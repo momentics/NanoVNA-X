@@ -1,0 +1,198 @@
+<p align="center">
+  <a href="https://github.com/momentics/NanoVNA-X/actions/workflows/firmware.yml"><img src="https://github.com/momentics/NanoVNA-X/actions/workflows/firmware.yml/badge.svg?branch=main" alt="Firmware CI status"></a>
+  <a href="https://github.com/momentics/NanoVNA-X/actions/workflows/release-artifacts.yml"><img src="https://github.com/momentics/NanoVNA-X/actions/workflows/release-artifacts.yml/badge.svg" alt="Release workflow status"></a>
+</p>
+
+NanoVNA-X: Enhanced Firmware for NanoVNA H/H4 — Stability, UI
+==========================================================
+[Русская версия](README_RU.md)
+
+<div align="center">
+<img src="/doc/NanoVNA.jpg" width="480px">
+</div>
+
+# About
+
+**NanoVNA-H** and **NanoVNA-H4** are very tiny handheld Vector Network Analyzers (VNA).
+They are standalone portable devices with LCD and battery.
+
+NanoVNA-X is maintained by **@momentics** (https://github.com/momentics/) and optimised for the
+memory-constrained STM32F072 and STM32F303 platforms. The codebase is a continuation of
+the outstanding work by [@DiSlord](https://github.com/DiSlord/) and is ultimately derived
+from the original firmware created by [@edy555](https://github.com/edy555). The firmware
+continues to be distributed under the terms of the GNU GPL so that the original authors
+retain their rights to their work.
+
+This repository contains the source code of the improved NanoVNA-H and NanoVNA-H4 firmware
+used in the NanoVNA-X project. The documentation describes the build and flash process on a
+macOS or a Linux (Debian or Ubuntu) system, other Linux (or even BSD) systems may behave
+similar.
+
+## Architecture Overview
+
+NanoVNA-X embraces a layered architecture that separates bootstrapping, platform
+integration, measurement processing and the user interface so the firmware remains
+maintainable while fitting into the tight flash and RAM budgets of the STM32F072 and
+STM32F303 families.
+
+* **Boot and application runtime.** The firmware starts in `src/core/main.c`, which hands off
+  to `app_main()` so that all higher level wiring lives in `src/app/application.c`. That
+  entry point initialises ChibiOS/RT, configures the USB console and synthesiser drivers,
+  brings up the measurement pipeline, and spins a dedicated sweep thread that coordinates
+  measurements, UI updates and shell commands.
+* **Platform abstraction.** `src/platform/platform_hal.c` invokes the registered board driver
+  table from `src/platform/boards/` so each supported target can publish a `PlatformDrivers`
+  structure with its initialisation hooks and peripheral descriptors. This keeps the core
+  application agnostic of whether it is running on the NanoVNA-H (STM32F072) or NanoVNA-H4
+  (STM32F303) hardware variants.
+* **Services layer.** Shared infrastructure lives in `src/services/`. The event bus implements
+  a lightweight publish/subscribe mechanism used to announce sweep lifecycle events,
+  configuration changes and other signals across modules. The scheduler provides a wrapper
+  around ChibiOS threads for cooperative workers, while the configuration service is
+  responsible for persisting user settings and calibration slots in MCU flash with checksum
+  protection.
+* **Measurement pipeline and DSP.** `src/measurement/pipeline.c` provides the façade that
+  bridges platform drivers and the measurement routines inside `app/application.c`. It tracks
+  which channels are active, executes sweep loops and exposes hooks for smoothing or domain
+  transforms. Numerical helpers and calibration maths reside in `src/dsp/`, keeping
+  compute-heavy code isolated from hardware access.
+* **Drivers and middleware.** Low-level device interactions are implemented in `src/drivers/`
+  for the LCD, Si5351 synthesiser, TLV320 codec and USB front-end, while `src/middleware/`
+  houses small integration shims such as the `chprintf` binding for ChibiOS streams. Common
+  third-party components (ChibiOS, FatFs) are vendored under `third_party/` and configured
+  through the headers in `config/` and top-level `chconf.h`/`halconf.h`.
+* **User interface layer.** The sweep thread initialises the UI toolkit (`src/ui/`), processes
+  hardware inputs, refreshes plotting primitives and marks screen regions for redraw. Fonts
+  and icon bitmaps that back the rendering code are stored in `src/resources/`. Optional
+  feature modules, such as the embedded web browser under `src/modules/`, can subscribe to
+  events or schedule tasks without changing the core loop.
+
+Complementary headers live in `include/`, while board support files, linker scripts and
+startup code reside in `boards/`. This structure lets the same measurement and UI engines run
+across both memory profiles with only targeted platform overrides.
+
+## Hardware platform and used chips
+The primary target MCUs are the STM32F072xB and STM32F303 (NanoVNA-H/H4); the F072 board employs an 8 MHz crystal, USB, SPI, I²C, and I²S lines for the display, SD, codec, and touch sensor, as described in board.h.
+
+The Si5351A clock generator (or a compatible part) drives the RF synthesizers and also produces reference frequencies for the audio ADC; its driver implements frequency caching, power management, and PLL initialization over I²C.
+
+The TLV320AIC3204 acts as a dual-channel audio ADC/DAC (I²S), with PLL configuration and input routing; the firmware controls it via I²C and streams the working data over SPI/I²S.
+
+Display controllers ILI9341/ST7789 (320×240) and ST7796S (480×320) are selected per board; DMA is supported, along with brightness control (for the H4), inversion, and text shadows to improve readability.
+
+Additional features include an RTC, SD card (screenshots, firmware, file manager), USB UID, remote control, and a measurement module (LC matching, cable analysis, and resonance analysis).
+
+## Building the firmware
+
+NanoVNA-X uses a standard GNU Make workflow and the Arm GNU GCC toolchain.
+See [`doc/building.md`](doc/building.md) for a fully detailed guide; the
+Russian translation is available in [`doc/building_ru.md`](doc/building_ru.md).
+summary below outlines the essential steps for a clean build.
+
+### 1. Install the cross-compiler
+
+Recent versions of `gcc-arm-none-eabi` are supported; there is no need to rely
+on archived releases.
+
+#### macOS (Homebrew)
+
+```
+brew install gcc-arm-none-eabi dfu-util
+```
+
+#### Ubuntu / Debian
+
+```
+sudo apt update
+sudo apt install gcc-arm-none-eabi libnewlib-arm-none-eabi dfu-util
+```
+
+After installation confirm that the compiler is available:
+
+```
+arm-none-eabi-gcc --version
+```
+
+### 2. Fetch the source code
+
+Clone the repository:
+
+```
+git clone https://github.com/momentics/NanoVNA-X.git
+cd NanoVNA-X
+```
+
+Updating to the latest revision later only requires `git pull`.
+
+### 3. Build the desired firmware profile
+
+Set the `TARGET` environment variable to select the board and invoke `make`.
+Use `make clean` when switching between targets to avoid mixing artefacts.
+
+```
+export TARGET=F072   # NanoVNA-H (default)
+make clean
+make -j$(nproc)
+```
+
+For the NanoVNA-H4 firmware build, set `TARGET=F303`. Build outputs are written
+to `build/` (`H.bin`/`H4.bin`, `.elf`, `.hex`). See [doc/building.md](doc/building.md)
+for a breakdown of which artefact to use with DFU, SWD, or debugging tools.
+
+### 4. Flash the firmware
+
+Place the device into DFU mode using one of the following methods:
+
+* Open the device and jumper `BOOT0` pin to `Vdd` when powering the device.
+* Select menu Config → DFU (requires recent firmware).
+* Press the jog switch on your H4 while powering the device.
+
+Then flash the binary generated in the previous step:
+
+```
+export TARGET=F072
+make flash
+```
+
+`make flash` uses `dfu-util` under the hood and will upload the matching
+`build/H.bin` or `build/H4.bin` artefact for the selected target. `dfu-util`
+prints status diagnostics such as a transient "firmware is corrupt" warning
+while switching the device out of DFU mode; the build script clears the status
+automatically and the message can be ignored.
+
+## Companion Tools
+
+There are several numbers of great companion PC tools from third-party.
+
+* [NanoVNA-App software](https://github.com/OneOfEleven/NanoVNA-H/blob/master/Release/NanoVNA-App.rar) by OneOfEleven
+* [NanoVNASharp Windows software](https://drive.google.com/drive/folders/1IZEtx2YdqchaTO8Aa9QbhQ8g_Pr5iNhr) by hugen79
+* [NanoVNA WebSerial/WebUSB](https://github.com/cho45/NanoVNA-WebUSB-Client) by cho45
+* [Android NanoVNA app](https://play.google.com/store/apps/details?id=net.lowreal.nanovnawebapp) by cho45
+* [NanoVNASaver](https://github.com/NanoVNA-Saver/nanovna-saver) by mihtjel and the members of NanoVNA-Saver
+* [TAPR VNAR4](https://groups.io/g/nanovna-users/files/NanoVNA%20PC%20Software/TAPR%20VNA) supports NanoVNA by erikkaashoek
+* [The NanoVNA toolbox](https://github.com/Ho-Ro/nanovna-tools) by Ho-Ro
+
+## Documentation
+
+* [NanoVNA-X menu & user workflow reference](doc/menu_and_user_guide.md)
+* [NanoVNA User Guide(ja)](https://cho45.github.io/NanoVNA-manual/) by cho45. [(en:google translate)](https://translate.google.com/translate?sl=ja&tl=en&u=https%3A%2F%2Fcho45.github.io%2FNanoVNA-manual%2F)
+* [NanoVNA user group](https://groups.io/g/nanovna-users/topics) on groups.io.
+
+## Reference
+
+* [Schematics](/doc/nanovna-sch.pdf)
+* [PCB Photo](/doc/nanovna-pcb-photo.jpg)
+* [Block Diagram](/doc/nanovna-blockdiagram.png)
+
+## Note
+
+Hardware design material is disclosed to prevent bad quality clone. Please let me know if you would have your own unit.
+
+## Credit
+* [@momentics](https://github.com/momentics/) – NanoVNA-X maintainer and integrator.
+
+## Based on code from:
+* [@DiSlord](https://github.com/DiSlord/) – original NanoVNA-D firmware author whose
+  work forms the foundation of this project and remains licensed under the GNU GPL.
+* [@edy555](https://github.com/edy555)
+

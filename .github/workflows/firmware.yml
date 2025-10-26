@@ -1,0 +1,50 @@
+name: Firmware CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [F072, F303]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install ARM toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
+
+      - name: Build firmware
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          make clean
+          make -j$(nproc)
+
+      - name: Determine artefact name
+        id: project
+        run: |
+          if [ "${{ matrix.target }}" = "F303" ]; then
+            echo "name=H4" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=H" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload build artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nanovna-${{ steps.project.outputs.name }}-${{ matrix.target }}
+          path: |
+            build/${{ steps.project.outputs.name }}.elf
+            build/${{ steps.project.outputs.name }}.bin
+            build/${{ steps.project.outputs.name }}.hex
+          if-no-files-found: error

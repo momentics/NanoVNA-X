@@ -1,0 +1,84 @@
+name: Release firmware
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-and-upload:
+    name: Release ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        target: [F072, F303]
+    env:
+      TARGET: ${{ matrix.target }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install ARM toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
+
+      - name: Determine firmware version
+        id: version
+        run: |
+          set -euo pipefail
+          fw_version=$(make -s print-version)
+          if ! printf '%s' "$fw_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "Firmware version '$fw_version' is not semantic" >&2
+            exit 1
+          fi
+          tag='${{ github.event.release.tag_name }}'
+          tag_stripped="${tag#v}"
+          if [ "$tag_stripped" != "$fw_version" ]; then
+            echo "Release tag '$tag' must match firmware version 'v$fw_version'" >&2
+            exit 1
+          fi
+          echo "fw_version=$fw_version" >> "$GITHUB_OUTPUT"
+
+      - name: Clean workspace
+        run: make clean
+
+      - name: Build firmware
+        run: make -j"$(nproc)"
+
+      - name: Prepare release assets
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.target }}" = "F303" ]; then
+            project=H4
+          else
+            project=H
+          fi
+          fw_version='${{ steps.version.outputs.fw_version }}'
+          dist_dir=dist
+          mkdir -p "$dist_dir"
+          base_name="NanoVNA-X_${{ matrix.target }}_v${fw_version}"
+          for ext in elf bin hex; do
+            cp "build/${project}.${ext}" "$dist_dir/${base_name}.${ext}"
+          done
+          for ext in elf bin hex; do
+            sha_file="$dist_dir/${base_name}.${ext}.sha256"
+            sha256sum "$dist_dir/${base_name}.${ext}" > "$sha_file"
+          done
+          printf 'Prepared %s artifacts in %s\n' "$base_name" "$dist_dir"
+
+      - name: Upload assets to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.elf
+            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.bin
+            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.hex
+            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.elf.sha256
+            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.bin.sha256
+            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.hex.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

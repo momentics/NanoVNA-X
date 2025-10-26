@@ -1,0 +1,24 @@
+# Build outputs
+/build/
+/build-*/
+*.elf
+*.hex
+*.bin
+*.map
+*.lst
+*.o
+*.d
+
+# Generated resources
+*.png
+.dep/
+
+# Editor and OS artefacts
+*~
+.DS_Store
+Thumbs.db
+TAGS
+.emacs-dirvars
+.idea/
+.vscode/
+*.swp
