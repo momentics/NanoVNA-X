@@ -8,7 +8,7 @@ NanoVNA-X: Enhanced Firmware for NanoVNA H/H4 — Stability, UI
 [Русская версия](README_RU.md)
 
 <div align="center">
-<img src="/doc/NanoVNA.jpg" width="480px">
+<img src="/doc/NanoVNA.jpg" width="280px">
 </div>
 
 # About
@@ -164,13 +164,9 @@ automatically and the message can be ignored.
 
 There are several numbers of great companion PC tools from third-party.
 
+* [GoVNA](https://github.com/momentics/GoVNA): A robust and secure Go library for controlling NanoVNA vector network analyzers. Features multi-protocol support (V1, V2/LiteVNA), automatic device detection, and optimized for high-performance server-side applications.
+* [PyVNA](https://github.com/momentics/PyVNA): Multi-protocol Python library for NanoVNA V1/V2/LiteVNA, derived from GoVNA for high performance & secure server-side applications. Supports auto-detection, robust device pooling, and comprehensive data handling.
 * [NanoVNA-App software](https://github.com/OneOfEleven/NanoVNA-H/blob/master/Release/NanoVNA-App.rar) by OneOfEleven
-* [NanoVNASharp Windows software](https://drive.google.com/drive/folders/1IZEtx2YdqchaTO8Aa9QbhQ8g_Pr5iNhr) by hugen79
-* [NanoVNA WebSerial/WebUSB](https://github.com/cho45/NanoVNA-WebUSB-Client) by cho45
-* [Android NanoVNA app](https://play.google.com/store/apps/details?id=net.lowreal.nanovnawebapp) by cho45
-* [NanoVNASaver](https://github.com/NanoVNA-Saver/nanovna-saver) by mihtjel and the members of NanoVNA-Saver
-* [TAPR VNAR4](https://groups.io/g/nanovna-users/files/NanoVNA%20PC%20Software/TAPR%20VNA) supports NanoVNA by erikkaashoek
-* [The NanoVNA toolbox](https://github.com/Ho-Ro/nanovna-tools) by Ho-Ro
 
 ## Documentation
 
