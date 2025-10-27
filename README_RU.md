@@ -8,7 +8,7 @@ NanoVNA-X - усовершенствованная прошивка для ка�
 [English version](README.md)
 
 <div align="center">
-<img src="/doc/NanoVNA.jpg" width="480px">
+<img src="/doc/NanoVNA.jpg" width="280px">
 </div>
 
 # О проекте
@@ -124,13 +124,9 @@ make flash
 
 Существует несколько качественных программных инструментов для персонального компьютера Personal Computer (PC), созданных сторонними разработчиками.
 
+* [GoVNA](https://github.com/momentics/GoVNA): Надёжная и безопасная библиотека Go для управления векторными анализаторами цепей NanoVNA. Поддерживаются несколько протоколов (V1, V2/LiteVNA), автоматическое определение устройств и оптимизирована для высокопроизводительных серверных приложений.
+* [PyVNA](https://github.com/momentics/PyVNA): Многопротокольная библиотека Python для NanoVNA V1/V2/LiteVNA, созданная на основе GoVNA для высокопроизводительных и безопасных серверных приложений. Поддерживает автоматическое определение, надёжное объединение устройств в пул и комплексную обработку данных.
 * [NanoVNA-App software](https://github.com/OneOfEleven/NanoVNA-H/blob/master/Release/NanoVNA-App.rar) от OneOfEleven
-* [NanoVNASharp Windows software](https://drive.google.com/drive/folders/1IZEtx2YdqchaTO8Aa9QbhQ8g_Pr5iNhr) от hugen79
-* [NanoVNA WebSerial/WebUSB](https://github.com/cho45/NanoVNA-WebUSB-Client) от cho45
-* [Android NanoVNA app](https://play.google.com/store/apps/details?id=net.lowreal.nanovnawebapp) от cho45
-* [NanoVNASaver](https://github.com/NanoVNA-Saver/nanovna-saver) от mihtjel и участников проекта NanoVNA-Saver
-* [TAPR VNAR4](https://groups.io/g/nanovna-users/files/NanoVNA%20PC%20Software/TAPR%20VNA) поддерживает NanoVNA, автор — erikkaashoek
-* [The NanoVNA toolbox](https://github.com/Ho-Ro/nanovna-tools) от Ho-Ro
 
 ## Документация
 
