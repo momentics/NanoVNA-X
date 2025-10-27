@@ -1,102 +1,125 @@
-# NanoVNA-X Menu and User Workflow Reference
+# NanoVNA-X Menu Reference
 
-This document consolidates the NanoVNA-X touch-screen menu structure and the core operating
-workflow for new users. It draws on the interactive menu map curated by Oristopo and the
-comprehensive user guide edited by L. Rothman to keep firmware behaviour aligned with
-popular NanoVNA builds.
+This document describes the on-device menu tree implemented in the current NanoVNA-X firmware. The structure and behaviour below are taken directly from [`src/ui/ui.c`](../src/ui/ui.c) and associated helpers. Items guarded by compile-time feature switches are called out explicitly so you can match the build configuration in `include/nanovna.h`.
 
-## Top-level menu layout
+## Navigation basics
 
-The firmware exposes the same top-level menu entries documented for classic NanoVNA-H
-releases. Each heading below summarises the buttons found on the corresponding screen and
-how they behave on NanoVNA-X.
+* Each submenu automatically appends a `← BACK` entry. Activating it returns to the previous level without applying extra actions.
+* Buttons that show a checkbox icon toggle a firmware flag immediately. Entries rendered with a highlighted background indicate context-sensitive information (for example, the active trace colour).
+* Numeric fields open the on-screen keypad. The keypad honours engineering suffixes (`k`, `M`, `G`, etc.) and uses the currently selected digit separator when that feature is enabled.
 
-### DISPLAY
+## Top-level menu bar
 
-* **TRACE** – Toggle individual traces on or off (up to four with compatible firmware) and
-  choose which trace is active before adjusting format, scale or channel assignments.
-* **FORMAT** – Pick the rendering mode for the active trace: logarithmic magnitude,
-  phase, delay, Smith chart, SWR, polar, linear magnitude, real/imaginary Cartesian
-  components, resistance or reactance views.
-* **SCALE** – Adjust the vertical gain of the active trace via *Scale/Div*, shift it
-  vertically with *Reference Position* and apply an *Electrical Delay* compensation in
-  picoseconds.
-* **CHANNEL** – Switch measurement sources between **CH0 REFLECT** and **CH1 THROUGH**.
-* **TRANSFORM** – Enable time-domain conversions (*Transform On*) and choose between
-  low-pass impulse/step or band-pass responses, select the window (minimum/normal/maximum)
-  and set the cable *Velocity Factor*.
+| Entry | Purpose |
+| --- | --- |
+| **DISPLAY** | Presentation controls for traces, formats, scaling and DSP helpers. |
+| **MARKER** | Marker enablement, search, tracking and marker-driven operations. |
+| **STIMULUS** | Sweep range, continuous-wave frequency and point-count settings. |
+| **CALIBRATE** | Calibration workflow, slot management and correction flags. |
+| **RECALL** | Load previously saved calibration data. |
+| **MEASURE** | (Enabled by `__VNA_MEASURE_MODULE__`.) Access context-aware measurement assistants. |
+| **SD CARD** | (Enabled by `__USE_SD_CARD__`.) File browser, import/export and screenshot controls. |
+| **CONFIG** | Device configuration, expert tools and utilities. |
+| **PAUSE/RESUME SWEEP** | Toggles the background sweep (`PAUSE` when running, `RESUME` when halted). |
 
-### MARKER
+---
 
-* Reposition sweep bounds to the highlighted marker with *Start* or *Stop*.
-* Jump the centre or span of the sweep to the current marker pair with *Center* and
-  *Span*.
-* Enable or disable up to four markers individually or hide all markers with *All Off*.
+## DISPLAY menu
 
-### STIMULUS
+* **TRACE** → opens a list of `TRACE 0` … `TRACE 3` entries. Selecting a trace either toggles its visibility or makes it the active trace if it is already enabled. When `STORED_TRACES` is greater than zero, additional entries labelled `STORE TRACE`/`CLEAR TRACE` appear for each stored-trace slot.
+* **FORMAT S11 (REFL)** → lists every S11 format for the active trace:
+  * `LOGMAG`, `PHASE`, `DELAY`, `SMITH`, `SWR`, `RESISTANCE`, `REACTANCE`, `|Z|`.
+  * `MORE` → exposes additional S11 formats: `POLAR`, `LINEAR`, `REAL`, `IMAG`, `Q FACTOR`, `CONDUCTANCE`, `SUSCEPTANCE`, `|Y|`.
+  * A second `MORE` branch adds impedance/admittance transformations such as `Z PHASE`, `SERIES C/L`, `PARALLEL R/X/C/L`.
+  * Selecting `SMITH` twice opens a Smith readout submenu whose contents depend on the trace channel (`LIN`, `LOG`, `RE/IM`, and impedance/admittance presentations for S11 or S21).
+* **FORMAT S21 (THRU)** → mirrors the S21 formats (`LOGMAG`, `PHASE`, `DELAY`, `SMITH`, `POLAR`, `LINEAR`, `REAL`, `IMAG`) and a `MORE` branch containing series/shunt resistance, reactance and Q-factor views.
+* **CHANNEL** → toggles the active trace between reflection (CH0) and transmission (CH1).
+* **SCALE** → provides `AUTO SCALE`, manual `TOP`, `BOTTOM`, `SCALE/DIV`, `REFERENCE POSITION`, `E-DELAY` entry fields, `S21 OFFSET`, and (when `__USE_GRID_VALUES__` is defined) `SHOW GRID VALUES` plus `DOT GRID` toggles.
+* **TRANSFORM** → controls time-domain transforms: enable/disable, select `LOW PASS IMPULSE`, `LOW PASS STEP` or `BANDPASS`, choose the window function, and edit the velocity factor.
+* **IF BANDWIDTH** → presents the hardware-specific list of IF bandwidth presets compiled into the firmware (for example 8 kHz, 4 kHz … down to 10 Hz on supported platforms).
+* **DATA SMOOTH** *(optional)* → appears with `__USE_SMOOTH__`. Lets you toggle smoothing off or pick from the compiled averaging factors.
+* **PORT-Z** *(optional)* → available when `__VNA_Z_RENORMALIZATION__` is defined. Sets a custom reference impedance for S11 processing.
 
-* Set sweep boundaries using *Start* and *Stop* (or *Center* plus *Span*).
-* Configure a continuous-wave spot measurement with *CW Freq*.
-* Temporarily freeze acquisition with *Pause Sweep* while you inspect or export data.
+## MARKER menu
 
-### CAL
+* **SELECT MARKER** → lists every marker slot allowed by `MARKERS_MAX`. Tapping an entry toggles the marker. The currently active marker shows a combined check/arrow icon. Two utility buttons follow the marker list: `ALL OFF` clears every marker, and `DELTA` toggles delta marker readouts.
+* **SEARCH [ON/OFF]** → toggles automatic peak/valley search mode.
+* **SEARCH ← LEFT / SEARCH → RIGHT** → step the highlighted marker to the next result in the chosen direction.
+* **OPERATIONS** → submenu containing `→ START`, `→ STOP`, `→ CENTER`, `→ SPAN` and `→ E-DELAY`. The sweep range buttons copy the active marker (and, when available, the previously active marker) into the corresponding sweep limits. `E-DELAY` adds the marker’s measured group delay to the active trace channel.
+* **TRACKING** → toggles marker tracking so the active marker follows live searches.
 
-* Launch the step-by-step calibration assistant through *Calibrate*.
-* Execute the standards sequence: **Open**, **Short**, **Load**, **Isolation**, **Thru**,
-  followed by *Done* when the trace stabilises.
-* Preserve the solved error terms in one of four slots using *Save 0–3*.
-* Clear live calibration data with *Reset* and toggle correction on/off with *Correction*.
+## STIMULUS menu
 
-### RECALL
+* **START**, **STOP**, **CENTER**, **SPAN** → keypad-driven sweep limit controls.
+* **CW FREQ** → sets a fixed continuous-wave output while the sweep remains paused.
+* **FREQ STEP** → edits the coarse tuning step used by the leveler/jog controls.
+* **JOG STEP** → switches between automatic and manual jog increments.
+* **SWEEP POINTS** → displays the current sweep size and opens a submenu. The submenu offers a direct `SET POINTS` keypad entry plus every preset enumerated in `POINTS_SET` for the target board.
 
-* Restore a stored calibration/profile from slots *Recall 0–3*.
+## CALIBRATE menu
 
-### CONFIG
+* **CALIBRATE** → opens the calibration assistant with the ordered steps `OPEN`, `SHORT`, `LOAD`, `ISOLN`, `THRU`, followed by `DONE` (store to flash) and `DONE IN RAM` (apply without persistence). Completed steps show a check mark.
+* **POWER AUTO** → opens a drive-level submenu. You can force specific Si5351 drive strengths (2 mA through 8 mA) or revert to automatic control.
+* **SAVE** → submenu used to archive calibrations. Each slot shows the stored frequency span when populated. When SD support and the browser are enabled a `SAVE TO SD CARD` item is prepended.
+* **RANGE** → displays the point count and frequency span of the loaded calibration and, when invoked, re-applies those limits and power settings if the calibration was interpolated.
+* **RESET** → clears the current calibration (except for the enhanced-response flag).
+* **APPLY** → toggles correction on/off without discarding coefficients.
+* **ENHANCED RESPONSE** → enables or disables the enhanced-response correction path.
+* **STANDARD LOAD R** *(optional)* → available when `__VNA_Z_RENORMALIZATION__` is defined. Lets you redefine the nominal load resistance used during calibration math.
 
-* Calibrate or test the touch panel, persist device preferences, inspect firmware version
-  details or reboot into the DFU bootloader.
+## RECALL menu
 
-> **Reference**: Interactive menu map for NanoVNA firmware, accessible at
-> <https://oristopo.github.io/nVhelp/html/Menu.htm>.
+* Lists every calibration slot with its stored span metadata. Selecting a populated slot loads it and highlights it as the active save ID.
+* When SD card browsing is enabled a `LOAD FROM SD CARD` entry at the top reads calibration archives directly.
 
-## Input and keypad tips
+## MEASURE menu (`__VNA_MEASURE_MODULE__`)
 
-The on-screen keypad mirrors the behaviour described in the upstream user guide: tap the
-numeric keys to enter values, use *Back* to delete the last character, and finish entry with
-unit shortcuts that immediately scale the typed number (for example, `M` multiplies by one
-million). Older firmware builds may hide the keypad icon, but touching the blank bar in the
-lower-right corner still summons the keypad overlay.
+Pressing **MEASURE** opens the submenu tied to the currently active measurement mode.
 
-## Core measurement workflow
+* **General list** (accessible when no specialised view is active): `OFF`, `L/C MATCH`, `CABLE (S11)`, `RESONANCE (S11)`, `SHUNT LC (S21)`, `SERIES LC (S21)`, `SERIES XTAL (S21)`, `FILTER (S21)`.
+* Selecting a mode switches to one of the specialised menus:
+  * **L/C MATCH** → `OFF`, `L/C MATCH`.
+  * **Cable (S11)** → `OFF`, `CABLE (S11)`, `VELOCITY FACTOR`, `CABLE LENGTH`.
+  * **Resonance (S11)** → `OFF`, `RESONANCE (S11)`.
+  * **S21 Shunt/Series/XTAL** → `OFF`, `SHUNT LC (S21)`, `SERIES LC (S21)`, `SERIES XTAL (S21)`, and an editable `Rl` load value.
+  * **Filter (S21)** → `OFF`, `FILTER (S21)`.
 
-A reliable sweep follows the same simple loop outlined in the NanoVNA user guide:
+## SD CARD menu (`__USE_SD_CARD__`)
 
-1. Define the frequency range – set *Start/Stop* or *Center/Span* before connecting the
-   device under test.
-2. Perform a fresh calibration covering that range and save the results to a slot.
-3. Hook up the DUT and capture traces or markers as needed.
+* **LOAD** *(shown when `__SD_FILE_BROWSER__` is enabled)* → opens the SD browser filtered to screenshots (`LOAD SCREENSHOT`), `S1P`, `S2P` or calibration files.
+* **SAVE S1P / SAVE S2P** → exports the current data set using either automatic filenames or the keypad prompt, depending on the `AUTO NAME` flag.
+* **SCREENSHOT** → captures the current LCD contents (BMP by default, or TIFF when that format is selected).
+* **SAVE CALIBRATION** → stores the active calibration to removable media.
+* **AUTO NAME** → toggles timestamp-based filenames for exports.
+* **IMAGE FORMAT** *(available with `__SD_CARD_DUMP_TIFF__`)* → switches the screenshot encoder between BMP and TIFF.
 
-## Recommended calibration sequence
+## CONFIG menu
 
-Calibrate whenever you change the sweep span or reconnect fixtures. The guide recommends the
-following order once the trace settles at each step:
+* **TOUCH CAL** → launches the touch-screen calibration routine.
+* **TOUCH TEST** → draws live feedback for verifying touch input.
+* **EXPERT SETTINGS** → opens advanced hardware controls:
+  * `THRESHOLD` (magnitude threshold), `TCXO` (reference oscillator trim) and `VBAT OFFSET` (battery calibration) all use the keypad.
+  * `IF OFFSET` *(when `USE_VARIABLE_OFFSET_MENU` is defined)* → opens a submenu listing the available IF offset presets.
+  * `REMEMBER STATE` *(with `__USE_BACKUP__`)* → toggles retention of UI state across restarts.
+  * `FLIP DISPLAY` *(with `__FLIP_DISPLAY__`)* → mirrors the LCD orientation.
+  * `→ DFU` *(with `__DFU_SOFTWARE_MODE__`)* → jumps to the DFU bootloader.
+  * `→ MORE` → exposes manufacturer-level tools:
+    * `MODE` cycles the Si5351 generator variant (`Si5351`, `MS5351`, `SWC5351`).
+    * `SEPARATOR` *(with `__DIGIT_SEPARATOR__`)* toggles between dot and comma numeric separators.
+    * `USB DEVICE UID` *(with `__USB_UID__`)* displays the unique USB identifier.
+    * `DUMP FIRMWARE` *(with `__SD_CARD_DUMP_FIRMWARE__`)* writes the flash image to the SD card.
+    * `LOAD COMMAND SCRIPT` *(with both `__SD_CARD_LOAD__` and the browser enabled)* launches the file browser for command scripts. Builds without the browser expose `LOAD CONFIG.INI` instead.
+    * `CLEAR CONFIG` → submenu containing `CLEAR ALL AND RESET`, which wipes configuration storage.
+* **SAVE CONFIG** → commits the in-memory configuration to non-volatile storage.
+* **CONNECTION** *(present with `__USE_SERIAL_CONSOLE__`)* → allows toggling the USB/serial console backend and choosing among the predefined UART bit rates.
+* **VERSION** → shows firmware version details.
+* **BRIGHTNESS** *(with `__LCD_BRIGHTNESS__`)* → interactive slider for the backlight level.
+* **DATE/TIME** *(with `__USE_RTC__`)* → submenu providing `SET DATE`, `SET TIME`, `RTC CAL` (ppm trim) and `RTC 512 Hz / LED2` output control.
 
-1. Open standard on CH0 → **Open**
-2. Short standard on CH0 → **Short**
-3. 50 Ω load on CH0 → **Load**
-4. 50 Ω loads on CH0 and CH1 → **Isolation** (leave CH0 open if only one load is available)
-5. Through connection between CH0 and CH1 → **Thru**
-6. Confirm convergence → **Done**, then store in a slot via **Save 0–3**
+## Sweep control button
 
-After loading calibration later, verify the status banner (`Cn DRSTX`) still matches the
-intended slot when you adjust sweep limits.
+The final menu button reflects the current sweep state. It reads `PAUSE SWEEP` when the VNA is sweeping and `RESUME SWEEP` once paused. Activating the button calls `toggle_sweep()` and updates the label/icon accordingly.
 
-## Additional operating notes
+---
 
-* Use markers to quickly retune the sweep edges to specific resonances or impedance targets.
-* The transform menu unlocks TDR-style analysis; experiment with window shapes and velocity
-  factor to line up distance estimates with physical cable lengths.
-* Pause the sweep before exporting data or repositioning fixtures to avoid transient traces.
-
-> **Reference**: L. Rothman, *NanoVNA User Guide*, rev. Jan 15 2020, available at
-> <http://ha3hz.hu/images/download/NanoVNA-User-Guide-English-reformat-Jan-15-20.pdf>.
+This reference mirrors the firmware defaults in `include/nanovna.h`. If you disable a feature flag during compilation, the associated menu entries are omitted automatically.
