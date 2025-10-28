@@ -140,14 +140,18 @@ def build_dfu(
 ) -> bytes:
     """Wrap *image* into a DfuSe container and return the binary payload."""
 
-    element = struct.pack("<II", base_address, len(image)) + image
+    element_header = struct.pack("<II", base_address, len(image))
+    element = element_header + image
+    # According to the DfuSe format, the TargetSize field stores only the
+    # payload bytes present in all elements, excluding their 8-byte headers.
+    target_size = len(image)
     target_prefix = struct.pack(
         "<6sBB255sII",
         b"Target",
         0,  # alt setting
         1 if target_named else 0,
         _encode_name(target_name if target_named else ""),
-        len(element),
+        target_size,
         1,  # one element
     )
     targets = target_prefix + element
