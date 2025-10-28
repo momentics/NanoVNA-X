@@ -35,6 +35,7 @@
 
 #include <chprintf.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <string.h>
 
 /*
@@ -1153,6 +1154,93 @@ extern uint16_t timings[16];
 #define DSP_WAIT         while (wait_count) {__WFI();}
 #define RESET_SWEEP      {p_sweep = 0;}
 
+/*
+ * Measurement loop helpers. We keep a tiny amount of state across calls so
+ * that the sweep can be advanced in short batches while still updating the UI
+ * in a responsive manner.
+ */
+static uint16_t sweep_bar_drawn_pixels = 0;
+static uint16_t sweep_bar_target_pixels = 0;
+static bool sweep_bar_enabled = false;
+static bool sweep_led_active = false;
+
+static inline void sweep_led_begin(void) {
+  if (!sweep_led_active) {
+    /* The LED is used as a coarse activity indicator. */
+    palClearPad(GPIOC, GPIOC_LED);
+    sweep_led_active = true;
+  }
+}
+
+static inline void sweep_led_end(void) {
+  if (sweep_led_active) {
+    palSetPad(GPIOC, GPIOC_LED);
+    sweep_led_active = false;
+  }
+}
+
+static inline void sweep_progress_begin(bool enabled) {
+  sweep_bar_enabled = enabled;
+  sweep_bar_drawn_pixels = 0;
+  sweep_bar_target_pixels = 0;
+  if (sweep_bar_enabled) {
+    lcd_set_background(LCD_SWEEP_LINE_COLOR);
+  }
+}
+
+static inline void sweep_progress_update(uint16_t pixels) {
+  if (!sweep_bar_enabled || pixels <= sweep_bar_target_pixels) {
+    return;
+  }
+  sweep_bar_target_pixels = pixels;
+  uint16_t delta = sweep_bar_target_pixels - sweep_bar_drawn_pixels;
+  /*
+   * Drawing fewer, larger blits significantly reduces the amount of time the
+   * CPU has to babysit the SPI peripheral, which otherwise introduces noise
+   * during measurements.
+   */
+  if (delta >= 2 || sweep_bar_target_pixels >= WIDTH) {
+    lcd_fill(OFFSETX + CELLOFFSETX + sweep_bar_drawn_pixels, OFFSETY, delta, 1);
+    sweep_bar_drawn_pixels = sweep_bar_target_pixels;
+  }
+}
+
+static inline void sweep_progress_end(void) {
+  if (!sweep_bar_enabled) {
+    return;
+  }
+  if (sweep_bar_target_pixels > sweep_bar_drawn_pixels) {
+    uint16_t delta = sweep_bar_target_pixels - sweep_bar_drawn_pixels;
+    lcd_fill(OFFSETX + CELLOFFSETX + sweep_bar_drawn_pixels, OFFSETY, delta, 1);
+    sweep_bar_drawn_pixels = sweep_bar_target_pixels;
+  }
+  lcd_set_background(LCD_GRID_COLOR);
+  if (sweep_bar_drawn_pixels > 0) {
+    lcd_fill(OFFSETX + CELLOFFSETX, OFFSETY, sweep_bar_drawn_pixels, 1);
+  }
+  sweep_bar_enabled = false;
+  sweep_bar_drawn_pixels = 0;
+  sweep_bar_target_pixels = 0;
+}
+
+static inline uint16_t sweep_points_budget(bool break_on_operation) {
+  if (!break_on_operation) {
+    return UINT16_MAX;
+  }
+  /*
+   * At wide bandwidths the DSP completes quickly, so we can process a larger
+   * batch without hurting latency. When the bandwidth narrows, the per-point
+   * latency grows and we reduce the batch size to keep UI reaction times low.
+   */
+  if (config._bandwidth <= BANDWIDTH_100) {
+    return 4;
+  }
+  if (config._bandwidth <= BANDWIDTH_1000) {
+    return 6;
+  }
+  return 8;
+}
+
 #define SWEEP_CH0_MEASURE           (1<< 0)
 #define SWEEP_CH1_MEASURE           (1<< 1)
 #define SWEEP_APPLY_EDELAY_S11      (1<< 2)
@@ -1215,23 +1303,41 @@ static void apply_offset(float data[2], float offset){
 // main loop for measurement
 bool app_measurement_sweep(bool break_on_operation, uint16_t mask)
 {
-  if (p_sweep>=sweep_points || break_on_operation == false) RESET_SWEEP;
-  if (break_on_operation && mask == 0)
+  if (p_sweep >= sweep_points || break_on_operation == false) {
+    RESET_SWEEP;
+    sweep_progress_end();
+    sweep_led_end();
+  }
+  if (break_on_operation && mask == 0) {
+    sweep_progress_end();
+    sweep_led_end();
     return false;
+  }
+
   float data[4];
   float c_data[CAL_TYPE_COUNT][2];
-  // Blink LED while scanning
-  palClearPad(GPIOC, GPIOC_LED);
+  bool completed = false;
   int delay = 0;
-  float offset = vna_expf(s21_offset * (logf(10.0f) / 20.0f));
-//  START_PROFILE;
-  lcd_set_background(LCD_SWEEP_LINE_COLOR);
-  // Wait some time for stable power
   int st_delay = DELAY_SWEEP_START;
-  int bar_start = 0;
   int interpolation_idx;
 
+  bool show_progress = config._bandwidth >= BANDWIDTH_100;
+  uint16_t batch_budget = sweep_points_budget(break_on_operation);
+  uint16_t processed = 0;
+  float offset = 1.0f;
+  if (mask & SWEEP_APPLY_S21_OFFSET) {
+    offset = vna_expf(s21_offset * (logf(10.0f) / 20.0f));
+  }
+
+  if (p_sweep == 0) {
+    sweep_led_begin();
+    sweep_progress_begin(show_progress);
+  }
+
   for (; p_sweep < sweep_points; p_sweep++) {
+    if (processed >= batch_budget) {
+      break;
+    }
     freq_t frequency = get_frequency(p_sweep);
     // Need made measure - set frequency
     uint8_t extra_cycles = 0;
@@ -1290,23 +1396,19 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask)
     if (operation_requested && break_on_operation) break;
     st_delay = 0;
     // Display SPI made noise on measurement (can see in CW mode), use reduced update
-    if (config._bandwidth >= BANDWIDTH_100){
-      int current_bar =  (p_sweep * WIDTH)/(sweep_points-1);
-      if (current_bar - bar_start > 0){
-        lcd_fill(OFFSETX+CELLOFFSETX + bar_start, OFFSETY, current_bar - bar_start, 1);
-        bar_start = current_bar;
-      }
+    if (show_progress && sweep_points > 1){
+      uint16_t current_bar =  (uint16_t)(((uint32_t)p_sweep * WIDTH)/(sweep_points-1));
+      sweep_progress_update(current_bar);
     }
+    processed++;    
   }
-  if (bar_start){
-    lcd_set_background(LCD_GRID_COLOR);
-    lcd_fill(OFFSETX+CELLOFFSETX, OFFSETY, bar_start, 1);
+  completed = (p_sweep == sweep_points);
+  if (completed) {
+    sweep_progress_end();
+    sweep_led_end();
   }
 
-//  STOP_PROFILE;
-  // blink LED while scanning
-  palSetPad(GPIOC, GPIOC_LED);
-  return p_sweep == sweep_points;
+  return completed;
 }
 
 #ifdef ENABLED_DUMP_COMMAND
