@@ -149,6 +149,10 @@ uint8_t sweep_mode = SWEEP_ENABLE;
 static uint16_t p_sweep = 0;
 // Sweep measured data
 float measured[2][SWEEP_POINTS_MAX][2];
+static volatile bool sweep_in_progress = false;
+static volatile bool sweep_copy_in_progress = false;
+static volatile uint32_t sweep_generation = 0;
+static float sweep_data_snapshot[2][SWEEP_POINTS_MAX][2];
 
 // Version text, displayed in Config->Version menu, also send by info command
 const char *info_about[]={
@@ -262,10 +266,15 @@ static THD_FUNCTION(Thread1, arg)
     bool completed = false;
     uint16_t mask = measurement_pipeline_active_mask(&measurement_pipeline);
     if (sweep_mode&(SWEEP_ENABLE|SWEEP_ONCE)) {
+      while (sweep_copy_in_progress)
+        chThdYield();
+      sweep_in_progress = true;
       event_bus_publish(&app_event_bus, EVENT_SWEEP_STARTED, &mask);
       completed = measurement_pipeline_execute(&measurement_pipeline, true, mask);
       sweep_mode&=~SWEEP_ONCE;
+      sweep_in_progress = false;
     } else {
+      sweep_in_progress = false;
       __WFI();
     }
     // Run Shell command in sweep thread
@@ -282,6 +291,7 @@ static THD_FUNCTION(Thread1, arg)
     sweep_mode&=~SWEEP_UI_MODE;
     // Process collected data, calculate trace coordinates and plot only if scan completed
     if (completed) {
+      sweep_generation++;
       event_bus_publish(&app_event_bus, EVENT_SWEEP_COMPLETED, &mask);
 #ifdef __USE_SMOOTH__
 //    START_PROFILE;
@@ -765,24 +775,51 @@ VNA_SHELL_FUNCTION(cmd_data)
 {
   int sel = 0;
   float (*array)[2];
-  uint16_t points;
-  bool resume_required;
+  uint16_t points = sweep_points;
   if (argc == 1)
     sel = my_atoi(argv[0]);
   if (sel < 0 || sel >= 7)
     goto usage;
 
-  array = sel < 2 ? measured[sel] : cal_data[sel - 2];
-  points = sweep_points;
-  resume_required = (sweep_mode & SWEEP_ENABLE) != 0;
-  if (resume_required)
-    pause_sweep();
+  if (sel < 2) {
+    float (*snapshot)[2] = sweep_data_snapshot[sel];
+    uint32_t generation;
+    uint16_t local_points;
 
-  /*
-   * The command now executes in the sweep thread (see command table flags).
-   * We still emit data in small bursts and yield periodically so the USB CDC
-   * driver can drain its buffers without starving other real-time work.
-   */
+    while (sweep_generation == 0) {
+      chThdSleepMilliseconds(1);
+    }
+
+    while (true) {
+      while (sweep_in_progress) {
+        chThdSleepMilliseconds(1);
+      }
+
+      sweep_copy_in_progress = true;
+      osalSysLock();
+      generation = sweep_generation;
+      local_points = sweep_points;
+      osalSysUnlock();
+
+      memcpy(snapshot, measured[sel], sizeof sweep_data_snapshot[sel]);
+      sweep_copy_in_progress = false;
+
+      osalSysLock();
+      bool stable = (generation == sweep_generation);
+      osalSysUnlock();
+
+      if (stable) {
+        points = local_points;
+        break;
+      }
+      chThdYield();
+    }
+
+    array = snapshot;
+  } else {
+    array = cal_data[sel - 2];
+  }
+
   for (uint16_t i = 0; i < points; i++) {
     shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, array[i][0], array[i][1]);
     if ((i & 0x0F) == 0x0F)
@@ -2948,7 +2985,7 @@ static const VNAShellCommand commands[] =
 #ifdef ENABLE_SCANBIN_COMMAND
     {"scan_bin"    , cmd_scan_bin    , CMD_WAIT_MUTEX|CMD_BREAK_SWEEP},
 #endif
-    {"data"        , cmd_data        , CMD_WAIT_MUTEX|CMD_BREAK_SWEEP},
+    {"data"        , cmd_data        , 0},
     {"frequencies" , cmd_frequencies , 0},
     {"freq"        , cmd_freq        , CMD_WAIT_MUTEX|CMD_BREAK_SWEEP|CMD_RUN_IN_UI|CMD_RUN_IN_LOAD},
     {"sweep"       , cmd_sweep       , CMD_WAIT_MUTEX|CMD_BREAK_SWEEP|CMD_RUN_IN_UI|CMD_RUN_IN_LOAD},
