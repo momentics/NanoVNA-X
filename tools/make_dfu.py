@@ -140,11 +140,22 @@ def build_dfu(
 ) -> bytes:
     """Wrap *image* into a DfuSe container and return the binary payload."""
 
-    element_header = struct.pack("<II", base_address, len(image))
-    element = element_header + image
-    # According to the DfuSe format, the TargetSize field stores only the
-    # payload bytes present in all elements, excluding their 8-byte headers.
-    target_size = len(image)
+    pad_len = (-len(image)) % 8
+    if pad_len:
+        # The ST bootloader requires each element payload to be 8-byte aligned
+        # (UM0391, section 4.3).  Pad the trailing bytes with erased flash
+        # values so the download size matches the bootloader expectation while
+        # keeping the firmware contents intact.
+        padded_image = image + (b"\xFF" * pad_len)
+    else:
+        padded_image = image
+
+    element_header = struct.pack("<II", base_address, len(padded_image))
+    element = element_header + padded_image
+    # TargetSize stores the exact number of bytes transferred for this target,
+    # including the 8-byte element headers (UM0391, section 2.2.2).
+    target_size = len(element)
+    
     target_prefix = struct.pack(
         "<6sBB255sII",
         b"Target",
