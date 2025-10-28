@@ -21,7 +21,7 @@ jobs:
       - name: Install ARM toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi dfu-util
 
       - name: Build firmware
         env:
@@ -29,6 +29,18 @@ jobs:
         run: |
           make clean
           make -j$(nproc)
+
+      - name: Generate DFU image
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          if [ "${{ matrix.target }}" = "F303" ]; then
+            project=H4
+          else
+            project=H
+          fi
+          python3 tools/make_dfu.py "build/${project}.bin" "build/${project}.dfu" --target-name "NanoVNA-X ${TARGET}"
+          dfu-suffix --add "build/${project}.dfu" --pid 0xdf11 --vid 0x0483 --did 0x0000 --spec 0x011a
 
       - name: Determine artefact name
         id: project
@@ -44,7 +56,7 @@ jobs:
         with:
           name: nanovna-${{ steps.project.outputs.name }}-${{ matrix.target }}
           path: |
-            build/${{ steps.project.outputs.name }}.elf
             build/${{ steps.project.outputs.name }}.bin
             build/${{ steps.project.outputs.name }}.hex
+            build/${{ steps.project.outputs.name }}.dfu
           if-no-files-found: error

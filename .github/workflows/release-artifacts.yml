@@ -24,7 +24,7 @@ jobs:
       - name: Install ARM toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi dfu-util
 
       - name: Determine firmware version
         id: version
@@ -61,10 +61,13 @@ jobs:
           dist_dir=dist
           mkdir -p "$dist_dir"
           base_name="NanoVNA-X_${{ matrix.target }}_v${fw_version}"
-          for ext in elf bin hex; do
+          for ext in bin hex; do
             cp "build/${project}.${ext}" "$dist_dir/${base_name}.${ext}"
           done
-          for ext in elf bin hex; do
+          dfu_path="$dist_dir/${base_name}.dfu"
+          python3 tools/make_dfu.py "build/${project}.bin" "$dfu_path" --target-name "NanoVNA-X ${TARGET}"
+          dfu-suffix --add "$dfu_path" --pid 0xdf11 --vid 0x0483 --did 0x0000 --spec 0x011a
+          for ext in bin hex dfu; do
             sha_file="$dist_dir/${base_name}.${ext}.sha256"
             sha256sum "$dist_dir/${base_name}.${ext}" > "$sha_file"
           done
@@ -74,11 +77,11 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.elf
             dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.bin
             dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.hex
-            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.elf.sha256
+            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.dfu
             dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.bin.sha256
             dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.hex.sha256
+            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.dfu.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
