@@ -763,18 +763,34 @@ VNA_SHELL_FUNCTION(cmd_clearconfig)
 
 VNA_SHELL_FUNCTION(cmd_data)
 {
-  int i;
   int sel = 0;
   float (*array)[2];
+  uint16_t points;
+  bool resume_required;
   if (argc == 1)
     sel = my_atoi(argv[0]);
-  if (sel < 0 || sel >=7)
+  if (sel < 0 || sel >= 7)
     goto usage;
 
-  array = sel < 2 ? measured[sel] : cal_data[sel-2];
+  array = sel < 2 ? measured[sel] : cal_data[sel - 2];
+  points = sweep_points;
+  resume_required = (sweep_mode & SWEEP_ENABLE) != 0;
+  if (resume_required)
+    pause_sweep();
 
-  for (i = 0; i < sweep_points; i++)
+  /*
+   * The command now executes in the sweep thread (see command table flags).
+   * We still emit data in small bursts and yield periodically so the USB CDC
+   * driver can drain its buffers without starving other real-time work.
+   */
+  for (uint16_t i = 0; i < points; i++) {
     shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, array[i][0], array[i][1]);
+    if ((i & 0x0F) == 0x0F)
+      chThdYield();
+  }
+
+  if (resume_required)
+    resume_sweep();
   return;
 usage:
   shell_printf("usage: data [array]" VNA_SHELL_NEWLINE_STR);
@@ -2932,7 +2948,7 @@ static const VNAShellCommand commands[] =
 #ifdef ENABLE_SCANBIN_COMMAND
     {"scan_bin"    , cmd_scan_bin    , CMD_WAIT_MUTEX|CMD_BREAK_SWEEP},
 #endif
-    {"data"        , cmd_data        , 0},
+    {"data"        , cmd_data        , CMD_WAIT_MUTEX|CMD_BREAK_SWEEP},
     {"frequencies" , cmd_frequencies , 0},
     {"freq"        , cmd_freq        , CMD_WAIT_MUTEX|CMD_BREAK_SWEEP|CMD_RUN_IN_UI|CMD_RUN_IN_LOAD},
     {"sweep"       , cmd_sweep       , CMD_WAIT_MUTEX|CMD_BREAK_SWEEP|CMD_RUN_IN_UI|CMD_RUN_IN_LOAD},
