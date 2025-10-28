@@ -775,7 +775,9 @@ VNA_SHELL_FUNCTION(cmd_data)
 {
   int sel = 0;
   float (*array)[2];
+  osalSysLock();
   uint16_t points = sweep_points;
+  osalSysUnlock();
   if (argc == 1)
     sel = my_atoi(argv[0]);
   if (sel < 0 || sel >= 7)
@@ -795,14 +797,16 @@ VNA_SHELL_FUNCTION(cmd_data)
         chThdSleepMilliseconds(1);
       }
 
-      sweep_copy_in_progress = true;
       osalSysLock();
+      sweep_copy_in_progress = true;
       generation = sweep_generation;
       local_points = sweep_points;
       osalSysUnlock();
 
       memcpy(snapshot, measured[sel], sizeof sweep_data_snapshot[sel]);
+      osalSysLock();
       sweep_copy_in_progress = false;
+      osalSysUnlock();
 
       osalSysLock();
       bool stable = (generation == sweep_generation);
@@ -825,9 +829,6 @@ VNA_SHELL_FUNCTION(cmd_data)
     if ((i & 0x0F) == 0x0F)
       chThdYield();
   }
-
-  if (resume_required)
-    resume_sweep();
   return;
 usage:
   shell_printf("usage: data [array]" VNA_SHELL_NEWLINE_STR);
@@ -3139,13 +3140,6 @@ void shell_update_speed(uint32_t speed){
 // Check USB connection status
 static bool usb_is_active_locked(void) {
   return usbGetDriverStateI(&USBD1) == USB_ACTIVE;
-}
-
-static bool usb_is_active(void){
-  osalSysLock();
-  const bool active = usb_is_active_locked();
-  osalSysUnlock();
-  return active;
 }
 
 // Reset shell I/O queue
