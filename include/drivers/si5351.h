@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2019-2020, Dmitry (DiSlord) dislordlive@gmail.com
+ * Copyright (c) 2019-2020, @momentics momentics@gmail.com
+ * Based on Dmitry (DiSlord) dislordlive@gmail.com
  * Based on TAKAHASHI Tomohiro (TTRFTECH) edy555@gmail.com
  * Copyright (c) 2024, @momentics <momentics@gmail.com>
  * All rights reserved.
@@ -79,6 +80,7 @@ void si5351_enable_output(void);
 
 void si5351_set_frequency_offset(int32_t offset);
 int  si5351_set_frequency(uint32_t freq, uint8_t drive_strength);
+uint8_t si5351_take_settling_cycles(void);
 void si5351_set_power(uint8_t drive_strength);
 void si5351_set_band_mode(uint16_t t);
 

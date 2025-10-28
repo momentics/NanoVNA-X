@@ -26,6 +26,9 @@
 // audio codec frequency clock
 #define CLK2_FREQUENCY AUDIO_CLOCK_REF
 
+// Number of extra measurement cycles required after a band change to let PLLs settle
+#define SI5351_SETTLING_CYCLES_ON_BAND_CHANGE 1
+
 // Fixed PLL mode multiplier (used for AUDIO codec frequency generation)
 #define PLL_N_2 32
 
@@ -35,6 +38,7 @@
 static uint8_t  current_band   = 0;
 static uint8_t  current_power  = 0;
 static uint32_t current_freq   = 0;
+static uint8_t  pending_settling_cycles = 0;
 // Use cache for this reg, not update if not change
 static uint8_t  clk_cache[3] = {0, 0, 0};
 
@@ -75,6 +79,13 @@ inline void si5351_set_timing(int i, int v) {timings[i]=US2ST(v);}
 uint32_t si5351_get_frequency(void)
 {
   return current_freq;
+}
+
+uint8_t si5351_take_settling_cycles(void)
+{
+  uint8_t cycles = pending_settling_cycles;
+  pending_settling_cycles = 0;
+  return cycles;
 }
 
 #ifdef USE_VARIABLE_OFFSET
@@ -653,6 +664,7 @@ si5351_set_frequency(uint32_t freq, uint8_t drive_strength)
       chThdSleepMicroseconds(DELAY_RESET_PLL_AFTER);
       si5351_reset_pll(SI5351_PLL_RESET_A|SI5351_PLL_RESET_B);
     }
+    pending_settling_cycles = SI5351_SETTLING_CYCLES_ON_BAND_CHANGE;
     current_band = band;
     delay = DELAY_BANDCHANGE;
   }

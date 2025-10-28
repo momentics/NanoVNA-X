@@ -1234,40 +1234,41 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask)
   for (; p_sweep < sweep_points; p_sweep++) {
     freq_t frequency = get_frequency(p_sweep);
     // Need made measure - set frequency
+    uint8_t extra_cycles = 0;
     if (mask & (SWEEP_CH0_MEASURE|SWEEP_CH1_MEASURE)) {
       delay = app_measurement_set_frequency(frequency);
       interpolation_idx = mask & SWEEP_USE_INTERPOLATION ? -1 : p_sweep;
+      extra_cycles = si5351_take_settling_cycles();
     }
-    // CH0:REFLECTION, reset and begin measure
-    if (mask & SWEEP_CH0_MEASURE) {
-      tlv320aic3204_select(0);
-      DSP_START(delay+st_delay);
-      delay = DELAY_CHANNEL_CHANGE;
-      // Get calibration data
-      if (mask & SWEEP_APPLY_CALIBRATION)
-        cal_interpolate(interpolation_idx, frequency, c_data);
-      //================================================
-      // Place some code thats need execute while delay
-      //================================================
-      DSP_WAIT;
-      (*sample_func)(&data[0]);             // calculate reflection coefficient
-      if (mask & SWEEP_APPLY_CALIBRATION)   // Apply calibration
-        apply_ch0_error_term(data, c_data);
-    }
-    // CH1:TRANSMISSION, reset and begin measure
-    if (mask & SWEEP_CH1_MEASURE) {
-      tlv320aic3204_select(1);
-      DSP_START(delay+st_delay);
-      // Get calibration data, only if not do this in 0 channel wait
-      if ((mask & SWEEP_APPLY_CALIBRATION) && !(mask & SWEEP_CH0_MEASURE))
-        cal_interpolate(interpolation_idx, frequency, c_data);
-      //================================================
-      // Place some code thats need execute while delay
-      //================================================
-      DSP_WAIT;
-      (*sample_func)(&data[2]);              // Measure transmission coefficient
-      if (mask & SWEEP_APPLY_CALIBRATION)    // Apply calibration
-        apply_ch1_error_term(data, c_data);
+    // Repeat raw acquisitions when PLL/band just changed to hide unstable samples
+    uint8_t total_cycles = extra_cycles + 1;
+    for (uint8_t cycle = 0; cycle < total_cycles; cycle++) {
+      bool final_cycle = (cycle == total_cycles - 1);
+      int cycle_delay = delay;
+      int cycle_st_delay = (cycle == 0) ? st_delay : 0;
+      // CH0:REFLECTION, reset and begin measure
+      if (mask & SWEEP_CH0_MEASURE) {
+        tlv320aic3204_select(0);
+        DSP_START(cycle_delay + cycle_st_delay);
+        cycle_delay = DELAY_CHANNEL_CHANGE;
+        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION))
+          cal_interpolate(interpolation_idx, frequency, c_data);
+        DSP_WAIT;
+        (*sample_func)(&data[0]);             // calculate reflection coefficient
+        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION))   // Apply calibration
+          apply_ch0_error_term(data, c_data);
+      }
+      // CH1:TRANSMISSION, reset and begin measure
+      if (mask & SWEEP_CH1_MEASURE) {
+        tlv320aic3204_select(1);
+        DSP_START(cycle_delay + cycle_st_delay);
+        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION) && !(mask & SWEEP_CH0_MEASURE))
+          cal_interpolate(interpolation_idx, frequency, c_data);
+        DSP_WAIT;
+        (*sample_func)(&data[2]);              // Measure transmission coefficient
+        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION))    // Apply calibration
+          apply_ch1_error_term(data, c_data);
+      }
     }
 #ifdef __VNA_Z_RENORMALIZATION__
     if (mask & SWEEP_USE_RENORMALIZATION)
