@@ -152,7 +152,6 @@ float measured[2][SWEEP_POINTS_MAX][2];
 static volatile bool sweep_in_progress = false;
 static volatile bool sweep_copy_in_progress = false;
 static volatile uint32_t sweep_generation = 0;
-static float sweep_data_snapshot[2][SWEEP_POINTS_MAX][2];
 
 // Version text, displayed in Config->Version menu, also send by info command
 const char *info_about[]={
@@ -784,7 +783,7 @@ VNA_SHELL_FUNCTION(cmd_data)
     goto usage;
 
   if (sel < 2) {
-    float (*snapshot)[2] = sweep_data_snapshot[sel];
+    float snapshot[SWEEP_POINTS_MAX][2];
     uint32_t generation;
     uint16_t local_points;
 
@@ -803,7 +802,7 @@ VNA_SHELL_FUNCTION(cmd_data)
       local_points = sweep_points;
       osalSysUnlock();
 
-      memcpy(snapshot, measured[sel], sizeof sweep_data_snapshot[sel]);
+      memcpy(snapshot, measured[sel], sizeof snapshot);
       osalSysLock();
       sweep_copy_in_progress = false;
       osalSysUnlock();
@@ -819,7 +818,12 @@ VNA_SHELL_FUNCTION(cmd_data)
       chThdYield();
     }
 
-    array = snapshot;
+    for (uint16_t i = 0; i < points; i++) {
+      shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, snapshot[i][0], snapshot[i][1]);
+      if ((i & 0x0F) == 0x0F)
+        chThdYield();
+    }
+    return;
   } else {
     array = cal_data[sel - 2];
   }
