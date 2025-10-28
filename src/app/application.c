@@ -1159,68 +1159,82 @@ extern uint16_t timings[16];
  * that the sweep can be advanced in short batches while still updating the UI
  * in a responsive manner.
  */
+#define SWEEP_STATE_PROGRESS_ACTIVE 0x01u
+#define SWEEP_STATE_LED_ACTIVE      0x02u
+
 static uint16_t sweep_bar_drawn_pixels = 0;
-static uint16_t sweep_bar_target_pixels = 0;
-static bool sweep_bar_enabled = false;
-static bool sweep_led_active = false;
+static uint8_t sweep_state_flags = 0;
+static uint8_t sweep_bar_pending = 0;
+
+static inline bool sweep_progress_enabled(void) {
+  return (sweep_state_flags & SWEEP_STATE_PROGRESS_ACTIVE) != 0;
+}
 
 static inline void sweep_led_begin(void) {
-  if (!sweep_led_active) {
+  if ((sweep_state_flags & SWEEP_STATE_LED_ACTIVE) == 0) {
     /* The LED is used as a coarse activity indicator. */
     palClearPad(GPIOC, GPIOC_LED);
-    sweep_led_active = true;
+    sweep_state_flags |= SWEEP_STATE_LED_ACTIVE;
   }
 }
 
 static inline void sweep_led_end(void) {
-  if (sweep_led_active) {
+  if ((sweep_state_flags & SWEEP_STATE_LED_ACTIVE) != 0) {
     palSetPad(GPIOC, GPIOC_LED);
-    sweep_led_active = false;
+    sweep_state_flags &= (uint8_t)~SWEEP_STATE_LED_ACTIVE;
   }
 }
 
 static inline void sweep_progress_begin(bool enabled) {
-  sweep_bar_enabled = enabled;
   sweep_bar_drawn_pixels = 0;
-  sweep_bar_target_pixels = 0;
-  if (sweep_bar_enabled) {
-    lcd_set_background(LCD_SWEEP_LINE_COLOR);
+  sweep_state_flags &= (uint8_t)~SWEEP_STATE_PROGRESS_ACTIVE;
+  sweep_bar_pending = 0;
+  if (!enabled) {
+    return;
   }
+  sweep_state_flags |= SWEEP_STATE_PROGRESS_ACTIVE;
+  lcd_set_background(LCD_SWEEP_LINE_COLOR);
 }
 
 static inline void sweep_progress_update(uint16_t pixels) {
-  if (!sweep_bar_enabled || pixels <= sweep_bar_target_pixels) {
+  if (!sweep_progress_enabled() || pixels <= sweep_bar_drawn_pixels) {
     return;
   }
-  sweep_bar_target_pixels = pixels;
-  uint16_t delta = sweep_bar_target_pixels - sweep_bar_drawn_pixels;
+  if (pixels > WIDTH) {
+    pixels = WIDTH;
+  }
+  uint16_t delta = pixels - sweep_bar_drawn_pixels - sweep_bar_pending;
   /*
    * Drawing fewer, larger blits significantly reduces the amount of time the
    * CPU has to babysit the SPI peripheral, which otherwise introduces noise
    * during measurements.
    */
-  if (delta >= 2 || sweep_bar_target_pixels >= WIDTH) {
-    lcd_fill(OFFSETX + CELLOFFSETX + sweep_bar_drawn_pixels, OFFSETY, delta, 1);
-    sweep_bar_drawn_pixels = sweep_bar_target_pixels;
+  uint16_t draw = sweep_bar_pending + delta;
+  if (draw >= 2 || pixels >= WIDTH) {
+    lcd_fill(OFFSETX + CELLOFFSETX + sweep_bar_drawn_pixels, OFFSETY, draw, 1);
+    sweep_bar_drawn_pixels += draw;
+    sweep_bar_pending = 0;
+  } else {
+    sweep_bar_pending = (uint8_t)draw;
   }
 }
 
 static inline void sweep_progress_end(void) {
-  if (!sweep_bar_enabled) {
+  if (!sweep_progress_enabled()) {
     return;
   }
-  if (sweep_bar_target_pixels > sweep_bar_drawn_pixels) {
-    uint16_t delta = sweep_bar_target_pixels - sweep_bar_drawn_pixels;
-    lcd_fill(OFFSETX + CELLOFFSETX + sweep_bar_drawn_pixels, OFFSETY, delta, 1);
-    sweep_bar_drawn_pixels = sweep_bar_target_pixels;
+  if (sweep_bar_pending > 0) {
+    lcd_fill(OFFSETX + CELLOFFSETX + sweep_bar_drawn_pixels, OFFSETY,
+             sweep_bar_pending, 1);
+    sweep_bar_drawn_pixels += sweep_bar_pending;
   }
+  sweep_bar_pending = 0;
   lcd_set_background(LCD_GRID_COLOR);
   if (sweep_bar_drawn_pixels > 0) {
     lcd_fill(OFFSETX + CELLOFFSETX, OFFSETY, sweep_bar_drawn_pixels, 1);
   }
-  sweep_bar_enabled = false;
   sweep_bar_drawn_pixels = 0;
-  sweep_bar_target_pixels = 0;
+  sweep_state_flags &= (uint8_t)~SWEEP_STATE_PROGRESS_ACTIVE;
 }
 
 static inline uint16_t sweep_points_budget(bool break_on_operation) {
@@ -1313,14 +1327,12 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask)
     sweep_led_end();
     return false;
   }
-
   float data[4];
   float c_data[CAL_TYPE_COUNT][2];
   bool completed = false;
   int delay = 0;
   int st_delay = DELAY_SWEEP_START;
-  int interpolation_idx;
-
+  int interpolation_idx = p_sweep;
   bool show_progress = config._bandwidth >= BANDWIDTH_100;
   uint16_t batch_budget = sweep_points_budget(break_on_operation);
   uint16_t processed = 0;
@@ -1343,7 +1355,7 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask)
     uint8_t extra_cycles = 0;
     if (mask & (SWEEP_CH0_MEASURE|SWEEP_CH1_MEASURE)) {
       delay = app_measurement_set_frequency(frequency);
-      interpolation_idx = mask & SWEEP_USE_INTERPOLATION ? -1 : p_sweep;
+      interpolation_idx = (mask & SWEEP_USE_INTERPOLATION) ? -1 : (int)p_sweep;
       extra_cycles = si5351_take_settling_cycles();
     }
     // Repeat raw acquisitions when PLL/band just changed to hide unstable samples
@@ -1400,7 +1412,7 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask)
       uint16_t current_bar =  (uint16_t)(((uint32_t)p_sweep * WIDTH)/(sweep_points-1));
       sweep_progress_update(current_bar);
     }
-    processed++;    
+    processed++;
   }
   completed = (p_sweep == sweep_points);
   if (completed) {
