@@ -1454,6 +1454,11 @@ VNA_SHELL_FUNCTION(cmd_scan)
 {
   freq_t start, stop;
   uint16_t points = sweep_points;
+  const freq_t original_start = get_sweep_frequency(ST_START);
+  const freq_t original_stop  = get_sweep_frequency(ST_STOP);
+  const uint16_t original_points = sweep_points;
+  bool restore_config = false;
+
   if (argc < 2 || argc > 4) {
     shell_printf("usage: scan {start(Hz)} {stop(Hz)} [points] [outmask]" VNA_SHELL_NEWLINE_STR);
     return;
@@ -1465,6 +1470,8 @@ VNA_SHELL_FUNCTION(cmd_scan)
       shell_printf("frequency range is invalid" VNA_SHELL_NEWLINE_STR);
       return;
   }
+  if (start != original_start || stop != original_stop)
+    restore_config = true;
   if (argc >= 3) {
     points = my_atoui(argv[2]);
     if (points == 0 || points > SWEEP_POINTS_MAX) {
@@ -1472,6 +1479,8 @@ VNA_SHELL_FUNCTION(cmd_scan)
       return;
     }
     sweep_points = points;
+    if (points != original_points)
+      restore_config = true;
   }
   uint16_t mask = 0;
   uint16_t sweep_ch = SWEEP_CH0_MEASURE|SWEEP_CH1_MEASURE;
@@ -1521,6 +1530,11 @@ VNA_SHELL_FUNCTION(cmd_scan)
         shell_printf(VNA_SHELL_NEWLINE_STR);
       }
     }
+  }
+
+  if (restore_config) {
+    sweep_points = original_points;
+    app_measurement_update_frequencies();
   }
 }
 
