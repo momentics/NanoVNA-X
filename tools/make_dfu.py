@@ -34,6 +34,7 @@ from typing import Final, Iterable, Tuple
 _DFUSE_SUFFIX_LEN: Final[int] = 16
 _DFUSE_PREFIX_STRUCT = struct.Struct("<5sBIB")
 _DFUSE_PREFIX_LEN: Final[int] = _DFUSE_PREFIX_STRUCT.size
+_DFUSE_TARGET_PREFIX_STRUCT = struct.Struct("<6sBI255sII")
 
 @dataclass(frozen=True)
 class _TargetPreset:
@@ -156,8 +157,7 @@ def build_dfu(
     # including the 8-byte element headers (UM0391, section 2.2.2).
     target_size = len(element)
     
-    target_prefix = struct.pack(
-        "<6sBB255sII",
+    target_prefix = _DFUSE_TARGET_PREFIX_STRUCT.pack(
         b"Target",
         0,  # alt setting
         1 if target_named else 0,
