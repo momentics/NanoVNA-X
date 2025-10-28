@@ -784,7 +784,10 @@ VNA_SHELL_FUNCTION(cmd_data)
     goto usage;
 
   if (sel < 2) {
-    float snapshot[SWEEP_POINTS_MAX][2];
+    // The shell runs on a tiny stack (main thread). Keeping the snapshot on
+    // the stack can overflow it and crash the system. Use a static buffer
+    // instead to store a stable copy of the sweep data.
+    static float snapshot[SWEEP_POINTS_MAX][2];
     uint32_t generation;
     uint16_t local_points;
 
