@@ -22,9 +22,8 @@
  */
 
 This script wraps a raw binary firmware image into a DfuSe (.dfu) container.
-Only the fields required by STM32 DFU bootloaders are populated. The final
-suffix (including the CRC) is appended by ``dfu-suffix``; this utility only
-emits the prefix, target header and the firmware payload.
+Only the fields required by STM32 DFU bootloaders are populated, including the
+mandatory 16-byte suffix with the CRC checksum.
 """
 
 from __future__ import annotations
@@ -35,7 +34,7 @@ import pathlib
 import struct
 from typing import Final
 
-# DfuSe files always reserve 16 bytes for the suffix that ``dfu-suffix`` adds.
+# DfuSe files always reserve 16 bytes for the suffix appended at the end.
 _DFUSE_SUFFIX_LEN: Final[int] = 16
 
 
