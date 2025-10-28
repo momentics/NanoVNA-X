@@ -36,10 +36,16 @@ jobs:
         run: |
           if [ "${{ matrix.target }}" = "F303" ]; then
             project=H4
+            dfuse_preset=stm32f303xc
           else
             project=H
+            dfuse_preset=stm32f072xb
           fi
-          python3 tools/make_dfu.py "build/${project}.bin" "build/${project}.dfu" --target-name "NanoVNA-X ${TARGET}"
+          python3 tools/make_dfu.py \
+            "build/${project}.bin" \
+            "build/${project}.dfu" \
+            --preset-target "$dfuse_preset" \
+            --device-id 0x0000
           dfu-suffix --add "build/${project}.dfu" --pid 0xdf11 --vid 0x0483 --did 0x0000 --spec 0x011a
 
       - name: Determine artefact name

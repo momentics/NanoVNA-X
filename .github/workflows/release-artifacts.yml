@@ -54,8 +54,10 @@ jobs:
           set -euo pipefail
           if [ "${{ matrix.target }}" = "F303" ]; then
             project=H4
+            dfuse_preset=stm32f303xc
           else
             project=H
+            dfuse_preset=stm32f072xb
           fi
           fw_version='${{ steps.version.outputs.fw_version }}'
           dist_dir=dist
@@ -65,7 +67,11 @@ jobs:
             cp "build/${project}.${ext}" "$dist_dir/${base_name}.${ext}"
           done
           dfu_path="$dist_dir/${base_name}.dfu"
-          python3 tools/make_dfu.py "build/${project}.bin" "$dfu_path" --target-name "NanoVNA-X ${TARGET}" --device-id 0x0000
+          python3 tools/make_dfu.py \
+            "build/${project}.bin" \
+            "$dfu_path" \
+            --preset-target "$dfuse_preset" \
+            --device-id 0x0000
           for ext in bin hex dfu; do
             sha_file="$dist_dir/${base_name}.${ext}.sha256"
             sha256sum "$dist_dir/${base_name}.${ext}" > "$sha_file"
