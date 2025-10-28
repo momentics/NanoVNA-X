@@ -784,12 +784,9 @@ VNA_SHELL_FUNCTION(cmd_data)
     goto usage;
 
   if (sel < 2) {
-    // The shell runs on a tiny stack (main thread). Keeping the snapshot on
-    // the stack can overflow it and crash the system. Use a static buffer
-    // instead to store a stable copy of the sweep data.
-    static float snapshot[SWEEP_POINTS_MAX][2];
     uint32_t generation;
     uint16_t local_points;
+    const float (*data)[2];
 
     while (sweep_generation == 0) {
       chThdSleepMilliseconds(1);
@@ -800,34 +797,33 @@ VNA_SHELL_FUNCTION(cmd_data)
         chThdSleepMilliseconds(1);
       }
 
+      // Freeze the sweep engine so the measurement buffer stays stable while
+      // the shell thread streams it to the host. This avoids allocating a
+      // large temporary buffer on the tiny shell stack.
       osalSysLock();
       sweep_copy_in_progress = true;
       generation = sweep_generation;
       local_points = sweep_points;
+      data = measured[sel];
       osalSysUnlock();
 
-      memcpy(snapshot, measured[sel], sizeof snapshot);
+      for (uint16_t i = 0; i < local_points; i++) {
+        shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, data[i][0], data[i][1]);
+        if ((i & 0x0F) == 0x0F)
+          chThdYield();
+      }
+
       osalSysLock();
       sweep_copy_in_progress = false;
-      osalSysUnlock();
-
-      osalSysLock();
       bool stable = (generation == sweep_generation);
       osalSysUnlock();
 
       if (stable) {
         points = local_points;
-        break;
+        return;
       }
       chThdYield();
     }
-
-    for (uint16_t i = 0; i < points; i++) {
-      shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, snapshot[i][0], snapshot[i][1]);
-      if ((i & 0x0F) == 0x0F)
-        chThdYield();
-    }
-    return;
   } else {
     array = cal_data[sel - 2];
   }
