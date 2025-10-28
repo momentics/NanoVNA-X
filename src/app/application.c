@@ -157,8 +157,8 @@ static volatile uint32_t sweep_generation = 0;
 // Version text, displayed in Config->Version menu, also send by info command
 const char *info_about[]={
   "Board: " BOARD_NAME,
-  "NanoVNA-X maintainer: momentics (momentics@gmail.com)",
-  "Reconstructed but based on NanoVNA-D by @DiSlord (and @edy555)",
+  "NanoVNA-X maintainer: @momentics <momentics@gmail.com>",
+  "Reconstructed (from @DiSlord and @edy555)",
   "Licensed under GPL.",
   "  https://github.com/momentics/NanoVNA-X",
   "Version: " NANOVNA_VERSION_STRING " ["\
