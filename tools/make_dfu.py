@@ -36,6 +36,8 @@ from typing import Final
 
 # DfuSe files always reserve 16 bytes for the suffix appended at the end.
 _DFUSE_SUFFIX_LEN: Final[int] = 16
+_DFUSE_PREFIX_STRUCT = struct.Struct("<5sBIB")
+_DFUSE_PREFIX_LEN: Final[int] = _DFUSE_PREFIX_STRUCT.size
 
 
 def _parse_address(value: str) -> int:
@@ -98,11 +100,10 @@ def build_dfu(
         1,  # one element
     )
     targets = target_prefix + element
-    prefix = struct.pack(
-        "<5sBIB",
+    prefix = _DFUSE_PREFIX_STRUCT.pack(
         b"DfuSe",
         0x01,
-        len(targets) + _DFUSE_SUFFIX_LEN,
+        _DFUSE_PREFIX_LEN + len(targets) + _DFUSE_SUFFIX_LEN,
         1,  # number of targets
     )
     payload_without_crc = prefix + targets
