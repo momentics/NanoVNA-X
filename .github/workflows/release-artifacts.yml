@@ -72,6 +72,7 @@ jobs:
             "$dfu_path" \
             --preset-target "$dfuse_preset" \
             --device-id 0x0000
+          dfu-suffix --check "$dfu_path"
           for ext in bin hex dfu; do
             sha_file="$dist_dir/${base_name}.${ext}.sha256"
             sha256sum "$dist_dir/${base_name}.${ext}" > "$sha_file"

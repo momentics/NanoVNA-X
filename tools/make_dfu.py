@@ -123,6 +123,7 @@ def _build_suffix(
         _DFUSE_SUFFIX_LEN,
     )
     crc = binascii.crc32(payload_without_crc + suffix_without_crc) & 0xFFFFFFFF
+    crc ^= 0xFFFFFFFF
     return suffix_without_crc + struct.pack("<I", crc)
 
 

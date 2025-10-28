@@ -46,7 +46,7 @@ jobs:
             "build/${project}.dfu" \
             --preset-target "$dfuse_preset" \
             --device-id 0x0000
-          dfu-suffix --add "build/${project}.dfu" --pid 0xdf11 --vid 0x0483 --did 0x0000 --spec 0x011a
+          dfu-suffix --check "build/${project}.dfu"
 
       - name: Determine artefact name
         id: project
