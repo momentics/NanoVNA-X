@@ -279,9 +279,9 @@ CPPWARN = -Wall -Wextra -Wundef
 
 # List all user C define here, like -D_DEBUG=1
 ifeq ($(TARGET),F303)
- UDEFS = -DARM_MATH_CM4 -DVERSION=\"$(VERSION)\" -DNANOVNA_F303
+ UDEFS = -DARM_MATH_CM4 -DNANOVNA_F303
 else
- UDEFS = -DARM_MATH_CM0 -DVERSION=\"$(VERSION)\" 
+ UDEFS = -DARM_MATH_CM0
 endif
 #Enable if use RTC and need auto select source LSE or LSI
 UDEFS+= -DVNA_AUTO_SELECT_RTC_SOURCE
@@ -293,7 +293,7 @@ UDEFS+= -DVNA_AUTO_SELECT_RTC_SOURCE
 UADEFS =
 
 # List all user directories here
-UINCDIR = config include include/drivers third_party/FatFs boards/STM32F072 boards/STM32F303
+UINCDIR = config include include/drivers third_party/FatFs boards/STM32F072 boards/STM32F303 $(BUILDDIR)/generated
 
 # List the user directory to look for the libraries here
 ULIBDIR =
@@ -307,6 +307,14 @@ ULIBS = -lm
 
 RULESPATH = $(CHIBIOS)/os/common/startup/ARMCMx/compilers/GCC
 include $(RULESPATH)/rules.mk
+
+VERSION_HEADER := $(BUILDDIR)/generated/version_info.h
+
+PRE_MAKE_ALL_RULE_HOOK: $(VERSION_HEADER)
+
+$(VERSION_HEADER): VERSION | $(BUILDDIR)
+	@mkdir -p $(dir $@)
+	@printf '#pragma once\n#define NANOVNA_VERSION_STRING "%s"\n' "$(VERSION)" > $@
 
 flash: build/$(PROJECT).bin
 	dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D build/$(PROJECT).bin

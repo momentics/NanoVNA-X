@@ -1045,7 +1045,7 @@ typedef struct properties {
   float    _s21_offset;          // additional external attenuator for S21 measures
   float    _portz;               // Used for port-z renormalization
   float    _cal_load_r;          // Used as calibration standard LOAD R value (calculated in renormalization procedure)
-  uint32_t _reserved1[7];
+  uint32_t _reserved1[5];
   float    _cal_data[CAL_TYPE_COUNT][SWEEP_POINTS_MAX][2]; // Put at the end for faster access to others data from struct
   uint32_t checksum;
 } properties_t;

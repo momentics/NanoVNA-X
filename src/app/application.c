@@ -30,6 +30,7 @@
 #include "platform/hal.h"
 #include "services/config_service.h"
 #include "services/event_bus.h"
+#include "version_info.h"
 #include "measurement/pipeline.h"
 
 #include <chprintf.h>
@@ -157,10 +158,10 @@ static volatile uint32_t sweep_generation = 0;
 const char *info_about[]={
   "Board: " BOARD_NAME,
   "NanoVNA-X maintainer: momentics (momentics@gmail.com)",
-  "Based on NanoVNA-D by @DiSlord and original work by @edy555",
+  "Reconstructed but based on NanoVNA-D by @DiSlord (and @edy555)",
   "Licensed under GPL.",
   "  https://github.com/momentics/NanoVNA-X",
-  "Version: " VERSION " ["\
+  "Version: " NANOVNA_VERSION_STRING " ["\
   "p:"define_to_STR(SWEEP_POINTS_MAX)", "\
   "IF:"define_to_STR(FREQUENCY_IF_K)"k, "\
   "ADC:"define_to_STR(AUDIO_ADC_FREQ_K1)"k, "\
@@ -2626,11 +2627,11 @@ VNA_SHELL_FUNCTION(cmd_stat)
 }
 #endif
 
-#ifndef VERSION
-#define VERSION "unknown"
+#ifndef NANOVNA_VERSION_STRING
+#error "NANOVNA_VERSION_STRING must be defined"
 #endif
 
-const char NANOVNA_VERSION[] = VERSION;
+const char NANOVNA_VERSION[] = NANOVNA_VERSION_STRING;
 
 VNA_SHELL_FUNCTION(cmd_version)
 {
