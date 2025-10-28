@@ -22,6 +22,7 @@
 #pragma once
 #include "ch.h"
 #include <stdalign.h>
+#include <stdint.h>
 
 // Define LCD display driver and size
 #if defined(NANOVNA_F303)
@@ -1384,8 +1385,19 @@ get_sweep_frequency(uint16_t type)
   switch (type) {
     case ST_START:  return frequency0;
     case ST_STOP:   return frequency1;
-    case ST_CENTER: return (frequency0>>1) + (frequency1>>1) + (frequency0&1);
-    case ST_SPAN:   return frequency1 - frequency0;
+    case ST_CENTER:
+    case ST_SPAN: {
+      freq_t start = frequency0;
+      freq_t stop  = frequency1;
+      if (start > stop) {
+        freq_t tmp = start;
+        start = stop;
+        stop  = tmp;
+      }
+      if (type == ST_CENTER)
+        return (freq_t)(((uint64_t)start + (uint64_t)stop) >> 1);
+      return stop - start;
+    }
     case ST_CW:     return frequency0;
   }
   return 0;

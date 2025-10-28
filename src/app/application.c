@@ -1600,11 +1600,26 @@ update_marker_index(freq_t fstart, freq_t fstop, uint16_t points)
   }
 }
 
+static inline void
+sweep_get_ordered(freq_t *start, freq_t *stop)
+{
+  freq_t a = frequency0;
+  freq_t b = frequency1;
+  if (a <= b) {
+    *start = a;
+    *stop  = b;
+  } else {
+    *start = b;
+    *stop  = a;
+  }
+}
+
 void
 app_measurement_update_frequencies(void)
 {
-  freq_t start = get_sweep_frequency(ST_START);
-  freq_t stop  = get_sweep_frequency(ST_STOP);
+  freq_t start, stop;
+
+  sweep_get_ordered(&start, &stop);
 
   app_measurement_set_frequencies(start, stop, sweep_points);
 
@@ -1621,8 +1636,8 @@ app_measurement_update_frequencies(void)
   RESET_SWEEP;
 }
 
-void
-set_sweep_frequency(uint16_t type, freq_t freq)
+static void
+set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforce_order)
 {
   // Check frequency for out of bounds (minimum SPAN can be any value)
   if (type < ST_SPAN && freq < FREQUENCY_MIN)
@@ -1633,36 +1648,38 @@ set_sweep_frequency(uint16_t type, freq_t freq)
     type = FREQ_IS_CENTERSPAN() ? ST_SPAN : ST_STOP;
     if (type == ST_STOP) freq+= frequency0;
   }
-  if (freq > FREQUENCY_MAX)
+  if (type != ST_VAR && freq > FREQUENCY_MAX)
     freq = FREQUENCY_MAX;
-  freq_t center, span;
+  freq_t center, span, start, stop;
   switch (type) {
     case ST_START:
       FREQ_STARTSTOP();
       frequency0 = freq;
-      // if start > stop then make start = stop
-      if (frequency1 < freq) frequency1 = freq;
+      if (enforce_order && frequency1 < freq)
+        frequency1 = freq;
       break;
     case ST_STOP:
       FREQ_STARTSTOP()
       frequency1 = freq;
-        // if start > stop then make start = stop
-      if (frequency0 > freq) frequency0 = freq;
+      if (enforce_order && frequency1 < freq)
+        frequency1 = freq;
       break;
     case ST_CENTER:
       FREQ_CENTERSPAN();
+      sweep_get_ordered(&start, &stop);
       center = freq;
-      span   = (frequency1 - frequency0 + 1)>>1;
+      span   = (stop - start + 1)>>1;
       if (span > center - FREQUENCY_MIN)
-        span = (center - FREQUENCY_MIN);
+        span = center - FREQUENCY_MIN;
       if (span > FREQUENCY_MAX - center)
-        span = (FREQUENCY_MAX - center);
+        span = FREQUENCY_MAX - center;
       frequency0 = center - span;
       frequency1 = center + span;
       break;
     case ST_SPAN:
       FREQ_CENTERSPAN();
-      center = get_sweep_frequency(ST_CENTER);
+      sweep_get_ordered(&start, &stop);
+      center = (freq_t)(((uint64_t)start + (uint64_t)stop) >> 1);
       span = freq>>1;
       if (center < FREQUENCY_MIN + span)
         center = FREQUENCY_MIN + span;
@@ -1682,6 +1699,12 @@ set_sweep_frequency(uint16_t type, freq_t freq)
       return;
   }
   app_measurement_update_frequencies();
+}
+
+void
+set_sweep_frequency(uint16_t type, freq_t freq)
+{
+  set_sweep_frequency_internal(type, freq, true);
 }
 
 void reset_sweep_frequency(void){
@@ -1715,14 +1738,15 @@ VNA_SHELL_FUNCTION(cmd_sweep)
     int type = get_str_index(argv[0], sweep_cmd);
     if (type == -1)
       goto usage;
-    set_sweep_frequency(type, value1);
+    bool enforce = !(type == ST_START || type == ST_STOP);
+    set_sweep_frequency_internal(type, value1, enforce);
     return;
   }
   //  Parse sweep {start(Hz)} [stop(Hz)]
   if (value0)
-    set_sweep_frequency(ST_START, value0);
+    set_sweep_frequency_internal(ST_START, value0, false);
   if (value1)
-    set_sweep_frequency(ST_STOP, value1);
+    set_sweep_frequency_internal(ST_STOP, value1, false);
   if (value2)
     set_sweep_points(value2);
   return;
@@ -1956,10 +1980,12 @@ cal_collect(uint16_t type)
   if (type >= ARRAY_COUNT(calibration_set)) return;
 
   // reset old calibration if frequency range/points not some
-  if (need_interpolate(frequency0, frequency1, sweep_points)){
+  freq_t cal_start, cal_stop;
+  sweep_get_ordered(&cal_start, &cal_stop);
+  if (need_interpolate(cal_start, cal_stop, sweep_points)){
     cal_status = 0;
-    cal_frequency0 = frequency0;
-    cal_frequency1 = frequency1;
+    cal_frequency0 = cal_start;
+    cal_frequency1 = cal_stop;
     cal_sweep_points = sweep_points;
   }
   cal_power = current_props._power;
