@@ -23,7 +23,7 @@ jobs:
 
       - name: Install ARM toolchain
         run: |
-          sudo apt-get update
+          # sudo apt-get update
           sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi dfu-util
 
       - name: Determine firmware version
