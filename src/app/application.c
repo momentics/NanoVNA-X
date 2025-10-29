@@ -27,6 +27,7 @@
 #include "si5351.h"
 #include "nanovna.h"
 #include "app/shell.h"
+#include "usbcfg.h"
 #include "platform/hal.h"
 #include "services/config_service.h"
 #include "services/event_bus.h"
@@ -833,7 +834,7 @@ VNA_SHELL_FUNCTION(cmd_capture)
   for (int y = 0; y < LCD_HEIGHT; y += READ_ROWS) {
     // use uint16_t spi_buffer[2048] (defined in ili9341) for read buffer
     lcd_read_memory(0, y, LCD_WIDTH, READ_ROWS, (uint16_t *)spi_buffer);
-    shell_write(spi_buffer, READ_ROWS * LCD_WIDTH * sizeof(uint16_t));
+    shell_stream_write(spi_buffer, READ_ROWS * LCD_WIDTH * sizeof(uint16_t));
   }
 }
 
