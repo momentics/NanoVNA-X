@@ -1061,8 +1061,8 @@ static void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforc
   case ST_STOP:
     FREQ_STARTSTOP()
     frequency1 = freq;
-    if (enforce_order && frequency1 < freq)
-      frequency1 = freq;
+    if (enforce_order && frequency0 > freq)
+      frequency0 = freq;
     break;
   case ST_CENTER:
     FREQ_CENTERSPAN();
