@@ -174,8 +174,6 @@ CSRC = $(STARTUPSRC) \
        src/resources/fonts/Font6x10.c \
        src/resources/fonts/Font7x11b.c \
        src/resources/fonts/Font11x14.c \
-       src/resources/icons/icons_marker.c \
-       src/resources/icons/icons_menu.c \
        src/drivers/usbcfg.c \
        src/core/main.c \
        src/app/application.c \
