@@ -624,14 +624,54 @@ VNA_SHELL_FUNCTION(cmd_clearconfig) {
 
 VNA_SHELL_FUNCTION(cmd_data) {
   int sel = 0;
-  float (*array)[2];
+  const float (*array)[2];
   osalSysLock();
   uint16_t points = sweep_points;
   osalSysUnlock();
-  if (argc == 1)
+  if (argc == 1) {
     sel = my_atoi(argv[0]);
-  if (sel < 0 || sel >= 7)
+  }
+  if (sel < 0 || sel >= 7) {
     goto usage;
+  }
+
+  if (sel < 2) {
+    sweep_service_snapshot_t snapshot;
+
+    sweep_service_wait_for_generation();
+    while (true) {
+      if (!sweep_service_snapshot_acquire((uint8_t)sel, &snapshot)) {
+        chThdSleepMilliseconds(1);
+        continue;
+      }
+
+      for (uint16_t i = 0; i < snapshot.points; i++) {
+        shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, snapshot.data[i][0], snapshot.data[i][1]);
+        if ((i & 0x0F) == 0x0F) {
+          chThdYield();
+        }
+      }
+
+      if (sweep_service_snapshot_release(&snapshot)) {
+        points = snapshot.points;
+        return;
+      }
+      chThdYield();
+    }
+  } else {
+    array = cal_data[sel - 2];
+    osalSysLock();
+    points = cal_sweep_points;
+    osalSysUnlock();
+  }
+
+  for (uint16_t i = 0; i < points; i++) {
+    shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, array[i][0], array[i][1]);
+    if ((i & 0x0F) == 0x0F) {
+      chThdYield();
+    }
+  }
+  return;
 
 usage:
   shell_printf("usage: data [array]" VNA_SHELL_NEWLINE_STR);
