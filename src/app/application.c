@@ -20,6 +20,11 @@
  * Boston, MA 02110-1301, USA.
  */
 
+#define ENABLED_DUMP_COMMAND
+#define ENABLE_SCANBIN_COMMAND
+#define ENABLE_USART_COMMAND
+#define ENABLE_CONFIG_COMMAND
+
 #include "app/application.h"
 #include "app/sweep_service.h"
 
@@ -73,7 +78,10 @@ FIL* filesystem_file(void) {
 // Shell command line buffer, args, nargs, and function ptr
 static char shell_line[VNA_SHELL_MAX_LENGTH];
 
-#define ENABLED_DUMP_COMMAND
+#ifdef ENABLED_DUMP_COMMAND
+static void cmd_dump(int argc, char* argv[]);
+#endif
+
 // Allow get threads debug info
 // #define ENABLE_THREADS_COMMAND
 // Enable vbat_offset command, allow change battery voltage correction in config
@@ -106,14 +114,10 @@ static char shell_line[VNA_SHELL_MAX_LENGTH];
 // #define ENABLE_I2C_TIMINGS
 // Enable band setting command, used for debug
 // #define ENABLE_BAND_COMMAND
-// Enable scan_bin command (need use ex scan in future)
-#define ENABLE_SCANBIN_COMMAND
 // Enable debug for console command
 // #define DEBUG_CONSOLE_SHOW
 // Enable usart command
-#define ENABLE_USART_COMMAND
 // Enable config command
-#define ENABLE_CONFIG_COMMAND
 #ifdef __USE_SD_CARD__
 // Enable SD card console command
 #define ENABLE_SD_CARD_COMMAND

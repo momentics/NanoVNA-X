@@ -83,15 +83,6 @@ static float geometry_mean(float v0, float v1, float v2) {
 #define SWEEP_STATE_PROGRESS_ACTIVE 0x01u
 #define SWEEP_STATE_LED_ACTIVE 0x02u
 
-#define SWEEP_CH0_MEASURE (1U << 0)
-#define SWEEP_CH1_MEASURE (1U << 1)
-#define SWEEP_APPLY_EDELAY_S11 (1U << 2)
-#define SWEEP_APPLY_EDELAY_S21 (1U << 3)
-#define SWEEP_APPLY_S21_OFFSET (1U << 4)
-#define SWEEP_APPLY_CALIBRATION (1U << 5)
-#define SWEEP_USE_INTERPOLATION (1U << 6)
-#define SWEEP_USE_RENORMALIZATION (1U << 7)
-
 static inline void sweep_reset_progress(void) {
   p_sweep = 0;
 }

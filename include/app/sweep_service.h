@@ -29,6 +29,15 @@
 #include "ch.h"
 #include "nanovna.h"
 
+#define SWEEP_CH0_MEASURE (1U << 0)
+#define SWEEP_CH1_MEASURE (1U << 1)
+#define SWEEP_APPLY_EDELAY_S11 (1U << 2)
+#define SWEEP_APPLY_EDELAY_S21 (1U << 3)
+#define SWEEP_APPLY_S21_OFFSET (1U << 4)
+#define SWEEP_APPLY_CALIBRATION (1U << 5)
+#define SWEEP_USE_INTERPOLATION (1U << 6)
+#define SWEEP_USE_RENORMALIZATION (1U << 7)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -63,6 +72,7 @@ uint16_t app_measurement_get_sweep_mask(void);
 bool app_measurement_sweep(bool break_on_operation, uint16_t mask);
 int app_measurement_set_frequency(freq_t freq);
 void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points);
+void app_measurement_update_frequencies(void);
 void app_measurement_transform_domain(uint16_t ch_mask);
 void measurement_data_smooth(uint16_t ch_mask);
 
