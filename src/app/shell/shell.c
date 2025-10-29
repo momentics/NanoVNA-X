@@ -40,6 +40,7 @@ static uint16_t shell_nargs;
 static volatile const VNAShellCommand* pending_command = NULL;
 static uint16_t pending_argc = 0;
 static char** pending_argv = NULL;
+static bool shell_skip_linefeed = false;
 
 static void shell_write(const void* buf, size_t size) {
   if (shell_stream == NULL) {
@@ -227,6 +228,12 @@ int vna_shell_read_line(char* line, int max_size) {
   uint8_t c;
   uint16_t j = 0;
   while (shell_read(&c, 1)) {
+    if (shell_skip_linefeed) {
+      shell_skip_linefeed = false;
+      if (c == '\n') {
+        continue;
+      }
+    }
     if (c == 0x08 || c == 0x7f) {
       if (j > 0) {
         shell_write(backspace, sizeof backspace);
@@ -234,7 +241,8 @@ int vna_shell_read_line(char* line, int max_size) {
       }
       continue;
     }
-    if (c == '\r') {
+    if (c == '\r' || c == '\n') {
+      shell_skip_linefeed = (c == '\r');
       shell_printf(VNA_SHELL_NEWLINE_STR);
       line[j] = 0;
       return 1;
