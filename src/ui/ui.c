@@ -21,6 +21,7 @@
  */
 
 #include "nanovna.h"
+#include "app/shell.h"
 #include "hal.h"
 #include "chprintf.h"
 #include <string.h>

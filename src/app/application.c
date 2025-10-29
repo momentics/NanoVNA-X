@@ -24,16 +24,15 @@
 
 #include "ch.h"
 #include "hal.h"
-#include "usbcfg.h"
 #include "si5351.h"
 #include "nanovna.h"
+#include "app/shell.h"
 #include "platform/hal.h"
 #include "services/config_service.h"
 #include "services/event_bus.h"
 #include "version_info.h"
 #include "measurement/pipeline.h"
 
-#include <chprintf.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -41,12 +40,9 @@
 /*
  *  Shell settings
  */
-// If need run shell as thread (use more amount of memory fore stack), after
-// enable this need reduce spi_buffer size, by default shell run in main thread
+// If need run shell as thread (use more amount of memory for stack), after
+// enable this need reduce spi_buffer size, by default shell runs in main thread
 // #define VNA_SHELL_THREAD
-
-static BaseSequentialStream *shell_stream = 0;
-threads_queue_t shell_thread;
 
 static event_bus_t app_event_bus;
 static event_bus_subscription_t app_event_slots[8];
@@ -66,28 +62,15 @@ FIL *filesystem_file(void) {
 }
 #endif
 
-// Shell new line
-#define VNA_SHELL_NEWLINE_STR    "\r\n"
-// Shell command promt
-#define VNA_SHELL_PROMPT_STR     "ch> "
-// Shell max arguments
-#define VNA_SHELL_MAX_ARGUMENTS   4
-// Shell max command line size
-#define VNA_SHELL_MAX_LENGTH     64
 // Shell frequency printf format
 //#define VNA_FREQ_FMT_STR         "%lu"
 #define VNA_FREQ_FMT_STR         "%u"
 
-// Shell command functions prototypes
-typedef void (*vna_shellcmd_t)(int argc, char *argv[]);
 #define VNA_SHELL_FUNCTION(command_name) \
       static void command_name(int argc, char *argv[])
 
 // Shell command line buffer, args, nargs, and function ptr
 static char shell_line[VNA_SHELL_MAX_LENGTH];
-static char *shell_args[VNA_SHELL_MAX_ARGUMENTS + 1];
-static uint16_t shell_nargs;
-static volatile vna_shellcmd_t  shell_function = 0;
 
 #define ENABLED_DUMP_COMMAND
 // Allow get threads debug info
@@ -278,14 +261,7 @@ static THD_FUNCTION(Thread1, arg)
       sweep_in_progress = false;
       __WFI();
     }
-    // Run Shell command in sweep thread
-    while (shell_function) {
-      shell_function(shell_nargs - 1, &shell_args[1]);
-      osalSysLock();
-      shell_function = 0;
-      osalThreadDequeueNextI(&shell_thread, MSG_OK);
-      osalSysUnlock();
-    }
+    shell_service_pending_commands();
     // Process UI inputs
     sweep_mode|= SWEEP_UI_MODE;
     ui_process();
@@ -503,36 +479,6 @@ app_measurement_transform_domain(uint16_t ch_mask)
     memcpy(measured[ch], tmp, sizeof(measured[0]));
   }
 }
-
-// Shell commands output
-int shell_printf(const char *fmt, ...)
-{
-  if (shell_stream == NULL) return 0;
-  va_list ap;
-  int formatted_bytes;
-  va_start(ap, fmt);
-  formatted_bytes = chvprintf(shell_stream, fmt, ap);
-  va_end(ap);
-  return formatted_bytes;
-}
-
-static void shell_write(const void *buf, uint32_t size) {streamWrite(shell_stream, buf, size);}
-static int  shell_read(void *buf, uint32_t size)        {return streamRead(shell_stream, buf, size);}
-//static void shell_put(uint8_t c)                      {streamPut(shell_stream, c);}
-//static uint8_t shell_getc(void)                       {return streamGet(shell_stream);}
-
-#ifdef __USE_SERIAL_CONSOLE__
-// Serial Shell commands output
-int serial_shell_printf(const char *fmt, ...)
-{
-  va_list ap;
-  int formatted_bytes;
-  va_start(ap, fmt);
-  formatted_bytes = chvprintf((BaseSequentialStream *)&SD1, fmt, ap);
-  va_end(ap);
-  return formatted_bytes;
-}
-#endif
 
 VNA_SHELL_FUNCTION(cmd_pause)
 {
@@ -852,9 +798,9 @@ void capture_rle8(void) {
   };
 
   uint16_t size = sizeof(config._lcd_palette);
-  shell_write(&screenshot_header, sizeof(screenshot_header));      // write header
-  shell_write(&size, sizeof(uint16_t));                            // write palette block size
-  shell_write(config._lcd_palette, size);                          // write palette block
+  shell_stream_write(&screenshot_header, sizeof(screenshot_header));      // write header
+  shell_stream_write(&size, sizeof(uint16_t));                            // write palette block size
+  shell_stream_write(config._lcd_palette, size);                          // write palette block
   uint16_t *data  = &spi_buffer[32];                               // most bad pack situation increase on 1 byte every 128, so put not compressed data on 64 byte offset
   for (int y = 0, idx = 0; y < LCD_HEIGHT; y++) {
     lcd_read_memory(0, y, LCD_WIDTH, 1, data);                     // read in 16bpp format
@@ -866,7 +812,7 @@ void capture_rle8(void) {
       ((uint8_t*)data)[x] = idx;                                   // put palette index
     }
     spi_buffer[0] = packbits((char *)data, (char *)&spi_buffer[1], LCD_WIDTH); // pack
-    shell_write(spi_buffer, spi_buffer[0] + sizeof(uint16_t));
+    shell_stream_write(spi_buffer, spi_buffer[0] + sizeof(uint16_t));
   }
 }
 #endif
@@ -1630,12 +1576,12 @@ VNA_SHELL_FUNCTION(cmd_scan)
   // Output data after if set (faster data receive)
   if (mask) {
     if (mask&SCAN_MASK_BINARY){
-      shell_write(&mask, sizeof(uint16_t));
-      shell_write(&points, sizeof(uint16_t));
+      shell_stream_write(&mask, sizeof(uint16_t));
+      shell_stream_write(&points, sizeof(uint16_t));
       for (int i = 0; i < points; i++) {
-        if (mask & SCAN_MASK_OUT_FREQ ) {freq_t f = get_frequency(i); shell_write(&f, sizeof(freq_t));} // 4 bytes .. frequency
-        if (mask & SCAN_MASK_OUT_DATA0) shell_write(&measured[0][i][0], sizeof(float)* 2);             // 4+4 bytes .. S11 real/imag
-        if (mask & SCAN_MASK_OUT_DATA1) shell_write(&measured[1][i][0], sizeof(float)* 2);             // 4+4 bytes .. S21 real/imag
+        if (mask & SCAN_MASK_OUT_FREQ ) {freq_t f = get_frequency(i); shell_stream_write(&f, sizeof(freq_t));} // 4 bytes .. frequency
+        if (mask & SCAN_MASK_OUT_DATA0) shell_stream_write(&measured[0][i][0], sizeof(float)* 2);             // 4+4 bytes .. S11 real/imag
+        if (mask & SCAN_MASK_OUT_DATA1) shell_stream_write(&measured[1][i][0], sizeof(float)* 2);             // 4+4 bytes .. S21 real/imag
       }
     } else {
       for (int i = 0; i < points; i++) {
@@ -2992,9 +2938,9 @@ VNA_SHELL_FUNCTION(cmd_usart)
 void send_region(remote_region_t *rd, uint8_t * buf, uint16_t size)
 {
   if (SDU1.config->usbp->state == USB_ACTIVE) {
-    shell_write(rd, sizeof(remote_region_t));
-    shell_write(buf, size);
-    shell_write(VNA_SHELL_PROMPT_STR VNA_SHELL_NEWLINE_STR, 6);
+    shell_stream_write(rd, sizeof(remote_region_t));
+    shell_stream_write(buf, size);
+    shell_stream_write(VNA_SHELL_PROMPT_STR VNA_SHELL_NEWLINE_STR, 6);
   }
   else
     sweep_mode&=~SWEEP_REMOTE;
@@ -3078,11 +3024,11 @@ VNA_SHELL_FUNCTION(cmd_sd_read)
   // shell_printf("sd_read: %s" VNA_SHELL_NEWLINE_STR, filename);
   // number of bytes to follow (file size)
   uint32_t filesize = f_size(file);
-  shell_write(&filesize, 4);
+  shell_stream_write(&filesize, 4);
   UINT size = 0;
   // file data (send all data from file)
   while (f_read(file, buf, 512, &size) == FR_OK && size > 0)
-    shell_write(buf, size);
+    shell_stream_write(buf, size);
 
   f_close(file);
   return;
@@ -3121,23 +3067,6 @@ VNA_SHELL_FUNCTION(cmd_msg)
 
 //=============================================================================
 VNA_SHELL_FUNCTION(cmd_help);
-
-#pragma pack(push, 2)
-typedef struct {
-  const char           *sc_name;
-  vna_shellcmd_t    sc_function;
-  uint16_t flags;
-} VNAShellCommand;
-#pragma pack(pop)
-
-// Some commands can executed only in sweep thread, not in main cycle
-#define CMD_WAIT_MUTEX  1
-// Command execution need in sweep thread, and need break sweep for run
-#define CMD_BREAK_SWEEP 2
-// Command can run in shell thread (if sweep thread process UI, not sweep)
-#define CMD_RUN_IN_UI   4
-// Command can run in load script
-#define CMD_RUN_IN_LOAD 8
 
 static const VNAShellCommand commands[] =
 {
@@ -3280,205 +3209,32 @@ VNA_SHELL_FUNCTION(cmd_help)
  * VNA shell functions
  */
 
-// Check Serial connection requirements
-#ifdef __USE_SERIAL_CONSOLE__
-#if HAL_USE_SERIAL == FALSE
-#error "For serial console need HAL_USE_SERIAL as TRUE in halconf.h"
-#endif
-
-// Before start process command from shell, need select input stream
-#define PREPARE_STREAM shell_stream = VNA_MODE(VNA_MODE_CONNECTION) ? (BaseSequentialStream *)&SD1 : (BaseSequentialStream *)&SDU1;
-
-// Update Serial connection speed and settings
-void shell_update_speed(uint32_t speed){
-  config._serial_speed = speed;
-  // Update Serial speed settings
-  sdSetBaudrate(&SD1, speed);
-}
-
-// Check USB connection status
-static bool usb_is_active_locked(void) {
-  return usbGetDriverStateI(&USBD1) == USB_ACTIVE;
-}
-
-// Reset shell I/O queue
-void shell_reset_console(void){
-  osalSysLock();
-  // Reset I/O queue over USB (for USB need also connect/disconnect)
-  if (usb_is_active_locked()){
-    if (VNA_MODE(VNA_MODE_CONNECTION))
-      sduDisconnectI(&SDU1);
-    else
-      sduConfigureHookI(&SDU1);
-  }
-  // Reset I/O queue over Serial
-  qResetI(&SD1.oqueue);
-  qResetI(&SD1.iqueue);
-  osalSysUnlock();
-  // Prepare I/O for shell_stream
-  PREPARE_STREAM;
-}
-
-// Check active connection for Shell
-static bool shell_check_connect(void){
-  // Serial connection always active
-  if (VNA_MODE(VNA_MODE_CONNECTION))
-    return true;
-  // USB connection can be USB_SUSPENDED
-  osalSysLock();
-  const bool active = usb_is_active_locked();
-  osalSysUnlock();
-  return active;
-}
-
-static void shell_init_connection(void){
-  osalThreadQueueObjectInit(&shell_thread);
-/*
- * Initializes and start serial-over-USB CDC driver SDU1, connected to USBD1
- */
-  sduObjectInit(&SDU1);
-  sduStart(&SDU1, &serusbcfg);
-  SerialConfig s_config = {config._serial_speed, 0, USART_CR2_STOP1_BITS, 0 };
-  sdStart(&SD1, &s_config);
-/*
- * Set Serial speed settings for SD1
- */
-  shell_update_speed(config._serial_speed);
-
-/*
- * Activates the USB driver and then the USB bus pull-up on D+.
- * Note, a delay is inserted in order to not have to disconnect the cable
- * after a reset.
- */
-  usbDisconnectBus(&USBD1);
-  chThdSleepMilliseconds(100);
-  usbStart(&USBD1, &usbcfg);
-  usbConnectBus(&USBD1);
-
-  shell_reset_console();
-}
-
-#else
-// Only USB console, shell_stream always on USB
-#define PREPARE_STREAM shell_stream = (BaseSequentialStream *)&SDU1;
-
-// Check connection as Active, if no suspend input
-static bool shell_check_connect(void){
-  return SDU1.config->usbp->state == USB_ACTIVE;
-}
-
-// Init shell I/O connection over USB
-static void shell_init_connection(void){
-/*
- * Initializes and start serial-over-USB CDC driver SDU1, connected to USBD1
- */
-  sduObjectInit(&SDU1);
-  sduStart(&SDU1, &serusbcfg);
-
-/*
- * Activates the USB driver and then the USB bus pull-up on D+.
- * Note, a delay is inserted in order to not have to disconnect the cable
- * after a reset.
- */
-  usbDisconnectBus(&USBD1);
-  chThdSleepMilliseconds(100);
-  usbStart(&USBD1, &usbcfg);
-  usbConnectBus(&USBD1);
-
-/*
- *  Set I/O stream SDU1 for shell
- */
-  PREPARE_STREAM;
-}
-#endif
-
-static const VNAShellCommand *VNAShell_parceLine(char *line){
-  // Parse and execute line
-  shell_nargs = parse_line(line, shell_args, ARRAY_COUNT(shell_args));
-  if (shell_nargs > ARRAY_COUNT(shell_args)) {
-    shell_printf("too many arguments, max " define_to_STR(VNA_SHELL_MAX_ARGUMENTS) "" VNA_SHELL_NEWLINE_STR);
-    return NULL;
-  }
-  if (shell_nargs > 0) {
-    const VNAShellCommand *scp;
-    for (scp = commands; scp->sc_name != NULL; scp++)
-      if (get_str_index(scp->sc_name, shell_args[0]) == 0)
-        return scp;
-  }
-  return NULL;
-}
-
-//
-// Read command line from shell_stream
-//
-static const char backspace[] = {0x08, 0x20, 0x08, 0x00};
-static int vna_shell_read_line(char *line, int max_size)
-{
-  // send backspace, space for erase, backspace again
-  uint8_t c;
-  uint16_t j = 0;
-  // Return 0 only if stream not active
-  while (shell_read(&c, 1)) {
-    // Backspace or Delete
-    if (c == 0x08 || c == 0x7f) {
-      if (j > 0) {shell_write(backspace, sizeof(backspace)); j--;}
-      continue;
-    }
-    // New line (Enter)
-    if (c == '\r') {
-      shell_printf(VNA_SHELL_NEWLINE_STR);
-      line[j] = 0;
-      return 1;
-    }
-    // Others (skip) or too long - skip
-    if (c < ' ' || j >= max_size - 1) continue;
-    shell_write(&c, 1); // Echo
-    line[j++] = (char)c;
-  }
-  return 0;
-}
-
 //
 // Parse and run command line
 //
 static void vna_shell_execute_line(char *line)
 {
   DEBUG_LOG(0, line); // debug console log
-  // Execute line
-  const VNAShellCommand *scp = VNAShell_parceLine(line);
-  if (scp) {
-    uint16_t cmd_flag = scp->flags;
-    // Skip wait mutex if process UI
-    if ((cmd_flag & CMD_RUN_IN_UI) && (sweep_mode&SWEEP_UI_MODE)) cmd_flag&=~CMD_WAIT_MUTEX;
-    // Break current sweep operation
-    if (scp->flags & CMD_BREAK_SWEEP) operation_requested|=OP_CONSOLE;
-    // Add function for run on sweep end or on break sweep
+  uint16_t argc = 0;
+  char **argv = NULL;
+  const char *command_name = NULL;
+  const VNAShellCommand *cmd = shell_parse_command(line, &argc, &argv, &command_name);
+  if (cmd) {
+    uint16_t cmd_flag = cmd->flags;
+    if ((cmd_flag & CMD_RUN_IN_UI) && (sweep_mode & SWEEP_UI_MODE)) {
+      cmd_flag &= (uint16_t)~CMD_WAIT_MUTEX;
+    }
+    if (cmd_flag & CMD_BREAK_SWEEP) {
+      operation_requested |= OP_CONSOLE;
+    }
     if (cmd_flag & CMD_WAIT_MUTEX) {
-      shell_function = scp->sc_function;
-      // Wait execute command in sweep thread. The queue primitives must run
-      // inside a system lock or ChibiOS can lose the wakeup and leave the
-      // shell thread parked, which showed up as the USB console freezing
-      // during continuous host polling.
-      osalSysLock();
-      osalThreadEnqueueTimeoutS(&shell_thread, TIME_INFINITE);
-      osalSysUnlock();
-//      do {
-//        chThdSleepMilliseconds(10);
-//      } while (shell_function);
-    } else
-      scp->sc_function(shell_nargs - 1, &shell_args[1]);
-//  DEBUG_LOG(10, "ok");
-  } else if (**shell_args) // unknown command (not empty), ignore <CR>
-    shell_printf("%s?" VNA_SHELL_NEWLINE_STR, shell_args[0]);
-}
-
-void vna_shell_execute_cmd_line(char *line) {
-  // Disable shell output (not allow shell_printf write, but not block other output!!)
-  shell_stream = NULL;
-  const VNAShellCommand *scp = VNAShell_parceLine(line);
-  if (scp && (scp->flags & CMD_RUN_IN_LOAD))
-    scp->sc_function(shell_nargs - 1, &shell_args[1]);
-  PREPARE_STREAM;
+      shell_request_deferred_execution(cmd, argc, argv);
+    } else {
+      cmd->sc_function((int)argc, argv);
+    }
+  } else if (command_name && *command_name) {
+    shell_printf("%s?" VNA_SHELL_NEWLINE_STR, command_name);
+  }
 }
 
 #ifdef __SD_CARD_LOAD__
@@ -3494,8 +3250,6 @@ bool sd_card_load_config(void){
   if (f_open(config_file, "config.ini", FA_OPEN_EXISTING | FA_READ) != FR_OK)
     return FALSE;
 
-  // Disable shell output (not allow shell_printf write, but not block other output!!)
-  shell_stream = NULL;
   char *buf = (char *)spi_buffer;
   UINT size = 0;
 
@@ -3511,10 +3265,10 @@ bool sd_card_load_config(void){
           continue;
         }
         shell_line[j] = 0;
+        if (j > 0) {
+          vna_shell_execute_cmd_line(shell_line);
+        }
         j = 0;
-        const VNAShellCommand *scp = VNAShell_parceLine(shell_line);
-        if (scp && (scp->flags&CMD_RUN_IN_LOAD))
-          scp->sc_function(shell_nargs - 1, &shell_args[1]);
         last_was_cr = (c == '\r');
         continue;
       }
@@ -3528,12 +3282,9 @@ bool sd_card_load_config(void){
   }
   if (j > 0) {
     shell_line[j] = 0;
-    const VNAShellCommand *scp = VNAShell_parceLine(shell_line);
-    if (scp && (scp->flags&CMD_RUN_IN_LOAD))
-      scp->sc_function(shell_nargs - 1, &shell_args[1]);
+    vna_shell_execute_cmd_line(shell_line);
   }
   f_close(config_file);
-  PREPARE_STREAM;
   return TRUE;
 }
 #endif
@@ -3602,6 +3353,7 @@ int app_main(void)
 /*
  * Init Shell console connection data
  */
+  shell_register_commands(commands);
   shell_init_connection();
 
 /*

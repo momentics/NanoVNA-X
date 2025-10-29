@@ -363,7 +363,6 @@ void update_backup_data(void);
 void set_sweep_points(uint16_t points);
 
 bool sd_card_load_config(void);
-void vna_shell_execute_cmd_line(char *line);
 
 #ifdef __REMOTE_DESKTOP__
 // State flags for remote touch state
@@ -1062,10 +1061,6 @@ void set_trace_refpos(int t, float refpos);
 void set_trace_enable(int t, bool enable);
 const char *get_trace_chname(int t);
 
-//
-// Shell config functions and macros for Serial connect, not used if Serial mode disabled
-void shell_update_speed(uint32_t speed);
-void shell_reset_console(void);
 void  set_electrical_delay(int ch, float seconds);
 float get_electrical_delay(void);
 void set_s21_offset(float offset);
