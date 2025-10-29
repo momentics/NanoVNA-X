@@ -1377,23 +1377,24 @@ extern uint16_t lastsaveid;
 inline freq_t
 get_sweep_frequency(uint16_t type)
 {
+  freq_t start = frequency0;
+  freq_t stop  = frequency1;
+  if (start > stop) {
+    freq_t tmp = start;
+    start = stop;
+    stop  = tmp;
+  }
   switch (type) {
-    case ST_START:  return frequency0;
-    case ST_STOP:   return frequency1;
+    case ST_START:
+      return start;
+    case ST_STOP:
+      return stop;
     case ST_CENTER:
-    case ST_SPAN: {
-      freq_t start = frequency0;
-      freq_t stop  = frequency1;
-      if (start > stop) {
-        freq_t tmp = start;
-        start = stop;
-        stop  = tmp;
-      }
-      if (type == ST_CENTER)
-        return (freq_t)(((uint64_t)start + (uint64_t)stop) >> 1);
+      return (freq_t)(((uint64_t)start + (uint64_t)stop) >> 1);
+    case ST_SPAN:
       return stop - start;
-    }
-    case ST_CW:     return frequency0;
+    case ST_CW:
+      return frequency0;
   }
   return 0;
 }
