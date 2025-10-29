@@ -122,4 +122,5 @@ The final menu button reflects the current sweep state. It reads `PAUSE SWEEP` w
 
 ---
 
-This reference mirrors the firmware defaults in `include/nanovna.h`. If you disable a feature flag during compilation, the associated menu entries are omitted automatically.
+This reference mirrors the firmware defaults in `include/nanovna.h` and `include/app.app_features.h`.
+If you disable a feature flag during compilation, the associated menu entries are omitted automatically.
