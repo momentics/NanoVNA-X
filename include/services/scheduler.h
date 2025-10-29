@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * Based on Dmitry (DiSlord) dislordlive@gmail.com 
+ * Based on Dmitry (DiSlord) dislordlive@gmail.com
  * Based on TAKAHASHI Tomohiro (TTRFTECH) edy555@gmail.com
  * All rights reserved.
  *
@@ -24,16 +24,13 @@
 
 #include "ch.h"
 
-typedef msg_t (*scheduler_entry_t)(void *user_data);
+typedef msg_t (*scheduler_entry_t)(void* user_data);
 
 typedef struct {
-  thread_t *thread;
+  thread_t* thread;
 } scheduler_task_t;
 
-scheduler_task_t scheduler_start(const char *name,
-                                 tprio_t priority,
-                                 size_t stack_size,
-                                 scheduler_entry_t entry,
-                                 void *user_data);
+scheduler_task_t scheduler_start(const char* name, tprio_t priority, size_t stack_size,
+                                 scheduler_entry_t entry, void* user_data);
 
-void scheduler_stop(scheduler_task_t *task);
+void scheduler_stop(scheduler_task_t* task);

@@ -32,5 +32,5 @@ typedef struct {
   void (*erase_calibration)(void);
 } config_service_api_t;
 
-const config_service_api_t *config_service_api(void);
+const config_service_api_t* config_service_api(void);
 void config_service_init(void);

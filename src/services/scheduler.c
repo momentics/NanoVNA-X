@@ -22,7 +22,7 @@
 
 typedef struct {
   scheduler_entry_t entry;
-  void *user_data;
+  void* user_data;
 } scheduler_thread_context_t;
 
 #if defined(NANOVNA_F303)
@@ -35,11 +35,11 @@ typedef struct {
 static THD_WORKING_AREA(default_wa, 512);
 static scheduler_thread_context_t default_context;
 #endif
-static thread_t *default_thread = NULL;
+static thread_t* default_thread = NULL;
 
 #if SCHEDULER_HAS_STATIC_WA
-static void scheduler_entry_adapter(void *arg) {
-  scheduler_thread_context_t *context = (scheduler_thread_context_t *)arg;
+static void scheduler_entry_adapter(void* arg) {
+  scheduler_thread_context_t* context = (scheduler_thread_context_t*)arg;
   msg_t exit_code = MSG_OK;
   if (context != NULL && context->entry != NULL) {
     exit_code = context->entry(context->user_data);
@@ -48,12 +48,9 @@ static void scheduler_entry_adapter(void *arg) {
 }
 #endif
 
-scheduler_task_t scheduler_start(const char *name,
-                                 tprio_t priority,
-                                 size_t stack_size,
-                                 scheduler_entry_t entry,
-                                 void *user_data) {
-  scheduler_task_t task = { .thread = NULL };
+scheduler_task_t scheduler_start(const char* name, tprio_t priority, size_t stack_size,
+                                 scheduler_entry_t entry, void* user_data) {
+  scheduler_task_t task = {.thread = NULL};
   if (entry == NULL) {
     return task;
   }
@@ -64,17 +61,13 @@ scheduler_task_t scheduler_start(const char *name,
   (void)user_data;
   return task;
 #else
-  if ((stack_size != 0U && stack_size != sizeof(default_wa)) ||
-      default_thread != NULL) {
+  if ((stack_size != 0U && stack_size != sizeof(default_wa)) || default_thread != NULL) {
     return task;
   }
   default_context.entry = entry;
   default_context.user_data = user_data;
 
-  task.thread = chThdCreateStatic(default_wa,
-                                  sizeof(default_wa),
-                                  priority,
-                                  scheduler_entry_adapter,
+  task.thread = chThdCreateStatic(default_wa, sizeof(default_wa), priority, scheduler_entry_adapter,
                                   &default_context);
   if (task.thread == NULL) {
     return task;
@@ -91,7 +84,7 @@ scheduler_task_t scheduler_start(const char *name,
 #endif
 }
 
-void scheduler_stop(scheduler_task_t *task) {
+void scheduler_stop(scheduler_task_t* task) {
   if (task == NULL || task->thread == NULL) {
     return;
   }

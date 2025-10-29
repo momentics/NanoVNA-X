@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * Based on Dmitry (DiSlord) dislordlive@gmail.com 
+ * Based on Dmitry (DiSlord) dislordlive@gmail.com
  * Based on TAKAHASHI Tomohiro (TTRFTECH) edy555@gmail.com
  * All rights reserved.
  *
@@ -26,7 +26,7 @@
 
 #include "platform/boards/board_registry.h"
 
-static const PlatformDrivers *drivers = NULL;
+static const PlatformDrivers* drivers = NULL;
 
 void platform_init(void) {
   platform_board_pre_init();
@@ -36,6 +36,6 @@ void platform_init(void) {
   }
 }
 
-const PlatformDrivers *platform_get_drivers(void) {
+const PlatformDrivers* platform_get_drivers(void) {
   return drivers;
 }

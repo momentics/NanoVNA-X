@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * Based on Dmitry (DiSlord) dislordlive@gmail.com 
+ * Based on Dmitry (DiSlord) dislordlive@gmail.com
  * Based on TAKAHASHI Tomohiro (TTRFTECH) edy555@gmail.com
  * All rights reserved.
  *
@@ -35,32 +35,26 @@ typedef enum {
 
 typedef struct {
   event_bus_topic_t topic;
-  const void *payload;
+  const void* payload;
 } event_bus_message_t;
 
-typedef void (*event_bus_listener_t)(const event_bus_message_t *message, void *user_data);
+typedef void (*event_bus_listener_t)(const event_bus_message_t* message, void* user_data);
 
 typedef struct {
   event_bus_listener_t callback;
-  void *user_data;
+  void* user_data;
   event_bus_topic_t topic;
 } event_bus_subscription_t;
 
 typedef struct {
-  event_bus_subscription_t *subscriptions;
+  event_bus_subscription_t* subscriptions;
   size_t capacity;
   size_t count;
 } event_bus_t;
 
-void event_bus_init(event_bus_t *bus,
-                    event_bus_subscription_t *storage,
-                    size_t capacity);
+void event_bus_init(event_bus_t* bus, event_bus_subscription_t* storage, size_t capacity);
 
-bool event_bus_subscribe(event_bus_t *bus,
-                         event_bus_topic_t topic,
-                         event_bus_listener_t listener,
-                         void *user_data);
+bool event_bus_subscribe(event_bus_t* bus, event_bus_topic_t topic, event_bus_listener_t listener,
+                         void* user_data);
 
-void event_bus_publish(event_bus_t *bus,
-                       event_bus_topic_t topic,
-                       const void *payload);
+void event_bus_publish(event_bus_t* bus, event_bus_topic_t topic, const void* payload);

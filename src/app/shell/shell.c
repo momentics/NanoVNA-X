@@ -31,31 +31,31 @@
 #include <chprintf.h>
 #include <stdarg.h>
 
-static const VNAShellCommand *command_table = NULL;
+static const VNAShellCommand* command_table = NULL;
 
-static BaseSequentialStream *shell_stream = NULL;
+static BaseSequentialStream* shell_stream = NULL;
 static threads_queue_t shell_thread;
-static char *shell_args[VNA_SHELL_MAX_ARGUMENTS + 1];
+static char* shell_args[VNA_SHELL_MAX_ARGUMENTS + 1];
 static uint16_t shell_nargs;
-static volatile const VNAShellCommand *pending_command = NULL;
+static volatile const VNAShellCommand* pending_command = NULL;
 static uint16_t pending_argc = 0;
-static char **pending_argv = NULL;
+static char** pending_argv = NULL;
 
-static void shell_write(const void *buf, size_t size) {
+static void shell_write(const void* buf, size_t size) {
   if (shell_stream == NULL) {
     return;
   }
   streamWrite(shell_stream, buf, size);
 }
 
-static int shell_read(void *buf, uint32_t size) {
+static int shell_read(void* buf, uint32_t size) {
   if (shell_stream == NULL) {
     return 0;
   }
   return streamRead(shell_stream, buf, size);
 }
 
-int shell_printf(const char *fmt, ...) {
+int shell_printf(const char* fmt, ...) {
   if (shell_stream == NULL) {
     return 0;
   }
@@ -67,30 +67,29 @@ int shell_printf(const char *fmt, ...) {
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
-int serial_shell_printf(const char *fmt, ...) {
+int serial_shell_printf(const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  const int written = chvprintf((BaseSequentialStream *)&SD1, fmt, ap);
+  const int written = chvprintf((BaseSequentialStream*)&SD1, fmt, ap);
   va_end(ap);
   return written;
 }
 #endif
 
-void shell_stream_write(const void *buffer, size_t size) {
+void shell_stream_write(const void* buffer, size_t size) {
   shell_write(buffer, size);
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
-#define PREPARE_STREAM                                                     \
-  do {                                                                     \
-    shell_stream = VNA_MODE(VNA_MODE_CONNECTION) ?                         \
-                      (BaseSequentialStream *)&SD1 :                      \
-                      (BaseSequentialStream *)&SDU1;                      \
+#define PREPARE_STREAM                                                                             \
+  do {                                                                                             \
+    shell_stream = VNA_MODE(VNA_MODE_CONNECTION) ? (BaseSequentialStream*)&SD1                     \
+                                                 : (BaseSequentialStream*)&SDU1;                   \
   } while (false)
 #else
-#define PREPARE_STREAM                                                     \
-  do {                                                                     \
-    shell_stream = (BaseSequentialStream *)&SDU1;                          \
+#define PREPARE_STREAM                                                                             \
+  do {                                                                                             \
+    shell_stream = (BaseSequentialStream*)&SDU1;                                                   \
   } while (false)
 #endif
 
@@ -158,18 +157,16 @@ void shell_restore_stream(void) {
   PREPARE_STREAM;
 }
 
-void shell_register_commands(const VNAShellCommand *table) {
+void shell_register_commands(const VNAShellCommand* table) {
   command_table = table;
 }
 
-const VNAShellCommand *shell_parse_command(char *line,
-                                           uint16_t *argc,
-                                           char ***argv,
-                                           const char **name_out) {
+const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** argv,
+                                           const char** name_out) {
   shell_nargs = parse_line(line, shell_args, ARRAY_COUNT(shell_args));
   if (shell_nargs > ARRAY_COUNT(shell_args)) {
     shell_printf("too many arguments, max " define_to_STR(VNA_SHELL_MAX_ARGUMENTS)
-                 VNA_SHELL_NEWLINE_STR);
+                     VNA_SHELL_NEWLINE_STR);
     return NULL;
   }
   if (shell_nargs == 0) {
@@ -196,7 +193,7 @@ const VNAShellCommand *shell_parse_command(char *line,
   if (command_table == NULL) {
     return NULL;
   }
-  for (const VNAShellCommand *cmd = command_table; cmd->sc_name != NULL; cmd++) {
+  for (const VNAShellCommand* cmd = command_table; cmd->sc_name != NULL; cmd++) {
     if (get_str_index(cmd->sc_name, shell_args[0]) == 0) {
       return cmd;
     }
@@ -204,9 +201,7 @@ const VNAShellCommand *shell_parse_command(char *line,
   return NULL;
 }
 
-void shell_request_deferred_execution(const VNAShellCommand *command,
-                                      uint16_t argc,
-                                      char **argv) {
+void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t argc, char** argv) {
   pending_command = command;
   pending_argc = argc;
   pending_argv = argv;
@@ -217,7 +212,7 @@ void shell_request_deferred_execution(const VNAShellCommand *command,
 
 void shell_service_pending_commands(void) {
   while (pending_command != NULL) {
-    const VNAShellCommand *command = pending_command;
+    const VNAShellCommand* command = pending_command;
     command->sc_function(pending_argc, pending_argv);
     osalSysLock();
     pending_command = NULL;
@@ -228,7 +223,7 @@ void shell_service_pending_commands(void) {
 
 static const char backspace[] = {0x08, 0x20, 0x08, 0x00};
 
-int vna_shell_read_line(char *line, int max_size) {
+int vna_shell_read_line(char* line, int max_size) {
   uint8_t c;
   uint16_t j = 0;
   while (shell_read(&c, 1)) {
@@ -253,12 +248,12 @@ int vna_shell_read_line(char *line, int max_size) {
   return 0;
 }
 
-void vna_shell_execute_cmd_line(char *line) {
-  BaseSequentialStream *previous = shell_stream;
+void vna_shell_execute_cmd_line(char* line) {
+  BaseSequentialStream* previous = shell_stream;
   shell_stream = NULL;
   uint16_t argc = 0;
-  char **argv = NULL;
-  const VNAShellCommand *cmd = shell_parse_command(line, &argc, &argv, NULL);
+  char** argv = NULL;
+  const VNAShellCommand* cmd = shell_parse_command(line, &argc, &argv, NULL);
   if (cmd != NULL && (cmd->flags & CMD_RUN_IN_LOAD)) {
     cmd->sc_function(argc, argv);
   }

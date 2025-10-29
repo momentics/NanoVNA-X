@@ -23,4 +23,4 @@
 #include "platform/hal.h"
 
 void platform_board_pre_init(void);
-const PlatformDrivers *platform_board_drivers(void);
+const PlatformDrivers* platform_board_drivers(void);

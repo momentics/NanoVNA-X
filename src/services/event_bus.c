@@ -20,9 +20,7 @@
 
 #include "services/event_bus.h"
 
-void event_bus_init(event_bus_t *bus,
-                    event_bus_subscription_t *storage,
-                    size_t capacity) {
+void event_bus_init(event_bus_t* bus, event_bus_subscription_t* storage, size_t capacity) {
   if (bus == NULL) {
     return;
   }
@@ -31,32 +29,28 @@ void event_bus_init(event_bus_t *bus,
   bus->count = 0;
 }
 
-bool event_bus_subscribe(event_bus_t *bus,
-                         event_bus_topic_t topic,
-                         event_bus_listener_t listener,
-                         void *user_data) {
+bool event_bus_subscribe(event_bus_t* bus, event_bus_topic_t topic, event_bus_listener_t listener,
+                         void* user_data) {
   if (bus == NULL || listener == NULL || bus->subscriptions == NULL) {
     return false;
   }
   if (bus->count >= bus->capacity) {
     return false;
   }
-  event_bus_subscription_t *slot = &bus->subscriptions[bus->count++];
+  event_bus_subscription_t* slot = &bus->subscriptions[bus->count++];
   slot->callback = listener;
   slot->user_data = user_data;
   slot->topic = topic;
   return true;
 }
 
-void event_bus_publish(event_bus_t *bus,
-                       event_bus_topic_t topic,
-                       const void *payload) {
+void event_bus_publish(event_bus_t* bus, event_bus_topic_t topic, const void* payload) {
   if (bus == NULL || bus->subscriptions == NULL) {
     return;
   }
-  const event_bus_message_t message = { .topic = topic, .payload = payload };
+  const event_bus_message_t message = {.topic = topic, .payload = payload};
   for (size_t i = 0; i < bus->count; ++i) {
-    event_bus_subscription_t *slot = &bus->subscriptions[i];
+    event_bus_subscription_t* slot = &bus->subscriptions[i];
     if (slot->callback == NULL) {
       continue;
     }

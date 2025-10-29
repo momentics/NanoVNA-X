@@ -177,6 +177,7 @@ CSRC = $(STARTUPSRC) \
        src/drivers/usbcfg.c \
        src/core/main.c \
        src/app/application.c \
+       src/app/sweep_service.c \
        src/app/shell/shell.c \
        src/core/common.c \
        src/drivers/si5351.c \

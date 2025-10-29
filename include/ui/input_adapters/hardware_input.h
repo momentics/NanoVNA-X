@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * Based on Dmitry (DiSlord) dislordlive@gmail.com 
+ * Based on Dmitry (DiSlord) dislordlive@gmail.com
  * Based on TAKAHASHI Tomohiro (TTRFTECH) edy555@gmail.com
  * All rights reserved.
  *
@@ -26,22 +26,22 @@
 #include "hal.h"
 #include "nanovna.h"
 
-#define NO_EVENT                    0
-#define EVT_BUTTON_SINGLE_CLICK     0x01
-#define EVT_BUTTON_DOUBLE_CLICK     0x02
-#define EVT_BUTTON_DOWN_LONG        0x04
-#define EVT_UP                      0x10
-#define EVT_DOWN                    0x20
-#define EVT_REPEAT                  0x40
+#define NO_EVENT 0
+#define EVT_BUTTON_SINGLE_CLICK 0x01
+#define EVT_BUTTON_DOUBLE_CLICK 0x02
+#define EVT_BUTTON_DOWN_LONG 0x04
+#define EVT_UP 0x10
+#define EVT_DOWN 0x20
+#define EVT_REPEAT 0x40
 
-#define BUTTON_DOWN_LONG_TICKS      MS2ST(500)
-#define BUTTON_DOUBLE_TICKS         MS2ST(250)
-#define BUTTON_REPEAT_TICKS         MS2ST(30)
-#define BUTTON_DEBOUNCE_TICKS       MS2ST(20)
+#define BUTTON_DOWN_LONG_TICKS MS2ST(500)
+#define BUTTON_DOUBLE_TICKS MS2ST(250)
+#define BUTTON_REPEAT_TICKS MS2ST(30)
+#define BUTTON_DEBOUNCE_TICKS MS2ST(20)
 
-#define BUTTON_DOWN                 (1 << GPIOA_LEVER1)
-#define BUTTON_PUSH                 (1 << GPIOA_PUSH)
-#define BUTTON_UP                   (1 << GPIOA_LEVER2)
+#define BUTTON_DOWN (1 << GPIOA_LEVER1)
+#define BUTTON_PUSH (1 << GPIOA_PUSH)
+#define BUTTON_UP (1 << GPIOA_LEVER2)
 
 uint16_t ui_input_get_buttons(void);
 uint16_t ui_input_check(void);

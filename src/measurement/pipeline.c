@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * Based on Dmitry (DiSlord) dislordlive@gmail.com 
+ * Based on Dmitry (DiSlord) dislordlive@gmail.com
  * Based on TAKAHASHI Tomohiro (TTRFTECH) edy555@gmail.com
  * All rights reserved.
  *
@@ -22,26 +22,21 @@
 
 #include "measurement/pipeline.h"
 
-#include "nanovna.h"
+#include "app/sweep_service.h"
 
-extern uint16_t app_measurement_get_sweep_mask(void);
-extern bool app_measurement_sweep(bool break_on_operation, uint16_t mask);
-
-void measurement_pipeline_init(measurement_pipeline_t *pipeline,
-                               const PlatformDrivers *drivers) {
+void measurement_pipeline_init(measurement_pipeline_t* pipeline, const PlatformDrivers* drivers) {
   if (pipeline == NULL) {
     return;
   }
   pipeline->drivers = drivers;
 }
 
-uint16_t measurement_pipeline_active_mask(measurement_pipeline_t *pipeline) {
+uint16_t measurement_pipeline_active_mask(measurement_pipeline_t* pipeline) {
   (void)pipeline;
   return app_measurement_get_sweep_mask();
 }
 
-bool measurement_pipeline_execute(measurement_pipeline_t *pipeline,
-                                  bool break_on_operation,
+bool measurement_pipeline_execute(measurement_pipeline_t* pipeline, bool break_on_operation,
                                   uint16_t channel_mask) {
   (void)pipeline;
   return app_measurement_sweep(break_on_operation, channel_mask);

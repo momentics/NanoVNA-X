@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * Based on Dmitry (DiSlord) dislordlive@gmail.com 
+ * Based on Dmitry (DiSlord) dislordlive@gmail.com
  * Based on TAKAHASHI Tomohiro (TTRFTECH) edy555@gmail.com
  * All rights reserved.
  *
@@ -39,11 +39,11 @@ static uint32_t calibration_slot_area(int id) {
   return SAVE_PROP_CONFIG_ADDR + id * SAVE_PROP_CONFIG_SIZE;
 }
 
-static uint32_t checksum(const void *start, size_t len) {
-  uint32_t *p = (uint32_t*)start;
+static uint32_t checksum(const void* start, size_t len) {
+  uint32_t* p = (uint32_t*)start;
   uint32_t value = 0;
   // align by sizeof(uint32_t)
-  len = (len + sizeof(uint32_t)-1)/sizeof(uint32_t);
+  len = (len + sizeof(uint32_t) - 1) / sizeof(uint32_t);
   while (len-- > 0)
     value = __ROR(value, 31) + *p++;
   return value;
@@ -60,9 +60,10 @@ static int config_save_impl(void) {
 }
 
 static int config_recall_impl(void) {
-  const config_t *src = (const config_t*)SAVE_CONFIG_ADDR;
+  const config_t* src = (const config_t*)SAVE_CONFIG_ADDR;
 
-  if (src->magic != CONFIG_MAGIC || checksum(src, sizeof *src - sizeof src->checksum) != src->checksum)
+  if (src->magic != CONFIG_MAGIC ||
+      checksum(src, sizeof *src - sizeof src->checksum) != src->checksum)
     return -1;
   // duplicated saved data onto sram to be able to modify marker/trace
   memcpy(&config, src, sizeof(config_t));
@@ -75,27 +76,29 @@ static int caldata_save_impl(uint32_t id) {
 
   // Apply magic word and calculate checksum
   current_props.magic = PROPERTIES_MAGIC;
-  current_props.checksum = checksum(&current_props, sizeof current_props - sizeof current_props.checksum);
+  current_props.checksum =
+      checksum(&current_props, sizeof current_props - sizeof current_props.checksum);
 
   // write to flash
-  uint16_t *dst = (uint16_t*)calibration_slot_area(id);
+  uint16_t* dst = (uint16_t*)calibration_slot_area(id);
   flash_program_half_word_buffer(dst, (uint16_t*)&current_props, sizeof(properties_t));
 
   lastsaveid = id;
   return 0;
 }
 
-const properties_t *get_properties(uint32_t id) {
+const properties_t* get_properties(uint32_t id) {
   if (id >= SAVEAREA_MAX)
     return NULL;
   // point to saved area on the flash memory
-  properties_t *src = (properties_t*)calibration_slot_area(id);
+  properties_t* src = (properties_t*)calibration_slot_area(id);
   // Check crc cache mask (made it only 1 time)
-  if (checksum_ok&(1<<id))
+  if (checksum_ok & (1 << id))
     return src;
-  if (src->magic != PROPERTIES_MAGIC || checksum(src, sizeof *src - sizeof src->checksum) != src->checksum)
+  if (src->magic != PROPERTIES_MAGIC ||
+      checksum(src, sizeof *src - sizeof src->checksum) != src->checksum)
     return NULL;
-  checksum_ok|=1<<id;
+  checksum_ok |= 1 << id;
   return src;
 }
 
@@ -104,9 +107,9 @@ static int caldata_recall_impl(uint32_t id) {
   if (id == NO_SAVE_SLOT)
     return 0;
   // point to saved area on the flash memory
-  const properties_t *src = get_properties(id);
-  if (src == NULL){
-//  load_default_properties();
+  const properties_t* src = get_properties(id);
+  if (src == NULL) {
+    //  load_default_properties();
     return 1;
   }
   // active configuration points to save data on flash memory
@@ -124,11 +127,11 @@ static void clear_all_config_prop_data_impl(void) {
 }
 
 static const config_service_api_t api = {
-  .save_configuration = config_save_impl,
-  .load_configuration = config_recall_impl,
-  .save_calibration = caldata_save_impl,
-  .load_calibration = caldata_recall_impl,
-  .erase_calibration = clear_all_config_prop_data_impl,
+    .save_configuration = config_save_impl,
+    .load_configuration = config_recall_impl,
+    .save_calibration = caldata_save_impl,
+    .load_calibration = caldata_recall_impl,
+    .erase_calibration = clear_all_config_prop_data_impl,
 };
 
 static bool initialized = false;
@@ -137,39 +140,38 @@ void config_service_init(void) {
   initialized = true;
 }
 
-const config_service_api_t *config_service_api(void) {
+const config_service_api_t* config_service_api(void) {
   return initialized ? &api : NULL;
 }
 
-static const config_service_api_t *require_api(void) {
-  const config_service_api_t *instance = config_service_api();
+static const config_service_api_t* require_api(void) {
+  const config_service_api_t* instance = config_service_api();
   return instance;
 }
 
 int config_save(void) {
-  const config_service_api_t *instance = require_api();
+  const config_service_api_t* instance = require_api();
   return instance ? instance->save_configuration() : -1;
 }
 
 int config_recall(void) {
-  const config_service_api_t *instance = require_api();
+  const config_service_api_t* instance = require_api();
   return instance ? instance->load_configuration() : -1;
 }
 
 int caldata_save(uint32_t id) {
-  const config_service_api_t *instance = require_api();
+  const config_service_api_t* instance = require_api();
   return instance ? instance->save_calibration(id) : -1;
 }
 
 int caldata_recall(uint32_t id) {
-  const config_service_api_t *instance = require_api();
+  const config_service_api_t* instance = require_api();
   return instance ? instance->load_calibration(id) : -1;
 }
 
 void clear_all_config_prop_data(void) {
-  const config_service_api_t *instance = require_api();
+  const config_service_api_t* instance = require_api();
   if (instance && instance->erase_calibration) {
     instance->erase_calibration();
   }
 }
-

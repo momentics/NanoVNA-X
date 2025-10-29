@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * Based on Dmitry (DiSlord) dislordlive@gmail.com 
+ * Based on Dmitry (DiSlord) dislordlive@gmail.com
  * Based on TAKAHASHI Tomohiro (TTRFTECH) edy555@gmail.com
  * All rights reserved.
  *
@@ -111,17 +111,17 @@
 // Run TIM2 as us timer counter (used as STM32_ST_TIM timer in ChibiOS)
 // Run TIM3 as ms timer counter
 void board_init_timers(void) {
-//  rccEnableTIM2(FALSE);
+  //  rccEnableTIM2(FALSE);
   rccEnableTIM3(FALSE);
   // TIM2 use AHB1 bus clock (32 bit timer), use STM32_TIMCLK1 clock source
-//  TIM2->PSC = STM32_TIMCLK1 / (1000000U) - 1; // 1MHz tick
+  //  TIM2->PSC = STM32_TIMCLK1 / (1000000U) - 1; // 1MHz tick
   // TIM3 use AHB1 bus clock (16 bit timer), used in touch period handler
-  TIM3->PSC = STM32_TIMCLK1 / (1000U) - 1;    // 1kHz tick
-  TIM3->CR2 = 0x20;                          // Generate TRIGO event for ADC watchdog
+  TIM3->PSC = STM32_TIMCLK1 / (1000U) - 1; // 1kHz tick
+  TIM3->CR2 = 0x20;                        // Generate TRIGO event for ADC watchdog
 }
 
 //
-void board_start_timer(TIM_TypeDef *timer, uint32_t period) {
+void board_start_timer(TIM_TypeDef* timer, uint32_t period) {
   timer->ARR = period - 1;
   timer->EGR = STM32_TIM_EGR_UG;
   timer->CNT = 0;
