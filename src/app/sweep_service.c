@@ -39,7 +39,7 @@ static systime_t ready_time = 0;
 static volatile uint16_t wait_count = 0;
 static audio_sample_t rx_buffer[AUDIO_BUFFER_LEN * 2];
 
-#ifdef ENABLED_DUMP_COMMAND
+#if ENABLED_DUMP_COMMAND
 static audio_sample_t* dump_buffer = NULL;
 static volatile int16_t dump_len = 0;
 static int16_t dump_selection = 0;
@@ -183,7 +183,7 @@ static void apply_offset(float data[2], float offset) {
   data[1] *= offset;
 }
 
-#ifdef ENABLED_DUMP_COMMAND
+#if ENABLED_DUMP_COMMAND
 static void duplicate_buffer_to_dump(audio_sample_t* p, size_t n) {
   p += dump_selection;
   while (n > 0U) {
@@ -209,7 +209,7 @@ void i2s_lld_serve_rx_interrupt(uint32_t flags) {
   } else {
     dsp_process(p, AUDIO_BUFFER_LEN);
   }
-#ifdef ENABLED_DUMP_COMMAND
+#if ENABLED_DUMP_COMMAND
   duplicate_buffer_to_dump(p, AUDIO_BUFFER_LEN);
 #endif
   --wait_count;
@@ -225,7 +225,7 @@ void sweep_service_init(void) {
   sweep_bar_pending = 0;
   smooth_factor = 0;
   sample_func = calculate_gamma;
-#ifdef ENABLED_DUMP_COMMAND
+#if ENABLED_DUMP_COMMAND
   dump_buffer = NULL;
   dump_len = 0;
   dump_selection = 0;
@@ -326,7 +326,7 @@ const audio_sample_t* sweep_service_rx_buffer(void) {
   return rx_buffer;
 }
 
-#ifdef ENABLED_DUMP_COMMAND
+#if ENABLED_DUMP_COMMAND
 void sweep_service_prepare_dump(audio_sample_t* buffer, size_t count, int selection) {
   dump_buffer = buffer;
   dump_len = (int16_t)count;

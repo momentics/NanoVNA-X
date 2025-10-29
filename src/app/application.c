@@ -20,11 +20,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#define ENABLED_DUMP_COMMAND
-#define ENABLE_SCANBIN_COMMAND
-#define ENABLE_USART_COMMAND
-#define ENABLE_CONFIG_COMMAND
-
+#include "app/app_features.h"
 #include "app/application.h"
 #include "app/sweep_service.h"
 
@@ -78,7 +74,7 @@ FIL* filesystem_file(void) {
 // Shell command line buffer, args, nargs, and function ptr
 static char shell_line[VNA_SHELL_MAX_LENGTH];
 
-#ifdef ENABLED_DUMP_COMMAND
+#if ENABLED_DUMP_COMMAND
 static void cmd_dump(int argc, char* argv[]);
 #endif
 
@@ -439,7 +435,7 @@ VNA_SHELL_FUNCTION(cmd_smooth) {
 }
 #endif
 
-#ifdef ENABLE_CONFIG_COMMAND
+#if ENABLE_CONFIG_COMMAND
 VNA_SHELL_FUNCTION(cmd_config) {
   static const char cmd_mode_list[] = "auto"
 #ifdef __USE_SMOOTH__
@@ -841,7 +837,7 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   uint16_t mask = 0;
   uint16_t sweep_ch = SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE;
 
-#ifdef ENABLE_SCANBIN_COMMAND
+#if ENABLE_SCANBIN_COMMAND
   if (argc == 4) {
     mask = my_atoui(argv[3]);
     if (sweep_mode & SWEEP_BINARY)
@@ -907,7 +903,7 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   }
 }
 
-#ifdef ENABLE_SCANBIN_COMMAND
+#if ENABLE_SCANBIN_COMMAND
 VNA_SHELL_FUNCTION(cmd_scan_bin) {
   sweep_mode |= SWEEP_BINARY;
   cmd_scan(argc, argv);
@@ -2215,7 +2211,7 @@ VNA_SHELL_FUNCTION(cmd_threads) {
 #endif
 
 #ifdef __USE_SERIAL_CONSOLE__
-#ifdef ENABLE_USART_COMMAND
+#if ENABLE_USART_COMMAND
 VNA_SHELL_FUNCTION(cmd_usart_cfg) {
   if (argc != 1) {
     //    shell_printf("usage: %s" VNA_SHELL_NEWLINE_STR "current: %u" VNA_SHELL_NEWLINE_STR,
@@ -2383,7 +2379,7 @@ VNA_SHELL_FUNCTION(cmd_help);
 
 static const VNAShellCommand commands[] = {
     {"scan", cmd_scan, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
-#ifdef ENABLE_SCANBIN_COMMAND
+#if ENABLE_SCANBIN_COMMAND
     {"scan_bin", cmd_scan_bin, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
 #endif
     {"data", cmd_data, 0},
@@ -2408,7 +2404,7 @@ static const VNAShellCommand commands[] = {
 #endif
     {"saveconfig", cmd_saveconfig, CMD_RUN_IN_LOAD},
     {"clearconfig", cmd_clearconfig, CMD_RUN_IN_LOAD},
-#ifdef ENABLED_DUMP_COMMAND
+#if ENABLED_DUMP_COMMAND
     {"dump", cmd_dump, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
 #endif
 #ifdef ENABLE_PORT_COMMAND
@@ -2455,11 +2451,11 @@ static const VNAShellCommand commands[] = {
 #ifdef __USE_SMOOTH__
     {"smooth", cmd_smooth, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
-#ifdef ENABLE_CONFIG_COMMAND
+#if ENABLE_CONFIG_COMMAND
     {"config", cmd_config, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
 #ifdef __USE_SERIAL_CONSOLE__
-#ifdef ENABLE_USART_COMMAND
+#if ENABLE_USART_COMMAND
     {"usart_cfg", cmd_usart_cfg,
      CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
     {"usart", cmd_usart, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
@@ -2811,7 +2807,7 @@ void hard_fault_handler_c(uint32_t* sp, const hard_fault_extra_registers_t* extr
 // void _kill(void){}
 // int  _write (int file, char *data, int len) {(void)file; (void)data; return len;}
 // void _getpid(void){}
-#ifdef ENABLED_DUMP_COMMAND
+#if ENABLED_DUMP_COMMAND
 VNA_SHELL_FUNCTION(cmd_dump) {
   int i, j;
   audio_sample_t dump[96 * 2];
