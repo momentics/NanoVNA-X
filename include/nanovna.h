@@ -1374,7 +1374,7 @@ extern uint16_t lastsaveid;
 #define DIGIT_SEPARATOR      '.'
 #endif
 
-inline freq_t
+static inline freq_t
 get_sweep_frequency(uint16_t type)
 {
   freq_t start = frequency0;
