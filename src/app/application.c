@@ -1103,186 +1103,6 @@ usage:
 }
 #endif
 
-config_t config = {
-    .magic = CONFIG_MAGIC,
-    ._harmonic_freq_threshold = FREQUENCY_THRESHOLD,
-    ._IF_freq = FREQUENCY_OFFSET,
-    ._touch_cal = DEFAULT_TOUCH_CONFIG,
-    ._vna_mode = 0, // USB mode, search max
-    ._brightness = DEFAULT_BRIGHTNESS,
-    ._dac_value = 1922,
-    ._vbat_offset = 420,
-    ._bandwidth = BANDWIDTH_1000,
-    ._lcd_palette = LCD_DEFAULT_PALETTE,
-    ._serial_speed = SERIAL_DEFAULT_BITRATE,
-    ._xtal_freq = XTALFREQ,
-    ._measure_r = MEASURE_DEFAULT_R,
-    ._lever_mode = LM_MARKER,
-    ._band_mode = 0,
-};
-
-properties_t current_props;
-
-// NanoVNA Default settings
-static const trace_t def_trace[TRACES_MAX] = { // enable, type, channel, smith format, scale, refpos
-    {TRUE, TRC_LOGMAG, 0, MS_RX, 10.0, NGRIDY - 1},
-    {TRUE, TRC_LOGMAG, 1, MS_REIM, 10.0, NGRIDY - 1},
-    {TRUE, TRC_SMITH, 0, MS_RX, 1.0, 0},
-    {TRUE, TRC_PHASE, 1, MS_REIM, 90.0, NGRIDY / 2}};
-
-static const marker_t def_markers[MARKERS_MAX] = {
-    {TRUE, 0, 10 * SWEEP_POINTS_MAX / 100 - 1, 0},
-#if MARKERS_MAX > 1
-    {FALSE, 0, 20 * SWEEP_POINTS_MAX / 100 - 1, 0},
-#endif
-#if MARKERS_MAX > 2
-    {FALSE, 0, 30 * SWEEP_POINTS_MAX / 100 - 1, 0},
-#endif
-#if MARKERS_MAX > 3
-    {FALSE, 0, 40 * SWEEP_POINTS_MAX / 100 - 1, 0},
-#endif
-#if MARKERS_MAX > 4
-    {FALSE, 0, 50 * SWEEP_POINTS_MAX / 100 - 1, 0},
-#endif
-#if MARKERS_MAX > 5
-    {FALSE, 0, 60 * SWEEP_POINTS_MAX / 100 - 1, 0},
-#endif
-#if MARKERS_MAX > 6
-    {FALSE, 0, 70 * SWEEP_POINTS_MAX / 100 - 1, 0},
-#endif
-#if MARKERS_MAX > 7
-    {FALSE, 0, 80 * SWEEP_POINTS_MAX / 100 - 1, 0},
-#endif
-};
-
-// Load propeties default settings
-static void load_default_properties(void) {
-  // Magic add on caldata_save
-  current_props.magic = PROPERTIES_MAGIC;
-  current_props._frequency0 = 50000;     // start =  50kHz
-  current_props._frequency1 = 900000000; // end   = 900MHz
-  current_props._var_freq = 0;
-  current_props._sweep_points = POINTS_COUNT_DEFAULT;     // Set default points count
-  current_props._cal_frequency0 = 50000;                  // calibration start =  50kHz
-  current_props._cal_frequency1 = 900000000;              // calibration end   = 900MHz
-  current_props._cal_sweep_points = POINTS_COUNT_DEFAULT; // Set calibration default points count
-  current_props._cal_status = 0;
-  //=============================================
-  memcpy(current_props._trace, def_trace, sizeof(def_trace));
-  memcpy(current_props._markers, def_markers, sizeof(def_markers));
-  //=============================================
-  current_props._electrical_delay[0] = 0.0f;
-  current_props._electrical_delay[1] = 0.0f;
-  current_props._var_delay = 0.0f;
-  current_props._s21_offset = 0.0f;
-  current_props._portz = 50.0f;
-  current_props._cal_load_r = 50.0f;
-  current_props._velocity_factor = 70;
-  current_props._current_trace = 0;
-  current_props._active_marker = 0;
-  current_props._previous_marker = MARKER_INVALID;
-  current_props._mode = 0;
-  current_props._reserved = 0;
-  current_props._power = SI5351_CLK_DRIVE_STRENGTH_AUTO;
-  current_props._cal_power = SI5351_CLK_DRIVE_STRENGTH_AUTO;
-  current_props._measure = 0;
-  // This data not loaded by default
-  // current_props._cal_data[5][POINTS_COUNT][2];
-  // Checksum add on caldata_save
-  // current_props.checksum = 0;
-}
-
-//
-// Backup registers support, allow save data on power off (while vbat power enabled)
-//
-#ifdef __USE_BACKUP__
-#if SWEEP_POINTS_MAX > 511 || SAVEAREA_MAX > 15
-#error "Check backup data limits!!"
-#endif
-
-// backup_0 bitfield
-typedef union {
-  struct {
-    uint32_t points : 9;     //  9 !! limit 511 points!!
-    uint32_t bw : 9;         // 18 !! limit 511
-    uint32_t id : 4;         // 22 !! 15 save slots
-    uint32_t leveler : 3;    // 25
-    uint32_t brightness : 7; // 32
-  };
-  uint32_t v;
-} backup_0;
-
-void update_backup_data(void) {
-  backup_0 bk = {.points = sweep_points,
-                 .bw = config._bandwidth,
-                 .id = lastsaveid,
-                 .leveler = lever_mode,
-                 .brightness = config._brightness};
-  set_backup_data32(0, bk.v);
-  set_backup_data32(1, frequency0);
-  set_backup_data32(2, frequency1);
-  set_backup_data32(3, var_freq);
-  set_backup_data32(4, config._vna_mode);
-}
-
-static void load_settings(void) {
-  load_default_properties(); // Load default settings
-  if (config_recall() == 0 &&
-      VNA_MODE(VNA_MODE_BACKUP)) { // Config loaded ok and need restore backup if enabled
-    backup_0 bk = {.v = get_backup_data32(0)};
-    if (bk.v != 0) {                                            // if backup data valid
-      if (bk.id < SAVEAREA_MAX && caldata_recall(bk.id) == 0) { // Slot valid and Load ok
-        sweep_points = bk.points; // Restore settings depend from calibration data
-        frequency0 = get_backup_data32(1);
-        frequency1 = get_backup_data32(2);
-        var_freq = get_backup_data32(3);
-      } else
-        caldata_recall(0);
-      // Here need restore settings not depend from cal data
-      config._brightness = bk.brightness;
-      lever_mode = bk.leveler;
-      config._vna_mode = get_backup_data32(4) | (1 << VNA_MODE_BACKUP); // refresh backup settings
-      set_bandwidth(bk.bw);
-    } else
-      caldata_recall(0); // Try load 0 slot
-  } else
-    caldata_recall(0); // Try load 0 slot
-  app_measurement_update_frequencies();
-#ifdef __VNA_MEASURE_MODULE__
-  plot_set_measure_mode(current_props._measure);
-#endif
-}
-#else
-static void load_settings(void) {
-  load_default_properties();
-  config_recall();
-  load_properties(0);
-}
-#endif
-
-int load_properties(uint32_t id) {
-  int r = caldata_recall(id);
-  app_measurement_update_frequencies();
-#ifdef __VNA_MEASURE_MODULE__
-  plot_set_measure_mode(current_props._measure);
-#endif
-  return r;
-}
-
-VNA_SHELL_FUNCTION(cmd_gain) {
-  int rvalue = 0;
-  int lvalue = 0;
-  if (argc == 0 && argc > 2) {
-    shell_printf("usage: gain {lgain(0-95)} [rgain(0-95)]" VNA_SHELL_NEWLINE_STR);
-    return;
-  };
-  lvalue = rvalue = my_atoui(argv[0]);
-  if (argc == 3)
-    rvalue = my_atoui(argv[1]);
-  tlv320aic3204_set_gain(lvalue, rvalue);
-}
-#endif
-
 void set_bandwidth(uint16_t bw_count) {
   config._bandwidth = bw_count & 0x1FF;
   request_to_redraw(REDRAW_BACKUP | REDRAW_FREQUENCY);
@@ -1314,6 +1134,18 @@ result:
   shell_printf("bandwidth %d (%uHz)" VNA_SHELL_NEWLINE_STR, config._bandwidth,
                get_bandwidth_frequency(config._bandwidth));
 }
+
+#ifdef ENABLE_GAIN_COMMAND
+VNA_SHELL_FUNCTION(cmd_gain) {
+  if (argc == 0 || argc > 2) {
+    shell_printf("usage: gain {lgain(0-95)} [rgain(0-95)]" VNA_SHELL_NEWLINE_STR);
+    return;
+  }
+  int lvalue = my_atoui(argv[0]);
+  int rvalue = (argc == 2) ? my_atoui(argv[1]) : lvalue;
+  tlv320aic3204_set_gain(lvalue, rvalue);
+}
+#endif
 
 void set_sweep_points(uint16_t points) {
   if (points > SWEEP_POINTS_MAX)
