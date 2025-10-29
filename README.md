@@ -28,6 +28,14 @@ used in the NanoVNA-X project. The documentation describes the build and flash p
 macOS or a Linux (Debian or Ubuntu) system, other Linux (or even BSD) systems may behave
 similar.
 
+## Improvements​
+An asynchronous event bus now provides a lightweight publish/subscribe backbone that decouples the measurement pipeline, UI, and configuration services; this reduces coupling, eases feature integration, and safely propagates sweep lifecycle, settings changes, and system signals without blocking long‑running tasks.​
+On top of the services layer, a cooperative scheduler assigns workers to measurement and rendering priorities, eliminating UI jitter under load and delivering predictable execution windows for DSP and I/O; hook timing and quanta were refined to avoid cross‑delays when talking to the synthesizer and audio codec.
+
+### PLL transient stabilization​
+PLL transients are stabilized by optimizing the synthesizer programming sequence and precomputing capture parameters: staged delays, lock‑status gating, and reference frequency caching minimize retuning overhead, reducing overshoot and drift at sweep start and during rapid retunes.​
+Loop‑filter parameters and output enable order were further refined to cut transient amplitude and accelerate phase settling across operating sub‑bands; this improves measurement repeatability and reduces reliance on additional DSP smoothing.
+
 ## Architecture Overview
 
 NanoVNA-X embraces a layered architecture that separates bootstrapping, platform
