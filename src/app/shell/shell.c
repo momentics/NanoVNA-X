@@ -141,27 +141,36 @@ static size_t shell_stream_write_buffer(BaseSequentialStream* stream, const void
 
 #if HAL_USE_SERIAL_USB == TRUE
   if (stream == (BaseSequentialStream*)&SDU1) {
-    const syssts_t sts = chSysGetStatusAndLockX();
-    const bool active = usbGetDriverStateI(&USBD1) == USB_ACTIVE;
-    chSysRestoreStatusX(sts);
-    if (!active) {
-      return 0U;
-    }
     while (total < size) {
       size_t chunk = size - total;
       if (chunk > SHELL_WRITE_CHUNK) {
         chunk = SHELL_WRITE_CHUNK;
       }
+
+      const syssts_t sts = chSysGetStatusAndLockX();
+      const bool active =
+          (usbGetDriverStateI(&USBD1) == USB_ACTIVE) && (SDU1.state == SDU_READY);
+      chSysRestoreStatusX(sts);
+      if (!active) {
+        break;
+      }
+
       const size_t written =
-          chnWriteTimeout((BaseChannel*)&SDU1, data + total, chunk, SHELL_WRITE_TIMEOUT);
+          obqWriteTimeout(&SDU1.obqueue, data + total, chunk, SHELL_WRITE_TIMEOUT);
       if (written == 0U) {
         break;
       }
+
       total += written;
       if (total < size) {
         chThdYield();
       }
     }
+
+    if (total > 0U) {
+      obqFlush(&SDU1.obqueue);
+    }
+
     return total;
   }
 #endif
@@ -173,16 +182,19 @@ static size_t shell_stream_write_buffer(BaseSequentialStream* stream, const void
       if (chunk > SHELL_WRITE_CHUNK) {
         chunk = SHELL_WRITE_CHUNK;
       }
-      const size_t written =
-          chnWriteTimeout((BaseChannel*)&SD1, data + total, chunk, SHELL_WRITE_TIMEOUT);
+
+      const qsize_t written =
+          oqWriteTimeout(&SD1.oqueue, data + total, (qsize_t)chunk, SHELL_WRITE_TIMEOUT);
       if (written == 0U) {
         break;
       }
-      total += written;
+
+      total += (size_t)written;
       if (total < size) {
         chThdYield();
       }
     }
+
     return total;
   }
 #endif
