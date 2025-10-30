@@ -2727,7 +2727,7 @@ static THD_WORKING_AREA(waThread2, /* cmd_* max stack size + alpha */ 442);
 THD_FUNCTION(myshellThread, p) {
   (void)p;
   chRegSetThreadName("shell");
-  bool prompt_printed = false;
+  bool prompt_printed = true;
   while (true) {
     if (!prompt_printed) {
       shell_printf(VNA_SHELL_PROMPT_STR);
@@ -2829,7 +2829,8 @@ int app_main(void) {
 
   while (1) {
     if (shell_check_connect()) {
-      shell_printf(VNA_SHELL_NEWLINE_STR "NanoVNA Shell" VNA_SHELL_NEWLINE_STR);
+      shell_printf(VNA_SHELL_PROMPT_STR VNA_SHELL_NEWLINE_STR "NanoVNA Shell" VNA_SHELL_NEWLINE_STR
+                                       VNA_SHELL_PROMPT_STR);
 #ifdef VNA_SHELL_THREAD
 #if CH_CFG_USE_WAITEXIT == FALSE
 #error "VNA_SHELL_THREAD use chThdWait, need enable CH_CFG_USE_WAITEXIT in chconf.h"
@@ -2838,7 +2839,7 @@ int app_main(void) {
           chThdCreateStatic(waThread2, sizeof(waThread2), NORMALPRIO + 1, myshellThread, NULL);
       chThdWait(shelltp);
 #else
-      bool prompt_printed = false;
+      bool prompt_printed = true;
       do {
         if (!prompt_printed) {
           shell_printf(VNA_SHELL_PROMPT_STR);

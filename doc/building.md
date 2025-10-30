@@ -115,6 +115,10 @@ host; see the main README for more detail on entering DFU mode.
   after updating the toolchain to avoid mixing incompatible object files.
 - **Permission errors when flashing** – on Linux, add udev rules for DFU devices
   or run `dfu-util` with `sudo`.
+- **Host utility cannot detect the device** – after flashing, open the USB console
+  and confirm the session starts with `ch> ` before the banner. Older host caches
+  (e.g. NanoVNA-Saver) may need a reconnect to pick up the new handshake.
+
 
 Following these steps should yield a repeatable build both locally and in
 continuous integration environments.

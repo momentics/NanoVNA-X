@@ -37,6 +37,7 @@ similar.
 * **Sweep engine overhaul.** The sweep service adds snapshot APIs, generation counters, and breakable batches so automation clients can read coherent buffers without stalling the UI; it also manages LED/progress feedback, smoothing kernels, domain transforms, and calibration flags inside the measurement loop.
 * **Persistent configuration service.** Configuration and calibration saves are validated with rolling checksums, cached per-slot integrity flags, and a single API surface that hides flash programming details from application code.
 * **Platform driver registry.** Hardware bring-up flows through a board registry that selects the correct driver table for each target and runs optional pre-initialisation hooks, reducing conditional logic scattered across the firmware.
+* **USB console handshake compatibility.** The USB shell now emits its `ch> ` prompt before the banner so host utilities such as NanoVNA-Saver detect the device without manual retries.
 
 ### PLL transient stabilization​
 PLL transients are stabilized by optimizing the synthesizer programming sequence and precomputing capture parameters: staged delays, lock‑status gating, and reference frequency caching minimize retuning overhead, reducing overshoot and drift at sweep start and during rapid retunes.​

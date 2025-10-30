@@ -120,6 +120,10 @@ Pressing **MEASURE** opens the submenu tied to the currently active measurement 
 
 The final menu button reflects the current sweep state. It reads `PAUSE SWEEP` when the VNA is sweeping and `RESUME SWEEP` once paused. Activating the button calls `toggle_sweep()` and updates the label/icon accordingly.
 
+## USB console prompt behaviour
+
+Automation clients rely on the USB shell prompt to decide when the instrument is ready. The firmware now opens every session with `\r\nch> \r\nNanoVNA Shell\r\nch> ` so that tools such as NanoVNA-Saver recognise the prompt immediately before processing the banner text.
+
 ---
 
 This reference mirrors the firmware defaults in `include/nanovna.h` and `include/app.app_features.h`.
