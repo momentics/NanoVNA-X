@@ -42,8 +42,8 @@ static uint16_t pending_argc = 0;
 static char** pending_argv = NULL;
 static bool shell_skip_linefeed = false;
 
-#define SHELL_READ_TIMEOUT TIME_MS2I(50)
-#define SHELL_INPUT_IDLE_TIMEOUT TIME_MS2I(2000)
+#define SHELL_READ_TIMEOUT MS2ST(50)
+#define SHELL_INPUT_IDLE_TIMEOUT MS2ST(2000)
 
 static void shell_write(const void* buf, size_t size) {
   if (shell_stream == NULL) {
