@@ -53,7 +53,7 @@ static int shell_read(void* buf, uint32_t size) {
   if (shell_stream == NULL) {
     return 0;
   }
-  return streamRead(shell_stream, buf, size);
+  return (int)chnReadTimeout((BaseAsynchronousChannel*)shell_stream, buf, size, TIME_IMMEDIATE);
 }
 
 int shell_printf(const char* fmt, ...) {
@@ -225,8 +225,8 @@ void shell_service_pending_commands(void) {
 static const char backspace[] = {0x08, 0x20, 0x08, 0x00};
 
 int vna_shell_read_line(char* line, int max_size) {
+  static uint16_t current_length = 0;
   uint8_t c;
-  uint16_t j = 0;
   while (shell_read(&c, 1)) {
     if (shell_skip_linefeed) {
       shell_skip_linefeed = false;
@@ -235,23 +235,24 @@ int vna_shell_read_line(char* line, int max_size) {
       }
     }
     if (c == 0x08 || c == 0x7f) {
-      if (j > 0) {
+      if (current_length > 0) {
         shell_write(backspace, sizeof backspace);
-        j--;
+        current_length--;
       }
       continue;
     }
     if (c == '\r' || c == '\n') {
       shell_skip_linefeed = (c == '\r');
       shell_printf(VNA_SHELL_NEWLINE_STR);
-      line[j] = 0;
+      line[current_length] = 0;
+      current_length = 0;
       return 1;
     }
-    if (c < ' ' || j >= max_size - 1) {
+    if (c < ' ' || current_length >= max_size - 1) {
       continue;
     }
     shell_write(&c, 1);
-    line[j++] = (char)c;
+    line[current_length++] = (char)c;
   }
   return 0;
 }
