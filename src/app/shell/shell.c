@@ -44,12 +44,70 @@ static bool shell_skip_linefeed = false;
 
 #define SHELL_READ_TIMEOUT MS2ST(50)
 #define SHELL_INPUT_IDLE_TIMEOUT MS2ST(2000)
+#define SHELL_WRITE_TIMEOUT MS2ST(200)
+#define SHELL_WRITE_CHUNK 64U
+
+#define SHELL_PRINTF_MAX_FILLER 11
+#define SHELL_PRINTF_FLOAT_PRECISION 9
+
+static char* shell_long_to_string_with_divisor(char* p, long num, unsigned radix, long divisor) {
+  int i;
+  char* q;
+  long l = num;
+  long ll = (divisor == 0) ? num : divisor;
+
+  q = p + SHELL_PRINTF_MAX_FILLER;
+  do {
+    i = (int)(l % radix);
+    i += '0';
+    if (i > '9') {
+      i += 'A' - '0' - 10;
+    }
+    *--q = (char)i;
+    l /= radix;
+  } while ((ll /= radix) != 0);
+
+  i = (int)(p + SHELL_PRINTF_MAX_FILLER - q);
+  do {
+    *p++ = *q++;
+  } while (--i);
+
+  return p;
+}
+
+static char* shell_ltoa(char* p, long num, unsigned radix) {
+  return shell_long_to_string_with_divisor(p, num, radix, 0);
+}
+
+#if CHPRINTF_USE_FLOAT
+static const long shell_pow10[SHELL_PRINTF_FLOAT_PRECISION] = {
+    10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
+
+static char* shell_ftoa(char* p, double num, unsigned long precision) {
+  long l;
+
+  if (precision == 0 || precision > SHELL_PRINTF_FLOAT_PRECISION) {
+    precision = SHELL_PRINTF_FLOAT_PRECISION;
+  }
+  precision = shell_pow10[precision - 1];
+
+  l = (long)num;
+  p = shell_long_to_string_with_divisor(p, l, 10, 0);
+  *p++ = '.';
+  l = (long)((num - l) * precision);
+  return shell_long_to_string_with_divisor(p, l, 10, precision / 10);
+}
+#endif
+
+static bool shell_stream_put_char(BaseSequentialStream* stream, uint8_t value);
+static size_t shell_stream_write_buffer(BaseSequentialStream* stream, const void* buf,
+                                        size_t size);
 
 static void shell_write(const void* buf, size_t size) {
-  if (shell_stream == NULL) {
+  if (shell_stream == NULL || size == 0U) {
     return;
   }
-  streamWrite(shell_stream, buf, size);
+  (void)shell_stream_write_buffer(shell_stream, buf, size);
 }
 
 static size_t shell_read(void* buf, size_t size) {
@@ -72,13 +130,264 @@ static size_t shell_read(void* buf, size_t size) {
   return streamRead(shell_stream, buf, size);
 }
 
+static size_t shell_stream_write_buffer(BaseSequentialStream* stream, const void* buf,
+                                        size_t size) {
+  if (stream == NULL || size == 0U) {
+    return 0U;
+  }
+
+  const uint8_t* data = (const uint8_t*)buf;
+  size_t total = 0U;
+
+#if HAL_USE_SERIAL_USB == TRUE
+  if (stream == (BaseSequentialStream*)&SDU1) {
+    osalSysLock();
+    const bool active = usbGetDriverStateI(&USBD1) == USB_ACTIVE;
+    osalSysUnlock();
+    if (!active) {
+      return 0U;
+    }
+    while (total < size) {
+      size_t chunk = size - total;
+      if (chunk > SHELL_WRITE_CHUNK) {
+        chunk = SHELL_WRITE_CHUNK;
+      }
+      const size_t written =
+          chnWriteTimeout((BaseChannel*)&SDU1, data + total, chunk, SHELL_WRITE_TIMEOUT);
+      if (written == 0U) {
+        break;
+      }
+      total += written;
+      if (total < size) {
+        chThdYield();
+      }
+    }
+    return total;
+  }
+#endif
+
+#ifdef __USE_SERIAL_CONSOLE__
+  if (stream == (BaseSequentialStream*)&SD1) {
+    while (total < size) {
+      size_t chunk = size - total;
+      if (chunk > SHELL_WRITE_CHUNK) {
+        chunk = SHELL_WRITE_CHUNK;
+      }
+      const size_t written =
+          chnWriteTimeout((BaseChannel*)&SD1, data + total, chunk, SHELL_WRITE_TIMEOUT);
+      if (written == 0U) {
+        break;
+      }
+      total += written;
+      if (total < size) {
+        chThdYield();
+      }
+    }
+    return total;
+  }
+#endif
+
+  return streamWrite(stream, data, size);
+}
+
+static bool shell_stream_put_char(BaseSequentialStream* stream, uint8_t value) {
+  return shell_stream_write_buffer(stream, &value, 1U) == 1U;
+}
+
+static int shell_vprintf(BaseSequentialStream* stream, const char* fmt, va_list ap) {
+  if (stream == NULL) {
+    return 0;
+  }
+
+  char* p;
+  char* s;
+  char c;
+  char filler;
+  int i;
+  int precision;
+  int width;
+  int n = 0;
+  bool is_long;
+  bool left_align;
+  long l;
+#if CHPRINTF_USE_FLOAT
+  float f;
+  char tmpbuf[2 * SHELL_PRINTF_MAX_FILLER + 1];
+#else
+  char tmpbuf[SHELL_PRINTF_MAX_FILLER + 1];
+#endif
+
+  while (true) {
+    c = *fmt++;
+    if (c == 0) {
+      return n;
+    }
+    if (c != '%') {
+      if (!shell_stream_put_char(stream, (uint8_t)c)) {
+        return n;
+      }
+      n++;
+      continue;
+    }
+    p = tmpbuf;
+    s = tmpbuf;
+    left_align = FALSE;
+    if (*fmt == '-') {
+      fmt++;
+      left_align = TRUE;
+    }
+    filler = ' ';
+    if (*fmt == '0') {
+      fmt++;
+      filler = '0';
+    }
+    width = 0;
+    while (TRUE) {
+      c = *fmt++;
+      if (c >= '0' && c <= '9') {
+        c -= '0';
+      } else if (c == '*') {
+        c = va_arg(ap, int);
+      } else {
+        break;
+      }
+      width = width * 10 + c;
+    }
+    precision = 0;
+    if (c == '.') {
+      while (TRUE) {
+        c = *fmt++;
+        if (c >= '0' && c <= '9') {
+          c -= '0';
+        } else if (c == '*') {
+          c = va_arg(ap, int);
+        } else {
+          break;
+        }
+        precision *= 10;
+        precision += c;
+      }
+    }
+
+    if (c == 'l' || c == 'L') {
+      is_long = TRUE;
+      if (*fmt) {
+        c = *fmt++;
+      }
+    } else {
+      is_long = (c >= 'A') && (c <= 'Z');
+    }
+
+    switch (c) {
+    case 'c':
+      filler = ' ';
+      *p++ = va_arg(ap, int);
+      break;
+    case 's':
+      filler = ' ';
+      if ((s = va_arg(ap, char*)) == 0) {
+        s = "(null)";
+      }
+      if (precision == 0) {
+        precision = 32767;
+      }
+      while (*s && (precision-- > 0)) {
+        *p++ = *s++;
+      }
+      break;
+    case 'D':
+    case 'd':
+      if (is_long) {
+        l = va_arg(ap, long);
+      } else {
+        l = va_arg(ap, int);
+      }
+      if (l < 0) {
+        *p++ = '-';
+        l = -l;
+      }
+      p = shell_ltoa(p, l, 10);
+      break;
+    case 'U':
+    case 'u':
+      if (is_long) {
+        l = va_arg(ap, long);
+      } else {
+        l = va_arg(ap, int);
+      }
+      p = shell_ltoa(p, l, 10);
+      break;
+    case 'X':
+    case 'x':
+      if (is_long) {
+        l = va_arg(ap, long);
+      } else {
+        l = va_arg(ap, int);
+      }
+      p = shell_ltoa(p, l, 16);
+      break;
+    case 'O':
+    case 'o':
+      if (is_long) {
+        l = va_arg(ap, long);
+      } else {
+        l = va_arg(ap, int);
+      }
+      p = shell_ltoa(p, l, 8);
+      break;
+#if CHPRINTF_USE_FLOAT
+    case 'f':
+    case 'F':
+      f = (float)va_arg(ap, double);
+      if (f < 0) {
+        *p++ = '-';
+        f = -f;
+      }
+      p = shell_ftoa(p, f, precision);
+      break;
+#endif
+    default:
+      if (!shell_stream_put_char(stream, (uint8_t)c)) {
+        return n;
+      }
+      n++;
+      continue;
+    }
+
+    i = (int)(p - s);
+    if ((width -= i) < 0) {
+      width = 0;
+    }
+    if (!left_align) {
+      while (width-- > 0) {
+        if (!shell_stream_put_char(stream, (uint8_t)filler)) {
+          return n;
+        }
+        n++;
+      }
+    }
+    while (i-- > 0) {
+      if (!shell_stream_put_char(stream, (uint8_t)*s++)) {
+        return n;
+      }
+      n++;
+    }
+    while (width-- > 0) {
+      if (!shell_stream_put_char(stream, (uint8_t)filler)) {
+        return n;
+      }
+      n++;
+    }
+  }
+}
+
 int shell_printf(const char* fmt, ...) {
   if (shell_stream == NULL) {
     return 0;
   }
   va_list ap;
   va_start(ap, fmt);
-  const int written = chvprintf(shell_stream, fmt, ap);
+  const int written = shell_vprintf(shell_stream, fmt, ap);
   va_end(ap);
   return written;
 }
@@ -87,7 +396,7 @@ int shell_printf(const char* fmt, ...) {
 int serial_shell_printf(const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  const int written = chvprintf((BaseSequentialStream*)&SD1, fmt, ap);
+  const int written = shell_vprintf((BaseSequentialStream*)&SD1, fmt, ap);
   va_end(ap);
   return written;
 }
