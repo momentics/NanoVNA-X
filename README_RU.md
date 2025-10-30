@@ -3,9 +3,11 @@
   <a href="https://github.com/momentics/NanoVNA-X/actions/workflows/release-artifacts.yml"><img src="https://github.com/momentics/NanoVNA-X/actions/workflows/release-artifacts.yml/badge.svg" alt="Состояние сборки релизных артефактов"></a>
 </p>
 
-NanoVNA-X - усовершенствованная прошивка для карманных векторных анализаторов NanoVNA -H/H4, более стабильные измерения, улучшенный интерфейс
+NanoVNA-X - усовершенствованная прошивка для карманных векторных анализаторов NanoVNA -H/H4
 ===============================================================================
 [English version](README.md)
+[![Release](https://img.shields.io/github/v/release/momentics/NanoVNA-X)](https://github.com/momentics/NanoVNA-X/releases)
+[![Maintenance](https://img.shields.io/maintenance/yes/2025)]()
 
 <div align="center">
 <img src="/doc/NanoVNA.jpg" width="280px">
