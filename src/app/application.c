@@ -146,6 +146,28 @@ const char* info_about[] = {
     0 // sentinel
 };
 
+#ifdef ENABLE_INFO_COMMAND
+static void shell_print_ascii_line(const char* text) {
+  char chunk[32];
+  size_t chunk_len = 0;
+  while (*text != '\0') {
+    unsigned char c = (unsigned char)*text++;
+    if (c < 0x20U || c >= 0x7FU) {
+      c = '?';
+    }
+    chunk[chunk_len++] = (char)c;
+    if (chunk_len == sizeof chunk) {
+      shell_stream_write(chunk, chunk_len);
+      chunk_len = 0;
+    }
+  }
+  if (chunk_len > 0U) {
+    shell_stream_write(chunk, chunk_len);
+  }
+  shell_stream_write(VNA_SHELL_NEWLINE_STR, sizeof(VNA_SHELL_NEWLINE_STR) - 1);
+}
+#endif
+
 // Allow draw some debug on LCD
 #ifdef DEBUG_CONSOLE_SHOW
 void my_debug_log(int offs, char* log) {
@@ -2164,8 +2186,9 @@ VNA_SHELL_FUNCTION(cmd_info) {
   (void)argc;
   (void)argv;
   int i = 0;
-  while (info_about[i])
-    shell_printf("%s" VNA_SHELL_NEWLINE_STR, info_about[i++]);
+  while (info_about[i] != NULL) {
+    shell_print_ascii_line(info_about[i++]);
+  }
 }
 #endif
 
