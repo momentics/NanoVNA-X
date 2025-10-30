@@ -53,10 +53,23 @@ static void shell_write(const void* buf, size_t size) {
 }
 
 static size_t shell_read(void* buf, size_t size) {
-  if (shell_stream == NULL) {
+  if (shell_stream == NULL || size == 0) {
     return 0;
   }
-  return chnReadTimeout((BaseChannel*)shell_stream, (uint8_t*)buf, size, SHELL_READ_TIMEOUT);
+
+#ifdef __USE_SERIAL_CONSOLE__
+  if (shell_stream == (BaseSequentialStream*)&SD1) {
+    return iqReadTimeout(&SD1.iqueue, (uint8_t*)buf, size, SHELL_READ_TIMEOUT);
+  }
+#endif
+
+#if HAL_USE_SERIAL_USB == TRUE
+  if (shell_stream == (BaseSequentialStream*)&SDU1) {
+    return ibqReadTimeout(&SDU1.ibqueue, (uint8_t*)buf, size, SHELL_READ_TIMEOUT);
+  }
+#endif
+
+  return streamRead(shell_stream, buf, size);
 }
 
 int shell_printf(const char* fmt, ...) {
