@@ -32,12 +32,16 @@ macOS or a Linux (Debian or Ubuntu) system, other Linux (or even BSD) systems ma
 similar.
 
 ## Improvements​
-An asynchronous event bus now provides a lightweight publish/subscribe backbone that decouples the measurement pipeline, UI, and configuration services; this reduces coupling, eases feature integration, and safely propagates sweep lifecycle, settings changes, and system signals without blocking long‑running tasks.​
-On top of the services layer, a cooperative scheduler assigns workers to measurement and rendering priorities, eliminating UI jitter under load and delivering predictable execution windows for DSP and I/O; hook timing and quanta were refined to avoid cross‑delays when talking to the synthesizer and audio codec.
+* **Decoupled services and scheduling.** The firmware introduces an event bus with typed topics so UI code, measurement logic, storage handlers, and input adapters can exchange notifications without hard dependencies, while a cooperative scheduler wraps ChibiOS threads to hand deterministic slots to long-running jobs such as sweeping or rendering.
+* **Measurement pipeline facade.** A dedicated pipeline object now bridges platform drivers and the sweep service, exposing the active channel mask and delegating execution so higher layers remain agnostic of hardware-specific quirks.
+* **Sweep engine overhaul.** The sweep service adds snapshot APIs, generation counters, and breakable batches so automation clients can read coherent buffers without stalling the UI; it also manages LED/progress feedback, smoothing kernels, domain transforms, and calibration flags inside the measurement loop.
+* **Persistent configuration service.** Configuration and calibration saves are validated with rolling checksums, cached per-slot integrity flags, and a single API surface that hides flash programming details from application code.
+* **Platform driver registry.** Hardware bring-up flows through a board registry that selects the correct driver table for each target and runs optional pre-initialisation hooks, reducing conditional logic scattered across the firmware.
 
 ### PLL transient stabilization​
 PLL transients are stabilized by optimizing the synthesizer programming sequence and precomputing capture parameters: staged delays, lock‑status gating, and reference frequency caching minimize retuning overhead, reducing overshoot and drift at sweep start and during rapid retunes.​
 Loop‑filter parameters and output enable order were further refined to cut transient amplitude and accelerate phase settling across operating sub‑bands; this improves measurement repeatability and reduces reliance on additional DSP smoothing.
+The Si5351 driver now tracks pending band changes, triggers PLL resets only when necessary, and requests extra settling cycles so the sweep loop automatically discards unstable conversions before logging final data; fractional divider approximations were tightened to keep output frequencies aligned with the cached PLL plans.
 
 ## Architecture Overview
 
