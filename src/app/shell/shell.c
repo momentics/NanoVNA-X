@@ -100,8 +100,7 @@ static char* shell_ftoa(char* p, double num, unsigned long precision) {
 #endif
 
 static bool shell_stream_put_char(BaseSequentialStream* stream, uint8_t value);
-static size_t shell_stream_write_buffer(BaseSequentialStream* stream, const void* buf,
-                                        size_t size);
+static size_t shell_stream_write_buffer(BaseSequentialStream* stream, const void* buf, size_t size);
 
 static void shell_write(const void* buf, size_t size) {
   if (shell_stream == NULL || size == 0U) {
@@ -148,8 +147,7 @@ static size_t shell_stream_write_buffer(BaseSequentialStream* stream, const void
       }
 
       const syssts_t sts = chSysGetStatusAndLockX();
-      const bool active =
-          (usbGetDriverStateI(&USBD1) == USB_ACTIVE) && (SDU1.state == SDU_READY);
+      const bool active = (usbGetDriverStateI(&USBD1) == USB_ACTIVE) && (SDU1.state == SDU_READY);
       chSysRestoreStatusX(sts);
       if (!active) {
         break;
@@ -414,8 +412,11 @@ int serial_shell_printf(const char* fmt, ...) {
 }
 #endif
 
-void shell_stream_write(const void* buffer, size_t size) {
-  shell_write(buffer, size);
+bool shell_stream_write(const void* buffer, size_t size) {
+  if (shell_stream == NULL) {
+    return false;
+  }
+  return shell_stream_write_buffer(shell_stream, buffer, size) == size;
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
