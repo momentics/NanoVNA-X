@@ -141,9 +141,9 @@ static size_t shell_stream_write_buffer(BaseSequentialStream* stream, const void
 
 #if HAL_USE_SERIAL_USB == TRUE
   if (stream == (BaseSequentialStream*)&SDU1) {
-    osalSysLock();
+    const syssts_t sts = chSysGetStatusAndLockX();
     const bool active = usbGetDriverStateI(&USBD1) == USB_ACTIVE;
-    osalSysUnlock();
+    chSysRestoreStatusX(sts);
     if (!active) {
       return 0U;
     }
