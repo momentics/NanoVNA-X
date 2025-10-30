@@ -365,6 +365,30 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
   return;
 }
 
+static bool nano_requests_hook(USBDriver* usbp) {
+  if ((usbp->setup.bmRequestType & USB_RTYPE_TYPE_MASK) == USB_RTYPE_TYPE_CLASS) {
+    switch (usbp->setup.bRequest) {
+    case CDC_SET_CONTROL_LINE_STATE: {
+      const bool dtr_active = (usbp->setup.wValue & 0x0001U) != 0U;
+      chSysLockFromISR();
+      if (!dtr_active) {
+        sduDisconnectI(&SDU1);
+      } else if ((usbGetDriverStateI(usbp) == USB_ACTIVE) && (SDU1.state != SDU_READY)) {
+        sduConfigureHookI(&SDU1);
+      }
+      chSysUnlockFromISR();
+      usbSetupTransfer(usbp, NULL, 0, NULL);
+      return true;
+    }
+    default:
+      break;
+    }
+  }
+
+  return sduRequestsHook(usbp);
+}
+
+
 /*
  * Handles the USB driver global events.
  */
@@ -378,7 +402,7 @@ static void sof_handler(USBDriver* usbp) {
 /*
  * USB driver configuration.
  */
-const USBConfig usbcfg = {usb_event, get_descriptor, sduRequestsHook, sof_handler};
+const USBConfig usbcfg = {usb_event, get_descriptor, nano_requests_hook, sof_handler};
 
 /*
  * Serial over USB driver configuration.
