@@ -47,9 +47,7 @@
  * queue-level function or macro.
  */
 
-/* Timeout-aware operations are needed by higher level shell helpers, keep the
- * timed variants available in this build. */
-//#define DISABLE_TIME_FUNCTIONS
+#define DISABLE_TIME_FUNCTIONS
 
 static size_t write(void *ip, const uint8_t *bp, size_t n) {
 
