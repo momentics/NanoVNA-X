@@ -247,7 +247,7 @@ static const USBDescriptor vcom_strings[] = {
 // Use unique serial string generated from MCU id
 #define UID_RADIX 5 // Radix conversion constant (5 bit, use 0..9 and A..V)
 #define USB_SERIAL_STRING_SIZE (64 / UID_RADIX) // Result string size
-tatic USBDescriptor serial_string_descriptor;
+static USBDescriptor serial_string_descriptor = {0, NULL};
 static uint16_t serial_string_buffer[USB_SERIAL_STRING_SIZE + 1];
 
 const USBDescriptor* get_serial_string_descriptor(void) {
