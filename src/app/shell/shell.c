@@ -467,11 +467,14 @@ bool shell_check_connect(void) {
     return true;
   }
   osalSysLock();
-  const bool active = usb_is_active_locked();
+  const bool ready = usb_is_active_locked() && (SDU1.state == SDU_READY);
   osalSysUnlock();
-  return active;
+  return ready;
 #else
-  return SDU1.config->usbp->state == USB_ACTIVE;
+  osalSysLock();
+  const bool ready = (SDU1.config->usbp->state == USB_ACTIVE) && (SDU1.state == SDU_READY);
+  osalSysUnlock();
+  return ready;
 #endif
 }
 

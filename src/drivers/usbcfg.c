@@ -334,6 +334,7 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
   chSysLockFromISR();
   switch (event) {
   case USB_EVENT_RESET:
+    sduDisconnectI(&SDU1);
     break;
   case USB_EVENT_ADDRESS:
     break;
@@ -345,6 +346,9 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
     usbInitEndpointI(usbp, USBD1_INTERRUPT_REQUEST_EP, &ep2config);
     /* Resetting the state of the CDC subsystem.*/
     sduConfigureHookI(&SDU1);
+    break;
+  case USB_EVENT_UNCONFIGURED:
+    sduDisconnectI(&SDU1);
     break;
   case USB_EVENT_SUSPEND:
     /* Disconnection event on suspend.*/
