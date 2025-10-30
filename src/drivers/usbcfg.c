@@ -371,9 +371,7 @@ static bool nano_requests_hook(USBDriver* usbp) {
     case CDC_SET_CONTROL_LINE_STATE: {
       const bool dtr_active = (usbp->setup.wValue & 0x0001U) != 0U;
       chSysLockFromISR();
-      if (!dtr_active) {
-        sduDisconnectI(&SDU1);
-      } else if ((usbGetDriverStateI(usbp) == USB_ACTIVE) && (SDU1.state != SDU_READY)) {
+      if (dtr_active && (usbGetDriverStateI(usbp) == USB_ACTIVE) && (SDU1.state != SDU_READY)) {
         sduConfigureHookI(&SDU1);
       }
       chSysUnlockFromISR();
