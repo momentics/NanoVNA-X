@@ -35,6 +35,12 @@ extern "C" {
 #define VNA_SHELL_MAX_ARGUMENTS 4
 #define VNA_SHELL_MAX_LENGTH 64
 
+enum {
+  VNA_SHELL_LINE_IDLE = 0,
+  VNA_SHELL_LINE_READY = 1,
+  VNA_SHELL_LINE_ABORTED = -1,
+};
+
 typedef void (*vna_shellcmd_t)(int argc, char* argv[]);
 
 typedef struct {

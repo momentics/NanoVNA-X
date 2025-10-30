@@ -2641,12 +2641,22 @@ static THD_WORKING_AREA(waThread2, /* cmd_* max stack size + alpha */ 442);
 THD_FUNCTION(myshellThread, p) {
   (void)p;
   chRegSetThreadName("shell");
+  bool prompt_printed = false;
   while (true) {
-    shell_printf(VNA_SHELL_PROMPT_STR);
-    if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH))
+    if (!prompt_printed) {
+      shell_printf(VNA_SHELL_PROMPT_STR);
+      prompt_printed = true;
+    }
+    const int line_state = vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH);
+    if (line_state == VNA_SHELL_LINE_READY) {
+      prompt_printed = false;
       vna_shell_execute_line(shell_line);
-    else // Putting a delay in order to avoid an endless loop trying to read an unavailable stream.
+    } else if (line_state == VNA_SHELL_LINE_ABORTED) {
+      prompt_printed = false;
+    } else { // Putting a delay in order to avoid an endless loop trying to read an unavailable
+             // stream.
       chThdSleepMilliseconds(100);
+    }
   }
 }
 #endif
@@ -2742,12 +2752,21 @@ int app_main(void) {
           chThdCreateStatic(waThread2, sizeof(waThread2), NORMALPRIO + 1, myshellThread, NULL);
       chThdWait(shelltp);
 #else
+      bool prompt_printed = false;
       do {
-        shell_printf(VNA_SHELL_PROMPT_STR);
-        if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH))
+        if (!prompt_printed) {
+          shell_printf(VNA_SHELL_PROMPT_STR);
+          prompt_printed = true;
+        }
+        const int line_state = vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH);
+        if (line_state == VNA_SHELL_LINE_READY) {
+          prompt_printed = false;
           vna_shell_execute_line(shell_line);
-        else
+        } else if (line_state == VNA_SHELL_LINE_ABORTED) {
+          prompt_printed = false;
+        } else {
           chThdSleepMilliseconds(200);
+        }
       } while (shell_check_connect());
 #endif
     }

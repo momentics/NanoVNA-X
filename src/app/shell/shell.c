@@ -42,6 +42,9 @@ static uint16_t pending_argc = 0;
 static char** pending_argv = NULL;
 static bool shell_skip_linefeed = false;
 
+#define SHELL_READ_TIMEOUT TIME_MS2I(50)
+#define SHELL_INPUT_IDLE_TIMEOUT TIME_MS2I(2000)
+
 static void shell_write(const void* buf, size_t size) {
   if (shell_stream == NULL) {
     return;
@@ -49,11 +52,11 @@ static void shell_write(const void* buf, size_t size) {
   streamWrite(shell_stream, buf, size);
 }
 
-static int shell_read(void* buf, uint32_t size) {
+static size_t shell_read(void* buf, size_t size) {
   if (shell_stream == NULL) {
     return 0;
   }
-  return streamRead(shell_stream, buf, size);
+  return chnReadTimeout((BaseChannel*)shell_stream, (uint8_t*)buf, size, SHELL_READ_TIMEOUT);
 }
 
 int shell_printf(const char* fmt, ...) {
@@ -226,8 +229,24 @@ static const char backspace[] = {0x08, 0x20, 0x08, 0x00};
 
 int vna_shell_read_line(char* line, int max_size) {
   static uint16_t current_length = 0;
+  static systime_t last_activity = 0;
   uint8_t c;
-  while (shell_read(&c, 1)) {
+  while (true) {
+    const size_t read = shell_read(&c, 1);
+    if (read == 0) {
+      if (current_length > 0 && last_activity != 0 &&
+          chVTTimeElapsedSinceX(last_activity) >= SHELL_INPUT_IDLE_TIMEOUT) {
+        shell_printf(VNA_SHELL_NEWLINE_STR "[shell] command timeout" VNA_SHELL_NEWLINE_STR);
+        current_length = 0;
+        last_activity = 0;
+        shell_skip_linefeed = false;
+        return VNA_SHELL_LINE_ABORTED;
+      }
+      return VNA_SHELL_LINE_IDLE;
+    }
+
+    last_activity = chVTGetSystemTimeX();
+
     if (shell_skip_linefeed) {
       shell_skip_linefeed = false;
       if (c == '\n') {
@@ -246,7 +265,8 @@ int vna_shell_read_line(char* line, int max_size) {
       shell_printf(VNA_SHELL_NEWLINE_STR);
       line[current_length] = 0;
       current_length = 0;
-      return 1;
+      last_activity = 0;
+      return VNA_SHELL_LINE_READY;
     }
     if (c < ' ' || current_length >= max_size - 1) {
       continue;
@@ -254,7 +274,6 @@ int vna_shell_read_line(char* line, int max_size) {
     shell_write(&c, 1);
     line[current_length++] = (char)c;
   }
-  return 0;
 }
 
 void vna_shell_execute_cmd_line(char* line) {
