@@ -70,11 +70,15 @@ void shell_reset_console(void);
 bool shell_check_connect(void);
 void shell_init_connection(void);
 void shell_restore_stream(void);
+bool shell_emit_prompt(void);
 
 const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** argv,
                                            const char** name_out);
 void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t argc, char** argv);
 void shell_service_pending_commands(void);
+bool shell_emit_handshake(void);
+bool shell_prompt_is_preprinted(void);
+void shell_clear_prompt_preprinted(void);
 
 int vna_shell_read_line(char* line, int max_size);
 void vna_shell_execute_cmd_line(char* line);

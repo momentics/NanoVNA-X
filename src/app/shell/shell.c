@@ -34,6 +34,7 @@
 static const VNAShellCommand* command_table = NULL;
 
 static BaseSequentialStream* shell_stream = NULL;
+static bool shell_prompt_preprinted = false;
 static threads_queue_t shell_thread;
 static char* shell_args[VNA_SHELL_MAX_ARGUMENTS + 1];
 static uint16_t shell_nargs;
@@ -459,6 +460,7 @@ void shell_reset_console(void) {
   qResetI(&SD1.iqueue);
 #endif
   osalSysUnlock();
+  shell_prompt_preprinted = false;
   shell_restore_stream();
 }
 
@@ -561,6 +563,30 @@ void shell_service_pending_commands(void) {
     osalThreadDequeueNextI(&shell_thread, MSG_OK);
     osalSysUnlock();
   }
+}
+
+bool shell_emit_prompt(void) {
+  const bool ok = shell_stream_write(VNA_SHELL_PROMPT_STR, sizeof(VNA_SHELL_PROMPT_STR) - 1U);
+  shell_prompt_preprinted = ok;
+  return ok;
+}
+
+bool shell_emit_handshake(void) {
+  static const char handshake_banner[] =
+      VNA_SHELL_PROMPT_STR VNA_SHELL_NEWLINE_STR "NanoVNA Shell" VNA_SHELL_NEWLINE_STR;
+  if (!shell_stream_write(handshake_banner, sizeof(handshake_banner) - 1U)) {
+    shell_prompt_preprinted = false;
+    return false;
+  }
+  return shell_emit_prompt();
+}
+
+bool shell_prompt_is_preprinted(void) {
+  return shell_prompt_preprinted;
+}
+
+void shell_clear_prompt_preprinted(void) {
+  shell_prompt_preprinted = false;
 }
 
 static const char backspace[] = {0x08, 0x20, 0x08, 0x00};

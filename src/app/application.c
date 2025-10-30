@@ -2727,11 +2727,14 @@ static THD_WORKING_AREA(waThread2, /* cmd_* max stack size + alpha */ 442);
 THD_FUNCTION(myshellThread, p) {
   (void)p;
   chRegSetThreadName("shell");
-  bool prompt_printed = true;
+  bool prompt_printed = shell_prompt_is_preprinted();
   while (true) {
     if (!prompt_printed) {
-      shell_printf(VNA_SHELL_PROMPT_STR);
-      prompt_printed = true;
+      prompt_printed = shell_emit_prompt();
+      if (!prompt_printed) {
+        chThdSleepMilliseconds(50);
+        continue;
+      }
     }
     const int line_state = vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH);
     if (line_state == VNA_SHELL_LINE_READY) {
@@ -2829,33 +2832,44 @@ int app_main(void) {
 
   while (1) {
     if (shell_check_connect()) {
-      shell_printf(VNA_SHELL_PROMPT_STR VNA_SHELL_NEWLINE_STR "NanoVNA Shell" VNA_SHELL_NEWLINE_STR
-                                       VNA_SHELL_PROMPT_STR);
+      bool handshake_ok;
+      do {
+        handshake_ok = shell_emit_handshake();
+        if (!handshake_ok) {
+          chThdSleepMilliseconds(50);
+        }
+      } while (shell_check_connect() && !handshake_ok);
+      if (handshake_ok) {
 #ifdef VNA_SHELL_THREAD
 #if CH_CFG_USE_WAITEXIT == FALSE
 #error "VNA_SHELL_THREAD use chThdWait, need enable CH_CFG_USE_WAITEXIT in chconf.h"
 #endif
-      thread_t* shelltp =
-          chThdCreateStatic(waThread2, sizeof(waThread2), NORMALPRIO + 1, myshellThread, NULL);
-      chThdWait(shelltp);
+        thread_t* shelltp =
+            chThdCreateStatic(waThread2, sizeof(waThread2), NORMALPRIO + 1, myshellThread, NULL);
+        chThdWait(shelltp);
 #else
-      bool prompt_printed = true;
-      do {
-        if (!prompt_printed) {
-          shell_printf(VNA_SHELL_PROMPT_STR);
-          prompt_printed = true;
-        }
-        const int line_state = vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH);
-        if (line_state == VNA_SHELL_LINE_READY) {
-          prompt_printed = false;
-          vna_shell_execute_line(shell_line);
-        } else if (line_state == VNA_SHELL_LINE_ABORTED) {
-          prompt_printed = false;
-        } else {
-          chThdSleepMilliseconds(200);
-        }
-      } while (shell_check_connect());
+        bool prompt_printed = shell_prompt_is_preprinted();
+        do {
+          if (!prompt_printed) {
+            prompt_printed = shell_emit_prompt();
+            if (!prompt_printed) {
+              chThdSleepMilliseconds(50);
+              continue;
+            }
+          }
+          const int line_state = vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH);
+          if (line_state == VNA_SHELL_LINE_READY) {
+            prompt_printed = false;
+            vna_shell_execute_line(shell_line);
+          } else if (line_state == VNA_SHELL_LINE_ABORTED) {
+            prompt_printed = false;
+          } else {
+            chThdSleepMilliseconds(200);
+          }
+        } while (shell_check_connect());
 #endif
+      }
+      shell_clear_prompt_preprinted();
     }
     chThdSleepMilliseconds(1000);
   }
