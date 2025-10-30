@@ -704,6 +704,9 @@ void capture_rle8(void) {
     }
     spi_buffer[0] = packbits((char*)data, (char*)&spi_buffer[1], LCD_WIDTH); // pack
     shell_stream_write(spi_buffer, spi_buffer[0] + sizeof(uint16_t));
+    if ((y & 0x03) == 0x03) {
+      chThdYield();
+    }    
   }
 }
 #endif
@@ -727,6 +730,7 @@ VNA_SHELL_FUNCTION(cmd_capture) {
     // use uint16_t spi_buffer[2048] (defined in ili9341) for read buffer
     lcd_read_memory(0, y, LCD_WIDTH, READ_ROWS, (uint16_t*)spi_buffer);
     shell_stream_write(spi_buffer, READ_ROWS * LCD_WIDTH * sizeof(uint16_t));
+    chThdYield();
   }
 }
 
@@ -923,6 +927,9 @@ VNA_SHELL_FUNCTION(cmd_scan) {
           shell_stream_write(&measured[0][i][0], sizeof(float) * 2); // 4+4 bytes .. S11 real/imag
         if (mask & SCAN_MASK_OUT_DATA1)
           shell_stream_write(&measured[1][i][0], sizeof(float) * 2); // 4+4 bytes .. S21 real/imag
+        if ((i & 0x0F) == 0x0F) {
+          chThdYield();
+        }
       }
     } else {
       for (int i = 0; i < points; i++) {
@@ -933,6 +940,9 @@ VNA_SHELL_FUNCTION(cmd_scan) {
         if (mask & SCAN_MASK_OUT_DATA1)
           shell_printf("%f %f ", measured[1][i][0], measured[1][i][1]);
         shell_printf(VNA_SHELL_NEWLINE_STR);
+        if ((i & 0x0F) == 0x0F) {
+          chThdYield();
+        }
       }
     }
   }
@@ -1873,6 +1883,9 @@ VNA_SHELL_FUNCTION(cmd_frequencies) {
   (void)argv;
   for (i = 0; i < sweep_points; i++) {
     shell_printf(VNA_FREQ_FMT_STR VNA_SHELL_NEWLINE_STR, get_frequency(i));
+    if ((i & 0x0F) == 0x0F) {
+      chThdYield();
+    }
   }
 }
 
@@ -2349,8 +2362,13 @@ VNA_SHELL_FUNCTION(cmd_sd_list) {
     return;
   }
   if (f_opendir(&dj, "") == FR_OK) {
-    while (f_findnext(&dj, &fno) == FR_OK && fno.fname[0])
+    uint16_t count = 0;
+    while (f_findnext(&dj, &fno) == FR_OK && fno.fname[0]) {
       shell_printf("%s %u" VNA_SHELL_NEWLINE_STR, fno.fname, fno.fsize);
+      if ((count++ & 0x0F) == 0x0F) {
+        chThdYield();
+      }
+    }
   }
   f_closedir(&dj);
 }
@@ -2376,8 +2394,10 @@ VNA_SHELL_FUNCTION(cmd_sd_read) {
   shell_stream_write(&filesize, 4);
   UINT size = 0;
   // file data (send all data from file)
-  while (f_read(file, buf, 512, &size) == FR_OK && size > 0)
+  while (f_read(file, buf, 512, &size) == FR_OK && size > 0) {
     shell_stream_write(buf, size);
+    chThdYield();
+  }
 
   f_close(file);
   return;
@@ -2885,6 +2905,9 @@ VNA_SHELL_FUNCTION(cmd_dump) {
     if (++j == 12) {
       shell_printf(VNA_SHELL_NEWLINE_STR);
       j = 0;
+    }
+    if ((i & 0x0F) == 0x0F) {
+      chThdYield();
     }
   }
 }
