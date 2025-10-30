@@ -55,7 +55,10 @@ cdc_linecoding_t linecoding = {
   LC_STOP_1, LC_PARITY_NONE, 8
 };
 
-#define DISABLE_TIME_FUNCTIONS
+/* Timed channel helpers are required by the NanoVNA shell which relies on
+ * chnReadTimeout(), therefore the timeout variants must remain enabled. */
+//#define DISABLE_TIME_FUNCTIONS
+
 /*===========================================================================*/
 /* Driver local functions.                                                   */
 /*===========================================================================*/
