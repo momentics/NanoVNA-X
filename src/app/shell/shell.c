@@ -53,7 +53,8 @@ static int shell_read(void* buf, uint32_t size) {
   if (shell_stream == NULL) {
     return 0;
   }
-  return (int)chnReadTimeout((BaseAsynchronousChannel*)shell_stream, buf, size, TIME_IMMEDIATE);
+  return (int)chnReadTimeout((BaseAsynchronousChannel*)shell_stream, buf, size,
+                             TIME_MS2I(20));
 }
 
 int shell_printf(const char* fmt, ...) {
