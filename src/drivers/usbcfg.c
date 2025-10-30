@@ -347,9 +347,11 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
     /* Resetting the state of the CDC subsystem.*/
     sduConfigureHookI(&SDU1);
     break;
+#ifdef USB_EVENT_UNCONFIGURED
   case USB_EVENT_UNCONFIGURED:
     sduDisconnectI(&SDU1);
     break;
+#endif
   case USB_EVENT_SUSPEND:
     /* Disconnection event on suspend.*/
     sduDisconnectI(&SDU1);
