@@ -55,6 +55,10 @@ static uint16_t p_sweep = 0;
 static uint8_t sweep_state_flags = 0;
 static uint16_t sweep_bar_drawn_pixels = 0;
 static uint8_t sweep_bar_pending = 0;
+static float snapshot_buffers[2][SWEEP_POINTS_MAX][2];
+
+#define SWEEP_SNAPSHOT_DEFAULT_TIMEOUT TIME_MS2I(5)
+#define SWEEP_SNAPSHOT_POLL_DELAY_MS 1U
 
 static uint8_t smooth_factor = 0;
 static void (*sample_func)(float* gamma) = calculate_gamma;
@@ -281,22 +285,51 @@ void sweep_service_wait_for_generation(void) {
 }
 
 bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* snapshot) {
+  return sweep_service_snapshot_try_acquire(channel, snapshot, SWEEP_SNAPSHOT_DEFAULT_TIMEOUT);
+}
+
+bool sweep_service_snapshot_try_acquire(uint8_t channel, sweep_service_snapshot_t* snapshot,
+                                        systime_t timeout) {
   if (snapshot == NULL || channel >= 2U) {
     return false;
   }
+
+  const systime_t start = chVTGetSystemTimeX();
   while (true) {
     osalSysLock();
     bool busy = sweep_in_progress || sweep_copy_in_progress;
+    uint32_t generation = sweep_generation;
+    uint16_t points = sweep_points;
     if (!busy) {
       sweep_copy_in_progress = true;
-      snapshot->generation = sweep_generation;
-      snapshot->points = sweep_points;
-      snapshot->data = measured[channel];
       osalSysUnlock();
+
+      if (points > SWEEP_POINTS_MAX) {
+        points = SWEEP_POINTS_MAX;
+      }
+
+      snapshot->generation = generation;
+      snapshot->points = points;
+      snapshot->data = snapshot_buffers[channel];
+
+      const size_t copy_bytes = (size_t)points * sizeof(snapshot_buffers[channel][0]);
+      if (copy_bytes > 0U) {
+        memcpy(snapshot_buffers[channel], measured[channel], copy_bytes);
+      }
+
       return true;
     }
     osalSysUnlock();
-    chThdSleepMilliseconds(1);
+
+    if (timeout == TIME_IMMEDIATE) {
+      return false;
+    }
+
+    if (timeout != TIME_INFINITE && chVTTimeElapsedSinceX(start) >= timeout) {
+      return false;
+    }
+
+    chThdSleepMilliseconds(SWEEP_SNAPSHOT_POLL_DELAY_MS);
   }
 }
 
