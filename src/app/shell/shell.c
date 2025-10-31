@@ -144,7 +144,7 @@ static bool shell_prepare_usb_stream(void) {
   return true;
 }
 
-/* One-time USB CDC initialization at boot. */
+//* One-time USB CDC initialization at boot. */
 void usb_cdc_init_once(void) {
   static bool inited = false;
   if (inited) {

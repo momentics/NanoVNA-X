@@ -42,29 +42,65 @@
 /* Ensure 48 MHz USB clock before starting USB (F072/F303). */
 static void usb_clock_init(void) {
 #if defined(NANOVNA_F303)
-  rccEnableHSE(TRUE);
+  if ((RCC->CR & RCC_CR_HSERDY) == 0U) {
+    RCC->CR |= RCC_CR_HSEON;
+    while ((RCC->CR & RCC_CR_HSERDY) == 0U) {
+    }
+  }
+
   RCC->CFGR2 &= ~RCC_CFGR2_PREDIV;
-  RCC->CFGR = (RCC->CFGR & ~(RCC_CFGR_PLLSRC | RCC_CFGR_PLLMUL | RCC_CFGR_USBPRE)) |
-              RCC_CFGR_PLLSRC_HSE_PREDIV | RCC_CFGR_PLLMUL9 | RCC_CFGR_USBPRE_DIV1_5;
-  rccEnablePLL(TRUE);
-  RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW) | RCC_CFGR_SW_PLL;
-  while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL) {
+
+  uint32_t cfgr = RCC->CFGR;
+  cfgr &= ~(RCC_CFGR_PLLSRC | RCC_CFGR_PLLMUL | RCC_CFGR_USBPRE);
+  cfgr |= RCC_CFGR_PLLSRC_HSE_PREDIV | RCC_CFGR_PLLMUL9 | RCC_CFGR_USBPRE_DIV1_5;
+  RCC->CFGR = cfgr;
+
+  if ((RCC->CR & RCC_CR_PLLRDY) == 0U) {
+    RCC->CR |= RCC_CR_PLLON;
+    while ((RCC->CR & RCC_CR_PLLRDY) == 0U) {
+    }
   }
-  rccEnableUSB(FALSE);
+
+  if ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL) {
+    RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW) | RCC_CFGR_SW_PLL;
+    while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL) {
+    }
+  }
+
+  RCC->APB1ENR |= RCC_APB1ENR_USBEN;
 #else /* STM32F072 */
-  rccEnableHSE(TRUE);
-  RCC->CFGR2 = (RCC->CFGR2 & ~RCC_CFGR2_PREDIV) | RCC_CFGR2_PREDIV_DIV2;
-  RCC->CFGR = (RCC->CFGR & ~(RCC_CFGR_PLLSRC | RCC_CFGR_PLLMUL)) |
-              RCC_CFGR_PLLSRC_HSE_PREDIV | RCC_CFGR_PLLMUL12;
-  rccEnablePLL(TRUE);
-  RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW) | RCC_CFGR_SW_PLL;
-  while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL) {
+  if ((RCC->CR & RCC_CR_HSERDY) == 0U) {
+    RCC->CR |= RCC_CR_HSEON;
+    while ((RCC->CR & RCC_CR_HSERDY) == 0U) {
+    }
   }
-  rccEnableUSB(FALSE);
+
+  uint32_t cfgr2 = RCC->CFGR2;
+  cfgr2 &= ~RCC_CFGR2_PREDIV;
+  cfgr2 |= RCC_CFGR2_PREDIV_DIV2;
+  RCC->CFGR2 = cfgr2;
+
+  uint32_t cfgr = RCC->CFGR;
+  cfgr &= ~(RCC_CFGR_PLLSRC | RCC_CFGR_PLLMUL);
+  cfgr |= RCC_CFGR_PLLSRC_HSE_PREDIV | RCC_CFGR_PLLMUL12;
+  RCC->CFGR = cfgr;
+
+  if ((RCC->CR & RCC_CR_PLLRDY) == 0U) {
+    RCC->CR |= RCC_CR_PLLON;
+    while ((RCC->CR & RCC_CR_PLLRDY) == 0U) {
+    }
+  }
+
+  if ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL) {
+    RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW) | RCC_CFGR_SW_PLL;
+    while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL) {
+    }
+  }
+
+  RCC->APB1ENR |= RCC_APB1ENR_USBEN;
   /* Alternative: HSI48 + CRS (if preferred, implement cleanly and select USB clock accordingly). */
 #endif
 }
-
 #include <string.h>
 
 /*
@@ -2688,6 +2724,7 @@ int app_main(void) {
    */
   halInit();
   chSysInit();
+
   usb_clock_init();
   usb_cdc_init_once();
 

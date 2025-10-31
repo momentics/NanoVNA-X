@@ -365,7 +365,9 @@ static void usbevent(USBDriver* usbp, usbevent_t event) {
 /* Temporary SOF hook for debugging USB clock/SOF presence. */
 static void sofhandler(USBDriver* usbp) {
   (void)usbp;
-  palTogglePad(GPIOC, GPIOC_LED);
+#if defined(GPIOC) && defined(GPIOC_LED)
+  GPIOC->ODR ^= (1U << GPIOC_LED);
+#endif
   osalSysLockFromISR();
   sduSOFHookI(&SDU1);
   osalSysUnlockFromISR();
