@@ -118,7 +118,6 @@ typedef struct {
 
 _Static_assert(CELLWIDTH % 8 == 0, "CELLWIDTH must be a multiple of 8");
 _Static_assert(SWEEP_POINTS_MAX > 0, "Sweep points must be positive");
-_Static_assert(TRACE_INDEX_COUNT > 0, "Trace index count must be positive");
 
 static inline uint16_t clamp_u16(int value, uint16_t min_value, uint16_t max_value) {
   if (value < (int)min_value)
@@ -126,25 +125,6 @@ static inline uint16_t clamp_u16(int value, uint16_t min_value, uint16_t max_val
   if (value > (int)max_value)
     return max_value;
   return (uint16_t)value;
-}
-
-/**
- * @brief Create a horizontal bitmask covering the inclusive column range.
- */
-static inline map_t markmap_mask(uint16_t x_begin, uint16_t x_end) {
-  if (x_begin > x_end)
-    SWAP(uint16_t, x_begin, x_end);
-  const uint16_t bitcount = (uint16_t)(sizeof(map_t) * CHAR_BIT);
-  if (x_begin >= bitcount)
-    return 0;
-  uint16_t width = (uint16_t)(x_end - x_begin + 1);
-  if (width >= bitcount)
-    return (map_t)~(map_t)0;
-  if ((uint32_t)x_begin + width > bitcount)
-    // Clamp when the requested range would exceed the markmap representation.
-    width = (uint16_t)(bitcount - x_begin);
-  const map_t width_mask = (map_t)(((map_t)1u << width) - 1u);
-  return (map_t)(width_mask << x_begin);
 }
 
 static inline pixel_t* cell_ptr(const RenderCellCtx* rcx, uint16_t x, uint16_t y) {
@@ -212,11 +192,31 @@ typedef uint32_t map_t;
 #endif
 _Static_assert(MAX_MARKMAP_X <= 32, "markmap type must handle at most 32 columns");
 
+/**
+ * @brief Create a horizontal bitmask covering the inclusive column range.
+ */
+static inline map_t markmap_mask(uint16_t x_begin, uint16_t x_end) {
+  if (x_begin > x_end)
+    SWAP(uint16_t, x_begin, x_end);
+  const uint16_t bitcount = (uint16_t)(sizeof(map_t) * CHAR_BIT);
+  if (x_begin >= bitcount)
+    return 0;
+  uint16_t width = (uint16_t)(x_end - x_begin + 1);
+  if (width >= bitcount)
+    return (map_t)~(map_t)0;
+  if ((uint32_t)x_begin + width > bitcount)
+    // Clamp when the requested range would exceed the markmap representation.
+    width = (uint16_t)(bitcount - x_begin);
+  const map_t width_mask = (map_t)(((map_t)1u << width) - 1u);
+  return (map_t)(width_mask << x_begin);
+}
+
 // Mark cell to update here
 static map_t markmap[MAX_MARKMAP_Y];
 
 // Trace data cache, for faster redraw cells
 #define TRACE_INDEX_COUNT (TRACES_MAX + STORED_TRACES)
+_Static_assert(TRACE_INDEX_COUNT > 0, "Trace index count must be positive");
 
 #if HEIGHT > UINT8_MAX
 typedef uint16_t trace_coord_t;
@@ -240,6 +240,20 @@ _Static_assert(ARRAY_COUNT(trace_index_x[0]) == SWEEP_POINTS_MAX,
                "trace index x size mismatch");
 _Static_assert(ARRAY_COUNT(trace_index_y[0]) == SWEEP_POINTS_MAX,
                "trace index y size mismatch");
+
+// Forward declarations for helpers implemented later in the translation unit.
+static inline void cell_drawline(const RenderCellCtx* rcx, int x0, int y0, int x1, int y1,
+                                 pixel_t c);
+static void cell_blit_bitmap(RenderCellCtx* rcx, int16_t x, int16_t y, uint16_t w, uint16_t h,
+                             const uint8_t* bitmap);
+static bool need_process_trace(uint16_t idx);
+static TraceIndexRange search_index_range_x(uint16_t x_start, uint16_t x_end,
+                                           trace_index_const_table_t table);
+static int marker_area_max(void);
+static void cell_draw_all_refpos(RenderCellCtx* rcx);
+static void cell_draw_measure(RenderCellCtx* rcx);
+static void cell_draw_grid_values(RenderCellCtx* rcx);
+static void cell_draw_marker_info(RenderCellCtx* rcx);
 
 static inline trace_index_table_t trace_index_table(int trace_id) {
   trace_index_table_t table = {trace_index_x[trace_id], trace_index_y[trace_id]};
