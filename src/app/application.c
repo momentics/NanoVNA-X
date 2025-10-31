@@ -111,14 +111,7 @@ static void usb_clock_init(void) {
 // #define VNA_SHELL_THREAD
 
 static event_bus_t app_event_bus;
-#if defined(NANOVNA_F303)
 enum { APP_EVENT_SLOTS_COUNT = 8 };
-#else
-/* The F072 target has only 16 KB of SRAM. Trim the default event slot pool
- * slightly so the firmware fits alongside the heap while keeping ample space
- * for future subscribers. */
-enum { APP_EVENT_SLOTS_COUNT = 6 };
-#endif
 static event_bus_subscription_t app_event_slots[APP_EVENT_SLOTS_COUNT];
 
 static measurement_pipeline_t measurement_pipeline;

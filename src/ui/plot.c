@@ -69,8 +69,8 @@ typedef struct {
   const trace_coord_t* y;
 } trace_index_const_table_t;
 
-static uint16_t trace_index_x[TRACE_INDEX_COUNT][SWEEP_POINTS_MAX];
-static trace_coord_t trace_index_y[TRACE_INDEX_COUNT][SWEEP_POINTS_MAX];
+static RAM4_BSS uint16_t trace_index_x[TRACE_INDEX_COUNT][SWEEP_POINTS_MAX];
+static RAM4_BSS trace_coord_t trace_index_y[TRACE_INDEX_COUNT][SWEEP_POINTS_MAX];
 
 static inline trace_index_table_t trace_index_table(int trace_id) {
   trace_index_table_t table = {trace_index_x[trace_id], trace_index_y[trace_id]};

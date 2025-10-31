@@ -24,6 +24,12 @@
 #include <stdalign.h>
 #include <stdint.h>
 
+#if defined(NANOVNA_F303)
+#define RAM4_BSS __attribute__((section(".ram4"), aligned(4)))
+#else
+#define RAM4_BSS
+#endif
+
 // Define LCD display driver and size
 #if defined(NANOVNA_F303)
 #define LCD_DRIVER_ST7796S
