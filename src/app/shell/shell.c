@@ -144,6 +144,19 @@ static bool shell_prepare_usb_stream(void) {
   return true;
 }
 
+/* One-time USB CDC initialization at boot. */
+void usb_cdc_init_once(void) {
+  static bool inited = false;
+  if (inited) {
+    return;
+  }
+  inited = true;
+  usbStart(&USBD1, &usbcfg);
+  usbConnectBus(&USBD1);
+  sduObjectInit(&SDU1);
+  sduStart(&SDU1, &serusbcfg);
+}
+
 void shell_reset_console(void) {
   osalSysLock();
 #ifdef __USE_SERIAL_CONSOLE__
@@ -186,18 +199,15 @@ bool shell_check_connect(void) {
 
 void shell_init_connection(void) {
   osalThreadQueueObjectInit(&shell_thread);
-  static bool usb_started = false;
-  if (!usb_started) {
-    sduObjectInit(&SDU1);
-    sduStart(&SDU1, &serusbcfg);
 #ifdef __USE_SERIAL_CONSOLE__
+  static bool serial_started = false;
+  if (!serial_started) {
     SerialConfig serial_cfg = {config._serial_speed, 0, USART_CR2_STOP1_BITS, 0};
     sdStart(&SD1, &serial_cfg);
     shell_update_speed(config._serial_speed);
-#endif
-    usbStart(&USBD1, &usbcfg);
-    usb_started = true;
+    serial_started = true;
   }
+#endif
   shell_restore_stream();
 }
 

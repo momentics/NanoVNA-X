@@ -62,6 +62,7 @@ void shell_stream_write(const void* buffer, size_t size);
 void shell_update_speed(uint32_t speed);
 void shell_reset_console(void);
 bool shell_check_connect(void);
+void usb_cdc_init_once(void);
 void shell_init_connection(void);
 void shell_restore_stream(void);
 

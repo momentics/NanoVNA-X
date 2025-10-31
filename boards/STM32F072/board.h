@@ -764,11 +764,10 @@
                                      PIN_AFIO_AF(14, 0) |          \
                                      PIN_AFIO_AF(15, 0))
 
-// boards/STM32F072/board.h (и аналог для F303)
-// Удалить ошибочные макросы на PA10:
+/* No hardware USB disconnect transistor is present, keep these as no-ops. */
 #undef usblld_connect_bus
 #undef usblld_disconnect_bus
-// Если DISC не разведен — no-op:
+
 #define usblld_connect_bus(usbp)    do { (void)usbp; } while (0)
 #define usblld_disconnect_bus(usbp) do { (void)usbp; } while (0)
 
