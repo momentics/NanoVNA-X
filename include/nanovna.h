@@ -60,7 +60,7 @@
 // Add show y grid line values option
 #define __USE_GRID_VALUES__
 // Add remote desktop option
-#define __REMOTE_DESKTOP__
+//#define __REMOTE_DESKTOP__
 // Add RLE8 compression capture image format
 #define __CAPTURE_RLE8__
 // Allow flip display
