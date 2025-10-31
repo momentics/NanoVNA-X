@@ -122,7 +122,7 @@ static bool shell_prepare_usb_stream(void) {
     shell_usb_ready = false;
   }
   if (state != USB_ACTIVE) {
-    if (!shell_wait_for_usb_active(TIME_MS2I(500))) {
+    if (!shell_wait_for_usb_active(MS2ST(500))) {
       return false;
     }
     state = shell_usb_get_state();
@@ -134,7 +134,7 @@ static bool shell_prepare_usb_stream(void) {
     }
   }
   if (!shell_usb_ready) {
-    if (!usbWaitSerialConfiguredTimeout(TIME_MS2I(500))) {
+    if (!usbWaitSerialConfiguredTimeout(MS2ST(500))) {
       return false;
     }
     shell_usb_ready = true;
