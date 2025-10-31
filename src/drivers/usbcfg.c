@@ -331,11 +331,17 @@ static const USBEndpointConfig ep2config = {
  * Handles the USB driver global events.
  */
 static bool usb_endpoints_configured = false;
-
-BSEMAPHORE_DECL(sdu_configured_bsem, true);
+static thread_reference_t sdu_configured_tr = NULL;
 
 bool usbWaitSerialConfiguredTimeout(systime_t timeout) {
-  return chBSemWaitTimeout(&sdu_configured_bsem, timeout) == MSG_OK;
+  osalSysLock();
+  if (usb_endpoints_configured) {
+    osalSysUnlock();
+    return true;
+  }
+  msg_t msg = osalThreadSuspendTimeoutS(&sdu_configured_tr, timeout);
+  osalSysUnlock();
+  return msg == MSG_OK;
 }
 
 static void usb_event(USBDriver* usbp, usbevent_t event) {
@@ -343,7 +349,9 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
   switch (event) {
   case USB_EVENT_RESET:
     usb_endpoints_configured = false;
-    chBSemResetI(&sdu_configured_bsem, true);
+    if (sdu_configured_tr != NULL) {
+      osalThreadResumeI(&sdu_configured_tr, MSG_RESET);
+    }
     break;
   case USB_EVENT_ADDRESS:
     break;
@@ -353,7 +361,9 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
       usbInitEndpointI(usbp, USBD1_INTERRUPT_REQUEST_EP, &ep2config);
       sduConfigureHookI(&SDU1);
       usb_endpoints_configured = true;
-      chBSemSignalI(&sdu_configured_bsem);
+      if (sdu_configured_tr != NULL) {
+        osalThreadResumeI(&sdu_configured_tr, MSG_OK);
+      }
     }
     break;
   case USB_EVENT_SUSPEND:
