@@ -119,7 +119,7 @@ static UARTConfig uart_config = {
     .rxerr_cb = NULL,
     .speed = 115200,
     .cr1 = 0,
-    .cr2 = USART_CR2_STOP1_BITS,
+    .cr2 = 0U,
     .cr3 = 0,
 };
 
@@ -200,4 +200,3 @@ msg_t uart_dma_get_timeout(uint8_t* value, systime_t timeout) {
 }
 
 #endif
-

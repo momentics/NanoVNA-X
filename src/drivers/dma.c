@@ -18,7 +18,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
- #include "drivers/dma.h"
+#include "drivers/dma.h"
 
 static inline void dma_channel_disable(DMA_Channel_TypeDef* channel) {
   channel->CCR &= ~STM32_DMA_CR_EN;
