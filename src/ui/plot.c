@@ -1626,7 +1626,11 @@ static uint8_t data_update = 0;
 // Include measure functions
 #ifdef __VNA_MEASURE_MODULE__
 #define cell_printf cell_printf_bound
+// legacy_measure.c expects invalidate_rect to be available for marking dirty regions.
+// Provide a compatibility alias to the pixel-based helper defined above.
+#define invalidate_rect invalidate_rect_px
 #include "../measurement/legacy_measure.c"
+#undef invalidate_rect
 #undef cell_printf
 #endif
 
