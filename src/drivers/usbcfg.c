@@ -247,29 +247,33 @@ static const USBDescriptor vcom_strings[] = {
 // Use unique serial string generated from MCU id
 #define UID_RADIX 5 // Radix conversion constant (5 bit, use 0..9 and A..V)
 #define USB_SERIAL_STRING_SIZE (64 / UID_RADIX) // Result string size
-USBDescriptor* get_serial_string_descriptor(void) {
-  uint16_t i;
-  uint16_t* buf = ((uint16_t*)&spi_buffer[ARRAY_COUNT(spi_buffer)]) - USB_SERIAL_STRING_SIZE -
-                  4; // 16 byte align
-  USBDescriptor* d = ((USBDescriptor*)buf) - 1;
-  uint32_t id0 = *(uint32_t*)0x1FFFF7AC; // MCU id0 address
-  uint32_t id1 = *(uint32_t*)0x1FFFF7B0; // MCU id1 address
-  uint32_t id2 = *(uint32_t*)0x1FFFF7B4; // MCU id2 address
-  uint64_t uid = id1;
-  id0 += id2;
-  uid |= id0 | (uid << 32); // generate unique 64bit ID
-  // Prepare serial string descriptor from 64 bit ID
-  for (i = 1; i < USB_SERIAL_STRING_SIZE + 1; i++) {
-    uint16_t c = uid & ((1 << UID_RADIX) - 1);
-    buf[i] = c + (c < 0x0A ? '0' : 'A' - 0x0A);
-    uid >>= UID_RADIX;
+
+static const USBDescriptor* get_serial_string_descriptor(void) {
+  static USBDescriptor descriptor;
+  static uint8_t serial_string[(USB_SERIAL_STRING_SIZE + 1) * sizeof(uint16_t)] = {0};
+
+  if (descriptor.ud_size == 0U) {
+    const uint32_t id0 = *(uint32_t*)0x1FFFF7AC; // MCU id0 address
+    const uint32_t id1 = *(uint32_t*)0x1FFFF7B0; // MCU id1 address
+    const uint32_t id2 = *(uint32_t*)0x1FFFF7B4; // MCU id2 address
+    uint64_t uid = id1;
+    uid |= ((uint64_t)(id0 + id2)) | (uid << 32); // generate unique 64bit ID
+
+    serial_string[0] = (uint8_t)sizeof(serial_string);
+    serial_string[1] = USB_DESCRIPTOR_STRING;
+
+    for (uint32_t i = 0; i < USB_SERIAL_STRING_SIZE; i++) {
+      const uint16_t c = uid & ((1U << UID_RADIX) - 1U);
+      serial_string[2 + (i * 2)] = (uint8_t)(c < 0x0A ? ('0' + c) : ('A' + c - 0x0A));
+      serial_string[3 + (i * 2)] = 0;
+      uid >>= UID_RADIX;
+    }
+
+    descriptor.ud_size = sizeof(serial_string);
+    descriptor.ud_string = serial_string;
   }
-  uint16_t size = i * sizeof(uint16_t);
-  buf[0] = size | (USB_DESCRIPTOR_STRING << 8);
-  // Generate USBDescriptor structure
-  d->ud_size = size;
-  d->ud_string = (uint8_t*)buf;
-  return d;
+
+  return &descriptor;
 }
 #endif
 
