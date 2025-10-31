@@ -34,14 +34,20 @@
 static const VNAShellCommand* command_table = NULL;
 
 static BaseSequentialStream* shell_stream = NULL;
-static bool shell_prompt_preprinted = false;
+static volatile bool shell_prompt_preprinted = false;
 static threads_queue_t shell_thread;
 static char* shell_args[VNA_SHELL_MAX_ARGUMENTS + 1];
 static uint16_t shell_nargs;
 static volatile const VNAShellCommand* pending_command = NULL;
 static uint16_t pending_argc = 0;
 static char** pending_argv = NULL;
-static bool shell_skip_linefeed = false;
+static volatile bool shell_skip_linefeed = false;
+
+void shell_usb_line_state_changed_i(bool dtr_active) {
+  (void)dtr_active;
+  shell_prompt_preprinted = false;
+  shell_skip_linefeed = false;
+}
 
 #define SHELL_READ_TIMEOUT MS2ST(50)
 #define SHELL_INPUT_IDLE_TIMEOUT MS2ST(2000)

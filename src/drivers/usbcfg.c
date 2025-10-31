@@ -16,6 +16,7 @@
 
 #include "hal.h"
 #include "nanovna.h"
+#include "app/shell.h"
 
 /* Virtual serial port over USB.*/
 SerialUSBDriver SDU1;
@@ -337,6 +338,7 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
   switch (event) {
   case USB_EVENT_RESET:
     sduDisconnectI(&SDU1);
+    shell_usb_line_state_changed_i(false);
     break;
   case USB_EVENT_ADDRESS:
     break;
@@ -348,15 +350,18 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
     usbInitEndpointI(usbp, USBD1_INTERRUPT_REQUEST_EP, &ep2config);
     /* Resetting the state of the CDC subsystem.*/
     sduConfigureHookI(&SDU1);
+    shell_usb_line_state_changed_i(false);
     break;
 #ifdef USB_EVENT_UNCONFIGURED
   case USB_EVENT_UNCONFIGURED:
     sduDisconnectI(&SDU1);
+    shell_usb_line_state_changed_i(false);
     break;
 #endif
   case USB_EVENT_SUSPEND:
     /* Disconnection event on suspend.*/
     sduDisconnectI(&SDU1);
+    shell_usb_line_state_changed_i(false);
     break;
   case USB_EVENT_WAKEUP:
     break;
@@ -373,9 +378,16 @@ static bool nano_requests_hook(USBDriver* usbp) {
     case CDC_SET_CONTROL_LINE_STATE: {
       const bool dtr_active = (usbp->setup.wValue & 0x0001U) != 0U;
       chSysLockFromISR();
-      if (dtr_active && (usbGetDriverStateI(usbp) == USB_ACTIVE) && (SDU1.state != SDU_READY)) {
-        sduConfigureHookI(&SDU1);
+      if (usbGetDriverStateI(usbp) == USB_ACTIVE) {
+        if (dtr_active) {
+          if (SDU1.state != SDU_READY) {
+            sduConfigureHookI(&SDU1);
+          }
+        } else if (SDU1.state == SDU_READY) {
+          sduDisconnectI(&SDU1);
+        }
       }
+      shell_usb_line_state_changed_i(dtr_active);
       chSysUnlockFromISR();
       usbSetupTransfer(usbp, NULL, 0, NULL);
       return true;

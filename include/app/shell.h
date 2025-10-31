@@ -71,6 +71,7 @@ bool shell_check_connect(void);
 void shell_init_connection(void);
 void shell_restore_stream(void);
 bool shell_emit_prompt(void);
+void shell_usb_line_state_changed_i(bool dtr_active);
 
 const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** argv,
                                            const char** name_out);
