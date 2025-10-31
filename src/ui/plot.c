@@ -31,6 +31,9 @@
 #include "chprintf.h"
 #include "nanovna.h"
 
+// Icons bitmap resources
+#include "../resources/icons/icons_marker.c"
+
 /*
  * NanoVNA-X plot module
  * ---------------------
@@ -520,6 +523,49 @@ static void compact_cell_buffer(RenderCellCtx* rcx) {
  *
  * Performs bounded searches on rectangular traces to avoid unnecessary work.
  */
+#if STORED_TRACES > 0
+static uint8_t enabled_store_trace = 0;
+
+void toggle_stored_trace(int idx) {
+  uint8_t mask = 1 << idx;
+  if (enabled_store_trace & mask) {
+    enabled_store_trace &= ~mask;
+    request_to_redraw(REDRAW_AREA);
+    return;
+  }
+  if (current_trace == TRACE_INVALID)
+    return;
+  memcpy(trace_index_x[TRACES_MAX + idx], trace_index_x[current_trace], sizeof(trace_index_x[0]));
+  memcpy(trace_index_y[TRACES_MAX + idx], trace_index_y[current_trace], sizeof(trace_index_y[0]));
+  enabled_store_trace |= mask;
+}
+
+uint8_t get_stored_traces(void) {
+  return enabled_store_trace;
+}
+
+static bool need_process_trace(uint16_t idx) {
+  if (idx < TRACES_MAX)
+    return trace[idx].enabled;
+  else if (idx < TRACE_INDEX_COUNT)
+    return enabled_store_trace & (1 << (idx - TRACES_MAX));
+  return false;
+}
+#else
+void toggle_stored_trace(int idx) {
+  (void)idx;
+}
+
+uint8_t get_stored_traces(void) {
+  return 0;
+}
+
+static bool need_process_trace(uint16_t idx) {
+  return trace[idx].enabled;
+}
+#define enabled_store_trace 0
+#endif
+
 static void render_traces_in_cell(RenderCellCtx* rcx) {
   if (sweep_points < 2)
     return;
@@ -1332,43 +1378,6 @@ static float distance_of_index(int idx) {
 }
 
 //**************************************************************************************
-//                   Stored traces
-//**************************************************************************************
-#if STORED_TRACES > 0
-static uint8_t enabled_store_trace = 0;
-void toggle_stored_trace(int idx) {
-  uint8_t mask = 1 << idx;
-  if (enabled_store_trace & mask) {
-    enabled_store_trace &= ~mask;
-    request_to_redraw(REDRAW_AREA);
-    return;
-  }
-  if (current_trace == TRACE_INVALID)
-    return;
-  memcpy(trace_index_x[TRACES_MAX + idx], trace_index_x[current_trace], sizeof(trace_index_x[0]));
-  memcpy(trace_index_y[TRACES_MAX + idx], trace_index_y[current_trace], sizeof(trace_index_y[0]));
-  enabled_store_trace |= mask;
-}
-
-uint8_t get_stored_traces(void) {
-  return enabled_store_trace;
-}
-
-static bool need_process_trace(uint16_t idx) {
-  if (idx < TRACES_MAX)
-    return trace[idx].enabled;
-  else if (idx < TRACE_INDEX_COUNT)
-    return enabled_store_trace & (1 << (idx - TRACES_MAX));
-  return false;
-}
-#else
-#define enabled_store_trace 0
-static bool need_process_trace(uint16_t idx) {
-  return trace[idx].enabled;
-}
-#endif
-
-//**************************************************************************************
 // Give a little speedup then draw rectangular plot
 // Write more difficult algorithm for search indexes not give speedup
 //**************************************************************************************
@@ -1434,9 +1443,6 @@ if (!inside) {
 //**************************************************************************************
 //                  Marker text/marker plate functions
 //**************************************************************************************
-// Icons bitmap
-#include "../resources/icons/icons_marker.c"
-
 void request_to_draw_marker(uint16_t mk_idx) {
   for (int t = 0; t < TRACES_MAX; t++) {
     if (!trace[t].enabled)
@@ -1791,6 +1797,8 @@ static void markmap_grid_values(void) {
   if (VNA_MODE(VNA_MODE_SHOW_GRID))
     invalidate_rect_px(GRID_X_TEXT, 0, LCD_WIDTH - OFFSETX, LCD_HEIGHT - 1);
 }
+#else
+static void markmap_grid_values(void) {}
 #endif
 
 //**************************************************************************************
