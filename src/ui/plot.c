@@ -1792,7 +1792,6 @@ static void cell_draw_grid_values(RenderCellCtx* rcx) {
   cell_set_font(FONT_NORMAL);
 }
 
-#if VNA_ENABLE_GRID_VALUES
 static void markmap_grid_values(void) {
   if (VNA_MODE(VNA_MODE_SHOW_GRID))
     invalidate_rect_px(GRID_X_TEXT, 0, LCD_WIDTH - OFFSETX, LCD_HEIGHT - 1);
