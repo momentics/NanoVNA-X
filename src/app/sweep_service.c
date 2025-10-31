@@ -55,9 +55,10 @@ static uint16_t p_sweep = 0;
 static uint8_t sweep_state_flags = 0;
 static uint16_t sweep_bar_drawn_pixels = 0;
 static uint8_t sweep_bar_pending = 0;
-static float snapshot_buffers[2][SWEEP_POINTS_MAX][2];
+// Snapshot staging buffer reused across channels; guarded by sweep_copy_in_progress.
+static float snapshot_buffer[SWEEP_POINTS_MAX][2];
 
-#define SWEEP_SNAPSHOT_DEFAULT_TIMEOUT TIME_MS2I(5)
+#define SWEEP_SNAPSHOT_DEFAULT_TIMEOUT MS2ST(5)
 #define SWEEP_SNAPSHOT_POLL_DELAY_MS 1U
 
 static uint8_t smooth_factor = 0;
@@ -310,11 +311,11 @@ bool sweep_service_snapshot_try_acquire(uint8_t channel, sweep_service_snapshot_
 
       snapshot->generation = generation;
       snapshot->points = points;
-      snapshot->data = snapshot_buffers[channel];
+      snapshot->data = snapshot_buffer;
 
-      const size_t copy_bytes = (size_t)points * sizeof(snapshot_buffers[channel][0]);
+      const size_t copy_bytes = (size_t)points * sizeof(snapshot_buffer[0]);
       if (copy_bytes > 0U) {
-        memcpy(snapshot_buffers[channel], measured[channel], copy_bytes);
+        memcpy(snapshot_buffer, measured[channel], copy_bytes);
       }
 
       return true;
