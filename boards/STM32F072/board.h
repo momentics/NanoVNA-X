@@ -764,6 +764,19 @@
                                      PIN_AFIO_AF(14, 0) |          \
                                      PIN_AFIO_AF(15, 0))
 
+#define usb_lld_connect_bus(usbp)                                                   \
+  do {                                                                              \
+    (void)(usbp);                                                                   \
+    palSetPadMode(GPIOA, GPIOA_USART1_RX, PAL_MODE_INPUT);                          \
+  } while (false)
+
+#define usb_lld_disconnect_bus(usbp)                                                \
+  do {                                                                              \
+    (void)(usbp);                                                                   \
+    palClearPad(GPIOA, GPIOA_USART1_RX);                                            \
+    palSetPadMode(GPIOA, GPIOA_USART1_RX, PAL_MODE_OUTPUT_PUSHPULL);                \
+  } while (false)
+
 #if !defined(_FROM_ASM_)
 #ifdef __cplusplus
 extern "C" {

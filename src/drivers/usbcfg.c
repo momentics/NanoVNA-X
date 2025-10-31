@@ -104,7 +104,7 @@ static const uint8_t vcom_configuration_descriptor_data[67] = {
     /* Endpoint 2 Descriptor.*/
     USB_DESC_ENDPOINT(USBD1_INTERRUPT_REQUEST_EP | 0x80, 0x03, /* bmAttributes (Interrupt). */
                       0x0008, /* wMaxPacketSize.                  */
-                      0xFF),  /* bInterval.                       */
+                      0x10),  /* bInterval.                       */
     /* Interface Descriptor.*/
     USB_DESC_INTERFACE(0x01,  /* bInterfaceNumber.                */
                        0x00,  /* bAlternateSetting.               */
@@ -247,29 +247,30 @@ static const USBDescriptor vcom_strings[] = {
 // Use unique serial string generated from MCU id
 #define UID_RADIX 5 // Radix conversion constant (5 bit, use 0..9 and A..V)
 #define USB_SERIAL_STRING_SIZE (64 / UID_RADIX) // Result string size
+static USBDescriptor serial_string_descriptor;
+static uint16_t serial_string_buffer[USB_SERIAL_STRING_SIZE + 1];
+static bool serial_string_initialized = false;
+
 USBDescriptor* get_serial_string_descriptor(void) {
-  uint16_t i;
-  uint16_t* buf = ((uint16_t*)&spi_buffer[ARRAY_COUNT(spi_buffer)]) - USB_SERIAL_STRING_SIZE -
-                  4; // 16 byte align
-  USBDescriptor* d = ((USBDescriptor*)buf) - 1;
-  uint32_t id0 = *(uint32_t*)0x1FFFF7AC; // MCU id0 address
-  uint32_t id1 = *(uint32_t*)0x1FFFF7B0; // MCU id1 address
-  uint32_t id2 = *(uint32_t*)0x1FFFF7B4; // MCU id2 address
-  uint64_t uid = id1;
-  id0 += id2;
-  uid |= id0 | (uid << 32); // generate unique 64bit ID
-  // Prepare serial string descriptor from 64 bit ID
-  for (i = 1; i < USB_SERIAL_STRING_SIZE + 1; i++) {
-    uint16_t c = uid & ((1 << UID_RADIX) - 1);
-    buf[i] = c + (c < 0x0A ? '0' : 'A' - 0x0A);
-    uid >>= UID_RADIX;
+  if (!serial_string_initialized) {
+    uint32_t id0 = *(uint32_t*)0x1FFFF7AC; // MCU id0 address
+    uint32_t id1 = *(uint32_t*)0x1FFFF7B0; // MCU id1 address
+    uint32_t id2 = *(uint32_t*)0x1FFFF7B4; // MCU id2 address
+    uint64_t uid = id1;
+    id0 += id2;
+    uid |= id0 | (uid << 32); // generate unique 64bit ID
+    for (uint16_t i = 1; i < USB_SERIAL_STRING_SIZE + 1; ++i) {
+      uint16_t c = uid & ((1U << UID_RADIX) - 1U);
+      serial_string_buffer[i] = c + (c < 0x0AU ? '0' : ('A' - 0x0AU));
+      uid >>= UID_RADIX;
+    }
+    const uint16_t length = (USB_SERIAL_STRING_SIZE + 1U) * sizeof(uint16_t);
+    serial_string_buffer[0] = (uint16_t)((USB_DESCRIPTOR_STRING << 8) | length);
+    serial_string_descriptor.ud_size = length;
+    serial_string_descriptor.ud_string = (uint8_t*)serial_string_buffer;
+    serial_string_initialized = true;
   }
-  uint16_t size = i * sizeof(uint16_t);
-  buf[0] = size | (USB_DESCRIPTOR_STRING << 8);
-  // Generate USBDescriptor structure
-  d->ud_size = size;
-  d->ud_string = (uint8_t*)buf;
-  return d;
+  return &serial_string_descriptor;
 }
 #endif
 
@@ -329,34 +330,40 @@ static const USBEndpointConfig ep2config = {
 /*
  * Handles the USB driver global events.
  */
+static bool usb_endpoints_configured = false;
+
+BSEMAPHORE_DECL(sdu_configured_bsem, true);
+
+bool usbWaitSerialConfiguredTimeout(systime_t timeout) {
+  return chBSemWaitTimeout(&sdu_configured_bsem, timeout) == MSG_OK;
+}
+
 static void usb_event(USBDriver* usbp, usbevent_t event) {
-  extern SerialUSBDriver SDU1;
-  chSysLockFromISR();
+  osalSysLockFromISR();
   switch (event) {
   case USB_EVENT_RESET:
+    usb_endpoints_configured = false;
+    chBSemResetI(&sdu_configured_bsem, true);
     break;
   case USB_EVENT_ADDRESS:
     break;
   case USB_EVENT_CONFIGURED:
-    /* Enables the endpoints specified into the configuration.
-       Note, this callback is invoked from an ISR so I-Class functions
-       must be used.*/
-    usbInitEndpointI(usbp, USBD1_DATA_REQUEST_EP, &ep1config);
-    usbInitEndpointI(usbp, USBD1_INTERRUPT_REQUEST_EP, &ep2config);
-    /* Resetting the state of the CDC subsystem.*/
-    sduConfigureHookI(&SDU1);
+    if (!usb_endpoints_configured) {
+      usbInitEndpointI(usbp, USBD1_DATA_REQUEST_EP, &ep1config);
+      usbInitEndpointI(usbp, USBD1_INTERRUPT_REQUEST_EP, &ep2config);
+      sduConfigureHookI(&SDU1);
+      usb_endpoints_configured = true;
+      chBSemSignalI(&sdu_configured_bsem);
+    }
     break;
   case USB_EVENT_SUSPEND:
-    /* Disconnection event on suspend.*/
-    sduDisconnectI(&SDU1);
     break;
   case USB_EVENT_WAKEUP:
     break;
   case USB_EVENT_STALLED:
     break;
   }
-  chSysUnlockFromISR();
-  return;
+  osalSysUnlockFromISR();
 }
 
 /*

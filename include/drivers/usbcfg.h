@@ -17,9 +17,14 @@
 #ifndef _USBCFG_H_
 #define _USBCFG_H_
 
+#include <stdbool.h>
+#include "ch.h"
+
 extern const USBConfig usbcfg;
 extern SerialUSBConfig serusbcfg;
 extern SerialUSBDriver SDU1;
+
+bool usbWaitSerialConfiguredTimeout(systime_t timeout);
 
 #endif /* _USBCFG_H_ */
 

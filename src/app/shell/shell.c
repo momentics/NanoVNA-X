@@ -34,6 +34,7 @@
 static const VNAShellCommand* command_table = NULL;
 
 static BaseSequentialStream* shell_stream = NULL;
+static bool shell_usb_ready = false;
 static threads_queue_t shell_thread;
 static char* shell_args[VNA_SHELL_MAX_ARGUMENTS + 1];
 static uint16_t shell_nargs;
@@ -81,19 +82,6 @@ void shell_stream_write(const void* buffer, size_t size) {
   shell_write(buffer, size);
 }
 
-#ifdef __USE_SERIAL_CONSOLE__
-#define PREPARE_STREAM                                                                             \
-  do {                                                                                             \
-    shell_stream = VNA_MODE(VNA_MODE_CONNECTION) ? (BaseSequentialStream*)&SD1                     \
-                                                 : (BaseSequentialStream*)&SDU1;                   \
-  } while (false)
-#else
-#define PREPARE_STREAM                                                                             \
-  do {                                                                                             \
-    shell_stream = (BaseSequentialStream*)&SDU1;                                                   \
-  } while (false)
-#endif
-
 void shell_update_speed(uint32_t speed) {
   config._serial_speed = speed;
 #ifdef __USE_SERIAL_CONSOLE__
@@ -101,18 +89,68 @@ void shell_update_speed(uint32_t speed) {
 #endif
 }
 
-#ifdef __USE_SERIAL_CONSOLE__
-static bool usb_is_active_locked(void) {
-  return usbGetDriverStateI(&USBD1) == USB_ACTIVE;
+static void shell_set_stream(BaseSequentialStream* stream) {
+  osalSysLock();
+  shell_stream = stream;
+  osalSysUnlock();
 }
-#endif
+
+static usbstate_t shell_usb_get_state(void) {
+  osalSysLock();
+  usbstate_t state = usbGetDriverStateI(&USBD1);
+  osalSysUnlock();
+  return state;
+}
+
+static bool shell_wait_for_usb_active(systime_t timeout) {
+  if (shell_usb_get_state() == USB_ACTIVE) {
+    return true;
+  }
+  const systime_t start = chVTGetSystemTimeX();
+  while (chVTTimeElapsedSinceX(start) < timeout) {
+    if (shell_usb_get_state() == USB_ACTIVE) {
+      return true;
+    }
+    chThdSleepMilliseconds(10);
+  }
+  return shell_usb_get_state() == USB_ACTIVE;
+}
+
+static bool shell_prepare_usb_stream(void) {
+  usbstate_t state = shell_usb_get_state();
+  if ((state == USB_READY) || (state == USB_STOP) || (state == USB_UNINIT)) {
+    shell_usb_ready = false;
+  }
+  if (state != USB_ACTIVE) {
+    if (!shell_wait_for_usb_active(TIME_MS2I(500))) {
+      return false;
+    }
+    state = shell_usb_get_state();
+    if ((state == USB_READY) || (state == USB_STOP) || (state == USB_UNINIT)) {
+      shell_usb_ready = false;
+    }
+    if (state != USB_ACTIVE) {
+      return false;
+    }
+  }
+  if (!shell_usb_ready) {
+    if (!usbWaitSerialConfiguredTimeout(TIME_MS2I(500))) {
+      return false;
+    }
+    shell_usb_ready = true;
+    static const uint8_t greeting[] = "\r\nch ";
+    streamWrite((BaseSequentialStream*)&SDU1, greeting, sizeof greeting - 1U);
+  }
+  return true;
+}
 
 void shell_reset_console(void) {
   osalSysLock();
 #ifdef __USE_SERIAL_CONSOLE__
-  if (usb_is_active_locked()) {
+  if (usbGetDriverStateI(&USBD1) == USB_ACTIVE) {
     if (VNA_MODE(VNA_MODE_CONNECTION)) {
       sduDisconnectI(&SDU1);
+      shell_usb_ready = false;
     } else {
       sduConfigureHookI(&SDU1);
     }
@@ -127,35 +165,54 @@ void shell_reset_console(void) {
 bool shell_check_connect(void) {
 #ifdef __USE_SERIAL_CONSOLE__
   if (VNA_MODE(VNA_MODE_CONNECTION)) {
+    shell_set_stream((BaseSequentialStream*)&SD1);
     return true;
   }
-  osalSysLock();
-  const bool active = usb_is_active_locked();
-  osalSysUnlock();
-  return active;
+  if (shell_prepare_usb_stream()) {
+    shell_set_stream((BaseSequentialStream*)&SDU1);
+    return true;
+  }
+  shell_set_stream(NULL);
+  return false;
 #else
-  return SDU1.config->usbp->state == USB_ACTIVE;
+  if (shell_prepare_usb_stream()) {
+    shell_set_stream((BaseSequentialStream*)&SDU1);
+    return true;
+  }
+  shell_set_stream(NULL);
+  return false;
 #endif
 }
 
 void shell_init_connection(void) {
   osalThreadQueueObjectInit(&shell_thread);
-  sduObjectInit(&SDU1);
-  sduStart(&SDU1, &serusbcfg);
+  static bool usb_started = false;
+  if (!usb_started) {
+    sduObjectInit(&SDU1);
+    sduStart(&SDU1, &serusbcfg);
 #ifdef __USE_SERIAL_CONSOLE__
-  SerialConfig serial_cfg = {config._serial_speed, 0, USART_CR2_STOP1_BITS, 0};
-  sdStart(&SD1, &serial_cfg);
-  shell_update_speed(config._serial_speed);
+    SerialConfig serial_cfg = {config._serial_speed, 0, USART_CR2_STOP1_BITS, 0};
+    sdStart(&SD1, &serial_cfg);
+    shell_update_speed(config._serial_speed);
 #endif
-  usbDisconnectBus(&USBD1);
-  chThdSleepMilliseconds(100);
-  usbStart(&USBD1, &usbcfg);
-  usbConnectBus(&USBD1);
+    usbStart(&USBD1, &usbcfg);
+    usb_started = true;
+  }
   shell_restore_stream();
 }
 
 void shell_restore_stream(void) {
-  PREPARE_STREAM;
+#ifdef __USE_SERIAL_CONSOLE__
+  if (VNA_MODE(VNA_MODE_CONNECTION)) {
+    shell_set_stream((BaseSequentialStream*)&SD1);
+    return;
+  }
+#endif
+  if (shell_prepare_usb_stream()) {
+    shell_set_stream((BaseSequentialStream*)&SDU1);
+  } else {
+    shell_set_stream(NULL);
+  }
 }
 
 void shell_register_commands(const VNAShellCommand* table) {
@@ -258,15 +315,17 @@ int vna_shell_read_line(char* line, int max_size) {
 
 void vna_shell_execute_cmd_line(char* line) {
   BaseSequentialStream* previous = shell_stream;
+  osalSysLock();
   shell_stream = NULL;
+  osalSysUnlock();
   uint16_t argc = 0;
   char** argv = NULL;
   const VNAShellCommand* cmd = shell_parse_command(line, &argc, &argv, NULL);
   if (cmd != NULL && (cmd->flags & CMD_RUN_IN_LOAD)) {
     cmd->sc_function(argc, argv);
   }
-  shell_stream = previous;
-  if (shell_stream == NULL) {
+  shell_set_stream(previous);
+  if (previous == NULL) {
     shell_restore_stream();
   }
 }
