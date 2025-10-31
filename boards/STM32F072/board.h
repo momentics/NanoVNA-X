@@ -764,12 +764,6 @@
                                      PIN_AFIO_AF(14, 0) |          \
                                      PIN_AFIO_AF(15, 0))
 
-/* No hardware USB disconnect transistor is present, keep these as no-ops. */
-#undef usb_lld_connect_bus
-#undef usb_lld_disconnect_bus
-#define usb_lld_connect_bus(usbp)    do { (void)usbp; } while (0)
-#define usb_lld_disconnect_bus(usbp) do { (void)usbp; } while (0)
-
 #if !defined(_FROM_ASM_)
 #ifdef __cplusplus
 extern "C" {

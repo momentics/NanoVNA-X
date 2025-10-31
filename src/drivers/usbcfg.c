@@ -17,8 +17,6 @@
 #include "hal.h"
 #include "nanovna.h"
 
-#include <stddef.h>
-
 /* Virtual serial port over USB.*/
 SerialUSBDriver SDU1;
 
@@ -103,10 +101,10 @@ static const uint8_t vcom_configuration_descriptor_data[67] = {
                             Class Interface).                */
     USB_DESC_BYTE(0x01), /* bSlaveInterface0 (Data Class
                             Interface).                      */
-    /* CDC Notification EP: 16 bytes, 16 ms polling. */
+    /* Endpoint 2 Descriptor.*/
     USB_DESC_ENDPOINT(USBD1_INTERRUPT_REQUEST_EP | 0x80, 0x03, /* bmAttributes (Interrupt). */
-                      0x0010, /* wMaxPacketSize.                  */
-                      0x10),  /* bInterval.                       */
+                      0x0008, /* wMaxPacketSize.                  */
+                      0xFF),  /* bInterval.                       */
     /* Interface Descriptor.*/
     USB_DESC_INTERFACE(0x01,  /* bInterfaceNumber.                */
                        0x00,  /* bAlternateSetting.               */
@@ -225,48 +223,55 @@ static const uint8_t vcom_string2[] = {
 };
 
 /*
+ * Serial Number string.
+ */
+static const uint8_t vcom_string3[] = {USB_DESC_BYTE(8), /* bLength.                         */
+                                       USB_DESC_BYTE(USB_DESCRIPTOR_STRING), /* bDescriptorType. */
+                                       '0' + CH_KERNEL_MAJOR,
+                                       0,
+                                       '0' + CH_KERNEL_MINOR,
+                                       0,
+                                       '0' + CH_KERNEL_PATCH,
+                                       0};
+
+/*
  * Strings wrappers array.
  */
 static const USBDescriptor vcom_strings[] = {
     [STR_LANG_ID] = {sizeof vcom_string0, vcom_string0},
     [STR_MANUFACTURER] = {sizeof vcom_string1, vcom_string1},
-    [STR_PRODUCT] = {sizeof vcom_string2, vcom_string2}};
+    [STR_PRODUCT] = {sizeof vcom_string2, vcom_string2},
+    [STR_SERIAL] = {sizeof vcom_string3, vcom_string3}};
 
-#define SERIAL_STRING_CHARS 24U
-static USBDescriptor serial_string_descriptor;
-static uint8_t serial_string_buffer[2U + (SERIAL_STRING_CHARS * 2U)];
-static bool serial_string_initialized = false;
-
-static const USBDescriptor* get_serial_string_descriptor(void) {
-  if (!serial_string_initialized) {
-    size_t index = 2U;
-    serial_string_buffer[1] = USB_DESCRIPTOR_STRING;
-#if defined(__USB_UID__)
-    const uint32_t* uid_words = (const uint32_t*)UID_BASE;
-    for (int word = 2; word >= 0; --word) {
-      uint32_t value = uid_words[word];
-      for (int nibble = 0; nibble < 8; ++nibble) {
-        uint32_t digit = (value >> 28) & 0x0FU;
-        value <<= 4;
-        char c = (digit < 10U) ? (char)('0' + digit) : (char)('A' + (digit - 10U));
-        serial_string_buffer[index++] = (uint8_t)c;
-        serial_string_buffer[index++] = 0U;
-      }
-    }
-#else
-    static const char fallback_serial[] = "000000000000000000000000";
-    for (size_t i = 0; i < sizeof fallback_serial - 1U; ++i) {
-      serial_string_buffer[index++] = (uint8_t)fallback_serial[i];
-      serial_string_buffer[index++] = 0U;
-    }
-#endif
-    serial_string_buffer[0] = (uint8_t)index;
-    serial_string_descriptor.ud_size = (uint16_t)index;
-    serial_string_descriptor.ud_string = serial_string_buffer;
-    serial_string_initialized = true;
+#ifdef __USB_UID__
+// Use unique serial string generated from MCU id
+#define UID_RADIX 5 // Radix conversion constant (5 bit, use 0..9 and A..V)
+#define USB_SERIAL_STRING_SIZE (64 / UID_RADIX) // Result string size
+USBDescriptor* get_serial_string_descriptor(void) {
+  uint16_t i;
+  uint16_t* buf = ((uint16_t*)&spi_buffer[ARRAY_COUNT(spi_buffer)]) - USB_SERIAL_STRING_SIZE -
+                  4; // 16 byte align
+  USBDescriptor* d = ((USBDescriptor*)buf) - 1;
+  uint32_t id0 = *(uint32_t*)0x1FFFF7AC; // MCU id0 address
+  uint32_t id1 = *(uint32_t*)0x1FFFF7B0; // MCU id1 address
+  uint32_t id2 = *(uint32_t*)0x1FFFF7B4; // MCU id2 address
+  uint64_t uid = id1;
+  id0 += id2;
+  uid |= id0 | (uid << 32); // generate unique 64bit ID
+  // Prepare serial string descriptor from 64 bit ID
+  for (i = 1; i < USB_SERIAL_STRING_SIZE + 1; i++) {
+    uint16_t c = uid & ((1 << UID_RADIX) - 1);
+    buf[i] = c + (c < 0x0A ? '0' : 'A' - 0x0A);
+    uid >>= UID_RADIX;
   }
-  return &serial_string_descriptor;
+  uint16_t size = i * sizeof(uint16_t);
+  buf[0] = size | (USB_DESCRIPTOR_STRING << 8);
+  // Generate USBDescriptor structure
+  d->ud_size = size;
+  d->ud_string = (uint8_t*)buf;
+  return d;
 }
+#endif
 
 /*
  * Handles the GET_DESCRIPTOR callback. All required descriptors must be
@@ -283,10 +288,11 @@ static const USBDescriptor* get_descriptor(USBDriver* usbp, uint8_t dtype, uint8
   case USB_DESCRIPTOR_CONFIGURATION:
     return &vcom_configuration_descriptor;
   case USB_DESCRIPTOR_STRING:
-    if (dindex == STR_SERIAL) {
+#ifdef __USB_UID__ // send unique USB serial string if need
+    if (dindex == STR_SERIAL && VNA_MODE(VNA_MODE_USB_UID))
       return get_serial_string_descriptor();
-    }
-    if (dindex < ARRAY_COUNT(vcom_strings))
+#endif
+    if (dindex < 4)
       return &vcom_strings[dindex];
   }
   return NULL;
@@ -323,51 +329,41 @@ static const USBEndpointConfig ep2config = {
 /*
  * Handles the USB driver global events.
  */
-static bool usb_endpoints_configured = false;
-static thread_reference_t sdu_configured_tr = NULL;
-
-bool usbWaitSerialConfiguredTimeout(systime_t timeout) {
-  osalSysLock();
-  if (usb_endpoints_configured) {
-    osalSysUnlock();
-    return true;
-  }
-  msg_t msg = osalThreadSuspendTimeoutS(&sdu_configured_tr, timeout);
-  osalSysUnlock();
-  return msg == MSG_OK;
-}
-
-/* Minimal and safe USB events handling. */
-static void usbevent(USBDriver* usbp, usbevent_t event) {
-  osalSysLockFromISR();
+static void usb_event(USBDriver* usbp, usbevent_t event) {
+  extern SerialUSBDriver SDU1;
+  chSysLockFromISR();
   switch (event) {
   case USB_EVENT_RESET:
-    usb_endpoints_configured = false;
-    if (sdu_configured_tr != NULL) {
-      osalThreadResumeI(&sdu_configured_tr, MSG_RESET);
-    }
+    break;
+  case USB_EVENT_ADDRESS:
     break;
   case USB_EVENT_CONFIGURED:
+    /* Enables the endpoints specified into the configuration.
+       Note, this callback is invoked from an ISR so I-Class functions
+       must be used.*/
     usbInitEndpointI(usbp, USBD1_DATA_REQUEST_EP, &ep1config);
     usbInitEndpointI(usbp, USBD1_INTERRUPT_REQUEST_EP, &ep2config);
+    /* Resetting the state of the CDC subsystem.*/
     sduConfigureHookI(&SDU1);
-    usb_endpoints_configured = true;
-    if (sdu_configured_tr != NULL) {
-      osalThreadResumeI(&sdu_configured_tr, MSG_OK);
-    }
     break;
   case USB_EVENT_SUSPEND:
+    /* Disconnection event on suspend.*/
+    sduDisconnectI(&SDU1);
+    break;
+  case USB_EVENT_WAKEUP:
+    break;
+  case USB_EVENT_STALLED:
     break;
   }
-  osalSysUnlockFromISR();
+  chSysUnlockFromISR();
+  return;
 }
 
-/* Temporary SOF hook for debugging USB clock/SOF presence. */
-static void sofhandler(USBDriver* usbp) {
+/*
+ * Handles the USB driver global events.
+ */
+static void sof_handler(USBDriver* usbp) {
   (void)usbp;
-#if defined(GPIOC) && defined(GPIOC_LED)
-  GPIOC->ODR ^= (1U << GPIOC_LED);
-#endif
   osalSysLockFromISR();
   sduSOFHookI(&SDU1);
   osalSysUnlockFromISR();
@@ -376,7 +372,7 @@ static void sofhandler(USBDriver* usbp) {
 /*
  * USB driver configuration.
  */
-const USBConfig usbcfg = {usbevent, get_descriptor, sduRequestsHook, sofhandler};
+const USBConfig usbcfg = {usb_event, get_descriptor, sduRequestsHook, sof_handler};
 
 /*
  * Serial over USB driver configuration.

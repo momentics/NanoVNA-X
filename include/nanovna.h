@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * Based on  Dmitry (DiSlord) dislordlive@gmail.com
+ * Copyright (c) 2019-2020, Dmitry (DiSlord) dislordlive@gmail.com
  * Based on TAKAHASHI Tomohiro (TTRFTECH) edy555@gmail.com
+ * Copyright (c) 2024, @momentics <momentics@gmail.com>
  * All rights reserved.
  *
  * This is free software; you can redistribute it and/or modify
@@ -23,12 +23,6 @@
 #include "ch.h"
 #include <stdalign.h>
 #include <stdint.h>
-
-#if defined(NANOVNA_F303)
-#define RAM4_BSS __attribute__((section(".ram4"), aligned(4)))
-#else
-#define RAM4_BSS
-#endif
 
 // Define LCD display driver and size
 #if defined(NANOVNA_F303)
