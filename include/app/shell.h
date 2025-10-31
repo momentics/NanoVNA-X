@@ -35,12 +35,6 @@ extern "C" {
 #define VNA_SHELL_MAX_ARGUMENTS 4
 #define VNA_SHELL_MAX_LENGTH 64
 
-enum {
-  VNA_SHELL_LINE_IDLE = 0,
-  VNA_SHELL_LINE_READY = 1,
-  VNA_SHELL_LINE_ABORTED = -1,
-};
-
 typedef void (*vna_shellcmd_t)(int argc, char* argv[]);
 
 typedef struct {
@@ -63,23 +57,18 @@ int shell_printf(const char* fmt, ...);
 int serial_shell_printf(const char* fmt, ...);
 #endif
 
-bool shell_stream_write(const void* buffer, size_t size);
+void shell_stream_write(const void* buffer, size_t size);
 
 void shell_update_speed(uint32_t speed);
 void shell_reset_console(void);
 bool shell_check_connect(void);
 void shell_init_connection(void);
 void shell_restore_stream(void);
-bool shell_emit_prompt(void);
-void shell_usb_line_state_changed_i(bool dtr_active);
 
 const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** argv,
                                            const char** name_out);
 void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t argc, char** argv);
 void shell_service_pending_commands(void);
-bool shell_emit_handshake(void);
-bool shell_prompt_is_preprinted(void);
-void shell_clear_prompt_preprinted(void);
 
 int vna_shell_read_line(char* line, int max_size);
 void vna_shell_execute_cmd_line(char* line);

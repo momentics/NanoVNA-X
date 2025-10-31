@@ -34,368 +34,26 @@
 static const VNAShellCommand* command_table = NULL;
 
 static BaseSequentialStream* shell_stream = NULL;
-static volatile bool shell_prompt_preprinted = false;
 static threads_queue_t shell_thread;
 static char* shell_args[VNA_SHELL_MAX_ARGUMENTS + 1];
 static uint16_t shell_nargs;
 static volatile const VNAShellCommand* pending_command = NULL;
 static uint16_t pending_argc = 0;
 static char** pending_argv = NULL;
-static volatile bool shell_skip_linefeed = false;
-
-void shell_usb_line_state_changed_i(bool dtr_active) {
-  (void)dtr_active;
-  shell_prompt_preprinted = false;
-  shell_skip_linefeed = false;
-}
-
-#define SHELL_READ_TIMEOUT MS2ST(50)
-#define SHELL_INPUT_IDLE_TIMEOUT MS2ST(2000)
-#define SHELL_WRITE_TIMEOUT MS2ST(200)
-#define SHELL_WRITE_CHUNK 64U
-
-#define SHELL_PRINTF_MAX_FILLER 11
-#define SHELL_PRINTF_FLOAT_PRECISION 9
-
-static char* shell_long_to_string_with_divisor(char* p, long num, unsigned radix, long divisor) {
-  int i;
-  char* q;
-  long l = num;
-  long ll = (divisor == 0) ? num : divisor;
-
-  q = p + SHELL_PRINTF_MAX_FILLER;
-  do {
-    i = (int)(l % radix);
-    i += '0';
-    if (i > '9') {
-      i += 'A' - '0' - 10;
-    }
-    *--q = (char)i;
-    l /= radix;
-  } while ((ll /= radix) != 0);
-
-  i = (int)(p + SHELL_PRINTF_MAX_FILLER - q);
-  do {
-    *p++ = *q++;
-  } while (--i);
-
-  return p;
-}
-
-static char* shell_ltoa(char* p, long num, unsigned radix) {
-  return shell_long_to_string_with_divisor(p, num, radix, 0);
-}
-
-#if CHPRINTF_USE_FLOAT
-static const long shell_pow10[SHELL_PRINTF_FLOAT_PRECISION] = {
-    10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
-
-static char* shell_ftoa(char* p, double num, unsigned long precision) {
-  long l;
-
-  if (precision == 0 || precision > SHELL_PRINTF_FLOAT_PRECISION) {
-    precision = SHELL_PRINTF_FLOAT_PRECISION;
-  }
-  precision = shell_pow10[precision - 1];
-
-  l = (long)num;
-  p = shell_long_to_string_with_divisor(p, l, 10, 0);
-  *p++ = '.';
-  l = (long)((num - l) * precision);
-  return shell_long_to_string_with_divisor(p, l, 10, precision / 10);
-}
-#endif
-
-static bool shell_stream_put_char(BaseSequentialStream* stream, uint8_t value);
-static size_t shell_stream_write_buffer(BaseSequentialStream* stream, const void* buf, size_t size);
+static bool shell_skip_linefeed = false;
 
 static void shell_write(const void* buf, size_t size) {
-  if (shell_stream == NULL || size == 0U) {
+  if (shell_stream == NULL) {
     return;
   }
-  (void)shell_stream_write_buffer(shell_stream, buf, size);
+  streamWrite(shell_stream, buf, size);
 }
 
-static size_t shell_read(void* buf, size_t size) {
-  if (shell_stream == NULL || size == 0) {
+static int shell_read(void* buf, uint32_t size) {
+  if (shell_stream == NULL) {
     return 0;
   }
-
-#ifdef __USE_SERIAL_CONSOLE__
-  if (shell_stream == (BaseSequentialStream*)&SD1) {
-    return iqReadTimeout(&SD1.iqueue, (uint8_t*)buf, size, SHELL_READ_TIMEOUT);
-  }
-#endif
-
-#if HAL_USE_SERIAL_USB == TRUE
-  if (shell_stream == (BaseSequentialStream*)&SDU1) {
-    return ibqReadTimeout(&SDU1.ibqueue, (uint8_t*)buf, size, SHELL_READ_TIMEOUT);
-  }
-#endif
-
   return streamRead(shell_stream, buf, size);
-}
-
-static size_t shell_stream_write_buffer(BaseSequentialStream* stream, const void* buf,
-                                        size_t size) {
-  if (stream == NULL || size == 0U) {
-    return 0U;
-  }
-
-  const uint8_t* data = (const uint8_t*)buf;
-  size_t total = 0U;
-
-#if HAL_USE_SERIAL_USB == TRUE
-  if (stream == (BaseSequentialStream*)&SDU1) {
-    while (total < size) {
-      size_t chunk = size - total;
-      if (chunk > SHELL_WRITE_CHUNK) {
-        chunk = SHELL_WRITE_CHUNK;
-      }
-
-      const syssts_t sts = chSysGetStatusAndLockX();
-      const bool active = (usbGetDriverStateI(&USBD1) == USB_ACTIVE) && (SDU1.state == SDU_READY);
-      chSysRestoreStatusX(sts);
-      if (!active) {
-        break;
-      }
-
-      const size_t written =
-          obqWriteTimeout(&SDU1.obqueue, data + total, chunk, SHELL_WRITE_TIMEOUT);
-      if (written == 0U) {
-        break;
-      }
-
-      total += written;
-      if (total < size) {
-        chThdYield();
-      }
-    }
-
-    if (total > 0U) {
-      obqFlush(&SDU1.obqueue);
-    }
-
-    return total;
-  }
-#endif
-
-#ifdef __USE_SERIAL_CONSOLE__
-  if (stream == (BaseSequentialStream*)&SD1) {
-    while (total < size) {
-      size_t chunk = size - total;
-      if (chunk > SHELL_WRITE_CHUNK) {
-        chunk = SHELL_WRITE_CHUNK;
-      }
-
-      const qsize_t written =
-          oqWriteTimeout(&SD1.oqueue, data + total, (qsize_t)chunk, SHELL_WRITE_TIMEOUT);
-      if (written == 0U) {
-        break;
-      }
-
-      total += (size_t)written;
-      if (total < size) {
-        chThdYield();
-      }
-    }
-
-    return total;
-  }
-#endif
-
-  return streamWrite(stream, data, size);
-}
-
-static bool shell_stream_put_char(BaseSequentialStream* stream, uint8_t value) {
-  return shell_stream_write_buffer(stream, &value, 1U) == 1U;
-}
-
-static int shell_vprintf(BaseSequentialStream* stream, const char* fmt, va_list ap) {
-  if (stream == NULL) {
-    return 0;
-  }
-
-  char* p;
-  char* s;
-  char c;
-  char filler;
-  int i;
-  int precision;
-  int width;
-  int n = 0;
-  bool is_long;
-  bool left_align;
-  long l;
-#if CHPRINTF_USE_FLOAT
-  float f;
-  char tmpbuf[2 * SHELL_PRINTF_MAX_FILLER + 1];
-#else
-  char tmpbuf[SHELL_PRINTF_MAX_FILLER + 1];
-#endif
-
-  while (true) {
-    c = *fmt++;
-    if (c == 0) {
-      return n;
-    }
-    if (c != '%') {
-      if (!shell_stream_put_char(stream, (uint8_t)c)) {
-        return n;
-      }
-      n++;
-      continue;
-    }
-    p = tmpbuf;
-    s = tmpbuf;
-    left_align = FALSE;
-    if (*fmt == '-') {
-      fmt++;
-      left_align = TRUE;
-    }
-    filler = ' ';
-    if (*fmt == '0') {
-      fmt++;
-      filler = '0';
-    }
-    width = 0;
-    while (TRUE) {
-      c = *fmt++;
-      if (c >= '0' && c <= '9') {
-        c -= '0';
-      } else if (c == '*') {
-        c = va_arg(ap, int);
-      } else {
-        break;
-      }
-      width = width * 10 + c;
-    }
-    precision = 0;
-    if (c == '.') {
-      while (TRUE) {
-        c = *fmt++;
-        if (c >= '0' && c <= '9') {
-          c -= '0';
-        } else if (c == '*') {
-          c = va_arg(ap, int);
-        } else {
-          break;
-        }
-        precision *= 10;
-        precision += c;
-      }
-    }
-
-    if (c == 'l' || c == 'L') {
-      is_long = TRUE;
-      if (*fmt) {
-        c = *fmt++;
-      }
-    } else {
-      is_long = (c >= 'A') && (c <= 'Z');
-    }
-
-    switch (c) {
-    case 'c':
-      filler = ' ';
-      *p++ = va_arg(ap, int);
-      break;
-    case 's':
-      filler = ' ';
-      if ((s = va_arg(ap, char*)) == 0) {
-        s = "(null)";
-      }
-      if (precision == 0) {
-        precision = 32767;
-      }
-      while (*s && (precision-- > 0)) {
-        *p++ = *s++;
-      }
-      break;
-    case 'D':
-    case 'd':
-      if (is_long) {
-        l = va_arg(ap, long);
-      } else {
-        l = va_arg(ap, int);
-      }
-      if (l < 0) {
-        *p++ = '-';
-        l = -l;
-      }
-      p = shell_ltoa(p, l, 10);
-      break;
-    case 'U':
-    case 'u':
-      if (is_long) {
-        l = va_arg(ap, long);
-      } else {
-        l = va_arg(ap, int);
-      }
-      p = shell_ltoa(p, l, 10);
-      break;
-    case 'X':
-    case 'x':
-      if (is_long) {
-        l = va_arg(ap, long);
-      } else {
-        l = va_arg(ap, int);
-      }
-      p = shell_ltoa(p, l, 16);
-      break;
-    case 'O':
-    case 'o':
-      if (is_long) {
-        l = va_arg(ap, long);
-      } else {
-        l = va_arg(ap, int);
-      }
-      p = shell_ltoa(p, l, 8);
-      break;
-#if CHPRINTF_USE_FLOAT
-    case 'f':
-    case 'F':
-      f = (float)va_arg(ap, double);
-      if (f < 0) {
-        *p++ = '-';
-        f = -f;
-      }
-      p = shell_ftoa(p, f, precision);
-      break;
-#endif
-    default:
-      if (!shell_stream_put_char(stream, (uint8_t)c)) {
-        return n;
-      }
-      n++;
-      continue;
-    }
-
-    i = (int)(p - s);
-    if ((width -= i) < 0) {
-      width = 0;
-    }
-    if (!left_align) {
-      while (width-- > 0) {
-        if (!shell_stream_put_char(stream, (uint8_t)filler)) {
-          return n;
-        }
-        n++;
-      }
-    }
-    while (i-- > 0) {
-      if (!shell_stream_put_char(stream, (uint8_t)*s++)) {
-        return n;
-      }
-      n++;
-    }
-    while (width-- > 0) {
-      if (!shell_stream_put_char(stream, (uint8_t)filler)) {
-        return n;
-      }
-      n++;
-    }
-  }
 }
 
 int shell_printf(const char* fmt, ...) {
@@ -404,7 +62,7 @@ int shell_printf(const char* fmt, ...) {
   }
   va_list ap;
   va_start(ap, fmt);
-  const int written = shell_vprintf(shell_stream, fmt, ap);
+  const int written = chvprintf(shell_stream, fmt, ap);
   va_end(ap);
   return written;
 }
@@ -413,17 +71,14 @@ int shell_printf(const char* fmt, ...) {
 int serial_shell_printf(const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  const int written = shell_vprintf((BaseSequentialStream*)&SD1, fmt, ap);
+  const int written = chvprintf((BaseSequentialStream*)&SD1, fmt, ap);
   va_end(ap);
   return written;
 }
 #endif
 
-bool shell_stream_write(const void* buffer, size_t size) {
-  if (shell_stream == NULL) {
-    return false;
-  }
-  return shell_stream_write_buffer(shell_stream, buffer, size) == size;
+void shell_stream_write(const void* buffer, size_t size) {
+  shell_write(buffer, size);
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
@@ -466,7 +121,6 @@ void shell_reset_console(void) {
   qResetI(&SD1.iqueue);
 #endif
   osalSysUnlock();
-  shell_prompt_preprinted = false;
   shell_restore_stream();
 }
 
@@ -476,14 +130,11 @@ bool shell_check_connect(void) {
     return true;
   }
   osalSysLock();
-  const bool ready = usb_is_active_locked() && (SDU1.state == SDU_READY);
+  const bool active = usb_is_active_locked();
   osalSysUnlock();
-  return ready;
+  return active;
 #else
-  osalSysLock();
-  const bool ready = (SDU1.config->usbp->state == USB_ACTIVE) && (SDU1.state == SDU_READY);
-  osalSysUnlock();
-  return ready;
+  return SDU1.config->usbp->state == USB_ACTIVE;
 #endif
 }
 
@@ -571,52 +222,12 @@ void shell_service_pending_commands(void) {
   }
 }
 
-bool shell_emit_prompt(void) {
-  const bool ok = shell_stream_write(VNA_SHELL_PROMPT_STR, sizeof(VNA_SHELL_PROMPT_STR) - 1U);
-  shell_prompt_preprinted = ok;
-  return ok;
-}
-
-bool shell_emit_handshake(void) {
-  static const char handshake_banner[] =
-      VNA_SHELL_PROMPT_STR VNA_SHELL_NEWLINE_STR "NanoVNA Shell" VNA_SHELL_NEWLINE_STR;
-  if (!shell_stream_write(handshake_banner, sizeof(handshake_banner) - 1U)) {
-    shell_prompt_preprinted = false;
-    return false;
-  }
-  return shell_emit_prompt();
-}
-
-bool shell_prompt_is_preprinted(void) {
-  return shell_prompt_preprinted;
-}
-
-void shell_clear_prompt_preprinted(void) {
-  shell_prompt_preprinted = false;
-}
-
 static const char backspace[] = {0x08, 0x20, 0x08, 0x00};
 
 int vna_shell_read_line(char* line, int max_size) {
-  static uint16_t current_length = 0;
-  static systime_t last_activity = 0;
   uint8_t c;
-  while (true) {
-    const size_t read = shell_read(&c, 1);
-    if (read == 0) {
-      if (current_length > 0 && last_activity != 0 &&
-          chVTTimeElapsedSinceX(last_activity) >= SHELL_INPUT_IDLE_TIMEOUT) {
-        shell_printf(VNA_SHELL_NEWLINE_STR "[shell] command timeout" VNA_SHELL_NEWLINE_STR);
-        current_length = 0;
-        last_activity = 0;
-        shell_skip_linefeed = false;
-        return VNA_SHELL_LINE_ABORTED;
-      }
-      return VNA_SHELL_LINE_IDLE;
-    }
-
-    last_activity = chVTGetSystemTimeX();
-
+  uint16_t j = 0;
+  while (shell_read(&c, 1)) {
     if (shell_skip_linefeed) {
       shell_skip_linefeed = false;
       if (c == '\n') {
@@ -624,26 +235,25 @@ int vna_shell_read_line(char* line, int max_size) {
       }
     }
     if (c == 0x08 || c == 0x7f) {
-      if (current_length > 0) {
+      if (j > 0) {
         shell_write(backspace, sizeof backspace);
-        current_length--;
+        j--;
       }
       continue;
     }
     if (c == '\r' || c == '\n') {
       shell_skip_linefeed = (c == '\r');
       shell_printf(VNA_SHELL_NEWLINE_STR);
-      line[current_length] = 0;
-      current_length = 0;
-      last_activity = 0;
-      return VNA_SHELL_LINE_READY;
+      line[j] = 0;
+      return 1;
     }
-    if (c < ' ' || current_length >= max_size - 1) {
+    if (c < ' ' || j >= max_size - 1) {
       continue;
     }
     shell_write(&c, 1);
-    line[current_length++] = (char)c;
+    line[j++] = (char)c;
   }
+  return 0;
 }
 
 void vna_shell_execute_cmd_line(char* line) {

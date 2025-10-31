@@ -146,32 +146,6 @@ const char* info_about[] = {
     0 // sentinel
 };
 
-#ifdef ENABLE_INFO_COMMAND
-static void shell_print_ascii_line(const char* text) {
-  char chunk[32];
-  size_t chunk_len = 0;
-  while (*text != '\0') {
-    unsigned char c = (unsigned char)*text++;
-    if (c < 0x20U || c >= 0x7FU) {
-      c = '?';
-    }
-    chunk[chunk_len++] = (char)c;
-    if (chunk_len == sizeof chunk) {
-      if (!shell_stream_write(chunk, chunk_len)) {
-        return;
-      }
-      chunk_len = 0;
-    }
-  }
-  if (chunk_len > 0U) {
-    if (!shell_stream_write(chunk, chunk_len)) {
-      return;
-    }
-  }
-  (void)shell_stream_write(VNA_SHELL_NEWLINE_STR, sizeof(VNA_SHELL_NEWLINE_STR) - 1);
-}
-#endif
-
 // Allow draw some debug on LCD
 #ifdef DEBUG_CONSOLE_SHOW
 void my_debug_log(int offs, char* log) {
@@ -712,15 +686,9 @@ void capture_rle8(void) {
   } screenshot_header = {0x4D42, LCD_WIDTH, LCD_HEIGHT, 8, 1};
 
   uint16_t size = sizeof(config._lcd_palette);
-  if (!shell_stream_write(&screenshot_header, sizeof(screenshot_header))) { // write header
-    return;
-  }
-  if (!shell_stream_write(&size, sizeof(uint16_t))) { // write palette block size
-    return;
-  }
-  if (!shell_stream_write(config._lcd_palette, size)) { // write palette block
-    return;
-  }
+  shell_stream_write(&screenshot_header, sizeof(screenshot_header)); // write header
+  shell_stream_write(&size, sizeof(uint16_t));                       // write palette block size
+  shell_stream_write(config._lcd_palette, size);                     // write palette block
   uint16_t* data = &spi_buffer[32]; // most bad pack situation increase on 1 byte every 128, so put
                                     // not compressed data on 64 byte offset
   for (int y = 0, idx = 0; y < LCD_HEIGHT; y++) {
@@ -735,12 +703,7 @@ void capture_rle8(void) {
       ((uint8_t*)data)[x] = idx; // put palette index
     }
     spi_buffer[0] = packbits((char*)data, (char*)&spi_buffer[1], LCD_WIDTH); // pack
-    if (!shell_stream_write(spi_buffer, spi_buffer[0] + sizeof(uint16_t))) {
-      return;
-    }
-    if ((y & 0x03) == 0x03) {
-      chThdYield();
-    }
+    shell_stream_write(spi_buffer, spi_buffer[0] + sizeof(uint16_t));
   }
 }
 #endif
@@ -763,10 +726,7 @@ VNA_SHELL_FUNCTION(cmd_capture) {
   for (int y = 0; y < LCD_HEIGHT; y += READ_ROWS) {
     // use uint16_t spi_buffer[2048] (defined in ili9341) for read buffer
     lcd_read_memory(0, y, LCD_WIDTH, READ_ROWS, (uint16_t*)spi_buffer);
-    if (!shell_stream_write(spi_buffer, READ_ROWS * LCD_WIDTH * sizeof(uint16_t))) {
-      return;
-    }
-    chThdYield();
+    shell_stream_write(spi_buffer, READ_ROWS * LCD_WIDTH * sizeof(uint16_t));
   }
 }
 
@@ -950,34 +910,19 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     app_measurement_sweep(false, sweep_ch);
   pause_sweep();
   // Output data after if set (faster data receive)
-  bool stream_ok = true;
   if (mask) {
     if (mask & SCAN_MASK_BINARY) {
-      stream_ok = shell_stream_write(&mask, sizeof(uint16_t));
-      if (stream_ok) {
-        stream_ok = shell_stream_write(&points, sizeof(uint16_t));
-      }
-      for (int i = 0; stream_ok && i < points; i++) {
+      shell_stream_write(&mask, sizeof(uint16_t));
+      shell_stream_write(&points, sizeof(uint16_t));
+      for (int i = 0; i < points; i++) {
         if (mask & SCAN_MASK_OUT_FREQ) {
           freq_t f = get_frequency(i);
-          if (!shell_stream_write(&f, sizeof(freq_t))) {
-            stream_ok = false;
-            break;
-          }
-        }
-        if (stream_ok && (mask & SCAN_MASK_OUT_DATA0) &&
-            !shell_stream_write(&measured[0][i][0], sizeof(float) * 2)) {
-          stream_ok = false;
-          break;
-        }
-        if (stream_ok && (mask & SCAN_MASK_OUT_DATA1) &&
-            !shell_stream_write(&measured[1][i][0], sizeof(float) * 2)) {
-          stream_ok = false;
-          break;
-        }
-        if ((i & 0x0F) == 0x0F) {
-          chThdYield();
-        }
+          shell_stream_write(&f, sizeof(freq_t));
+        } // 4 bytes .. frequency
+        if (mask & SCAN_MASK_OUT_DATA0)
+          shell_stream_write(&measured[0][i][0], sizeof(float) * 2); // 4+4 bytes .. S11 real/imag
+        if (mask & SCAN_MASK_OUT_DATA1)
+          shell_stream_write(&measured[1][i][0], sizeof(float) * 2); // 4+4 bytes .. S21 real/imag
       }
     } else {
       for (int i = 0; i < points; i++) {
@@ -988,19 +933,8 @@ VNA_SHELL_FUNCTION(cmd_scan) {
         if (mask & SCAN_MASK_OUT_DATA1)
           shell_printf("%f %f ", measured[1][i][0], measured[1][i][1]);
         shell_printf(VNA_SHELL_NEWLINE_STR);
-        if ((i & 0x0F) == 0x0F) {
-          chThdYield();
-        }
       }
     }
-  }
-
-  if (!stream_ok) {
-    if (restore_config) {
-      sweep_points = original_points;
-      app_measurement_update_frequencies();
-    }
-    return;
   }
 
   if (restore_config) {
@@ -1939,9 +1873,6 @@ VNA_SHELL_FUNCTION(cmd_frequencies) {
   (void)argv;
   for (i = 0; i < sweep_points; i++) {
     shell_printf(VNA_FREQ_FMT_STR VNA_SHELL_NEWLINE_STR, get_frequency(i));
-    if ((i & 0x0F) == 0x0F) {
-      chThdYield();
-    }
   }
 }
 
@@ -2220,9 +2151,8 @@ VNA_SHELL_FUNCTION(cmd_info) {
   (void)argc;
   (void)argv;
   int i = 0;
-  while (info_about[i] != NULL) {
-    shell_print_ascii_line(info_about[i++]);
-  }
+  while (info_about[i])
+    shell_printf("%s" VNA_SHELL_NEWLINE_STR, info_about[i++]);
 }
 #endif
 
@@ -2345,11 +2275,8 @@ VNA_SHELL_FUNCTION(cmd_usart) {
   sdWriteTimeout(&SD1, (uint8_t*)VNA_SHELL_NEWLINE_STR, sizeof(VNA_SHELL_NEWLINE_STR) - 1, time);
   uint32_t size;
   uint8_t buffer[64];
-  while ((size = sdReadTimeout(&SD1, buffer, sizeof(buffer), time))) {
-    if (!shell_stream_write(buffer, size)) {
-      break;
-    }
-  }
+  while ((size = sdReadTimeout(&SD1, buffer, sizeof(buffer), time)))
+    streamWrite(&SDU1, buffer, size);
 }
 #endif
 #endif
@@ -2357,10 +2284,9 @@ VNA_SHELL_FUNCTION(cmd_usart) {
 #ifdef __REMOTE_DESKTOP__
 void send_region(remote_region_t* rd, uint8_t* buf, uint16_t size) {
   if (SDU1.config->usbp->state == USB_ACTIVE) {
-    if (!shell_stream_write(rd, sizeof(remote_region_t)) || !shell_stream_write(buf, size) ||
-        !shell_stream_write(VNA_SHELL_PROMPT_STR VNA_SHELL_NEWLINE_STR, 6)) {
-      sweep_mode &= ~SWEEP_REMOTE;
-    }
+    shell_stream_write(rd, sizeof(remote_region_t));
+    shell_stream_write(buf, size);
+    shell_stream_write(VNA_SHELL_PROMPT_STR VNA_SHELL_NEWLINE_STR, 6);
   } else
     sweep_mode &= ~SWEEP_REMOTE;
 }
@@ -2423,13 +2349,8 @@ VNA_SHELL_FUNCTION(cmd_sd_list) {
     return;
   }
   if (f_opendir(&dj, "") == FR_OK) {
-    uint16_t count = 0;
-    while (f_findnext(&dj, &fno) == FR_OK && fno.fname[0]) {
+    while (f_findnext(&dj, &fno) == FR_OK && fno.fname[0])
       shell_printf("%s %u" VNA_SHELL_NEWLINE_STR, fno.fname, fno.fsize);
-      if ((count++ & 0x0F) == 0x0F) {
-        chThdYield();
-      }
-    }
   }
   f_closedir(&dj);
 }
@@ -2452,18 +2373,11 @@ VNA_SHELL_FUNCTION(cmd_sd_read) {
   // shell_printf("sd_read: %s" VNA_SHELL_NEWLINE_STR, filename);
   // number of bytes to follow (file size)
   uint32_t filesize = f_size(file);
-  if (!shell_stream_write(&filesize, 4)) {
-    f_close(file);
-    return;
-  }
+  shell_stream_write(&filesize, 4);
   UINT size = 0;
   // file data (send all data from file)
-  while (f_read(file, buf, 512, &size) == FR_OK && size > 0) {
-    if (!shell_stream_write(buf, size)) {
-      break;
-    }
-    chThdYield();
-  }
+  while (f_read(file, buf, 512, &size) == FR_OK && size > 0)
+    shell_stream_write(buf, size);
 
   f_close(file);
   return;
@@ -2727,25 +2641,12 @@ static THD_WORKING_AREA(waThread2, /* cmd_* max stack size + alpha */ 442);
 THD_FUNCTION(myshellThread, p) {
   (void)p;
   chRegSetThreadName("shell");
-  bool prompt_printed = shell_prompt_is_preprinted();
   while (true) {
-    if (!prompt_printed) {
-      prompt_printed = shell_emit_prompt();
-      if (!prompt_printed) {
-        chThdSleepMilliseconds(50);
-        continue;
-      }
-    }
-    const int line_state = vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH);
-    if (line_state == VNA_SHELL_LINE_READY) {
-      prompt_printed = false;
+    shell_printf(VNA_SHELL_PROMPT_STR);
+    if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH))
       vna_shell_execute_line(shell_line);
-    } else if (line_state == VNA_SHELL_LINE_ABORTED) {
-      prompt_printed = false;
-    } else { // Putting a delay in order to avoid an endless loop trying to read an unavailable
-             // stream.
+    else // Putting a delay in order to avoid an endless loop trying to read an unavailable stream.
       chThdSleepMilliseconds(100);
-    }
   }
 }
 #endif
@@ -2832,44 +2733,23 @@ int app_main(void) {
 
   while (1) {
     if (shell_check_connect()) {
-      bool handshake_ok;
-      do {
-        handshake_ok = shell_emit_handshake();
-        if (!handshake_ok) {
-          chThdSleepMilliseconds(50);
-        }
-      } while (shell_check_connect() && !handshake_ok);
-      if (handshake_ok) {
+      shell_printf(VNA_SHELL_NEWLINE_STR "NanoVNA Shell" VNA_SHELL_NEWLINE_STR);
 #ifdef VNA_SHELL_THREAD
 #if CH_CFG_USE_WAITEXIT == FALSE
 #error "VNA_SHELL_THREAD use chThdWait, need enable CH_CFG_USE_WAITEXIT in chconf.h"
 #endif
-        thread_t* shelltp =
-            chThdCreateStatic(waThread2, sizeof(waThread2), NORMALPRIO + 1, myshellThread, NULL);
-        chThdWait(shelltp);
+      thread_t* shelltp =
+          chThdCreateStatic(waThread2, sizeof(waThread2), NORMALPRIO + 1, myshellThread, NULL);
+      chThdWait(shelltp);
 #else
-        bool prompt_printed = shell_prompt_is_preprinted();
-        do {
-          if (!prompt_printed) {
-            prompt_printed = shell_emit_prompt();
-            if (!prompt_printed) {
-              chThdSleepMilliseconds(50);
-              continue;
-            }
-          }
-          const int line_state = vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH);
-          if (line_state == VNA_SHELL_LINE_READY) {
-            prompt_printed = false;
-            vna_shell_execute_line(shell_line);
-          } else if (line_state == VNA_SHELL_LINE_ABORTED) {
-            prompt_printed = false;
-          } else {
-            chThdSleepMilliseconds(200);
-          }
-        } while (shell_check_connect());
+      do {
+        shell_printf(VNA_SHELL_PROMPT_STR);
+        if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH))
+          vna_shell_execute_line(shell_line);
+        else
+          chThdSleepMilliseconds(200);
+      } while (shell_check_connect());
 #endif
-      }
-      shell_clear_prompt_preprinted();
     }
     chThdSleepMilliseconds(1000);
   }
@@ -2986,9 +2866,6 @@ VNA_SHELL_FUNCTION(cmd_dump) {
     if (++j == 12) {
       shell_printf(VNA_SHELL_NEWLINE_STR);
       j = 0;
-    }
-    if ((i & 0x0F) == 0x0F) {
-      chThdYield();
     }
   }
 }

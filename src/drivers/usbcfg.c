@@ -16,7 +16,6 @@
 
 #include "hal.h"
 #include "nanovna.h"
-#include "app/shell.h"
 
 /* Virtual serial port over USB.*/
 SerialUSBDriver SDU1;
@@ -248,13 +247,11 @@ static const USBDescriptor vcom_strings[] = {
 // Use unique serial string generated from MCU id
 #define UID_RADIX 5 // Radix conversion constant (5 bit, use 0..9 and A..V)
 #define USB_SERIAL_STRING_SIZE (64 / UID_RADIX) // Result string size
-static USBDescriptor serial_string_descriptor = {0, NULL};
-static uint16_t serial_string_buffer[USB_SERIAL_STRING_SIZE + 1];
-
-const USBDescriptor* get_serial_string_descriptor(void) {
+USBDescriptor* get_serial_string_descriptor(void) {
   uint16_t i;
-  uint16_t* buf = serial_string_buffer;
-  USBDescriptor* d = &serial_string_descriptor;
+  uint16_t* buf = ((uint16_t*)&spi_buffer[ARRAY_COUNT(spi_buffer)]) - USB_SERIAL_STRING_SIZE -
+                  4; // 16 byte align
+  USBDescriptor* d = ((USBDescriptor*)buf) - 1;
   uint32_t id0 = *(uint32_t*)0x1FFFF7AC; // MCU id0 address
   uint32_t id1 = *(uint32_t*)0x1FFFF7B0; // MCU id1 address
   uint32_t id2 = *(uint32_t*)0x1FFFF7B4; // MCU id2 address
@@ -271,7 +268,7 @@ const USBDescriptor* get_serial_string_descriptor(void) {
   buf[0] = size | (USB_DESCRIPTOR_STRING << 8);
   // Generate USBDescriptor structure
   d->ud_size = size;
-  d->ud_string = (const uint8_t*)buf;
+  d->ud_string = (uint8_t*)buf;
   return d;
 }
 #endif
@@ -337,8 +334,6 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
   chSysLockFromISR();
   switch (event) {
   case USB_EVENT_RESET:
-    sduDisconnectI(&SDU1);
-    shell_usb_line_state_changed_i(false);
     break;
   case USB_EVENT_ADDRESS:
     break;
@@ -350,18 +345,10 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
     usbInitEndpointI(usbp, USBD1_INTERRUPT_REQUEST_EP, &ep2config);
     /* Resetting the state of the CDC subsystem.*/
     sduConfigureHookI(&SDU1);
-    shell_usb_line_state_changed_i(false);
     break;
-#ifdef USB_EVENT_UNCONFIGURED
-  case USB_EVENT_UNCONFIGURED:
-    sduDisconnectI(&SDU1);
-    shell_usb_line_state_changed_i(false);
-    break;
-#endif
   case USB_EVENT_SUSPEND:
     /* Disconnection event on suspend.*/
     sduDisconnectI(&SDU1);
-    shell_usb_line_state_changed_i(false);
     break;
   case USB_EVENT_WAKEUP:
     break;
@@ -371,35 +358,6 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
   chSysUnlockFromISR();
   return;
 }
-
-static bool nano_requests_hook(USBDriver* usbp) {
-  if ((usbp->setup.bmRequestType & USB_RTYPE_TYPE_MASK) == USB_RTYPE_TYPE_CLASS) {
-    switch (usbp->setup.bRequest) {
-    case CDC_SET_CONTROL_LINE_STATE: {
-      const bool dtr_active = (usbp->setup.wValue & 0x0001U) != 0U;
-      chSysLockFromISR();
-      if (usbGetDriverStateI(usbp) == USB_ACTIVE) {
-        if (dtr_active) {
-          if (SDU1.state != SDU_READY) {
-            sduConfigureHookI(&SDU1);
-          }
-        } else if (SDU1.state == SDU_READY) {
-          sduDisconnectI(&SDU1);
-        }
-      }
-      shell_usb_line_state_changed_i(dtr_active);
-      chSysUnlockFromISR();
-      usbSetupTransfer(usbp, NULL, 0, NULL);
-      return true;
-    }
-    default:
-      break;
-    }
-  }
-
-  return sduRequestsHook(usbp);
-}
-
 
 /*
  * Handles the USB driver global events.
@@ -414,7 +372,7 @@ static void sof_handler(USBDriver* usbp) {
 /*
  * USB driver configuration.
  */
-const USBConfig usbcfg = {usb_event, get_descriptor, nano_requests_hook, sof_handler};
+const USBConfig usbcfg = {usb_event, get_descriptor, sduRequestsHook, sof_handler};
 
 /*
  * Serial over USB driver configuration.

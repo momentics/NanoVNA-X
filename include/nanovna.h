@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2019-2020, Dmitry (DiSlord) dislordlive@gmail.com
- * Based on TAKAHASHI Tomohiro (TTRFTECH) edy555@gmail.com
  * Copyright (c) 2024, @momentics <momentics@gmail.com>
+ * Based on  Dmitry (DiSlord) dislordlive@gmail.com
+ * Based on TAKAHASHI Tomohiro (TTRFTECH) edy555@gmail.com
  * All rights reserved.
  *
  * This is free software; you can redistribute it and/or modify
@@ -60,7 +60,7 @@
 // Add show y grid line values option
 #define __USE_GRID_VALUES__
 // Add remote desktop option
-//#define __REMOTE_DESKTOP__
+#define __REMOTE_DESKTOP__
 // Add RLE8 compression capture image format
 #define __CAPTURE_RLE8__
 // Allow flip display

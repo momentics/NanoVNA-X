@@ -48,7 +48,6 @@
  */
 
 #define DISABLE_TIME_FUNCTIONS
-
 static size_t write(void *ip, const uint8_t *bp, size_t n) {
 
   return oqWriteTimeout(&((SerialDriver *)ip)->oqueue, bp,
