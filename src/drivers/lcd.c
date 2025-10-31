@@ -126,7 +126,7 @@ void spi_drop_rx(void) {
 // SPI DMA settings and data
 //*****************************************************
 #ifdef __USE_DISPLAY_DMA__
-tatic const uint32_t txdmamode = STM32_DMA_CR_PL(STM32_SPI_SPI1_DMA_PRIORITY) |
+static const uint32_t txdmamode = STM32_DMA_CR_PL(STM32_SPI_SPI1_DMA_PRIORITY) |
                                   STM32_DMA_CR_DIR_M2P;
 
 static const uint32_t rxdmamode = STM32_DMA_CR_PL(STM32_SPI_SPI1_DMA_PRIORITY) |
