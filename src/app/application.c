@@ -30,6 +30,9 @@
 #include "nanovna.h"
 #include "app/shell.h"
 #include "usbcfg.h"
+#ifdef __USE_SERIAL_CONSOLE__
+#include "drivers/uart_dma.h"
+#endif
 #include "platform/hal.h"
 #include "services/config_service.h"
 #include "services/event_bus.h"
@@ -2271,11 +2274,12 @@ VNA_SHELL_FUNCTION(cmd_usart) {
     return; // Not work in serial mode
   if (argc == 2)
     time = MS2ST(my_atoui(argv[1]));
-  sdWriteTimeout(&SD1, (uint8_t*)argv[0], strlen(argv[0]), time);
-  sdWriteTimeout(&SD1, (uint8_t*)VNA_SHELL_NEWLINE_STR, sizeof(VNA_SHELL_NEWLINE_STR) - 1, time);
+  uart_dma_write_timeout((const uint8_t*)argv[0], strlen(argv[0]), time);
+  uart_dma_write_timeout((const uint8_t*)VNA_SHELL_NEWLINE_STR,
+                         sizeof(VNA_SHELL_NEWLINE_STR) - 1, time);
   uint32_t size;
   uint8_t buffer[64];
-  while ((size = sdReadTimeout(&SD1, buffer, sizeof(buffer), time)))
+  while ((size = uart_dma_read_timeout(buffer, sizeof(buffer), time)))
     streamWrite(&SDU1, buffer, size);
 }
 #endif

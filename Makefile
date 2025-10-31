@@ -175,6 +175,8 @@ CSRC = $(STARTUPSRC) \
        src/resources/fonts/Font7x11b.c \
        src/resources/fonts/Font11x14.c \
        src/drivers/usbcfg.c \
+       src/drivers/dma.c \
+       src/drivers/uart_dma.c \
        src/core/main.c \
        src/app/application.c \
        src/app/sweep_service.c \

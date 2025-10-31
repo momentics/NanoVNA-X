@@ -27,6 +27,9 @@
 
 #include "nanovna.h"
 #include "usbcfg.h"
+#ifdef __USE_SERIAL_CONSOLE__
+#include "drivers/uart_dma.h"
+#endif
 
 #include <chprintf.h>
 #include <stdarg.h>
@@ -71,7 +74,7 @@ int shell_printf(const char* fmt, ...) {
 int serial_shell_printf(const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  const int written = chvprintf((BaseSequentialStream*)&SD1, fmt, ap);
+  const int written = chvprintf(uart_dma_stream(), fmt, ap);
   va_end(ap);
   return written;
 }
@@ -84,7 +87,7 @@ void shell_stream_write(const void* buffer, size_t size) {
 #ifdef __USE_SERIAL_CONSOLE__
 #define PREPARE_STREAM                                                                             \
   do {                                                                                             \
-    shell_stream = VNA_MODE(VNA_MODE_CONNECTION) ? (BaseSequentialStream*)&SD1                     \
+    shell_stream = VNA_MODE(VNA_MODE_CONNECTION) ? uart_dma_stream()                               \
                                                  : (BaseSequentialStream*)&SDU1;                   \
   } while (false)
 #else
@@ -97,7 +100,7 @@ void shell_stream_write(const void* buffer, size_t size) {
 void shell_update_speed(uint32_t speed) {
   config._serial_speed = speed;
 #ifdef __USE_SERIAL_CONSOLE__
-  sdSetBaudrate(&SD1, speed);
+  uart_dma_set_baudrate(speed);
 #endif
 }
 
@@ -117,10 +120,11 @@ void shell_reset_console(void) {
       sduConfigureHookI(&SDU1);
     }
   }
-  qResetI(&SD1.oqueue);
-  qResetI(&SD1.iqueue);
 #endif
   osalSysUnlock();
+#ifdef __USE_SERIAL_CONSOLE__
+  uart_dma_flush_queues();
+#endif
   shell_restore_stream();
 }
 
@@ -143,9 +147,7 @@ void shell_init_connection(void) {
   sduObjectInit(&SDU1);
   sduStart(&SDU1, &serusbcfg);
 #ifdef __USE_SERIAL_CONSOLE__
-  SerialConfig serial_cfg = {config._serial_speed, 0, USART_CR2_STOP1_BITS, 0};
-  sdStart(&SD1, &serial_cfg);
-  shell_update_speed(config._serial_speed);
+  uart_dma_init(config._serial_speed);
 #endif
   usbDisconnectBus(&USBD1);
   chThdSleepMilliseconds(100);
