@@ -1181,13 +1181,7 @@ typedef uint16_t pixel_t;
 #define LCD_PIXEL_SIZE        2
 // Cell size, depends from spi_buffer size, CELLWIDTH*CELLHEIGHT*sizeof(pixel) <= sizeof(spi_buffer)
 #define CELLWIDTH  (64 / DISPLAY_CELL_BUFFER_COUNT)
-#if defined(NANOVNA_F303)
 #define CELLHEIGHT (32)
-#else
-// Shrink the tile height on STM32F072 builds to reduce the SPI tile buffer
-// footprint so the restored 101-point sweep fits back into SRAM.
-#define CELLHEIGHT (24)
-#endif
 #endif
 
 // Define size of screen buffer in pixel_t (need for cell w * h * count)
@@ -1196,6 +1190,7 @@ typedef uint16_t pixel_t;
 #ifndef SPI_BUFFER_SIZE
 #error "Define LCD pixel format"
 #endif
+
 
 enum {
   LCD_BG_COLOR = 0,       // background

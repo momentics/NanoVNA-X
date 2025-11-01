@@ -20,6 +20,8 @@
 
 #include "services/scheduler.h"
 
+#if defined(NANOVNA_F303)
+
 typedef struct {
   scheduler_entry_t entry;
   void* user_data;
@@ -41,7 +43,6 @@ static THD_FUNCTION(scheduler_entry_adapter, arg) {
   chThdExit(exit_code);
 }
 
-#if defined(NANOVNA_F303)
 #define SCHEDULER_SLOT_COUNT 3U
 static THD_WORKING_AREA(scheduler_wa0, 448);
 static THD_WORKING_AREA(scheduler_wa1, 512);
@@ -51,20 +52,6 @@ static scheduler_slot_t scheduler_slots[SCHEDULER_SLOT_COUNT] = {
     {.thread = NULL, .context = {0}, .work_area = scheduler_wa1, .work_area_size = sizeof(scheduler_wa1)},
     {.thread = NULL, .context = {0}, .work_area = scheduler_wa2, .work_area_size = sizeof(scheduler_wa2)},
 };
-#else
-#define SCHEDULER_SLOT_COUNT 2U
-#if defined(NANOVNA_F303)
-static THD_WORKING_AREA(scheduler_wa0, 320);
-static THD_WORKING_AREA(scheduler_wa1, 384);
-#else
-static THD_WORKING_AREA(scheduler_wa0, 256);
-static THD_WORKING_AREA(scheduler_wa1, 320);
-#endif
-static scheduler_slot_t scheduler_slots[SCHEDULER_SLOT_COUNT] = {
-    {.thread = NULL, .context = {0}, .work_area = scheduler_wa0, .work_area_size = sizeof(scheduler_wa0)},
-    {.thread = NULL, .context = {0}, .work_area = scheduler_wa1, .work_area_size = sizeof(scheduler_wa1)},
-};
-#endif
 
 static scheduler_slot_t* scheduler_acquire_slot(size_t stack_size) {
   scheduler_slot_t* selected = NULL;
@@ -175,3 +162,22 @@ void scheduler_stop(scheduler_task_t* task) {
 
   task->thread = NULL;
 }
+
+#else  // !defined(NANOVNA_F303)
+
+scheduler_task_t scheduler_start(const char* name, tprio_t priority, size_t stack_size,
+                                 scheduler_entry_t entry, void* user_data) {
+  (void)name;
+  (void)priority;
+  (void)stack_size;
+  (void)entry;
+  (void)user_data;
+  scheduler_task_t task = {.thread = NULL};
+  return task;
+}
+
+void scheduler_stop(scheduler_task_t* task) {
+  (void)task;
+}
+
+#endif

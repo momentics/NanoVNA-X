@@ -50,14 +50,18 @@ typedef struct {
   event_bus_topic_t topic;
 } event_bus_subscription_t;
 
-#define EVENT_BUS_QUEUE_DEPTH 8U
 #if defined(NANOVNA_F303)
+#define EVENT_BUS_ENABLE_DISPATCHER 1
+#define EVENT_BUS_QUEUE_DEPTH 8U
 #define EVENT_BUS_DISPATCH_STACK_DEPTH 384U
-#else
-#define EVENT_BUS_DISPATCH_STACK_DEPTH 256U
-#endif
 #define EVENT_BUS_DISPATCH_STACK_SIZE_BYTES \
   (sizeof(stkalign_t) * THD_WORKING_AREA_SIZE(EVENT_BUS_DISPATCH_STACK_DEPTH))
+#else
+#define EVENT_BUS_ENABLE_DISPATCHER 0
+#define EVENT_BUS_QUEUE_DEPTH 0U
+#define EVENT_BUS_DISPATCH_STACK_DEPTH 0U
+#define EVENT_BUS_DISPATCH_STACK_SIZE_BYTES 0U
+#endif
 
 typedef struct {
   event_bus_message_t message;
@@ -68,9 +72,11 @@ typedef struct event_bus {
   event_bus_subscription_t* subscriptions;
   size_t capacity;
   size_t count;
+#if EVENT_BUS_ENABLE_DISPATCHER
   mailbox_t mailbox;
   msg_t mailbox_buffer[EVENT_BUS_QUEUE_DEPTH];
   event_bus_queue_entry_t queue[EVENT_BUS_QUEUE_DEPTH];
+#endif
   scheduler_task_t dispatcher_task;
 } event_bus_t;
 

@@ -20,6 +20,7 @@
 
 #include "services/event_bus.h"
 
+#if EVENT_BUS_ENABLE_DISPATCHER
 static event_bus_queue_entry_t* event_bus_alloc_slot_s(event_bus_t* bus) {
   chDbgCheckClassS();
   for (size_t i = 0; i < EVENT_BUS_QUEUE_DEPTH; ++i) {
@@ -36,6 +37,7 @@ static void event_bus_release_slot_s(event_bus_queue_entry_t* slot) {
   chDbgCheckClassS();
   slot->in_use = false;
 }
+#endif
 
 static void event_bus_dispatch(event_bus_t* bus, const event_bus_message_t* message) {
   for (size_t i = 0; i < bus->count; ++i) {
@@ -47,6 +49,7 @@ static void event_bus_dispatch(event_bus_t* bus, const event_bus_message_t* mess
   }
 }
 
+#if EVENT_BUS_ENABLE_DISPATCHER
 static msg_t event_bus_dispatcher_entry(void* arg) {
   event_bus_t* bus = (event_bus_t*)arg;
   while (true) {
@@ -65,6 +68,7 @@ static msg_t event_bus_dispatcher_entry(void* arg) {
   }
   return MSG_OK;
 }
+#endif
 
 void event_bus_init(event_bus_t* bus, event_bus_subscription_t* storage, size_t capacity) {
   if (bus == NULL) {
@@ -73,6 +77,7 @@ void event_bus_init(event_bus_t* bus, event_bus_subscription_t* storage, size_t 
   bus->subscriptions = storage;
   bus->capacity = storage ? capacity : 0U;
   bus->count = 0U;
+#if EVENT_BUS_ENABLE_DISPATCHER
   for (size_t i = 0; i < EVENT_BUS_QUEUE_DEPTH; ++i) {
     bus->queue[i].in_use = false;
     bus->queue[i].message.topic = EVENT_SWEEP_STARTED;
@@ -82,6 +87,9 @@ void event_bus_init(event_bus_t* bus, event_bus_subscription_t* storage, size_t 
   bus->dispatcher_task =
       scheduler_start("event-bus", NORMALPRIO - 1, EVENT_BUS_DISPATCH_STACK_SIZE_BYTES,
                       event_bus_dispatcher_entry, bus);
+#else
+  bus->dispatcher_task.thread = NULL;
+#endif
 }
 
 bool event_bus_subscribe(event_bus_t* bus, event_bus_topic_t topic, event_bus_listener_t listener,
@@ -100,6 +108,11 @@ static bool event_bus_post(event_bus_t* bus, event_bus_topic_t topic, const void
   if (bus == NULL || bus->subscriptions == NULL) {
     return false;
   }
+#if !EVENT_BUS_ENABLE_DISPATCHER
+  const event_bus_message_t message = {.topic = topic, .payload = payload};
+  event_bus_dispatch(bus, &message);
+  return true;
+#else
   if (bus->dispatcher_task.thread == NULL) {
     const event_bus_message_t message = {.topic = topic, .payload = payload};
     event_bus_dispatch(bus, &message);
@@ -125,6 +138,7 @@ static bool event_bus_post(event_bus_t* bus, event_bus_topic_t topic, const void
     return false;
   }
   return true;
+#endif
 }
 
 void event_bus_publish(event_bus_t* bus, event_bus_topic_t topic, const void* payload) {
@@ -132,6 +146,12 @@ void event_bus_publish(event_bus_t* bus, event_bus_topic_t topic, const void* pa
 }
 
 bool event_bus_publish_from_isr(event_bus_t* bus, event_bus_topic_t topic, const void* payload) {
+#if !EVENT_BUS_ENABLE_DISPATCHER
+  (void)bus;
+  (void)topic;
+  (void)payload;
+  return false;
+#else
   if (bus == NULL || bus->subscriptions == NULL) {
     return false;
   }
@@ -151,4 +171,5 @@ bool event_bus_publish_from_isr(event_bus_t* bus, event_bus_topic_t topic, const
   }
   chSysUnlockFromISR();
   return true;
+#endif
 }
