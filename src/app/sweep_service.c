@@ -238,7 +238,19 @@ void sweep_service_init(void) {
   dump_selection = 0;
 #endif
   chBSemObjectInit(&capture_sem, true);
-  chBSemObjectInit(&snapshot_sem, false);
+  /*
+   * The snapshot semaphore gates both the sweep loop and any asynchronous
+   * snapshot consumers.  The sweep thread waits on it before launching the
+   * first measurement pass so that outstanding snapshot copies can finish
+   * safely.  In the freshly booted firmware there are no in-flight copies,
+   * therefore the semaphore must start in the signaled state; otherwise the
+   * first wait call blocks forever and the UI never comes up.  Earlier
+   * releases initialised it to "true" implicitly by signalling after
+   * creation.  When the DMA/event-bus refactor landed in v0.9.23 the
+   * initial signal was dropped, leaving the semaphore empty and the firmware
+   * stuck in sweep_service_wait_for_copy_release().
+   */
+  chBSemObjectInit(&snapshot_sem, true);
 }
 
 void sweep_service_reset_progress(void) {
@@ -273,8 +285,13 @@ uint32_t sweep_service_increment_generation(void) {
   osalSysLock();
   uint32_t generation = ++sweep_generation;
   osalSysUnlock();
-  return generation;
+  /*
+   * Wake any snapshot waiters now that a fresh sweep is ready.  The previous
+   * refactor accidentally returned before signalling, so USB clients waiting
+   * for sweep data never resumed even though the pipeline advanced.
+   */
   chBSemSignal(&snapshot_sem);
+  return generation;
 }
 
 uint32_t sweep_service_current_generation(void) {
