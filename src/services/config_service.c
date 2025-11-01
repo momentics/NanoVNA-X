@@ -35,13 +35,6 @@ uint16_t lastsaveid = 0;
 
 // properties CRC check cache (max 8 slots)
 static uint8_t checksum_ok = 0;
-static event_bus_t* config_event_bus = NULL;
-
-static void config_service_publish(event_bus_topic_t topic) {
-  if (config_event_bus != NULL) {
-    event_bus_publish(config_event_bus, topic, NULL);
-  }
-}
 
 static uint32_t calibration_slot_area(int id) {
   return SAVE_PROP_CONFIG_ADDR + id * SAVE_PROP_CONFIG_SIZE;
@@ -64,7 +57,6 @@ static int config_save_impl(void) {
 
   // write to flash
   flash_program_half_word_buffer((uint16_t*)SAVE_CONFIG_ADDR, (uint16_t*)&config, sizeof(config_t));
-  config_service_publish(EVENT_STORAGE_UPDATED);
   return 0;
 }
 
@@ -93,7 +85,6 @@ static int caldata_save_impl(uint32_t id) {
   flash_program_half_word_buffer(dst, (uint16_t*)&current_props, sizeof(properties_t));
 
   lastsaveid = id;
-  config_service_publish(EVENT_STORAGE_UPDATED);
   return 0;
 }
 
@@ -134,13 +125,6 @@ static void clear_all_config_prop_data_impl(void) {
   checksum_ok = 0;
   // unlock and erase flash pages
   flash_erase_pages(SAVE_PROP_CONFIG_ADDR, SAVE_FULL_AREA_SIZE);
-  config_service_publish(EVENT_STORAGE_UPDATED);
-}
-
-static void config_service_on_configuration_changed(const event_bus_message_t* message, void* user_data) {
-  (void)message;
-  (void)user_data;
-  (void)config_save_impl();
 }
 
 static const config_service_api_t api = {
@@ -155,14 +139,6 @@ static bool initialized = false;
 
 void config_service_init(void) {
   initialized = true;
-}
-
-void config_service_bind_event_bus(event_bus_t* bus) {
-  config_event_bus = bus;
-  if (bus != NULL) {
-    (void)event_bus_subscribe(bus, EVENT_CONFIGURATION_CHANGED,
-                              config_service_on_configuration_changed, NULL);
-  }
 }
 
 const config_service_api_t* config_service_api(void) {

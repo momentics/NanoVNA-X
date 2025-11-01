@@ -53,7 +53,6 @@ enum {
 };
 
 void shell_register_commands(const VNAShellCommand* table);
-void shell_bind_event_bus(event_bus_t* bus);
 
 int shell_printf(const char* fmt, ...);
 #ifdef __USE_SERIAL_CONSOLE__

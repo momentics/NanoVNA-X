@@ -274,13 +274,9 @@ typedef uint32_t freq_t;
 #define POINTS_SET_COUNT       3
 #define POINTS_SET             {51, 101, SWEEP_POINTS_MAX}
 #define POINTS_COUNT_DEFAULT   SWEEP_POINTS_MAX
-#elif SWEEP_POINTS_MAX >= 51
+#elif SWEEP_POINTS_MAX >=101
 #define POINTS_SET_COUNT       2
 #define POINTS_SET             {51, SWEEP_POINTS_MAX}
-#define POINTS_COUNT_DEFAULT   SWEEP_POINTS_MAX
-#else
-#define POINTS_SET_COUNT       1
-#define POINTS_SET             {SWEEP_POINTS_MAX}
 #define POINTS_COUNT_DEFAULT   SWEEP_POINTS_MAX
 #endif
 
@@ -982,12 +978,9 @@ enum {
 };
 #endif
 
-#if defined(NANOVNA_F303)
 #define STORED_TRACES  1
-#else
-#define STORED_TRACES  0
-#endif
 #define TRACES_MAX     4
+
 typedef struct trace {
   uint8_t enabled;
   uint8_t type;
@@ -1190,7 +1183,6 @@ typedef uint16_t pixel_t;
 #ifndef SPI_BUFFER_SIZE
 #error "Define LCD pixel format"
 #endif
-
 
 enum {
   LCD_BG_COLOR = 0,       // background
@@ -1422,9 +1414,7 @@ void clear_all_config_prop_data(void);
 // Enter in leveler search mode after search click
 //#define UI_USE_LEVELER_SEARCH_MODE
 
-struct event_bus;
-typedef struct event_bus event_bus_t;
-void ui_init(event_bus_t* bus);
+void ui_init(void);
 void ui_process(void);
 
 void handle_touch_interrupt(void);

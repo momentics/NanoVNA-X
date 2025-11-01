@@ -38,8 +38,6 @@
 static systime_t ready_time = 0;
 static volatile uint16_t wait_count = 0;
 static audio_sample_t rx_buffer[AUDIO_BUFFER_LEN * 2];
-static binary_semaphore_t capture_sem;
-static binary_semaphore_t snapshot_sem;
 
 #if ENABLED_DUMP_COMMAND
 static audio_sample_t* dump_buffer = NULL;
@@ -215,11 +213,6 @@ void i2s_lld_serve_rx_interrupt(uint32_t flags) {
   duplicate_buffer_to_dump(p, AUDIO_BUFFER_LEN);
 #endif
   --wait_count;
-  if (wait_count == 0U) {
-    chSysLockFromISR();
-    chBSemSignalI(&capture_sem);
-    chSysUnlockFromISR();
-  }
 }
 
 void sweep_service_init(void) {
@@ -237,25 +230,6 @@ void sweep_service_init(void) {
   dump_len = 0;
   dump_selection = 0;
 #endif
-  chBSemObjectInit(&capture_sem, true);
-  /*
-   * The snapshot semaphore gates both the sweep loop and any asynchronous
-   * snapshot consumers.  The sweep thread waits on it before launching the
-   * first measurement pass so that outstanding snapshot copies can finish
-   * safely.  In the freshly booted firmware there are no in-flight copies,
-   * therefore the semaphore must start in the signaled state; otherwise the
-   * first wait call blocks forever and the UI never comes up.  Earlier
-   * releases initialised it by signalling immediately after creation.  When
-   * the DMA/event-bus refactor landed in v0.9.23 the initial signal was
-   * dropped, leaving the semaphore empty and the firmware stuck in
-   * sweep_service_wait_for_copy_release().
-   *
-   * The @p taken argument of chBSemObjectInit() follows ChibiOS semantics:
-   * passing @p false leaves the semaphore signaled (count = 1) while @p true
-   * starts it in the taken state.  Initialise it with @p false so the first
-   * wait succeeds.
-   */
-  chBSemObjectInit(&snapshot_sem, false);
 }
 
 void sweep_service_reset_progress(void) {
@@ -263,40 +237,19 @@ void sweep_service_reset_progress(void) {
 }
 
 void sweep_service_wait_for_copy_release(void) {
-  bool continuing_partial_sweep = false;
-  osalSysLock();
-  uint16_t total_points = sweep_points;
-  continuing_partial_sweep = (p_sweep != 0U && p_sweep < total_points);
-  osalSysUnlock();
-  if (continuing_partial_sweep) {
-    /*
-     * The sweep is resuming from a previous chunk, so no snapshot copy can be
-     * in flight yet.  Skip the semaphore wait to avoid deadlocking on the
-     * taken state left by sweep_service_begin_measurement().
-     */
-    return;
-  }
   while (true) {
-    msg_t msg = chBSemWait(&snapshot_sem);
-    if (msg == MSG_RESET) {
-      continue;
+    osalSysLock();
+    bool busy = sweep_copy_in_progress;
+    osalSysUnlock();
+    if (!busy) {
+      break;
     }
-    chBSemSignal(&snapshot_sem);
-    break;
+    chThdYield();
   }
 }
 
 void sweep_service_begin_measurement(void) {
   osalSysLock();
-  uint16_t total_points = sweep_points;
-  if (p_sweep == 0U || p_sweep >= total_points) {
-    /*
-     * Only take the snapshot semaphore when a brand new sweep is starting.
-     * Partial sweeps resume with the semaphore already taken; resetting it
-     * again would strand the UI loop in sweep_service_wait_for_copy_release().
-     */
-    chBSemResetI(&snapshot_sem, true);
-  }
   sweep_in_progress = true;
   osalSysUnlock();
 }
@@ -311,12 +264,6 @@ uint32_t sweep_service_increment_generation(void) {
   osalSysLock();
   uint32_t generation = ++sweep_generation;
   osalSysUnlock();
-  /*
-   * Wake any snapshot waiters now that a fresh sweep is ready.  The previous
-   * refactor accidentally returned before signalling, so USB clients waiting
-   * for sweep data never resumed even though the pipeline advanced.
-   */
-  chBSemSignal(&snapshot_sem);
   return generation;
 }
 
@@ -338,27 +285,18 @@ bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* s
     return false;
   }
   while (true) {
-    msg_t msg = chBSemWait(&snapshot_sem);
-    if (msg == MSG_RESET) {
-      continue;
-    }
-    if (msg != MSG_OK) {
-      return false;
-    }
-    bool acquired = false;
     osalSysLock();
-   if (!sweep_in_progress && !sweep_copy_in_progress) {
+    bool busy = sweep_in_progress || sweep_copy_in_progress;
+    if (!busy) {
       sweep_copy_in_progress = true;
       snapshot->generation = sweep_generation;
       snapshot->points = sweep_points;
       snapshot->data = measured[channel];
-      acquired = true;
-    }
-    osalSysUnlock();
-    if (acquired) {
+      osalSysUnlock();
       return true;
     }
-    chBSemSignal(&snapshot_sem);
+    osalSysUnlock();
+    chThdSleepMilliseconds(1);
   }
 }
 
@@ -370,20 +308,17 @@ bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
   }
   sweep_copy_in_progress = false;
   osalSysUnlock();
-  chBSemSignal(&snapshot_sem);
   return stable;
 }
 
 void sweep_service_start_capture(systime_t delay_ticks) {
-  chSysLock();
-  chBSemResetI(&capture_sem, true);
   ready_time = chVTGetSystemTimeX() + delay_ticks;
   wait_count = config._bandwidth + 2U;
-  chSysUnlock();
 }
 
 void sweep_service_wait_for_capture(void) {
-  while (chBSemWait(&capture_sem) == MSG_RESET) {
+  while (wait_count != 0U) {
+    __WFI();
   }
 }
 

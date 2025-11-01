@@ -41,26 +41,6 @@ static volatile const VNAShellCommand* pending_command = NULL;
 static uint16_t pending_argc = 0;
 static char** pending_argv = NULL;
 static bool shell_skip_linefeed = false;
-static event_bus_t* shell_event_bus = NULL;
-#if defined(__USE_SERIAL_CONSOLE__)
-static bool shell_serial_seen_rx = false;
-static systime_t shell_serial_mode_since = 0;
-#endif
-
-static void shell_handle_sweep_completed(const event_bus_message_t* message, void* user_data) {
-  (void)message;
-  (void)user_data;
-  shell_service_pending_commands();
-}
-
-void shell_bind_event_bus(event_bus_t* bus) {
-  shell_event_bus = bus;
-  if (bus == NULL) {
-    return;
-  }
-  (void)event_bus_subscribe(bus, EVENT_SWEEP_COMPLETED, shell_handle_sweep_completed, NULL);
-  (void)event_bus_subscribe(bus, EVENT_SHELL_COMMAND_PENDING, shell_handle_sweep_completed, NULL);
-}
 
 static void shell_write(const void* buf, size_t size) {
   if (shell_stream == NULL) {
@@ -73,15 +53,6 @@ static int shell_read(void* buf, uint32_t size) {
   if (shell_stream == NULL) {
     return 0;
   }
-#if defined(__USE_SERIAL_CONSOLE__)
-  if (shell_stream == (BaseSequentialStream*)&SD1) {
-    const int received = streamRead(shell_stream, buf, size);
-    if (received > 0) {
-      shell_serial_seen_rx = true;
-    }
-    return received;
-  }
-#endif
   return streamRead(shell_stream, buf, size);
 }
 
@@ -156,18 +127,6 @@ void shell_reset_console(void) {
 bool shell_check_connect(void) {
 #ifdef __USE_SERIAL_CONSOLE__
   if (VNA_MODE(VNA_MODE_CONNECTION)) {
-    osalSysLock();
-    const bool usb_active = usb_is_active_locked();
-    osalSysUnlock();
-#if !defined(NANOVNA_F303)
-    if (usb_active && !shell_serial_seen_rx) {
-      const systime_t elapsed = chVTTimeElapsedSinceX(shell_serial_mode_since);
-      if (MS2ST(elapsed) > 2000U) {
-        apply_vna_mode(VNA_MODE_CONNECTION, VNA_MODE_CLR);
-        return usb_active;
-      }
-    }
-#endif
     return true;
   }
   osalSysLock();
@@ -197,12 +156,6 @@ void shell_init_connection(void) {
 
 void shell_restore_stream(void) {
   PREPARE_STREAM;
-#if defined(__USE_SERIAL_CONSOLE__)
-  if (shell_stream == (BaseSequentialStream*)&SD1) {
-    shell_serial_seen_rx = false;
-    shell_serial_mode_since = chVTGetSystemTimeX();
-  }
-#endif
 }
 
 void shell_register_commands(const VNAShellCommand* table) {
@@ -256,14 +209,11 @@ void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t a
   osalSysLock();
   osalThreadEnqueueTimeoutS(&shell_thread, TIME_INFINITE);
   osalSysUnlock();
-  if (shell_event_bus != NULL) {
-    event_bus_publish(shell_event_bus, EVENT_SHELL_COMMAND_PENDING, NULL);
-  }
 }
 
 void shell_service_pending_commands(void) {
   while (pending_command != NULL) {
-    const VNAShellCommand* command = (const VNAShellCommand*)pending_command;
+    const VNAShellCommand* command = pending_command;
     command->sc_function(pending_argc, pending_argv);
     osalSysLock();
     pending_command = NULL;
