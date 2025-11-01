@@ -22,6 +22,8 @@
 
 #ifdef __USE_SERIAL_CONSOLE__
 
+#if HAL_USE_UART == TRUE
+
 static size_t uart_dma_send_buffer(UARTDriver* driver, const uint8_t* buffer, size_t size,
                                    systime_t timeout, msg_t* last_status) {
   size_t transmitted = 0;
@@ -199,4 +201,91 @@ msg_t uart_dma_get_timeout(uint8_t* value, systime_t timeout) {
   return status;
 }
 
-#endif
+##else /* HAL_USE_UART == TRUE */
+
+static SerialConfig serial_config = {
+    .speed = 115200,
+    .cr1 = 0,
+    .cr2 = USART_CR2_STOP1_BITS,
+    .cr3 = 0,
+};
+
+static SerialDriver* serial_driver = &SD1;
+
+BaseSequentialStream* uart_dma_stream(void) {
+  return (BaseSequentialStream*)serial_driver;
+}
+
+static void serial_restart(uint32_t baudrate) {
+  serial_config.speed = baudrate;
+  if (serial_driver->state == SD_READY) {
+    sdStop(serial_driver);
+  }
+  sdStart(serial_driver, &serial_config);
+}
+
+void uart_dma_init(uint32_t baudrate) {
+  serial_restart(baudrate);
+}
+
+void uart_dma_set_baudrate(uint32_t baudrate) {
+  if (serial_driver->state == SD_READY) {
+    sdSetBaudrate(serial_driver, baudrate);
+  } else {
+    serial_restart(baudrate);
+  }
+}
+
+void uart_dma_stop(void) {
+  if (serial_driver->state == SD_READY) {
+    sdStop(serial_driver);
+  }
+}
+
+void uart_dma_flush_queues(void) {
+  if (serial_driver->state != SD_READY) {
+    return;
+  }
+  osalSysLock();
+  qResetI(&serial_driver->oqueue);
+  qResetI(&serial_driver->iqueue);
+  osalSysUnlock();
+}
+
+size_t uart_dma_write_timeout(const uint8_t* data, size_t size, systime_t timeout) {
+  if ((serial_driver->state != SD_READY) || (data == NULL) || (size == 0U)) {
+    return 0;
+  }
+  return sdWriteTimeout(serial_driver, data, size, timeout);
+}
+
+size_t uart_dma_read_timeout(uint8_t* data, size_t size, systime_t timeout) {
+  if ((serial_driver->state != SD_READY) || (data == NULL) || (size == 0U)) {
+    return 0;
+  }
+  return sdReadTimeout(serial_driver, data, size, timeout);
+}
+
+msg_t uart_dma_put_timeout(uint8_t value, systime_t timeout) {
+  if (serial_driver->state != SD_READY) {
+    return MSG_RESET;
+  }
+  return sdPutTimeout(serial_driver, value, timeout);
+}
+
+msg_t uart_dma_get_timeout(uint8_t* value, systime_t timeout) {
+  if ((serial_driver->state != SD_READY) || (value == NULL)) {
+    return MSG_RESET;
+  }
+  msg_t status = sdGetTimeout(serial_driver, timeout);
+  if (status < MSG_OK) {
+    return status;
+  }
+  *value = (uint8_t)status;
+  return MSG_OK;
+}
+
+#endif /* HAL_USE_UART == TRUE */
+
+#endif /* __USE_SERIAL_CONSOLE__ */
+
