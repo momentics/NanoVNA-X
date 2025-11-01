@@ -160,7 +160,7 @@
 #define USE_VARIABLE_OFFSET
 
 // Maximum sweep point count (limit by flash and RAM size)
-#define SWEEP_POINTS_MAX         101
+#define SWEEP_POINTS_MAX         91
 #endif
 // Minimum sweep point count
 #define SWEEP_POINTS_MIN         21
@@ -274,9 +274,13 @@ typedef uint32_t freq_t;
 #define POINTS_SET_COUNT       3
 #define POINTS_SET             {51, 101, SWEEP_POINTS_MAX}
 #define POINTS_COUNT_DEFAULT   SWEEP_POINTS_MAX
-#elif SWEEP_POINTS_MAX >=101
+#elif SWEEP_POINTS_MAX >= 51
 #define POINTS_SET_COUNT       2
 #define POINTS_SET             {51, SWEEP_POINTS_MAX}
+#define POINTS_COUNT_DEFAULT   SWEEP_POINTS_MAX
+#else
+#define POINTS_SET_COUNT       1
+#define POINTS_SET             {SWEEP_POINTS_MAX}
 #define POINTS_COUNT_DEFAULT   SWEEP_POINTS_MAX
 #endif
 
@@ -978,9 +982,12 @@ enum {
 };
 #endif
 
+#if defined(NANOVNA_F303)
 #define STORED_TRACES  1
+#else
+#define STORED_TRACES  0
+#endif
 #define TRACES_MAX     4
-
 typedef struct trace {
   uint8_t enabled;
   uint8_t type;

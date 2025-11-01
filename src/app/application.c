@@ -163,7 +163,11 @@ void my_debug_log(int offs, char* log) {
 #define DEBUG_LOG(offs, text)
 #endif
 
+#if defined(NANOVNA_F303)
 static THD_WORKING_AREA(waThread1, 1024);
+#else
+static THD_WORKING_AREA(waThread1, 768);
+#endif
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
   chRegSetThreadName("sweep");

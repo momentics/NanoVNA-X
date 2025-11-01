@@ -51,7 +51,11 @@ typedef struct {
 } event_bus_subscription_t;
 
 #define EVENT_BUS_QUEUE_DEPTH 8U
+#if defined(NANOVNA_F303)
 #define EVENT_BUS_DISPATCH_STACK_DEPTH 384U
+#else
+#define EVENT_BUS_DISPATCH_STACK_DEPTH 256U
+#endif
 #define EVENT_BUS_DISPATCH_STACK_SIZE_BYTES \
   (sizeof(stkalign_t) * THD_WORKING_AREA_SIZE(EVENT_BUS_DISPATCH_STACK_DEPTH))
 

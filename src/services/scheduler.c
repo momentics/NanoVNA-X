@@ -53,8 +53,13 @@ static scheduler_slot_t scheduler_slots[SCHEDULER_SLOT_COUNT] = {
 };
 #else
 #define SCHEDULER_SLOT_COUNT 2U
+#if defined(NANOVNA_F303)
 static THD_WORKING_AREA(scheduler_wa0, 320);
 static THD_WORKING_AREA(scheduler_wa1, 384);
+#else
+static THD_WORKING_AREA(scheduler_wa0, 256);
+static THD_WORKING_AREA(scheduler_wa1, 320);
+#endif
 static scheduler_slot_t scheduler_slots[SCHEDULER_SLOT_COUNT] = {
     {.thread = NULL, .context = {0}, .work_area = scheduler_wa0, .work_area_size = sizeof(scheduler_wa0)},
     {.thread = NULL, .context = {0}, .work_area = scheduler_wa1, .work_area_size = sizeof(scheduler_wa1)},
