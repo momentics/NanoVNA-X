@@ -38,7 +38,6 @@ similar.
 * **Persistent configuration service.** Configuration and calibration saves are validated with rolling checksums, cached per-slot integrity flags, and a single API surface that hides flash programming details from application code.
 * **Platform driver registry.** Hardware bring-up flows through a board registry that selects the correct driver table for each target and runs optional pre-initialisation hooks, reducing conditional logic scattered across the firmware.
 * **USB console handshake compatibility.** The USB shell now emits its `ch> ` prompt before the banner so host utilities such as NanoVNA-Saver detect the device without manual retries.
-* **Unified DMA pipeline for SPI and UART.** Display refresh, SD card transfers, and the USART console now use a shared DMA manager with channel arbitration, chunked transfers, and a DMA-backed shell stream on both STM32F072 and STM32F303 boards. See [`doc/dma_overview.md`](doc/dma_overview.md) for the mapping and extension guidelines.
 
 ### PLL transient stabilization​
 PLL transients are stabilized by optimizing the synthesizer programming sequence and precomputing capture parameters: staged delays, lock‑status gating, and reference frequency caching minimize retuning overhead, reducing overshoot and drift at sweep start and during rapid retunes.​

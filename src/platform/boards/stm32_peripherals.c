@@ -91,15 +91,12 @@
 #endif
 #endif
 
-// Compact STM32 DMA library (only when the HAL does not already provide handlers)
-#if !defined(STM32_DMA_REQUIRED)
+// Compact STM32 DMA library
 #ifdef NANOVNA_F303
 #include "boards/STM32F303/dma_v1.c"
 #else
 #include "boards/STM32F072/dma_v1.c"
 #endif
-#endif
-
 
 // Compact STM32 EXT library
 #if HAL_USE_EXT == FALSE

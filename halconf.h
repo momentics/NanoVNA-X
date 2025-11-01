@@ -296,22 +296,13 @@
  * @details Configuration parameter, you can change the depth of the queue
  *          buffers depending on the requirements of your application.
  * @note    The default is 64 bytes for both the transmission and receive
- *          buffers, however the STM32F072 build reduces them to 32 bytes in
- *          order to fit within the available SRAM.
+ *          buffers.
  */
 #if !defined(SERIAL_RX_BUFFERS_SIZE) || defined(__DOXYGEN__)
-#if defined(BOARD_NANOVNA_STM32_F072)
-#define SERIAL_RX_BUFFERS_SIZE 32
-#else
 #define SERIAL_RX_BUFFERS_SIZE 64
 #endif
-#endif
 #if !defined(SERIAL_TX_BUFFERS_SIZE) || defined(__DOXYGEN__)
-#if defined(BOARD_NANOVNA_STM32_F072)
-#define SERIAL_TX_BUFFERS_SIZE 32
-#else
 #define SERIAL_TX_BUFFERS_SIZE 64
-#endif
 #endif
 /*===========================================================================*/
 /* SERIAL_USB driver related setting.                                        */
@@ -372,7 +363,7 @@
  * @note    Disabling this option saves both code and data space.
  */
 #if !defined(UART_USE_WAIT) || defined(__DOXYGEN__)
-#define UART_USE_WAIT TRUE
+#define UART_USE_WAIT FALSE
 #endif
 
 /**
