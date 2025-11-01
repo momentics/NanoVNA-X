@@ -139,6 +139,7 @@ endif
 
 include $(CHIBIOS)/os/hal/osal/rt/osal.mk
 # RTOS files (optional).
+CHCONF_FILE := config/chconf.h
 include $(CHIBIOS)/os/rt/rt.mk
 ifeq ($(TARGET),F303)
 include $(CHIBIOS)/os/common/ports/ARMCMx/compilers/GCC/mk/port_v7m.mk
