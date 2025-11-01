@@ -160,7 +160,7 @@
 #define USE_VARIABLE_OFFSET
 
 // Maximum sweep point count (limit by flash and RAM size)
-#define SWEEP_POINTS_MAX         91
+#define SWEEP_POINTS_MAX         101
 #endif
 // Minimum sweep point count
 #define SWEEP_POINTS_MIN         21
@@ -1180,8 +1180,14 @@ typedef uint16_t pixel_t;
 #define HEXRGB(hex) ( (((hex)>>3)&0x001c00) | (((hex)>>5)&0x0000f8) | (((hex)<<16)&0xf80000) | (((hex)<<13)&0x00e000) )
 #define LCD_PIXEL_SIZE        2
 // Cell size, depends from spi_buffer size, CELLWIDTH*CELLHEIGHT*sizeof(pixel) <= sizeof(spi_buffer)
-#define CELLWIDTH  (64/DISPLAY_CELL_BUFFER_COUNT)
+#define CELLWIDTH  (64 / DISPLAY_CELL_BUFFER_COUNT)
+#if defined(NANOVNA_F303)
 #define CELLHEIGHT (32)
+#else
+// Shrink the tile height on STM32F072 builds to reduce the SPI tile buffer
+// footprint so the restored 101-point sweep fits back into SRAM.
+#define CELLHEIGHT (24)
+#endif
 #endif
 
 // Define size of screen buffer in pixel_t (need for cell w * h * count)
