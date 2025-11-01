@@ -121,7 +121,11 @@ static void cmd_dump(int argc, char* argv[]);
 
 uint8_t sweep_mode = SWEEP_ENABLE;
 // Sweep measured data
+#if defined(NANOVNA_F303)
+__attribute__((section(".ram4"))) float measured[2][SWEEP_POINTS_MAX][2];
+#else
 float measured[2][SWEEP_POINTS_MAX][2];
+#endif
 
 // Version text, displayed in Config->Version menu, also send by info command
 const char* info_about[] = {
