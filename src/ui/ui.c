@@ -3953,6 +3953,9 @@ static void ui_init_ext(void) {
 }
 #endif
 
+static void ui_handle_sweep_completed(const event_bus_message_t* message, void* user_data);
+static void ui_handle_storage_updated(const event_bus_message_t* message, void* user_data);
+
 void ui_init(event_bus_t* bus) {
   if (bus != NULL) {
     (void)event_bus_subscribe(bus, EVENT_SWEEP_COMPLETED, ui_handle_sweep_completed, NULL);
