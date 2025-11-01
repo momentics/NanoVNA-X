@@ -201,7 +201,7 @@ msg_t uart_dma_get_timeout(uint8_t* value, systime_t timeout) {
   return status;
 }
 
-##else /* HAL_USE_UART == TRUE */
+#else /* HAL_USE_UART == TRUE */
 
 static SerialConfig serial_config = {
     .speed = 115200,
