@@ -1414,7 +1414,8 @@ void clear_all_config_prop_data(void);
 // Enter in leveler search mode after search click
 //#define UI_USE_LEVELER_SEARCH_MODE
 
-typedef struct event_bus_t event_bus_t;
+struct event_bus;
+typedef struct event_bus event_bus_t;
 void ui_init(event_bus_t* bus);
 void ui_process(void);
 

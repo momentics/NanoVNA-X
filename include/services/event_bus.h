@@ -60,7 +60,7 @@ typedef struct {
   bool in_use;
 } event_bus_queue_entry_t;
 
-typedef struct {
+typedef struct event_bus {
   event_bus_subscription_t* subscriptions;
   size_t capacity;
   size_t count;

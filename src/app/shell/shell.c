@@ -232,7 +232,7 @@ void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t a
 
 void shell_service_pending_commands(void) {
   while (pending_command != NULL) {
-    const VNAShellCommand* command = pending_command;
+    const VNAShellCommand* command = (const VNAShellCommand*)pending_command;
     command->sc_function(pending_argc, pending_argv);
     osalSysLock();
     pending_command = NULL;
