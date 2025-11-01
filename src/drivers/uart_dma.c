@@ -20,8 +20,6 @@
 
 #include "drivers/uart_dma.h"
 
-#ifdef __USE_SERIAL_CONSOLE__
-
 #if HAL_USE_UART == TRUE
 
 static size_t uart_dma_send_buffer(UARTDriver* driver, const uint8_t* buffer, size_t size,
@@ -286,6 +284,3 @@ msg_t uart_dma_get_timeout(uint8_t* value, systime_t timeout) {
 }
 
 #endif /* HAL_USE_UART == TRUE */
-
-#endif /* __USE_SERIAL_CONSOLE__ */
-
