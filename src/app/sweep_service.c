@@ -245,12 +245,17 @@ void sweep_service_init(void) {
    * safely.  In the freshly booted firmware there are no in-flight copies,
    * therefore the semaphore must start in the signaled state; otherwise the
    * first wait call blocks forever and the UI never comes up.  Earlier
-   * releases initialised it to "true" implicitly by signalling after
-   * creation.  When the DMA/event-bus refactor landed in v0.9.23 the
-   * initial signal was dropped, leaving the semaphore empty and the firmware
-   * stuck in sweep_service_wait_for_copy_release().
+   * releases initialised it by signalling immediately after creation.  When
+   * the DMA/event-bus refactor landed in v0.9.23 the initial signal was
+   * dropped, leaving the semaphore empty and the firmware stuck in
+   * sweep_service_wait_for_copy_release().
+   *
+   * The @p taken argument of chBSemObjectInit() follows ChibiOS semantics:
+   * passing @p false leaves the semaphore signaled (count = 1) while @p true
+   * starts it in the taken state.  Initialise it with @p false so the first
+   * wait succeeds.
    */
-  chBSemObjectInit(&snapshot_sem, true);
+  chBSemObjectInit(&snapshot_sem, false);
 }
 
 void sweep_service_reset_progress(void) {
