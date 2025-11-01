@@ -162,7 +162,7 @@ bool shell_check_connect(void) {
 #if !defined(NANOVNA_F303)
     if (usb_active && !shell_serial_seen_rx) {
       const systime_t elapsed = chVTTimeElapsedSinceX(shell_serial_mode_since);
-      if (TIME_I2MS(elapsed) > 2000U) {
+      if (MS2ST(elapsed) > 2000U) {
         apply_vna_mode(VNA_MODE_CONNECTION, VNA_MODE_CLR);
         return usb_active;
       }
