@@ -74,9 +74,9 @@ STM32F303 families.
   compute-heavy code isolated from hardware access.
 * **Drivers and middleware.** Low-level device interactions are implemented in `src/drivers/`
   for the LCD, Si5351 synthesiser, TLV320 codec and USB front-end, while `src/middleware/`
-  houses small integration shims such as the `chprintf` binding for ChibiOS streams. Common
-  third-party components (ChibiOS, FatFs) are vendored under `third_party/` and configured
-  through the headers in `config/` and top-level `chconf.h`/`halconf.h`.
+  houses small integration shims such as the `chprintf` binding for ChibiOS streams. ChibiOS
+  itself is vendored under `third_party/` and configured through the headers in `config/`
+  and top-level `chconf.h`/`halconf.h`.
 * **User interface layer.** The sweep thread initialises the UI toolkit (`src/ui/`), processes
   hardware inputs, refreshes plotting primitives and marks screen regions for redraw. Fonts
   and icon bitmaps that back the rendering code are stored in `src/resources/`. Optional
@@ -88,7 +88,7 @@ startup code reside in `boards/`. This structure lets the same measurement and U
 across both memory profiles with only targeted platform overrides.
 
 ## Hardware platform and used chips
-The primary target MCUs are the STM32F072xB and STM32F303 (NanoVNA-H/H4); the F072 board employs an 8 MHz crystal, USB, SPI, I²C, and I²S lines for the display, SD, codec, and touch sensor, as described in board.h.
+The primary target MCUs are the STM32F072xB and STM32F303 (NanoVNA-H/H4); the F072 board employs an 8 MHz crystal plus USB, SPI, I²C, and I²S lines for the display, codec, and touch sensor, as described in board.h.
 
 The Si5351A clock generator (or a compatible part) drives the RF synthesizers and also produces reference frequencies for the audio ADC; its driver implements frequency caching, power management, and PLL initialization over I²C.
 
@@ -96,7 +96,7 @@ The TLV320AIC3204 acts as a dual-channel audio ADC/DAC (I²S), with PLL configur
 
 Display controllers ILI9341/ST7789 (320×240) and ST7796S (480×320) are selected per board; DMA is supported, along with brightness control (for the H4), inversion, and text shadows to improve readability.
 
-Additional features include an RTC, SD card (screenshots, firmware, file manager), USB UID, remote control, and a measurement module (LC matching, cable analysis, and resonance analysis).
+Additional features include an RTC, persistent calibration/configuration in internal flash, USB UID, remote control, and a measurement module (LC matching, cable analysis, and resonance analysis).
 
 ## Building the firmware
 

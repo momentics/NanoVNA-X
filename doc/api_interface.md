@@ -89,7 +89,6 @@ When the binary bit is set, the reply starts with the 16-bit mask and 16-bit poi
 ### 5.4 Storage and configuration persistence
 * `clearconfig {1234}` — Factory reset of persistent configuration and calibration (requires the literal key `1234`).
 * `saveconfig` — Persist the current configuration.
-* `sd_list [pattern]`, `sd_read {filename}`, `sd_delete {filename}` (`ENABLE_SD_CARD_COMMAND`) — List FAT filesystem entries, read files (the response begins with a 32-bit size prefix, then raw bytes), or delete a file. All commands implicitly mount the SD card.
 
 ### 5.5 System information and diagnostics
 * `band {idx} {mode} {value}` (`ENABLE_BAND_COMMAND`) — Update Si5351 band-configuration tables.
@@ -104,7 +103,6 @@ When the binary bit is set, the reply starts with the 16-bit mask and 16-bit poi
 * `usart_cfg {baud}` / `usart {string} [timeout_ms]` (`ENABLE_USART_COMMAND` and `__USE_SERIAL_CONSOLE__`) — Reconfigure or use the hardware UART console. `usart` sends the string (plus newline) to the UART and streams any reply back over USB until the timeout expires.
 
 ### 5.6 Remote UI and automation
-* `msg {delay_ms} [text] [header]` (`__SD_CARD_LOAD__`) — Display a modal message box for the given duration.
 * `refresh {on|off}` (`__REMOTE_DESKTOP__`) — Enable (`on`) or disable (`off`) remote screen streaming. When enabled and the USB CDC link is active, the firmware periodically sends a `remote_region_t` header followed by pixel data for regions that changed, then terminates the update with the normal prompt.
 * `touch {x} {y}` / `release [x y]` (`__REMOTE_DESKTOP__`) — Inject remote touch-press or touch-release events. Passing `-1` for a coordinate preserves the last position.
 * `touchcal`, `touchtest` — Trigger on-device touch calibration or diagnostics.
@@ -140,15 +138,10 @@ When the binary bit is set, the reply starts with the 16-bit mask and 16-bit poi
 3. **Retrieve binary sweep data**
    *Send:* `scan 50000000 150000000 201 0x83\r\n`
    *Receive:* first four bytes contain the mask `0x0083` and point count `0x00C9` (201), followed by 201 records of frequency (`uint32_t`) and selected complex samples (`float[2]`).
-4. **Read a file from the SD card**
-   ```text
-   ch> sd_read log.csv\r\n
-   <4-byte size><binary file data>ch> 
-   ```
-5. **Capture the LCD as raw RGB565**
+4. **Capture the LCD as raw RGB565**
    ```text
    ch> capture\r\n
-   <LCD_WIDTH * LCD_HEIGHT * 2 bytes of pixel data>ch> 
+   <LCD_WIDTH * LCD_HEIGHT * 2 bytes of pixel data>ch>
    ```
 
 ## 7. Error handling and best practices
@@ -163,7 +156,6 @@ The availability of certain commands depends on compile-time options. Key macros
 | Macro | Enables |
 |-------|---------|
 | `__REMOTE_DESKTOP__` | Remote framebuffer streaming (`refresh`, `touch`, `release`). |
-| `__USE_SD_CARD__` + `ENABLE_SD_CARD_COMMAND` | SD card shell commands. |
 | `__VNA_MEASURE_MODULE__` | Advanced `measure` modes. |
 | `__USE_SMOOTH__` | `smooth` command. |
 | `ENABLE_SCANBIN_COMMAND` | Binary `scan` helper. |

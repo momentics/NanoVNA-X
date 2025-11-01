@@ -52,18 +52,7 @@ static event_bus_subscription_t app_event_slots[8];
 
 static measurement_pipeline_t measurement_pipeline;
 
-#ifdef __USE_SD_CARD__
-static FATFS fs_volume_instance;
-static FIL fs_file_instance;
-
-FATFS* filesystem_volume(void) {
-  return &fs_volume_instance;
-}
-
-FIL* filesystem_file(void) {
-  return &fs_file_instance;
-}
-#endif
+// SD card access was removed; configuration persists using internal flash only.
 
 // Shell frequency printf format
 // #define VNA_FREQ_FMT_STR         "%lu"
@@ -114,10 +103,6 @@ static void cmd_dump(int argc, char* argv[]);
 // #define DEBUG_CONSOLE_SHOW
 // Enable usart command
 // Enable config command
-#ifdef __USE_SD_CARD__
-// Enable SD card console command
-#define ENABLE_SD_CARD_COMMAND
-#endif
 
 uint8_t sweep_mode = SWEEP_ENABLE;
 // Sweep measured data
@@ -455,9 +440,6 @@ VNA_SHELL_FUNCTION(cmd_config) {
 #endif
 #ifdef __DIGIT_SEPARATOR__
                                       "|separator"
-#endif
-#ifdef __SD_CARD_DUMP_TIFF__
-                                      "|tif"
 #endif
       ;
   int idx;
@@ -2320,99 +2302,7 @@ VNA_SHELL_FUNCTION(cmd_release) {
 }
 #endif
 
-#ifdef ENABLE_SD_CARD_COMMAND
-#ifndef __USE_SD_CARD__
-#error "Need enable SD card support __USE_SD_CARD__ in nanovna.h, for use ENABLE_SD_CARD_COMMAND"
-#endif
-
-static FRESULT cmd_sd_card_mount(void) {
-  const FRESULT res = f_mount(filesystem_volume(), "", 1);
-  if (res != FR_OK)
-    shell_printf("err: no card" VNA_SHELL_NEWLINE_STR);
-  return res;
-}
-
-VNA_SHELL_FUNCTION(cmd_sd_list) {
-  DIR dj;
-  FILINFO fno;
-  if (cmd_sd_card_mount() != FR_OK)
-    return;
-  switch (argc) {
-  case 0:
-    dj.pat = "*.*";
-    break;
-  case 1:
-    dj.pat = argv[0];
-    break;
-  default:
-    shell_printf("usage: sd_list {pattern}" VNA_SHELL_NEWLINE_STR);
-    return;
-  }
-  if (f_opendir(&dj, "") == FR_OK) {
-    while (f_findnext(&dj, &fno) == FR_OK && fno.fname[0])
-      shell_printf("%s %u" VNA_SHELL_NEWLINE_STR, fno.fname, fno.fsize);
-  }
-  f_closedir(&dj);
-}
-
-VNA_SHELL_FUNCTION(cmd_sd_read) {
-  char* buf = (char*)spi_buffer;
-  if (argc != 1) {
-    shell_printf("usage: sd_read {filename}" VNA_SHELL_NEWLINE_STR);
-    return;
-  }
-  const char* filename = argv[0];
-  if (cmd_sd_card_mount() != FR_OK)
-    return;
-
-  FIL* const file = filesystem_file();
-  if (f_open(file, filename, FA_OPEN_EXISTING | FA_READ) != FR_OK) {
-    shell_printf("err: no file" VNA_SHELL_NEWLINE_STR);
-    return;
-  }
-  // shell_printf("sd_read: %s" VNA_SHELL_NEWLINE_STR, filename);
-  // number of bytes to follow (file size)
-  uint32_t filesize = f_size(file);
-  shell_stream_write(&filesize, 4);
-  UINT size = 0;
-  // file data (send all data from file)
-  while (f_read(file, buf, 512, &size) == FR_OK && size > 0)
-    shell_stream_write(buf, size);
-
-  f_close(file);
-  return;
-}
-
-VNA_SHELL_FUNCTION(cmd_sd_delete) {
-  FRESULT res;
-  if (argc != 1) {
-    shell_printf("usage: sd_delete {filename}" VNA_SHELL_NEWLINE_STR);
-    return;
-  }
-  if (cmd_sd_card_mount() != FR_OK)
-    return;
-  const char* filename = argv[0];
-  res = f_unlink(filename);
-  shell_printf("delete: %s %s" VNA_SHELL_NEWLINE_STR, filename, res == FR_OK ? "OK" : "err");
-  return;
-}
-#endif
-
-#ifdef __SD_CARD_LOAD__
-VNA_SHELL_FUNCTION(cmd_msg) {
-  if (argc == 0) {
-    shell_printf("usage: msg delay [text] [header]" VNA_SHELL_NEWLINE_STR);
-    return;
-  }
-  uint32_t delay = my_atoui(argv[0]);
-  char *header = 0, *text = 0;
-  if (argc > 1)
-    text = argv[1];
-  if (argc > 2)
-    header = argv[2];
-  ui_message_box(header, text, delay);
-}
-#endif
+// All SD card shell commands were removed with the filesystem support.
 
 //=============================================================================
 VNA_SHELL_FUNCTION(cmd_help);
@@ -2433,11 +2323,6 @@ static const VNAShellCommand commands[] = {
     {"bandwidth", cmd_bandwidth, CMD_RUN_IN_LOAD},
 #ifdef __USE_RTC__
     {"time", cmd_time, CMD_RUN_IN_UI},
-#endif
-#ifdef ENABLE_SD_CARD_COMMAND
-    {"sd_list", cmd_sd_list, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
-    {"sd_read", cmd_sd_read, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
-    {"sd_delete", cmd_sd_delete, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
 #endif
 #ifdef __VNA_ENABLE_DAC__
     {"dac", cmd_dac, CMD_RUN_IN_LOAD},
@@ -2466,9 +2351,6 @@ static const VNAShellCommand commands[] = {
     {"touchtest", cmd_touchtest, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
     {"pause", cmd_pause, CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
     {"resume", cmd_resume, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
-#ifdef __SD_CARD_LOAD__
-    {"msg", cmd_msg, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_LOAD},
-#endif
     {"cal", cmd_cal, CMD_WAIT_MUTEX},
     {"save", cmd_save, CMD_RUN_IN_LOAD},
     {"recall", cmd_recall, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
@@ -2582,59 +2464,6 @@ static void vna_shell_execute_line(char* line) {
     shell_printf("%s?" VNA_SHELL_NEWLINE_STR, command_name);
   }
 }
-
-#ifdef __SD_CARD_LOAD__
-#ifndef __USE_SD_CARD__
-#error "Need enable SD card support __USE_SD_CARD__ in nanovna.h, for use __SD_CARD_LOAD__"
-#endif
-bool sd_card_load_config(void) {
-  // Mount card
-  if (f_mount(filesystem_volume(), "", 1) != FR_OK)
-    return FALSE;
-
-  FIL* const config_file = filesystem_file();
-  if (f_open(config_file, "config.ini", FA_OPEN_EXISTING | FA_READ) != FR_OK)
-    return FALSE;
-
-  char* buf = (char*)spi_buffer;
-  UINT size = 0;
-
-  uint16_t j = 0, i;
-  bool last_was_cr = false;
-  while (f_read(config_file, buf, 512, &size) == FR_OK && size > 0) {
-    i = 0;
-    while (i < size) {
-      uint8_t c = buf[i++];
-      if (c == '\r' || c == '\n') {
-        if (c == '\n' && last_was_cr) {
-          last_was_cr = false;
-          continue;
-        }
-        shell_line[j] = 0;
-        if (j > 0) {
-          vna_shell_execute_cmd_line(shell_line);
-        }
-        j = 0;
-        last_was_cr = (c == '\r');
-        continue;
-      }
-      last_was_cr = false;
-      // Others (skip)
-      if (c < 0x20)
-        continue;
-      // Store
-      if (j < VNA_SHELL_MAX_LENGTH - 1)
-        shell_line[j++] = (char)c;
-    }
-  }
-  if (j > 0) {
-    shell_line[j] = 0;
-    vna_shell_execute_cmd_line(shell_line);
-  }
-  f_close(config_file);
-  return TRUE;
-}
-#endif
 
 #ifdef VNA_SHELL_THREAD
 static THD_WORKING_AREA(waThread2, /* cmd_* max stack size + alpha */ 442);

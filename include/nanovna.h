@@ -51,8 +51,6 @@
 #define __USE_RTC__
 // Add RTC backup registers support
 #define __USE_BACKUP__
-// Add SD card support, req enable RTC (additional settings for file system see FatFS lib ffconf.h)
-#define __USE_SD_CARD__
 // Use unique serial string for USB
 #define __USB_UID__
 // If enabled serial in halconf.h, possible enable serial console control
@@ -89,21 +87,6 @@
 #define __VNA_MEASURE_MODULE__
 // Add Z normalization feature
 //#define __VNA_Z_RENORMALIZATION__
-
-/*
- * Submodules defines
- */
-// If SD card enabled
-#ifdef __USE_SD_CARD__
-// Allow run commands from SD card (config.ini in root)
-#define __SD_CARD_LOAD__
-// Allow screenshots in TIFF format
-#define __SD_CARD_DUMP_TIFF__
-// Allow dump firmware to SD card
-#define __SD_CARD_DUMP_FIRMWARE__
-// Enable SD card file browser, and allow load files from it
-#define __SD_FILE_BROWSER__
-#endif
 
 // If measure module enabled, add submodules
 #ifdef __VNA_MEASURE_MODULE__
@@ -361,8 +344,6 @@ void update_backup_data(void);
 #endif
 
 void set_sweep_points(uint16_t points);
-
-bool sd_card_load_config(void);
 
 #ifdef __REMOTE_DESKTOP__
 // State flags for remote touch state
@@ -943,10 +924,7 @@ enum {
 #ifdef __DIGIT_SEPARATOR__
   VNA_MODE_SEPARATOR,    // Comma or dot digit separator (0: dot, 1: comma)
 #endif
-#ifdef __SD_CARD_DUMP_TIFF__
-  VNA_MODE_TIFF,         // Save screenshot format (0: bmp, 1: tiff)
-#endif
-#ifdef __USB_UID__
+  #ifdef __USB_UID__
   VNA_MODE_USB_UID       // Use unique serial string for USB
 #endif
 };
@@ -1301,22 +1279,6 @@ void lcd_vector_draw(int x, int y, const vector_data *v);
 
 uint32_t lcd_send_register(uint8_t cmd, uint8_t len, const uint8_t *data);
 void     lcd_set_flip(bool flip);
-
-// SD Card support, discio functions for FatFS lib implemented in ili9341.c
-#ifdef  __USE_SD_CARD__
-#include "ff.h"
-#include "diskio.h"
-
-// Buffers for SD card use spi_buffer
-#if SPI_BUFFER_SIZE < 2048
-#error "SPI_BUFFER_SIZE for SD card support need size >= 2048"
-#endif
-
-FATFS *filesystem_volume(void);
-FIL   *filesystem_file(void);
-
-void test_log(void);        // debug log
-#endif
 
 /*
  * flash.c
