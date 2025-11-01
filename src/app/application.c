@@ -174,7 +174,7 @@ static THD_FUNCTION(Thread1, arg) {
   /*
    * UI (menu, touch, buttons) and plot initialize
    */
-  ui_init();
+  ui_init(&app_event_bus);
   // Initialize graph plotting
   plot_init();
   while (1) {
@@ -191,7 +191,6 @@ static THD_FUNCTION(Thread1, arg) {
       sweep_service_end_measurement();
       __WFI();
     }
-    shell_service_pending_commands();
     // Process UI inputs
     sweep_mode |= SWEEP_UI_MODE;
     ui_process();
@@ -205,7 +204,6 @@ static THD_FUNCTION(Thread1, arg) {
         app_measurement_transform_domain(mask);
       //      STOP_PROFILE;
       // Prepare draw graphics, cache all lines, mark screen cells for redraw
-      request_to_redraw(REDRAW_PLOT);
     }
     request_to_redraw(REDRAW_BATTERY);
 #ifndef DEBUG_CONSOLE_SHOW
@@ -2687,6 +2685,8 @@ int app_main(void) {
 
   config_service_init();
   event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots));
+  config_service_bind_event_bus(&app_event_bus);
+  shell_bind_event_bus(&app_event_bus);
 
   /*
    * restore config and calibration 0 slot from flash memory, also if need use backup data

@@ -25,20 +25,14 @@ typedef struct {
   void* user_data;
 } scheduler_thread_context_t;
 
-#if defined(NANOVNA_F303)
-#define SCHEDULER_HAS_STATIC_WA TRUE
-#else
-#define SCHEDULER_HAS_STATIC_WA FALSE
-#endif
+typedef struct {
+  thread_t* thread;
+  scheduler_thread_context_t context;
+  stkalign_t* work_area;
+  size_t work_area_size;
+} scheduler_slot_t;
 
-#if SCHEDULER_HAS_STATIC_WA
-static THD_WORKING_AREA(default_wa, 512);
-static scheduler_thread_context_t default_context;
-#endif
-static thread_t* default_thread = NULL;
-
-#if SCHEDULER_HAS_STATIC_WA
-static void scheduler_entry_adapter(void* arg) {
+static THD_FUNCTION(scheduler_entry_adapter, arg) {
   scheduler_thread_context_t* context = (scheduler_thread_context_t*)arg;
   msg_t exit_code = MSG_OK;
   if (context != NULL && context->entry != NULL) {
@@ -46,7 +40,66 @@ static void scheduler_entry_adapter(void* arg) {
   }
   chThdExit(exit_code);
 }
+
+#if defined(NANOVNA_F303)
+#define SCHEDULER_SLOT_COUNT 3U
+static THD_WORKING_AREA(scheduler_wa0, 448);
+static THD_WORKING_AREA(scheduler_wa1, 512);
+static THD_WORKING_AREA(scheduler_wa2, 640);
+static scheduler_slot_t scheduler_slots[SCHEDULER_SLOT_COUNT] = {
+    {.thread = NULL, .context = {0}, .work_area = scheduler_wa0, .work_area_size = sizeof(scheduler_wa0)},
+    {.thread = NULL, .context = {0}, .work_area = scheduler_wa1, .work_area_size = sizeof(scheduler_wa1)},
+    {.thread = NULL, .context = {0}, .work_area = scheduler_wa2, .work_area_size = sizeof(scheduler_wa2)},
+};
+#else
+#define SCHEDULER_SLOT_COUNT 2U
+static THD_WORKING_AREA(scheduler_wa0, 320);
+static THD_WORKING_AREA(scheduler_wa1, 384);
+static scheduler_slot_t scheduler_slots[SCHEDULER_SLOT_COUNT] = {
+    {.thread = NULL, .context = {0}, .work_area = scheduler_wa0, .work_area_size = sizeof(scheduler_wa0)},
+    {.thread = NULL, .context = {0}, .work_area = scheduler_wa1, .work_area_size = sizeof(scheduler_wa1)},
+};
 #endif
+
+static scheduler_slot_t* scheduler_acquire_slot(size_t stack_size) {
+  scheduler_slot_t* selected = NULL;
+  for (size_t i = 0; i < SCHEDULER_SLOT_COUNT; ++i) {
+    scheduler_slot_t* slot = &scheduler_slots[i];
+    if (slot->thread != NULL) {
+      continue;
+    }
+    if (stack_size != 0U && stack_size > slot->work_area_size) {
+      continue;
+    }
+    selected = slot;
+    break;
+  }
+  if (selected != NULL) {
+    selected->thread = (thread_t*)1; // reserve slot
+  }
+  return selected;
+}
+
+static void scheduler_release_slot(scheduler_slot_t* slot) {
+  if (slot == NULL) {
+    return;
+  }
+  slot->thread = NULL;
+  slot->context.entry = NULL;
+  slot->context.user_data = NULL;
+}
+
+static scheduler_slot_t* scheduler_find_slot(thread_t* thread) {
+  if (thread == NULL) {
+    return NULL;
+  }
+  for (size_t i = 0; i < SCHEDULER_SLOT_COUNT; ++i) {
+    if (scheduler_slots[i].thread == thread) {
+      return &scheduler_slots[i];
+    }
+  }
+  return NULL;
+}
 
 scheduler_task_t scheduler_start(const char* name, tprio_t priority, size_t stack_size,
                                  scheduler_entry_t entry, void* user_data) {
@@ -54,40 +107,54 @@ scheduler_task_t scheduler_start(const char* name, tprio_t priority, size_t stac
   if (entry == NULL) {
     return task;
   }
-#if !SCHEDULER_HAS_STATIC_WA
-  (void)name;
-  (void)priority;
-  (void)stack_size;
-  (void)user_data;
-  return task;
-#else
-  if ((stack_size != 0U && stack_size != sizeof(default_wa)) || default_thread != NULL) {
-    return task;
-  }
-  default_context.entry = entry;
-  default_context.user_data = user_data;
 
-  task.thread = chThdCreateStatic(default_wa, sizeof(default_wa), priority, scheduler_entry_adapter,
-                                  &default_context);
-  if (task.thread == NULL) {
+  chSysLock();
+  scheduler_slot_t* slot = scheduler_acquire_slot(stack_size);
+  chSysUnlock();
+  if (slot == NULL) {
     return task;
   }
-  default_thread = task.thread;
+
+  slot->context.entry = entry;
+  slot->context.user_data = user_data;
+
+  thread_t* thread = chThdCreateStatic(slot->work_area, slot->work_area_size, priority,
+                                       scheduler_entry_adapter, &slot->context);
+  if (thread == NULL) {
+    chSysLock();
+    scheduler_release_slot(slot);
+    chSysUnlock();
+    return task;
+  }
+
+  chSysLock();
+  slot->thread = thread;
+  chSysUnlock();
+
 #if CH_CFG_USE_REGISTRY
-  if (task.thread != NULL && name != NULL) {
-    chRegSetThreadNameX(task.thread, name);
+  if (name != NULL) {
+    chRegSetThreadNameX(thread, name);
   }
 #else
   (void)name;
 #endif
+
+  task.thread = thread;
   return task;
-#endif
 }
 
 void scheduler_stop(scheduler_task_t* task) {
   if (task == NULL || task->thread == NULL) {
     return;
   }
+  scheduler_slot_t* slot = NULL;
+  chSysLock();
+  slot = scheduler_find_slot(task->thread);
+  chSysUnlock();
+  if (slot == NULL) {
+    return;
+  }
+
   chThdTerminate(task->thread);
 #if CH_CFG_USE_WAITEXIT == TRUE
   chThdWait(task->thread);
@@ -96,12 +163,10 @@ void scheduler_stop(scheduler_task_t* task) {
     chThdSleepMilliseconds(1);
   }
 #endif
-  if (task->thread == default_thread) {
-    default_thread = NULL;
-#if SCHEDULER_HAS_STATIC_WA
-    default_context.entry = NULL;
-    default_context.user_data = NULL;
-#endif
-  }
+
+  chSysLock();
+  scheduler_release_slot(slot);
+  chSysUnlock();
+
   task->thread = NULL;
 }

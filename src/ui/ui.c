@@ -23,6 +23,7 @@
 #include "nanovna.h"
 #include "app/shell.h"
 #include "hal.h"
+#include "services/event_bus.h"
 #include "chprintf.h"
 #include <string.h>
 #include "si5351.h"
@@ -3952,7 +3953,11 @@ static void ui_init_ext(void) {
 }
 #endif
 
-void ui_init() {
+void ui_init(event_bus_t* bus) {
+  if (bus != NULL) {
+    (void)event_bus_subscribe(bus, EVENT_SWEEP_COMPLETED, ui_handle_sweep_completed, NULL);
+    (void)event_bus_subscribe(bus, EVENT_STORAGE_UPDATED, ui_handle_storage_updated, NULL);
+  }
   ui_input_reset_state();
   // Activates the EXT driver 1.
   ui_init_ext();
@@ -3963,3 +3968,18 @@ void ui_init() {
   lcd_set_brightness(config._brightness);
 #endif
 }
+#define UI_UNUSED(x) (void)(x)
+
+static void ui_handle_sweep_completed(const event_bus_message_t* message, void* user_data) {
+  UI_UNUSED(message);
+  UI_UNUSED(user_data);
+  request_to_redraw(REDRAW_PLOT);
+  request_to_redraw(REDRAW_BATTERY);
+}
+
+static void ui_handle_storage_updated(const event_bus_message_t* message, void* user_data) {
+  UI_UNUSED(message);
+  UI_UNUSED(user_data);
+  request_to_redraw(REDRAW_CAL_STATUS | REDRAW_BACKUP);
+}
+

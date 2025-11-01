@@ -164,7 +164,7 @@
  *
  * @note    The default is @p TRUE.
  */
-#define CH_CFG_USE_SEMAPHORES               FALSE
+#define CH_CFG_USE_SEMAPHORES               TRUE
 
 /**
  * @brief   Semaphores queuing mode.
@@ -221,7 +221,7 @@
  *
  * @note    The default is @p TRUE.
  */
-#define CH_CFG_USE_EVENTS                   FALSE
+#define CH_CFG_USE_EVENTS                   TRUE
 
 /**
  * @brief   Events Flags APIs with timeout.
@@ -231,7 +231,7 @@
  * @note    The default is @p TRUE.
  * @note    Requires @p CH_CFG_USE_EVENTS.
  */
-#define CH_CFG_USE_EVENTS_TIMEOUT           FALSE
+#define CH_CFG_USE_EVENTS_TIMEOUT           TRUE
 
 /**
  * @brief   Synchronous Messages APIs.
@@ -261,7 +261,7 @@
  * @note    The default is @p TRUE.
  * @note    Requires @p CH_CFG_USE_SEMAPHORES.
  */
-#define CH_CFG_USE_MAILBOXES                FALSE
+#define CH_CFG_USE_MAILBOXES                TRUE
 
 /**
  * @brief   I/O Queues APIs.

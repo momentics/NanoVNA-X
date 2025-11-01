@@ -41,6 +41,22 @@ static volatile const VNAShellCommand* pending_command = NULL;
 static uint16_t pending_argc = 0;
 static char** pending_argv = NULL;
 static bool shell_skip_linefeed = false;
+static event_bus_t* shell_event_bus = NULL;
+
+static void shell_handle_sweep_completed(const event_bus_message_t* message, void* user_data) {
+  (void)message;
+  (void)user_data;
+  shell_service_pending_commands();
+}
+
+void shell_bind_event_bus(event_bus_t* bus) {
+  shell_event_bus = bus;
+  if (bus == NULL) {
+    return;
+  }
+  (void)event_bus_subscribe(bus, EVENT_SWEEP_COMPLETED, shell_handle_sweep_completed, NULL);
+  (void)event_bus_subscribe(bus, EVENT_SHELL_COMMAND_PENDING, shell_handle_sweep_completed, NULL);
+}
 
 static void shell_write(const void* buf, size_t size) {
   if (shell_stream == NULL) {
@@ -209,6 +225,9 @@ void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t a
   osalSysLock();
   osalThreadEnqueueTimeoutS(&shell_thread, TIME_INFINITE);
   osalSysUnlock();
+  if (shell_event_bus != NULL) {
+    event_bus_publish(shell_event_bus, EVENT_SHELL_COMMAND_PENDING, NULL);
+  }
 }
 
 void shell_service_pending_commands(void) {

@@ -22,6 +22,9 @@
 
 #pragma once
 
+#include "ch.h"
+#include "services/scheduler.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 
@@ -30,7 +33,8 @@ typedef enum {
   EVENT_SWEEP_COMPLETED,
   EVENT_TOUCH_INPUT,
   EVENT_STORAGE_UPDATED,
-  EVENT_CONFIGURATION_CHANGED
+  EVENT_CONFIGURATION_CHANGED,
+  EVENT_SHELL_COMMAND_PENDING
 } event_bus_topic_t;
 
 typedef struct {
@@ -46,10 +50,24 @@ typedef struct {
   event_bus_topic_t topic;
 } event_bus_subscription_t;
 
+#define EVENT_BUS_QUEUE_DEPTH 8U
+#define EVENT_BUS_DISPATCH_STACK_DEPTH 384U
+#define EVENT_BUS_DISPATCH_STACK_SIZE_BYTES \
+  (sizeof(stkalign_t) * THD_WORKING_AREA_SIZE(EVENT_BUS_DISPATCH_STACK_DEPTH))
+
+typedef struct {
+  event_bus_message_t message;
+  bool in_use;
+} event_bus_queue_entry_t;
+
 typedef struct {
   event_bus_subscription_t* subscriptions;
   size_t capacity;
   size_t count;
+  mailbox_t mailbox;
+  msg_t mailbox_buffer[EVENT_BUS_QUEUE_DEPTH];
+  event_bus_queue_entry_t queue[EVENT_BUS_QUEUE_DEPTH];
+  scheduler_task_t dispatcher_task;
 } event_bus_t;
 
 void event_bus_init(event_bus_t* bus, event_bus_subscription_t* storage, size_t capacity);
@@ -58,3 +76,5 @@ bool event_bus_subscribe(event_bus_t* bus, event_bus_topic_t topic, event_bus_li
                          void* user_data);
 
 void event_bus_publish(event_bus_t* bus, event_bus_topic_t topic, const void* payload);
+
+bool event_bus_publish_from_isr(event_bus_t* bus, event_bus_topic_t topic, const void* payload);

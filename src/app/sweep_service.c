@@ -38,6 +38,8 @@
 static systime_t ready_time = 0;
 static volatile uint16_t wait_count = 0;
 static audio_sample_t rx_buffer[AUDIO_BUFFER_LEN * 2];
+static binary_semaphore_t capture_sem;
+static binary_semaphore_t snapshot_sem;
 
 #if ENABLED_DUMP_COMMAND
 static audio_sample_t* dump_buffer = NULL;
@@ -213,6 +215,11 @@ void i2s_lld_serve_rx_interrupt(uint32_t flags) {
   duplicate_buffer_to_dump(p, AUDIO_BUFFER_LEN);
 #endif
   --wait_count;
+  if (wait_count == 0U) {
+    chSysLockFromISR();
+    chBSemSignalI(&capture_sem);
+    chSysUnlockFromISR();
+  }
 }
 
 void sweep_service_init(void) {
@@ -230,6 +237,8 @@ void sweep_service_init(void) {
   dump_len = 0;
   dump_selection = 0;
 #endif
+  chBSemObjectInit(&capture_sem, true);
+  chBSemObjectInit(&snapshot_sem, false);
 }
 
 void sweep_service_reset_progress(void) {
@@ -238,18 +247,18 @@ void sweep_service_reset_progress(void) {
 
 void sweep_service_wait_for_copy_release(void) {
   while (true) {
-    osalSysLock();
-    bool busy = sweep_copy_in_progress;
-    osalSysUnlock();
-    if (!busy) {
-      break;
+    msg_t msg = chBSemWait(&snapshot_sem);
+    if (msg == MSG_RESET) {
+      continue;
     }
-    chThdYield();
+    chBSemSignal(&snapshot_sem);
+    break;
   }
 }
 
 void sweep_service_begin_measurement(void) {
   osalSysLock();
+  chBSemResetI(&snapshot_sem, true);
   sweep_in_progress = true;
   osalSysUnlock();
 }
@@ -265,6 +274,7 @@ uint32_t sweep_service_increment_generation(void) {
   uint32_t generation = ++sweep_generation;
   osalSysUnlock();
   return generation;
+  chBSemSignal(&snapshot_sem);
 }
 
 uint32_t sweep_service_current_generation(void) {
@@ -285,18 +295,27 @@ bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* s
     return false;
   }
   while (true) {
+    msg_t msg = chBSemWait(&snapshot_sem);
+    if (msg == MSG_RESET) {
+      continue;
+    }
+    if (msg != MSG_OK) {
+      return false;
+    }
+    bool acquired = false;
     osalSysLock();
-    bool busy = sweep_in_progress || sweep_copy_in_progress;
-    if (!busy) {
+   if (!sweep_in_progress && !sweep_copy_in_progress) {
       sweep_copy_in_progress = true;
       snapshot->generation = sweep_generation;
       snapshot->points = sweep_points;
       snapshot->data = measured[channel];
-      osalSysUnlock();
-      return true;
+      acquired = true;
     }
     osalSysUnlock();
-    chThdSleepMilliseconds(1);
+    if (acquired) {
+      return true;
+    }
+    chBSemSignal(&snapshot_sem);
   }
 }
 
@@ -308,17 +327,20 @@ bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
   }
   sweep_copy_in_progress = false;
   osalSysUnlock();
+  chBSemSignal(&snapshot_sem);
   return stable;
 }
 
 void sweep_service_start_capture(systime_t delay_ticks) {
+  chSysLock();
+  chBSemResetI(&capture_sem, true);
   ready_time = chVTGetSystemTimeX() + delay_ticks;
   wait_count = config._bandwidth + 2U;
+  chSysUnlock();
 }
 
 void sweep_service_wait_for_capture(void) {
-  while (wait_count != 0U) {
-    __WFI();
+  while (chBSemWait(&capture_sem) == MSG_RESET) {
   }
 }
 
