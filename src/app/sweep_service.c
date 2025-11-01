@@ -263,6 +263,19 @@ void sweep_service_reset_progress(void) {
 }
 
 void sweep_service_wait_for_copy_release(void) {
+  bool continuing_partial_sweep = false;
+  osalSysLock();
+  uint16_t total_points = sweep_points;
+  continuing_partial_sweep = (p_sweep != 0U && p_sweep < total_points);
+  osalSysUnlock();
+  if (continuing_partial_sweep) {
+    /*
+     * The sweep is resuming from a previous chunk, so no snapshot copy can be
+     * in flight yet.  Skip the semaphore wait to avoid deadlocking on the
+     * taken state left by sweep_service_begin_measurement().
+     */
+    return;
+  }
   while (true) {
     msg_t msg = chBSemWait(&snapshot_sem);
     if (msg == MSG_RESET) {
@@ -275,7 +288,15 @@ void sweep_service_wait_for_copy_release(void) {
 
 void sweep_service_begin_measurement(void) {
   osalSysLock();
-  chBSemResetI(&snapshot_sem, true);
+  uint16_t total_points = sweep_points;
+  if (p_sweep == 0U || p_sweep >= total_points) {
+    /*
+     * Only take the snapshot semaphore when a brand new sweep is starting.
+     * Partial sweeps resume with the semaphore already taken; resetting it
+     * again would strand the UI loop in sweep_service_wait_for_copy_release().
+     */
+    chBSemResetI(&snapshot_sem, true);
+  }
   sweep_in_progress = true;
   osalSysUnlock();
 }
