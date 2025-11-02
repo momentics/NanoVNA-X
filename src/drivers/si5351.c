@@ -58,7 +58,7 @@ uint16_t timings[8] = {
     DELAY_RESET_PLL_BEFORE, // 5
     DELAY_RESET_PLL_AFTER,  // 6
 };
-inline void si5351_set_timing(int i, int v) {
+void si5351_set_timing(int i, int v) {
   timings[i] = US2ST(v);
 }
 #undef DELAY_BAND_1_2
@@ -350,12 +350,19 @@ typedef struct {
 #define SI5351_FIXED_MULT 2
 #define SI5351_MIXED 3
 
-#define CONST_BAND const
-#ifndef CONST_BAND
-#define CONST_BAND
-static band_strategy_t* band_s;
+#if ENABLE_BAND_COMMAND
+typedef band_strategy_t band_strategy_storage_t;
+typedef band_strategy_t* band_strategy_ptr_t;
+#else
+typedef const band_strategy_t band_strategy_storage_t;
+typedef const band_strategy_t* band_strategy_ptr_t;
+#endif
+
+static band_strategy_ptr_t band_s;
+
+#if ENABLE_BAND_COMMAND
 void si5351_update_band_config(int idx, uint32_t pidx, uint32_t v) {
-  CONST_BAND band_strategy_t* b = &band_s[idx];
+  band_strategy_t* b = &band_s[idx];
   switch (pidx) {
   case 0:
     b->mode = v;
@@ -392,15 +399,13 @@ void si5351_update_band_config(int idx, uint32_t pidx, uint32_t v) {
     break;
   }
 }
-#else
-static const band_strategy_t* band_s;
 #endif
 
 /*
  * Frequency generation divide on band
  */
 // Mode for H board v3.3 and SI5351 installed
-CONST_BAND band_strategy_t band_strategy_33H_SI5351[] = {
+band_strategy_storage_t band_strategy_33H_SI5351[] = {
     {0U, 0, {0}, 0, 0, -1, -1, -1, -1, 1}, // 0
     {26000U,
      SI5351_FIXED_PLL,
@@ -561,7 +566,7 @@ CONST_BAND band_strategy_t band_strategy_33H_SI5351[] = {
 };
 
 // Mode for H4 board v3.4 and SI5351 installed
-CONST_BAND band_strategy_t band_strategy_H4_SI5351[] = {
+band_strategy_storage_t band_strategy_H4_SI5351[] = {
     {0U, 0, {0}, 0, 0, -1, -1, -1, -1, 1}, // 0
     {26000U,
      SI5351_FIXED_PLL,
@@ -722,7 +727,7 @@ CONST_BAND band_strategy_t band_strategy_H4_SI5351[] = {
 };
 
 // Mode for board v3.6 and MS5351 installed
-CONST_BAND band_strategy_t band_strategy_36H_MS5351[] = {
+band_strategy_storage_t band_strategy_36H_MS5351[] = {
     {0U, 0, {0}, 0, 0, -1, -1, -1, -1, 1}, // 0
     {26000U,
      SI5351_FIXED_PLL,
@@ -827,7 +832,7 @@ CONST_BAND band_strategy_t band_strategy_36H_MS5351[] = {
 };
 
 // Mode for board H v3.6+ or H4 v4.3+ and SWC5351 installed
-CONST_BAND band_strategy_t band_strategy_SWC5351[] = {
+band_strategy_storage_t band_strategy_SWC5351[] = {
     {0U, 0, {0}, 0, 0, -1, -1, -1, -1, 1}, // 0
     {32000U,
      SI5351_FIXED_PLL,
@@ -922,7 +927,7 @@ CONST_BAND band_strategy_t band_strategy_SWC5351[] = {
 };
 
 void si5351_set_band_mode(uint16_t t) {
-  static const band_strategy_t* bs[] = {
+  static band_strategy_ptr_t bs[] = {
 #if defined(NANOVNA_F303)
       band_strategy_H4_SI5351, band_strategy_36H_MS5351, band_strategy_SWC5351
 #else

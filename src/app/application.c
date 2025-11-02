@@ -1916,7 +1916,8 @@ VNA_SHELL_FUNCTION(cmd_vbat_offset) {
 
 #if ENABLE_SI5351_TIMINGS
 VNA_SHELL_FUNCTION(cmd_si5351time) {
-  (void)argc;
+  if (argc != 2)
+    return;
   int idx = my_atoui(argv[0]);
   uint16_t value = my_atoui(argv[1]);
   si5351_set_timing(idx, value);
@@ -1939,10 +1940,10 @@ VNA_SHELL_FUNCTION(cmd_si5351reg) {
 
 #if ENABLE_I2C_TIMINGS
 VNA_SHELL_FUNCTION(cmd_i2ctime) {
-  (void)argc;
-  uint32_t tim = STM32_TIMINGR_PRESC(0U) | STM32_TIMINGR_SCLDEL(my_atoui(argv[0])) |
-                 STM32_TIMINGR_SDADEL(my_atoui(argv[1])) | STM32_TIMINGR_SCLH(my_atoui(argv[2])) |
-                 STM32_TIMINGR_SCLL(my_atoui(argv[3]));
+  if (argc != 4)
+    return;
+  uint32_t tim = STM32_I2C_TIMINGS(0U, my_atoui(argv[0]), my_atoui(argv[1]), my_atoui(argv[2]),
+                                   my_atoui(argv[3]));
   i2c_set_timings(tim);
 }
 #endif
