@@ -33,7 +33,7 @@ similar.
 
 ## Acknowledgment and Disclaimer
 
-- Profound thanks to @DiSlord for the original firmware text and the foundations that significantly inspired and enabled the start of this new firmware project.
+- Profound thanks to [@DiSlord](https://github.com/DiSlord/) for the original firmware sources and the foundations that significantly inspired and enabled the start of this new firmware project.
 - This firmware evolves rapidly and, with each daily change, diverges further from the original implementation.
 - The original codebase was exceptionally feature‑rich; to make ongoing development feasible, the SD subsystem has been temporarily removed to reduce complexity and unblock core refactoring.
 - The SD subsystem will return once the key features are implemented as originally envisioned and the architecture is ready to support it cleanly.
@@ -225,7 +225,7 @@ There are several numbers of great companion PC tools from third-party.
 Hardware design material is disclosed to prevent bad quality clone. Please let me know if you would have your own unit.
 
 ## Credit
-* [@momentics](https://github.com/momentics/) – NanoVNA-X maintainer and integrator.
+* [@momentics](https://github.com/momentics/) – NanoVNA-X maintainer.
 
 ## Based on code from:
 * [@DiSlord](https://github.com/DiSlord/) – original NanoVNA-D firmware author whose
