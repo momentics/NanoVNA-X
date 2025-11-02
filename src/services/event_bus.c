@@ -118,13 +118,13 @@ static bool event_bus_enqueue(event_bus_t* bus, event_bus_queue_node_t* node, bo
   }
   if (result != MSG_OK) {
     if (from_isr) {
-      osalSysLockFromISR();
+      chSysLockFromISR();
       node->in_use = false;
-      osalSysUnlockFromISR();
+      chSysUnlockFromISR();
     } else {
-      osalSysLock();
+      chSysLock();
       node->in_use = false;
-      osalSysUnlock();
+      chSysUnlock();
     }
     return false;
   }
@@ -145,15 +145,15 @@ static bool event_bus_publish_common(event_bus_t* bus, event_bus_topic_t topic, 
 
   bool success = false;
   if (from_isr) {
-    osalSysLockFromISR();
+    chSysLockFromISR();
   } else {
-    osalSysLock();
+    chSysLock();
   }
   event_bus_queue_node_t* node = event_bus_alloc_node(bus, topic, payload);
   if (from_isr) {
-    osalSysUnlockFromISR();
+    chSysUnlockFromISR();
   } else {
-    osalSysUnlock();
+    chSysUnlock();
   }
 
   if (node == NULL) {
@@ -197,8 +197,8 @@ bool event_bus_dispatch(event_bus_t* bus, systime_t timeout) {
   const event_bus_message_t message = node->message;
   event_bus_dispatch_to_subscribers(bus, &message);
 
-  osalSysLock();
+  chSysLock();
   node->in_use = false;
-  osalSysUnlock();
+  chSysUnlock();
   return true;
 }

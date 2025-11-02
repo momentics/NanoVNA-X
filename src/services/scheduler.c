@@ -37,11 +37,11 @@ static THD_FUNCTION(scheduler_entry_adapter, arg) {
     exit_code = slot->entry(slot->user_data);
   }
 
-  osalSysLock();
+  chSysLock();
   slot->thread = NULL;
   slot->entry = NULL;
   slot->user_data = NULL;
-  osalSysUnlock();
+  chSysUnlock();
 
   chThdExit(exit_code);
 }
@@ -55,7 +55,7 @@ scheduler_task_t scheduler_start(const char* name, tprio_t priority, void* worki
   }
 
   scheduler_slot_t* slot = NULL;
-  osalSysLock();
+  chSysLock();
   for (size_t i = 0; i < SCHEDULER_MAX_TASKS; ++i) {
     if (scheduler_slots[i].thread == NULL) {
       slot = &scheduler_slots[i];
@@ -64,7 +64,7 @@ scheduler_task_t scheduler_start(const char* name, tprio_t priority, void* worki
       break;
     }
   }
-  osalSysUnlock();
+  chSysUnlock();
 
   if (slot == NULL) {
     return task;
@@ -73,16 +73,16 @@ scheduler_task_t scheduler_start(const char* name, tprio_t priority, void* worki
   thread_t* thread = chThdCreateStatic(working_area, working_area_size, priority,
                                        scheduler_entry_adapter, slot);
   if (thread == NULL) {
-    osalSysLock();
+    chSysLock();
     slot->entry = NULL;
     slot->user_data = NULL;
-    osalSysUnlock();
+    chSysUnlock();
     return task;
   }
 
-  osalSysLock();
+  chSysLock();
   slot->thread = thread;
-  osalSysUnlock();
+  chSysUnlock();
 
 #if CH_CFG_USE_REGISTRY
   if (name != NULL) {
@@ -104,9 +104,9 @@ void scheduler_stop(scheduler_task_t* task) {
   scheduler_slot_t* slot = task->slot;
   thread_t* thread;
 
-  osalSysLock();
+  chSysLock();
   thread = slot->thread;
-  osalSysUnlock();
+  chSysUnlock();
 
   if (thread == NULL) {
     task->slot = NULL;
@@ -122,11 +122,11 @@ void scheduler_stop(scheduler_task_t* task) {
   }
 #endif
 
-  osalSysLock();
+  chSysLock();
   slot->thread = NULL;
   slot->entry = NULL;
   slot->user_data = NULL;
-  osalSysUnlock();
+  chSysUnlock();
 
   task->slot = NULL;
 }
