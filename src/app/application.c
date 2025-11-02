@@ -71,42 +71,7 @@ static char shell_line[VNA_SHELL_MAX_LENGTH];
 static void cmd_dump(int argc, char* argv[]);
 #endif
 
-// Allow get threads debug info
-// #define ENABLE_THREADS_COMMAND
-// Enable vbat_offset command, allow change battery voltage correction in config
-#define ENABLE_VBAT_OFFSET_COMMAND
-// Info about NanoVNA, need fore soft
-#define ENABLE_INFO_COMMAND
-// Enable color command, allow change config color for traces, grid, menu
-#define ENABLE_COLOR_COMMAND
-// Enable transform command
-#define ENABLE_TRANSFORM_COMMAND
-// Enable sample command
-// #define ENABLE_SAMPLE_COMMAND
-// Enable I2C command for send data to AIC3204, used for debug
-// #define ENABLE_I2C_COMMAND
-// Enable LCD command for send data to LCD screen, used for debug
-// #define ENABLE_LCD_COMMAND
-// Enable output debug data on screen on hard fault
-// #define ENABLE_HARD_FAULT_HANDLER_DEBUG
-// Enable test command, used for debug
-// #define ENABLE_TEST_COMMAND
-// Enable stat command, used for debug
-// #define ENABLE_STAT_COMMAND
-// Enable gain command, used for debug
-// #define ENABLE_GAIN_COMMAND
-// Enable port command, used for debug
-// #define ENABLE_PORT_COMMAND
-// Enable si5351 register write, used for debug
-// #define ENABLE_SI5351_REG_WRITE
-// Enable i2c timing command, used for debug
-// #define ENABLE_I2C_TIMINGS
-// Enable band setting command, used for debug
-// #define ENABLE_BAND_COMMAND
-// Enable debug for console command
-// #define DEBUG_CONSOLE_SHOW
-// Enable usart command
-// Enable config command
+// Optional commands are controlled through app_features.h profiles.
 
 uint8_t sweep_mode = SWEEP_ENABLE;
 // Sweep measured data
@@ -728,25 +693,8 @@ VNA_SHELL_FUNCTION(cmd_capture) {
   }
 }
 
-#if 0
-VNA_SHELL_FUNCTION(cmd_gamma)
-{
-  float gamma[2];
-  (void)argc;
-  (void)argv;
-  
-  pause_sweep();
-  chMtxLock(&mutex);
-  wait_dsp(4);  
-  calculate_gamma(gamma);
-  chMtxUnlock(&mutex);
-
-  shell_printf("%d %d" VNA_SHELL_NEWLINE_STR, gamma[0], gamma[1]);
-}
-#endif
-
 static void (*sample_func)(float* gamma) = calculate_gamma;
-#ifdef ENABLE_SAMPLE_COMMAND
+#if ENABLE_SAMPLE_COMMAND
 VNA_SHELL_FUNCTION(cmd_sample) {
   if (argc != 1)
     goto usage;
@@ -803,7 +751,7 @@ result:
                get_bandwidth_frequency(config._bandwidth));
 }
 
-#ifdef ENABLE_GAIN_COMMAND
+#if ENABLE_GAIN_COMMAND
 VNA_SHELL_FUNCTION(cmd_gain) {
   if (argc == 0 || argc > 2) {
     shell_printf("usage: gain {lgain(0-95)} [rgain(0-95)]" VNA_SHELL_NEWLINE_STR);
@@ -988,16 +936,8 @@ static void update_marker_index(freq_t fstart, freq_t fstop, uint16_t points) {
     else if (f >= fstop)
       idx = points - 1;
     else { // Search frequency index for marker frequency
-#if 0
-      for (idx = 1; idx < points; idx++) {
-        if (frequencies[idx] <= f) continue;
-        if (f < (frequencies[idx-1]/2 + frequencies[idx]/2)) idx--; // Correct closest idx
-        break;
-      }
-#else
       float r = ((float)(f - fstart)) / (fstop - fstart);
       idx = r * (points - 1);
-#endif
     }
     set_marker_index(m, idx);
   }
@@ -1174,18 +1114,8 @@ static void eterm_calc_es(void) {
     // z=1/(jwc*z0) = 1/(2*pi*f*c*z0)  Note: normalized with Z0
     // s11ao = (z-1)/(z+1) = (1-1/z)/(1+1/z) = (1-jwcz0)/(1+jwcz0)
     // prepare 1/s11ao for effeiciency
-#if 0
-    float c = 50e-15;
-    //float c = 1.707e-12;
-    float z0 = 50;
-    float z = 2 * VNA_PI * frequencies[i] * c * z0;
-    float sq = 1 + z*z;
-    float s11aor = (1 - z*z) / sq;
-    float s11aoi = 2*z / sq;
-#else
     float s11aor = 1.0f;
     float s11aoi = 0.0f;
-#endif
     // S11mo’= S11mo - Ed
     // S11ms’= S11ms - Ed
     float s11or = cal_data[CAL_OPEN][i][0] - cal_data[ETERM_ED][i][0];
@@ -1247,75 +1177,6 @@ static void eterm_calc_et(void) {
   cal_status &= ~CALSTAT_THRU;
   cal_status |= CALSTAT_ET;
 }
-
-#if 0
-void apply_error_term(void)
-{
-  int i;
-  for (i = 0; i < sweep_points; i++) {
-    // S11m' = S11m - Ed
-    // S11a = S11m' / (Er + Es S11m')
-    float s11mr = measured[0][i][0] - cal_data[ETERM_ED][i][0];
-    float s11mi = measured[0][i][1] - cal_data[ETERM_ED][i][1];
-    float err = cal_data[ETERM_ER][i][0] + s11mr * cal_data[ETERM_ES][i][0] - s11mi * cal_data[ETERM_ES][i][1];
-    float eri = cal_data[ETERM_ER][i][1] + s11mr * cal_data[ETERM_ES][i][1] + s11mi * cal_data[ETERM_ES][i][0];
-    float sq = err*err + eri*eri;
-    float s11ar = (s11mr * err + s11mi * eri) / sq;
-    float s11ai = (s11mi * err - s11mr * eri) / sq;
-    measured[0][i][0] = s11ar;
-    measured[0][i][1] = s11ai;
-
-    // CAUTION: Et is inversed for efficiency
-    // S21m' = S21m - Ex
-    // S21a = S21m' (1-EsS11a)Et
-    float s21mr = measured[1][i][0] - cal_data[ETERM_EX][i][0];
-    float s21mi = measured[1][i][1] - cal_data[ETERM_EX][i][1];
-    float esr = 1 - (cal_data[ETERM_ES][i][0] * s11ar - cal_data[ETERM_ES][i][1] * s11ai);
-    float esi = - (cal_data[ETERM_ES][i][1] * s11ar + cal_data[ETERM_ES][i][0] * s11ai);
-    float etr = esr * cal_data[ETERM_ET][i][0] - esi * cal_data[ETERM_ET][i][1];
-    float eti = esr * cal_data[ETERM_ET][i][1] + esi * cal_data[ETERM_ET][i][0];
-    float s21ar = s21mr * etr - s21mi * eti;
-    float s21ai = s21mi * etr + s21mr * eti;
-    measured[1][i][0] = s21ar;
-    measured[1][i][1] = s21ai;
-  }
-}
-
-static void apply_error_term_at(int i)
-{
-    // S11m' = S11m - Ed
-    // S11a = S11m' / (Er + Es S11m')
-    float s11mr = measured[0][i][0] - cal_data[ETERM_ED][i][0];
-    float s11mi = measured[0][i][1] - cal_data[ETERM_ED][i][1];
-    float err = cal_data[ETERM_ER][i][0] + s11mr * cal_data[ETERM_ES][i][0] - s11mi * cal_data[ETERM_ES][i][1];
-    float eri = cal_data[ETERM_ER][i][1] + s11mr * cal_data[ETERM_ES][i][1] + s11mi * cal_data[ETERM_ES][i][0];
-    float sq = err*err + eri*eri;
-    float s11ar = (s11mr * err + s11mi * eri) / sq;
-    float s11ai = (s11mi * err - s11mr * eri) / sq;
-    measured[0][i][0] = s11ar;
-    measured[0][i][1] = s11ai;
-
-    // CAUTION: Et is inversed for efficiency
-    // S21m' = S21m - Ex
-    // S21a = S21m' (1-EsS11a)Et
-    float s21mr = measured[1][i][0] - cal_data[ETERM_EX][i][0];
-    float s21mi = measured[1][i][1] - cal_data[ETERM_EX][i][1];
-#if 1
-    float esr = 1 - (cal_data[ETERM_ES][i][0] * s11ar - cal_data[ETERM_ES][i][1] * s11ai);
-    float esi = 0 - (cal_data[ETERM_ES][i][1] * s11ar + cal_data[ETERM_ES][i][0] * s11ai);
-    float etr = esr * cal_data[ETERM_ET][i][0] - esi * cal_data[ETERM_ET][i][1];
-    float eti = esr * cal_data[ETERM_ET][i][1] + esi * cal_data[ETERM_ET][i][0];
-    float s21ar = s21mr * etr - s21mi * eti;
-    float s21ai = s21mi * etr + s21mr * eti;
-#else
-    // Not made CH1 correction by CH0 data
-    float s21ar = s21mr * cal_data[ETERM_ET][i][0] - s21mi * cal_data[ETERM_ET][i][1];
-    float s21ai = s21mi * cal_data[ETERM_ET][i][0] + s21mr * cal_data[ETERM_ET][i][1];
-#endif
-    measured[1][i][0] = s21ar;
-    measured[1][i][1] = s21ai;
-}
-#endif
 
 static void apply_ch0_error_term(float data[4], float c_data[CAL_TYPE_COUNT][2]) {
   // S11m' = S11m - Ed
@@ -1875,7 +1736,7 @@ VNA_SHELL_FUNCTION(cmd_frequencies) {
   }
 }
 
-#ifdef ENABLE_TRANSFORM_COMMAND
+#if ENABLE_TRANSFORM_COMMAND
 static void set_domain_mode(int mode) // accept DOMAIN_FREQ or DOMAIN_TIME
 {
   if (mode != (props_mode & DOMAIN_MODE)) {
@@ -1940,65 +1801,14 @@ usage:
 }
 #endif
 
-#ifdef ENABLE_TEST_COMMAND
+#if ENABLE_TEST_COMMAND
 VNA_SHELL_FUNCTION(cmd_test) {
   (void)argc;
   (void)argv;
-
-#if 0
-  int i;
-  for (i = 0; i < 100; i++) {
-    palClearPad(GPIOC, GPIOC_LED);
-    app_measurement_set_frequency(10000000);
-    palSetPad(GPIOC, GPIOC_LED);
-    chThdSleepMilliseconds(50);
-
-    palClearPad(GPIOC, GPIOC_LED);
-    app_measurement_set_frequency(90000000);
-    palSetPad(GPIOC, GPIOC_LED);
-    chThdSleepMilliseconds(50);
-  }
-#endif
-
-#if 0
-  int i;
-  int mode = 0;
-  if (argc >= 1)
-    mode = my_atoi(argv[0]);
-
-  for (i = 0; i < 20; i++) {
-    palClearPad(GPIOC, GPIOC_LED);
-    ili9341_test(mode);
-    palSetPad(GPIOC, GPIOC_LED);
-    chThdSleepMilliseconds(50);
-  }
-#endif
-
-#if 0
-  //extern adcsample_t adc_samples[2];
-  //shell_printf("adc: %d %d" VNA_SHELL_NEWLINE_STR, adc_samples[0], adc_samples[1]);
-  int i;
-  int x, y;
-  for (i = 0; i < 50; i++) {
-    test_touch(&x, &y);
-    shell_printf("adc: %d %d" VNA_SHELL_NEWLINE_STR, x, y);
-    chThdSleepMilliseconds(200);
-  }
-  //extern int touch_x, touch_y;
-  //shell_printf("adc: %d %d" VNA_SHELL_NEWLINE_STR, touch_x, touch_y);
-#endif
-#if 0
-  while (argc > 1) {
-    int16_t x, y;
-    touch_position(&x, &y);
-    shell_printf("touch: %d %d" VNA_SHELL_NEWLINE_STR, x, y);
-    chThdSleepMilliseconds(200);
-  }
-#endif
 }
 #endif
 
-#ifdef ENABLE_PORT_COMMAND
+#if ENABLE_PORT_COMMAND
 VNA_SHELL_FUNCTION(cmd_port) {
   int port;
   if (argc != 1) {
@@ -2010,16 +1820,10 @@ VNA_SHELL_FUNCTION(cmd_port) {
 }
 #endif
 
-#ifdef ENABLE_STAT_COMMAND
+#if ENABLE_STAT_COMMAND
 static struct {
   int16_t rms[2];
   int16_t ave[2];
-#if 0
-  int callback_count;
-  int32_t last_counter_value;
-  int32_t interval_cycles;
-  int32_t busy_cycles;
-#endif
 } stat;
 
 VNA_SHELL_FUNCTION(cmd_stat) {
@@ -2095,7 +1899,7 @@ VNA_SHELL_FUNCTION(cmd_vbat) {
   shell_printf("%d m" S_VOLT VNA_SHELL_NEWLINE_STR, adc_vbat_read());
 }
 
-#ifdef ENABLE_VBAT_OFFSET_COMMAND
+#if ENABLE_VBAT_OFFSET_COMMAND
 VNA_SHELL_FUNCTION(cmd_vbat_offset) {
   if (argc != 1) {
     shell_printf("%d" VNA_SHELL_NEWLINE_STR, config._vbat_offset);
@@ -2106,7 +1910,7 @@ VNA_SHELL_FUNCTION(cmd_vbat_offset) {
 }
 #endif
 
-#ifdef ENABLE_SI5351_TIMINGS
+#if ENABLE_SI5351_TIMINGS
 VNA_SHELL_FUNCTION(cmd_si5351time) {
   (void)argc;
   int idx = my_atoui(argv[0]);
@@ -2115,15 +1919,9 @@ VNA_SHELL_FUNCTION(cmd_si5351time) {
 }
 #endif
 
-#ifdef ENABLE_SI5351_REG_WRITE
+#if ENABLE_SI5351_REG_WRITE
 VNA_SHELL_FUNCTION(cmd_si5351reg) {
-#if 0
-  (void) argc;
-  uint32_t reg = my_atoui(argv[0]);
-  uint8_t buf[1] = {0xAA};
-  if (si5351_bulk_read(reg, buf, 1))
-    shell_printf("si reg[%d] = 0x%02x" VNA_SHELL_NEWLINE_STR, reg, buf[0]);
-#else
+
   if (argc != 2) {
     shell_printf("usage: si reg data" VNA_SHELL_NEWLINE_STR);
     return;
@@ -2132,11 +1930,10 @@ VNA_SHELL_FUNCTION(cmd_si5351reg) {
   uint8_t dat = my_atoui(argv[1]);
   uint8_t buf[] = {reg, dat};
   si5351_bulk_write(buf, 2);
-#endif
 }
 #endif
 
-#ifdef ENABLE_I2C_TIMINGS
+#if ENABLE_I2C_TIMINGS
 VNA_SHELL_FUNCTION(cmd_i2ctime) {
   (void)argc;
   uint32_t tim = STM32_TIMINGR_PRESC(0U) | STM32_TIMINGR_SCLDEL(my_atoui(argv[0])) |
@@ -2146,7 +1943,7 @@ VNA_SHELL_FUNCTION(cmd_i2ctime) {
 }
 #endif
 
-#ifdef ENABLE_INFO_COMMAND
+#if ENABLE_INFO_COMMAND
 VNA_SHELL_FUNCTION(cmd_info) {
   (void)argc;
   (void)argv;
@@ -2156,7 +1953,7 @@ VNA_SHELL_FUNCTION(cmd_info) {
 }
 #endif
 
-#ifdef ENABLE_COLOR_COMMAND
+#if ENABLE_COLOR_COMMAND
 VNA_SHELL_FUNCTION(cmd_color) {
   uint32_t color;
   uint16_t i;
@@ -2179,7 +1976,7 @@ VNA_SHELL_FUNCTION(cmd_color) {
 }
 #endif
 
-#ifdef ENABLE_I2C_COMMAND
+#if ENABLE_I2C_COMMAND
 VNA_SHELL_FUNCTION(cmd_i2c) {
   if (argc != 3) {
     shell_printf("usage: i2c page reg data" VNA_SHELL_NEWLINE_STR);
@@ -2192,7 +1989,7 @@ VNA_SHELL_FUNCTION(cmd_i2c) {
 }
 #endif
 
-#ifdef ENABLE_BAND_COMMAND
+#if ENABLE_BAND_COMMAND
 VNA_SHELL_FUNCTION(cmd_band) {
   static const char cmd_sweep_list[] = "mode|freq|div|mul|omul|pow|opow|l|r|lr|adj";
   if (argc != 3) {
@@ -2205,7 +2002,7 @@ VNA_SHELL_FUNCTION(cmd_band) {
 }
 #endif
 
-#ifdef ENABLE_LCD_COMMAND
+#if ENABLE_LCD_COMMAND
 VNA_SHELL_FUNCTION(cmd_lcd) {
   uint8_t d[VNA_SHELL_MAX_ARGUMENTS];
   if (argc == 0)
@@ -2218,7 +2015,7 @@ VNA_SHELL_FUNCTION(cmd_lcd) {
 }
 #endif
 
-#ifdef ENABLE_THREADS_COMMAND
+#if ENABLE_THREADS_COMMAND
 #if CH_CFG_USE_REGISTRY == FALSE
 #error "Threads Requite enabled CH_CFG_USE_REGISTRY in chconf.h"
 #endif
@@ -2350,19 +2147,19 @@ static const VNAShellCommand commands[] = {
 #if ENABLED_DUMP_COMMAND
     {"dump", cmd_dump, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
 #endif
-#ifdef ENABLE_PORT_COMMAND
+#if ENABLE_PORT_COMMAND
     {"port", cmd_port, CMD_RUN_IN_LOAD},
 #endif
-#ifdef ENABLE_STAT_COMMAND
+#if ENABLE_STAT_COMMAND
     {"stat", cmd_stat, CMD_WAIT_MUTEX},
 #endif
-#ifdef ENABLE_GAIN_COMMAND
+#if ENABLE_GAIN_COMMAND
     {"gain", cmd_gain, CMD_WAIT_MUTEX},
 #endif
-#ifdef ENABLE_SAMPLE_COMMAND
+#if ENABLE_SAMPLE_COMMAND
     {"sample", cmd_sample, 0},
 #endif
-#ifdef ENABLE_TEST_COMMAND
+#if ENABLE_TEST_COMMAND
     {"test", cmd_test, 0},
 #endif
     {"touchcal", cmd_touchcal, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
@@ -2401,40 +2198,40 @@ static const VNAShellCommand commands[] = {
     {"usart", cmd_usart, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
 #endif
-#ifdef ENABLE_VBAT_OFFSET_COMMAND
+#if ENABLE_VBAT_OFFSET_COMMAND
     {"vbat_offset", cmd_vbat_offset, CMD_RUN_IN_LOAD},
 #endif
-#ifdef ENABLE_TRANSFORM_COMMAND
+#if ENABLE_TRANSFORM_COMMAND
     {"transform", cmd_transform, CMD_RUN_IN_LOAD},
 #endif
     {"threshold", cmd_threshold, CMD_RUN_IN_LOAD},
     {"help", cmd_help, 0},
-#ifdef ENABLE_INFO_COMMAND
+#if ENABLE_INFO_COMMAND
     {"info", cmd_info, 0},
 #endif
     {"version", cmd_version, 0},
-#ifdef ENABLE_COLOR_COMMAND
+#if ENABLE_COLOR_COMMAND
     {"color", cmd_color, CMD_RUN_IN_LOAD},
 #endif
-#ifdef ENABLE_I2C_COMMAND
+#if ENABLE_I2C_COMMAND
     {"i2c", cmd_i2c, CMD_WAIT_MUTEX},
 #endif
-#ifdef ENABLE_SI5351_REG_WRITE
+#if ENABLE_SI5351_REG_WRITE
     {"si", cmd_si5351reg, CMD_WAIT_MUTEX},
 #endif
-#ifdef ENABLE_LCD_COMMAND
+#if ENABLE_LCD_COMMAND
     {"lcd", cmd_lcd, CMD_WAIT_MUTEX},
 #endif
-#ifdef ENABLE_THREADS_COMMAND
+#if ENABLE_THREADS_COMMAND
     {"threads", cmd_threads, 0},
 #endif
-#ifdef ENABLE_SI5351_TIMINGS
+#if ENABLE_SI5351_TIMINGS
     {"t", cmd_si5351time, CMD_WAIT_MUTEX},
 #endif
-#ifdef ENABLE_I2C_TIMINGS
+#if ENABLE_I2C_TIMINGS
     {"i", cmd_i2ctime, CMD_WAIT_MUTEX},
 #endif
-#ifdef ENABLE_BAND_COMMAND
+#if ENABLE_BAND_COMMAND
     {"b", cmd_band, CMD_WAIT_MUTEX},
 #endif
     {NULL, NULL, 0}};
@@ -2653,7 +2450,7 @@ __attribute__((naked)) void HardFault_Handler(void) {
 
 void hard_fault_handler_c(uint32_t* sp, const hard_fault_extra_registers_t* extra,
                           uint32_t exc_return) {
-#ifdef ENABLE_HARD_FAULT_HANDLER_DEBUG
+#if ENABLE_HARD_FAULT_HANDLER_DEBUG
   uint32_t r0 = sp[0];
   uint32_t r1 = sp[1];
   uint32_t r2 = sp[2];

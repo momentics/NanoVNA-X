@@ -352,12 +352,6 @@ void vna_sincosf(float angle, float* pSinVal, float* pCosVal) {
   indexC &= (FAST_MATH_TABLE_SIZE - 1);
 
   // Read two nearest values of input value from the cos & sin tables
-#if 0
-  f1 = GET_SIN_TABLE(indexC  );
-  f2 = GET_SIN_TABLE(indexC+1);
-  d1 = GET_SIN_TABLE(indexS  );
-  d2 = GET_SIN_TABLE(indexS+1);
-#else
   if (indexC < 256) {
     f1 = sin_table_512[indexC + 0];
     f2 = sin_table_512[indexC + 1];
@@ -372,7 +366,6 @@ void vna_sincosf(float angle, float* pSinVal, float* pCosVal) {
     d1 = -sin_table_512[indexS - 256 + 0];
     d2 = -sin_table_512[indexS - 256 + 1];
   }
-#endif
 
 #if 1
   // 1e-7 error on 512 size table
@@ -455,22 +448,9 @@ float vna_sqrtf(float x) {
     uint32_t i;
   } u = {x};
   ix = u.i;
-#if 0
-  // take care of Inf and NaN
-  if((ix&0x7f800000)==0x7f800000) return x*x+x;	// sqrt(NaN)=NaN, sqrt(+inf)=+inf, sqrt(-inf)=sNaN
-  // take care if x < 0
-  if (ix <  0) return (x-x)/0.0f;
-#endif
   if (ix == 0)
     return 0.0f;
   m = (ix >> 23);
-#if 0 //
-  // normalize x
-  if(m==0) {				// subnormal x
-    for(int i=0;(ix&0x00800000)==0;i++) ix<<=1;
-      m -= i-1;
-  }
-#endif
   m -= 127; // unbias exponent
   ix = (ix & 0x007fffff) | 0x00800000;
   // generate sqrt(x) bit by bit

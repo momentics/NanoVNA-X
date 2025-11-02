@@ -745,14 +745,6 @@ enum {
   KP_k, KP_M, KP_G,
   KP_m, KP_u, KP_n, KP_p,
   KP_X1, KP_ENTER, KP_PERCENT, // Enter values
-#if 0
-  KP_INF,
-  KP_DB,
-  KP_PLUSMINUS,
-  KP_KEYPAD,
-  KP_SPACE,
-  KP_PLUS,
-#endif
   // Special uint8_t buttons
   KP_EMPTY = 255  // Empty button
 };
@@ -1263,12 +1255,8 @@ void lcd_clear_screen(void);
 void lcd_blit_bitmap(uint16_t x, uint16_t y, uint16_t width, uint16_t height, const uint8_t *bitmap);
 void lcd_blit_bitmap_scale(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t size, const uint8_t *b);
 void lcd_drawchar(uint8_t ch, int x, int y);
-#if 0
-void lcd_drawstring(int16_t x, int16_t y, const char *str);
-#else
 // use printf for draw string
 #define lcd_drawstring lcd_printf
-#endif
 int  lcd_printf(int16_t x, int16_t y, const char *fmt, ...);
 int  lcd_printf_v(int16_t x, int16_t y, const char *fmt, ...);
 int  lcd_drawchar_size(uint8_t ch, int x, int y, uint8_t size);

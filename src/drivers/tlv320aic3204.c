@@ -452,17 +452,6 @@ static void tlv320aic3204_bulk_write(const uint8_t* buf, int len) {
   i2c_transfer(AIC3204_ADDR, buf, len);
 }
 
-#if 0
-static int
-tlv320aic3204_read(uint8_t d0)
-{
-  int addr = AIC3204_ADDR;
-  uint8_t buf[] = { d0 };
-  i2c_receive(&I2CD1, addr, buf, 1, buf, 1);
-  return buf[0];
-}
-#endif
-
 static void tlv320aic3204_config(const uint8_t* data, int len) {
   for (; len--; data += 2)
     tlv320aic3204_bulk_write(data, 2);
@@ -484,17 +473,8 @@ void tlv320aic3204_write_reg(uint8_t page, uint8_t reg, uint8_t data) {
 }
 
 void tlv320aic3204_select(uint8_t channel) {
-#if 0
-  // Cache current selected channel
-  static uint8_t current_channel = -1;
-  if (current_channel == channel)
-    return;
-  current_channel = channel;
-#endif
   tlv320aic3204_bulk_write(channel ? conf_data_ch1_select : conf_data_ch3_select,
                            sizeof(conf_data_ch1_select));
-  //  tlv320aic3204_config(channel ? conf_data_ch1_select : conf_data_ch3_select,
-  //  sizeof(conf_data_ch3_select)/2);
 }
 
 void tlv320aic3204_set_gain(uint8_t lgain, uint8_t rgain) {

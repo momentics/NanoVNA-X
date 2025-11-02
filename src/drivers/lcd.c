@@ -745,14 +745,6 @@ void lcd_fill(int x, int y, int w, int h) {
 #endif
 }
 
-#if 0
-static void lcd_pixel(int x, int y, uint16_t color) {
-  lcd_set_window(x, y, 1, 1, LCD_RAMWR);
-  while (SPI_TX_IS_NOT_EMPTY(LCD_SPI));
-  SPI_WRITE_16BIT(LCD_SPI, color);
-}
-#endif
-
 void lcd_line(int x0, int y0, int x1, int y1) {
   // Modified Bresenham's line algorithm
   if (x1 < x0) {
@@ -1028,54 +1020,3 @@ void lcd_vector_draw(int x, int y, const vector_data* v) {
     v++;
   }
 }
-
-#if 0
-static const uint16_t colormap[] = {
-  RGBHEX(0x00ff00), RGBHEX(0x0000ff), RGBHEX(0xff0000),
-  RGBHEX(0x00ffff), RGBHEX(0xff00ff), RGBHEX(0xffff00)
-};
-
-void ili9341_test(int mode) {
-  int x, y;
-  int i;
-  switch (mode) {
-    default:
-#if 1
-    lcd_fill(0, 0, LCD_WIDTH, LCD_HEIGHT, 0);
-    for (y = 0; y < LCD_HEIGHT; y++) {
-      lcd_fill(0, y, LCD_WIDTH, 1, RGB(LCD_HEIGHT-y, y, (y + 120) % 256));
-    }
-    break;
-    case 1:
-      lcd_fill(0, 0, LCD_WIDTH, LCD_HEIGHT, 0);
-      for (y = 0; y < LCD_HEIGHT; y++) {
-        for (x = 0; x < LCD_WIDTH; x++) {
-          ili9341_pixel(x, y, (y<<8)|x);
-        }
-      }
-      break;
-    case 2:
-      //lcd_send_command(0x55, 0xff00);
-      ili9341_pixel(64, 64, 0xaa55);
-    break;
-#endif
-#if 1
-    case 3:
-      for (i = 0; i < 10; i++)
-        lcd_drawfont(i, i*20, 120);
-    break;
-#endif
-#if 0
-    case 4:
-      draw_grid(10, 8, 29, 29, 15, 0, 0xffff, 0);
-    break;
-#endif
-    case 4:
-      lcd_line(0, 0, 15, 100);
-      lcd_line(0, 0, 100, 100);
-      lcd_line(0, 15, 100, 0);
-      lcd_line(0, 100, 100, 0);
-    break;
-  }
-}
-#endif

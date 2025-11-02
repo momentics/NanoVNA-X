@@ -1992,14 +1992,6 @@ static void draw_all_cells(void) {
         draw_cell(m * CELLWIDTH, n * CELLHEIGHT);
   }
 
-#if 0
-  lcd_bulk_finish();
-  for (m = 0; m < w; m++)
-    for (n = 0; n < h; n++) {
-      lcd_set_background((markmap[n] & (1 << m)) ? LCD_LOW_BAT_COLOR : LCD_NORMAL_BAT_COLOR);
-      lcd_fill(m*CELLWIDTH+OFFSETX, n*CELLHEIGHT, 2, 2);
-    }
-#endif
   // clear map for next plotting
   clear_markmap();
   // Flush LCD buffer, wait completion (need call after end use lcd_bulk_continue mode)

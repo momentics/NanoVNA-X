@@ -369,20 +369,7 @@ bool sweep_service_dump_ready(void) {
 
 uint16_t app_measurement_get_sweep_mask(void) {
   uint16_t ch_mask = 0;
-#if 0
-  for (int t = 0; t < TRACES_MAX; t++) {
-    if (!trace[t].enabled) {
-      continue;
-    }
-    if ((trace[t].channel & 1) == 0) {
-      ch_mask |= SWEEP_CH0_MEASURE;
-    } else {
-      ch_mask |= SWEEP_CH1_MEASURE;
-    }
-  }
-#else
   ch_mask |= SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE;
-#endif
 #ifdef __VNA_MEASURE_MODULE__
   ch_mask |= plot_get_measure_channels();
 #endif

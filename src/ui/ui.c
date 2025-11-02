@@ -258,29 +258,6 @@ static void menu_set_submenu(const menuitem_t* submenu);
 // Icons for UI
 #include "../resources/icons/icons_menu.c"
 
-#if 0
-static void btn_wait(void) {
-  while (READ_PORT()) chThdSleepMilliseconds(10);
-}
-#endif
-
-#if 0
-static void bubble_sort(uint16_t *v, int n) {
-  bool swapped = true;
-  int i = 0, j;
-  while (i < n - 1 && swapped) { // keep going while we swap in the unordered part
-    swapped = false;
-    for (j = n - 1; j > i; j--) { // unordered part
-      if (v[j] < v[j - 1]) {
-        SWAP(uint16_t, v[j], v[j - 1]);
-        swapped = true;
-      }
-    }
-    i++;
-  }
-}
-#endif
-
 #define SOFTWARE_TOUCH
 //*******************************************************************************
 // Software Touch module
@@ -2215,13 +2192,6 @@ static void menu_draw_buttons(const menuitem_t* m, uint32_t mask) {
 static void menu_draw(uint32_t mask) {
   menu_draw_buttons(menu_stack[menu_current_level], mask);
 }
-
-#if 0
-static void erase_menu_buttons(void) {
-  lcd_set_background(LCD_BG_COLOR);
-  lcd_fill(LCD_WIDTH-MENU_BUTTON_WIDTH, 0, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT*MENU_BUTTON_MAX);
-}
-#endif
 
 //  Menu mode processing
 static void ui_mode_menu(void) {
