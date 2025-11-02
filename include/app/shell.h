@@ -71,6 +71,7 @@ const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** a
                                            const char** name_out);
 void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t argc, char** argv);
 void shell_service_pending_commands(void);
+void shell_attach_event_bus(event_bus_t* bus);
 
 int vna_shell_read_line(char* line, int max_size);
 void vna_shell_execute_cmd_line(char* line);

@@ -35,6 +35,18 @@ uint16_t lastsaveid = 0;
 
 // properties CRC check cache (max 8 slots)
 static uint8_t checksum_ok = 0;
+static event_bus_t* config_event_bus = NULL;
+
+static void config_on_configuration_changed(const event_bus_message_t* message, void* user_data) {
+  (void)user_data;
+  if (message == NULL) {
+    return;
+  }
+  if (message->topic != EVENT_CONFIGURATION_CHANGED) {
+    return;
+  }
+  (void)config_save();
+}
 
 static uint32_t calibration_slot_area(int id) {
   return SAVE_PROP_CONFIG_ADDR + id * SAVE_PROP_CONFIG_SIZE;
@@ -57,6 +69,9 @@ static int config_save_impl(void) {
 
   // write to flash
   flash_program_half_word_buffer((uint16_t*)SAVE_CONFIG_ADDR, (uint16_t*)&config, sizeof(config_t));
+  if (config_event_bus != NULL) {
+    event_bus_publish(config_event_bus, EVENT_STORAGE_UPDATED, NULL);
+  }
   return 0;
 }
 
@@ -125,6 +140,9 @@ static void clear_all_config_prop_data_impl(void) {
   checksum_ok = 0;
   // unlock and erase flash pages
   flash_erase_pages(SAVE_PROP_CONFIG_ADDR, SAVE_FULL_AREA_SIZE);
+  if (config_event_bus != NULL) {
+    event_bus_publish(config_event_bus, EVENT_STORAGE_UPDATED, NULL);
+  }
 }
 
 static const config_service_api_t api = {
@@ -139,6 +157,22 @@ static bool initialized = false;
 
 void config_service_init(void) {
   initialized = true;
+}
+
+void config_service_attach_event_bus(event_bus_t* bus) {
+  if (config_event_bus == bus) {
+    return;
+  }
+  config_event_bus = bus;
+  if (bus != NULL) {
+    event_bus_subscribe(bus, EVENT_CONFIGURATION_CHANGED, config_on_configuration_changed, NULL);
+  }
+}
+
+void config_service_notify_configuration_changed(void) {
+  if (config_event_bus != NULL) {
+    event_bus_publish(config_event_bus, EVENT_CONFIGURATION_CHANGED, NULL);
+  }
 }
 
 const config_service_api_t* config_service_api(void) {

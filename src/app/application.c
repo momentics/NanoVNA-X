@@ -50,6 +50,10 @@
 static event_bus_t app_event_bus;
 static event_bus_subscription_t app_event_slots[8];
 
+#define APP_EVENT_QUEUE_DEPTH 8U
+static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
+static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
+
 static measurement_pipeline_t measurement_pipeline;
 
 // SD card access was removed; configuration persists using internal flash only.
@@ -148,6 +152,17 @@ void my_debug_log(int offs, char* log) {
 #define DEBUG_LOG(offs, text)
 #endif
 
+static void app_process_event_queue(systime_t timeout) {
+  while (event_bus_dispatch(&app_event_bus, TIME_IMMEDIATE)) {
+  }
+  if (timeout != TIME_IMMEDIATE) {
+    if (event_bus_dispatch(&app_event_bus, timeout)) {
+      while (event_bus_dispatch(&app_event_bus, TIME_IMMEDIATE)) {
+      }
+    }
+  }
+}
+
 static THD_WORKING_AREA(waThread1, 1024);
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
@@ -159,10 +174,13 @@ static THD_FUNCTION(Thread1, arg) {
   /*
    * UI (menu, touch, buttons) and plot initialize
    */
+  ui_attach_event_bus(&app_event_bus);
   ui_init();
   // Initialize graph plotting
   plot_init();
   while (1) {
+    app_process_event_queue(TIME_IMMEDIATE);
+    shell_service_pending_commands();
     bool completed = false;
     uint16_t mask = measurement_pipeline_active_mask(&measurement_pipeline);
     if (sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) {
@@ -174,9 +192,9 @@ static THD_FUNCTION(Thread1, arg) {
       sweep_service_end_measurement();
     } else {
       sweep_service_end_measurement();
-      __WFI();
+      app_process_event_queue(MS2ST(5));
     }
-    shell_service_pending_commands();
+    app_process_event_queue(TIME_IMMEDIATE);
     // Process UI inputs
     sweep_mode |= SWEEP_UI_MODE;
     ui_process();
@@ -189,10 +207,7 @@ static THD_FUNCTION(Thread1, arg) {
       if ((props_mode & DOMAIN_MODE) == DOMAIN_TIME)
         app_measurement_transform_domain(mask);
       //      STOP_PROFILE;
-      // Prepare draw graphics, cache all lines, mark screen cells for redraw
-      request_to_redraw(REDRAW_PLOT);
     }
-    request_to_redraw(REDRAW_BATTERY);
 #ifndef DEBUG_CONSOLE_SHOW
     // plot trace and other indications as raster
     draw_all();
@@ -578,6 +593,7 @@ VNA_SHELL_FUNCTION(cmd_threshold) {
   }
   value = my_atoui(argv[0]);
   config._harmonic_freq_threshold = value;
+  config_service_notify_configuration_changed();
 }
 
 VNA_SHELL_FUNCTION(cmd_saveconfig) {
@@ -757,6 +773,7 @@ usage:
 void set_bandwidth(uint16_t bw_count) {
   config._bandwidth = bw_count & 0x1FF;
   request_to_redraw(REDRAW_BACKUP | REDRAW_FREQUENCY);
+  config_service_notify_configuration_changed();
 }
 
 uint32_t get_bandwidth_frequency(uint16_t bw_freq) {
@@ -2085,6 +2102,7 @@ VNA_SHELL_FUNCTION(cmd_vbat_offset) {
     return;
   }
   config._vbat_offset = (int16_t)my_atoi(argv[0]);
+  config_service_notify_configuration_changed();
 }
 #endif
 
@@ -2515,7 +2533,11 @@ int app_main(void) {
   sweep_service_init();
 
   config_service_init();
-  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots));
+  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
+                 app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage),
+                 app_event_nodes, ARRAY_COUNT(app_event_nodes));
+  config_service_attach_event_bus(&app_event_bus);
+  shell_attach_event_bus(&app_event_bus);
 
   /*
    * restore config and calibration 0 slot from flash memory, also if need use backup data

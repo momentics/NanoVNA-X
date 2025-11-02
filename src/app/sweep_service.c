@@ -59,6 +59,17 @@ static uint8_t sweep_bar_pending = 0;
 static uint8_t smooth_factor = 0;
 static void (*sample_func)(float* gamma) = calculate_gamma;
 
+static binary_semaphore_t capture_done_sem;
+static event_source_t sweep_state_event;
+
+static void sweep_notify_state_change_i(void) {
+  chEvtBroadcastI(&sweep_state_event);
+}
+
+static void sweep_notify_state_change(void) {
+  chEvtBroadcast(&sweep_state_event);
+}
+
 #ifdef __USE_FREQ_TABLE__
 static freq_t frequencies[SWEEP_POINTS_MAX];
 #else
@@ -213,6 +224,10 @@ void i2s_lld_serve_rx_interrupt(uint32_t flags) {
   duplicate_buffer_to_dump(p, AUDIO_BUFFER_LEN);
 #endif
   --wait_count;
+  if (wait_count == 0U) {
+    chBSemSignalI(&capture_done_sem);
+    sweep_notify_state_change_i();
+  }
 }
 
 void sweep_service_init(void) {
@@ -225,6 +240,8 @@ void sweep_service_init(void) {
   sweep_bar_pending = 0;
   smooth_factor = 0;
   sample_func = calculate_gamma;
+  chBSemObjectInit(&capture_done_sem, true);
+  chEvtObjectInit(&sweep_state_event);
 #if ENABLED_DUMP_COMMAND
   dump_buffer = NULL;
   dump_len = 0;
@@ -237,6 +254,8 @@ void sweep_service_reset_progress(void) {
 }
 
 void sweep_service_wait_for_copy_release(void) {
+  event_listener_t listener;
+  chEvtRegisterMask(&sweep_state_event, &listener, EVENT_MASK(0));
   while (true) {
     osalSysLock();
     bool busy = sweep_copy_in_progress;
@@ -244,20 +263,23 @@ void sweep_service_wait_for_copy_release(void) {
     if (!busy) {
       break;
     }
-    chThdYield();
+    chEvtWaitAny(EVENT_MASK(0));
   }
+  chEvtUnregister(&sweep_state_event, &listener);
 }
 
 void sweep_service_begin_measurement(void) {
   osalSysLock();
   sweep_in_progress = true;
   osalSysUnlock();
+  sweep_notify_state_change();
 }
 
 void sweep_service_end_measurement(void) {
   osalSysLock();
   sweep_in_progress = false;
   osalSysUnlock();
+  sweep_notify_state_change();
 }
 
 uint32_t sweep_service_increment_generation(void) {
@@ -284,7 +306,10 @@ bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* s
   if (snapshot == NULL || channel >= 2U) {
     return false;
   }
-  while (true) {
+  event_listener_t listener;
+  chEvtRegisterMask(&sweep_state_event, &listener, EVENT_MASK(1));
+  bool acquired = false;
+  while (!acquired) {
     osalSysLock();
     bool busy = sweep_in_progress || sweep_copy_in_progress;
     if (!busy) {
@@ -292,12 +317,15 @@ bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* s
       snapshot->generation = sweep_generation;
       snapshot->points = sweep_points;
       snapshot->data = measured[channel];
-      osalSysUnlock();
-      return true;
+      acquired = true;
     }
     osalSysUnlock();
-    chThdSleepMilliseconds(1);
+    if (!acquired) {
+      chEvtWaitAny(EVENT_MASK(1));
+    }
   }
+  chEvtUnregister(&sweep_state_event, &listener);
+  return true;
 }
 
 bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
@@ -308,17 +336,18 @@ bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
   }
   sweep_copy_in_progress = false;
   osalSysUnlock();
+  sweep_notify_state_change();
   return stable;
 }
 
 void sweep_service_start_capture(systime_t delay_ticks) {
   ready_time = chVTGetSystemTimeX() + delay_ticks;
   wait_count = config._bandwidth + 2U;
+  chBSemReset(&capture_done_sem, true);
 }
 
 void sweep_service_wait_for_capture(void) {
-  while (wait_count != 0U) {
-    __WFI();
+  while (chBSemWait(&capture_done_sem) != MSG_OK) {
   }
 }
 

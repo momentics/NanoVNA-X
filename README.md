@@ -31,6 +31,13 @@ used in the NanoVNA-X project. The documentation describes the build and flash p
 macOS or a Linux (Debian or Ubuntu) system, other Linux (or even BSD) systems may behave
 similar.
 
+## Acknowledgment and Disclaimer
+
+- Profound thanks to @DiSlord for the original firmware text and the foundations that significantly inspired and enabled the start of this new firmware project.
+- This firmware evolves rapidly and, with each daily change, diverges further from the original implementation.
+- The original codebase was exceptionally feature‑rich; to make ongoing development feasible, the SD subsystem has been temporarily removed to reduce complexity and unblock core refactoring.
+- The SD subsystem will return once the key features are implemented as originally envisioned and the architecture is ready to support it cleanly.
+
 ## Improvements​
 * **Decoupled services and scheduling.** The firmware introduces an event bus with typed topics so UI code, measurement logic, storage handlers, and input adapters can exchange notifications without hard dependencies, while a cooperative scheduler wraps ChibiOS threads to hand deterministic slots to long-running jobs such as sweeping or rendering.
 * **Measurement pipeline facade.** A dedicated pipeline object now bridges platform drivers and the sweep service, exposing the active channel mask and delegating execution so higher layers remain agnostic of hardware-specific quirks.

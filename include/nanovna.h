@@ -21,6 +21,7 @@
  */
 #pragma once
 #include "ch.h"
+#include "services/event_bus.h"
 #include <stdalign.h>
 #include <stdint.h>
 
@@ -1378,6 +1379,7 @@ void clear_all_config_prop_data(void);
 
 void ui_init(void);
 void ui_process(void);
+void ui_attach_event_bus(event_bus_t* bus);
 
 void handle_touch_interrupt(void);
 

@@ -24,6 +24,7 @@
 #include "app/shell.h"
 #include "hal.h"
 #include "services/event_bus.h"
+#include "services/config_service.h"
 #include "chprintf.h"
 #include <string.h>
 #include "si5351.h"
@@ -51,6 +52,42 @@ static uint8_t last_touch_status = EVT_TOUCH_NONE;
 static int16_t last_touch_x;
 static int16_t last_touch_y;
 uint8_t operation_requested = OP_NONE;
+
+static event_bus_t* ui_event_bus = NULL;
+
+static void ui_on_event(const event_bus_message_t* message, void* user_data);
+
+void ui_attach_event_bus(event_bus_t* bus) {
+  if (ui_event_bus == bus) {
+    return;
+  }
+  ui_event_bus = bus;
+  if (bus != NULL) {
+    event_bus_subscribe(bus, EVENT_SWEEP_STARTED, ui_on_event, NULL);
+    event_bus_subscribe(bus, EVENT_SWEEP_COMPLETED, ui_on_event, NULL);
+    event_bus_subscribe(bus, EVENT_STORAGE_UPDATED, ui_on_event, NULL);
+  }
+}
+
+static void ui_on_event(const event_bus_message_t* message, void* user_data) {
+  (void)user_data;
+  if (message == NULL) {
+    return;
+  }
+  switch (message->topic) {
+  case EVENT_SWEEP_STARTED:
+    request_to_redraw(REDRAW_BATTERY);
+    break;
+  case EVENT_SWEEP_COMPLETED:
+    request_to_redraw(REDRAW_PLOT | REDRAW_BATTERY);
+    break;
+  case EVENT_STORAGE_UPDATED:
+    request_to_redraw(REDRAW_CAL_STATUS);
+    break;
+  default:
+    break;
+  }
+}
 
 //==============================================
 static uint16_t menu_button_height = MENU_BUTTON_HEIGHT(MENU_BUTTON_MIN);
@@ -478,6 +515,7 @@ void ui_touch_cal_exec(void) {
 #endif
   get_touch_point(x1, y1, "UPPER LEFT", &config._touch_cal[p1]);
   get_touch_point(x2, y2, "LOWER RIGHT", &config._touch_cal[p2]);
+  config_service_notify_configuration_changed();
 }
 
 static void touch_position(int* x, int* y) {
@@ -980,6 +1018,7 @@ void apply_vna_mode(uint16_t idx, vna_mode_ops operation) {
   if (old == config._vna_mode)
     return;
   request_to_redraw(vna_mode_data[idx].update_flag);
+  config_service_notify_configuration_changed();
   // Custom processing after apply
   switch (idx) {
 #ifdef __USE_SERIAL_CONSOLE__
@@ -1390,6 +1429,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_brightness_acb) {
   }
   config._brightness = (uint8_t)value;
   request_to_redraw(REDRAW_BACKUP | REDRAW_AREA);
+  config_service_notify_configuration_changed();
   ui_mode_normal();
 }
 #endif
@@ -1408,6 +1448,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_band_sel_acb) {
   if (++config._band_mode >= ARRAY_COUNT(gen_names))
     config._band_mode = 0;
   si5351_set_band_mode(config._band_mode);
+  config_service_notify_configuration_changed();
 }
 
 #if STORED_TRACES > 0
@@ -2524,6 +2565,7 @@ UI_KEYBOARD_CALLBACK(input_harmonic) {
     return;
   }
   config._harmonic_freq_threshold = keyboard_get_uint();
+  config_service_notify_configuration_changed();
 }
 
 UI_KEYBOARD_CALLBACK(input_vbat) {
@@ -2533,6 +2575,7 @@ UI_KEYBOARD_CALLBACK(input_vbat) {
     return;
   }
   config._vbat_offset = keyboard_get_uint();
+  config_service_notify_configuration_changed();
 }
 
 #ifdef __S21_MEASURE__
@@ -2543,6 +2586,7 @@ UI_KEYBOARD_CALLBACK(input_measure_r) {
     return;
   }
   config._measure_r = keyboard_get_float();
+  config_service_notify_configuration_changed();
 }
 #endif
 

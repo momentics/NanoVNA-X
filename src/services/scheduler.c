@@ -20,88 +20,113 @@
 
 #include "services/scheduler.h"
 
-typedef struct {
+typedef struct scheduler_slot {
+  thread_t* thread;
   scheduler_entry_t entry;
   void* user_data;
-} scheduler_thread_context_t;
+} scheduler_slot_t;
 
-#if defined(NANOVNA_F303)
-#define SCHEDULER_HAS_STATIC_WA TRUE
-#else
-#define SCHEDULER_HAS_STATIC_WA FALSE
-#endif
+#define SCHEDULER_MAX_TASKS 4U
 
-#if SCHEDULER_HAS_STATIC_WA
-static THD_WORKING_AREA(default_wa, 512);
-static scheduler_thread_context_t default_context;
-#endif
-static thread_t* default_thread = NULL;
+static scheduler_slot_t scheduler_slots[SCHEDULER_MAX_TASKS];
 
-#if SCHEDULER_HAS_STATIC_WA
-static void scheduler_entry_adapter(void* arg) {
-  scheduler_thread_context_t* context = (scheduler_thread_context_t*)arg;
+static THD_FUNCTION(scheduler_entry_adapter, arg) {
+  scheduler_slot_t* slot = (scheduler_slot_t*)arg;
   msg_t exit_code = MSG_OK;
-  if (context != NULL && context->entry != NULL) {
-    exit_code = context->entry(context->user_data);
+  if (slot != NULL && slot->entry != NULL) {
+    exit_code = slot->entry(slot->user_data);
   }
+
+  osalSysLock();
+  slot->thread = NULL;
+  slot->entry = NULL;
+  slot->user_data = NULL;
+  osalSysUnlock();
+
   chThdExit(exit_code);
 }
-#endif
 
-scheduler_task_t scheduler_start(const char* name, tprio_t priority, size_t stack_size,
-                                 scheduler_entry_t entry, void* user_data) {
-  scheduler_task_t task = {.thread = NULL};
-  if (entry == NULL) {
+scheduler_task_t scheduler_start(const char* name, tprio_t priority, void* working_area,
+                                 size_t working_area_size, scheduler_entry_t entry,
+                                 void* user_data) {
+  scheduler_task_t task = {.slot = NULL};
+  if (entry == NULL || working_area == NULL || working_area_size == 0U) {
     return task;
   }
-#if !SCHEDULER_HAS_STATIC_WA
-  (void)name;
-  (void)priority;
-  (void)stack_size;
-  (void)user_data;
-  return task;
-#else
-  if ((stack_size != 0U && stack_size != sizeof(default_wa)) || default_thread != NULL) {
-    return task;
-  }
-  default_context.entry = entry;
-  default_context.user_data = user_data;
 
-  task.thread = chThdCreateStatic(default_wa, sizeof(default_wa), priority, scheduler_entry_adapter,
-                                  &default_context);
-  if (task.thread == NULL) {
+  scheduler_slot_t* slot = NULL;
+  osalSysLock();
+  for (size_t i = 0; i < SCHEDULER_MAX_TASKS; ++i) {
+    if (scheduler_slots[i].thread == NULL) {
+      slot = &scheduler_slots[i];
+      slot->entry = entry;
+      slot->user_data = user_data;
+      break;
+    }
+  }
+  osalSysUnlock();
+
+  if (slot == NULL) {
     return task;
   }
-  default_thread = task.thread;
+
+  thread_t* thread = chThdCreateStatic(working_area, working_area_size, priority,
+                                       scheduler_entry_adapter, slot);
+  if (thread == NULL) {
+    osalSysLock();
+    slot->entry = NULL;
+    slot->user_data = NULL;
+    osalSysUnlock();
+    return task;
+  }
+
+  osalSysLock();
+  slot->thread = thread;
+  osalSysUnlock();
+
 #if CH_CFG_USE_REGISTRY
-  if (task.thread != NULL && name != NULL) {
-    chRegSetThreadNameX(task.thread, name);
+  if (name != NULL) {
+    chRegSetThreadNameX(thread, name);
   }
 #else
   (void)name;
 #endif
+
+  task.slot = slot;
   return task;
-#endif
 }
 
 void scheduler_stop(scheduler_task_t* task) {
-  if (task == NULL || task->thread == NULL) {
+  if (task == NULL || task->slot == NULL) {
     return;
   }
-  chThdTerminate(task->thread);
+
+  scheduler_slot_t* slot = task->slot;
+  thread_t* thread;
+
+  osalSysLock();
+  thread = slot->thread;
+  osalSysUnlock();
+
+  if (thread == NULL) {
+    task->slot = NULL;
+    return;
+  }
+
+  chThdTerminate(thread);
 #if CH_CFG_USE_WAITEXIT == TRUE
-  chThdWait(task->thread);
+  chThdWait(thread);
 #else
-  while (!chThdTerminatedX(task->thread)) {
+  while (!chThdTerminatedX(thread)) {
     chThdSleepMilliseconds(1);
   }
 #endif
-  if (task->thread == default_thread) {
-    default_thread = NULL;
-#if SCHEDULER_HAS_STATIC_WA
-    default_context.entry = NULL;
-    default_context.user_data = NULL;
-#endif
-  }
-  task->thread = NULL;
+
+  osalSysLock();
+  slot->thread = NULL;
+  slot->entry = NULL;
+  slot->user_data = NULL;
+  osalSysUnlock();
+
+  task->slot = NULL;
 }

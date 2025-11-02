@@ -177,7 +177,7 @@ CSRC = $(STARTUPSRC) \
        src/core/main.c \
        src/app/application.c \
        src/app/sweep_service.c \
-       src/app/shell/shell.c \
+       src/app/shell.c \
        src/core/common.c \
        src/drivers/si5351.c \
        src/drivers/tlv320aic3204.c \
