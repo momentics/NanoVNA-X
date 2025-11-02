@@ -45,22 +45,37 @@ static event_bus_t* shell_event_bus = NULL;
 
 static void shell_on_event(const event_bus_message_t* message, void* user_data);
 
+static bool shell_connection_ready(void) {
+#ifdef __USE_SERIAL_CONSOLE__
+  if (VNA_MODE(VNA_MODE_CONNECTION)) {
+    return true;
+  }
+#endif
+  return (SDU1.config->usbp->state == USB_ACTIVE);
+}
+
 static void shell_write(const void* buf, size_t size) {
-  if (shell_stream == NULL) {
+  if (shell_stream == NULL || size == 0U) {
+    return;
+  }
+  if (!shell_connection_ready()) {
     return;
   }
   streamWrite(shell_stream, buf, size);
 }
 
 static int shell_read(void* buf, uint32_t size) {
-  if (shell_stream == NULL) {
+  if (shell_stream == NULL || size == 0U) {
+    return 0;
+  }
+  if (!shell_connection_ready()) {
     return 0;
   }
   return streamRead(shell_stream, buf, size);
 }
 
 int shell_printf(const char* fmt, ...) {
-  if (shell_stream == NULL) {
+  if (shell_stream == NULL || !shell_connection_ready()) {
     return 0;
   }
   va_list ap;

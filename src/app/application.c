@@ -26,7 +26,7 @@
 
 #include "ch.h"
 #include "hal.h"
-#include "hal/ports/STM32/LLD/I2Cv2/hal_i2c_lld.h"
+#include "hal_i2c_lld.h"
 #include "si5351.h"
 #include "nanovna.h"
 #include "app/shell.h"
@@ -74,7 +74,7 @@ static void cmd_dump(int argc, char* argv[]);
 
 // Optional commands are controlled through app_features.h profiles.
 
-uint8_t sweep_mode = SWEEP_ENABLE;
+uint8_t sweep_mode = SWEEP_ENABLE | SWEEP_ONCE;
 // Sweep measured data
 float measured[2][SWEEP_POINTS_MAX][2];
 
@@ -975,6 +975,9 @@ void app_measurement_update_frequencies(void) {
   request_to_redraw(REDRAW_BACKUP | REDRAW_PLOT | REDRAW_CAL_STATUS | REDRAW_FREQUENCY |
                     REDRAW_AREA);
   sweep_service_reset_progress();
+  if ((sweep_mode & SWEEP_ENABLE) == 0U) {
+    sweep_mode |= SWEEP_ONCE;
+  }
 }
 
 static void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforce_order) {
