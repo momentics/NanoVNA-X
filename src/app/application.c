@@ -26,6 +26,7 @@
 
 #include "ch.h"
 #include "hal.h"
+#include "hal/ports/STM32/LLD/I2Cv2/hal_i2c_lld.h"
 #include "si5351.h"
 #include "nanovna.h"
 #include "app/shell.h"
@@ -1939,7 +1940,7 @@ VNA_SHELL_FUNCTION(cmd_i2ctime) {
   uint32_t tim = STM32_TIMINGR_PRESC(0U) | STM32_TIMINGR_SCLDEL(my_atoui(argv[0])) |
                  STM32_TIMINGR_SDADEL(my_atoui(argv[1])) | STM32_TIMINGR_SCLH(my_atoui(argv[2])) |
                  STM32_TIMINGR_SCLL(my_atoui(argv[3]));
-  set_I2C_timings(tim);
+  i2c_set_timings(tim);
 }
 #endif
 
@@ -2015,10 +2016,7 @@ VNA_SHELL_FUNCTION(cmd_lcd) {
 }
 #endif
 
-#if ENABLE_THREADS_COMMAND
-#if CH_CFG_USE_REGISTRY == FALSE
-#error "Threads Requite enabled CH_CFG_USE_REGISTRY in chconf.h"
-#endif
+#if ENABLE_THREADS_COMMAND && (CH_CFG_USE_REGISTRY == TRUE)
 VNA_SHELL_FUNCTION(cmd_threads) {
   static const char* states[] = {CH_STATE_NAMES};
   thread_t* tp;
@@ -2222,7 +2220,7 @@ static const VNAShellCommand commands[] = {
 #if ENABLE_LCD_COMMAND
     {"lcd", cmd_lcd, CMD_WAIT_MUTEX},
 #endif
-#if ENABLE_THREADS_COMMAND
+#if ENABLE_THREADS_COMMAND && (CH_CFG_USE_REGISTRY == TRUE)
     {"threads", cmd_threads, 0},
 #endif
 #if ENABLE_SI5351_TIMINGS
