@@ -43,7 +43,7 @@ Commands are listed alphabetically within thematic groups. Optional commands are
 
 ### 5.1 Sweep configuration and measurement control
 * `bandwidth {count} | bandwidth {frequency_Hz} {measured_bw}` — Set or query the IF bandwidth. With one argument, the raw count (0–511) is applied; with two arguments, the firmware computes the nearest count for the requested Hertz value. Response echoes the active count and effective bandwidth.
-* `config {auto|avg|connection|mode|grid|dot|bk|flip|separator|tif} {0|1}` (`ENABLE_CONFIG_COMMAND`) — Enable or disable UI and acquisition modes. `connection` switches between USB and UART console, `bk` toggles RTC backup usage, etc. Responds with usage text if arguments are invalid.
+* `config {auto|avg|connection|mode|grid|dot|bk|flip|separator} {0|1}` (`ENABLE_CONFIG_COMMAND`) — Enable or disable UI and acquisition modes. `connection` switches between USB and UART console, `bk` toggles RTC backup usage, etc. The exact option list depends on which compile-time features are enabled. Responds with usage text if arguments are invalid.
 * `freq {frequency_Hz}` — Switch to CW mode at the specified frequency. The sweep pauses while the generator retunes.
 * `measure {mode}` (`__VNA_MEASURE_MODULE__`) — Select measurement post-processing (e.g., `lc`, `filter`, `cable`). Usage text is printed for unsupported modes.
 * `offset {frequency_offset_Hz}` (`USE_VARIABLE_OFFSET`) — Apply a global generator offset in Hz.
@@ -56,7 +56,7 @@ Commands are listed alphabetically within thematic groups. Optional commands are
 * `sweep {start_Hz} [stop_Hz] [points]` — Set sweep boundaries and optional point count. Alternatively use `sweep {start|stop|center|span|cw|step|var} {value}` to adjust a single parameter.
 * `tcxo {frequency_Hz}` — Configure the external TCXO frequency.
 * `threshold {frequency_Hz}` — Update the harmonic mode crossover threshold.
-* `transform {on|off|impulse|step|bandpass|mininum|normal|maximum}` (`ENABLE_TRANSFORM_COMMAND`) — Toggle time-domain transform and windowing.
+* `transform {on|off|impulse|step|bandpass|minimum|normal|maximum}` (`ENABLE_TRANSFORM_COMMAND`) — Toggle time-domain transform and windowing.
 
 **Scan mask bits** (combine via addition or bitwise OR):
 
@@ -91,7 +91,7 @@ When the binary bit is set, the reply starts with the 16-bit mask and 16-bit poi
 * `saveconfig` — Persist the current configuration.
 
 ### 5.5 System information and diagnostics
-* `band {idx} {mode} {value}` (`ENABLE_BAND_COMMAND`) — Update Si5351 band-configuration tables.
+* `b {idx} {mode} {value}` (`ENABLE_BAND_COMMAND`) — Update Si5351 band-configuration tables. `{mode}` must be one of `mode|freq|div|mul|omul|pow|opow|l|r|lr|adj`.
 * `dac {0-4095}` (`__VNA_ENABLE_DAC__`) — Program the auxiliary DAC output.
 * `gain {lgain} [rgain]` (`ENABLE_GAIN_COMMAND`) — Adjust TLV320AIC3204 PGA gains.
 * `info` (`ENABLE_INFO_COMMAND`) — Print the null-terminated `info_about[]` strings that describe the firmware build.
