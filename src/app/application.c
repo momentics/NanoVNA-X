@@ -179,17 +179,23 @@ static THD_FUNCTION(Thread1, arg) {
     app_process_event_queue(TIME_IMMEDIATE);
     shell_service_pending_commands();
     bool completed = false;
+    bool measurement_performed = false;
     uint16_t mask = measurement_pipeline_active_mask(&measurement_pipeline);
     if (sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) {
-      sweep_service_wait_for_copy_release();
-      sweep_service_begin_measurement();
-      event_bus_publish(&app_event_bus, EVENT_SWEEP_STARTED, &mask);
-      completed = measurement_pipeline_execute(&measurement_pipeline, true, mask);
-      sweep_mode &= ~SWEEP_ONCE;
-      sweep_service_end_measurement();
+      if (sweep_service_wait_for_copy_release(MS2ST(10))) {
+        sweep_service_begin_measurement();
+        event_bus_publish(&app_event_bus, EVENT_SWEEP_STARTED, &mask);
+        completed = measurement_pipeline_execute(&measurement_pipeline, true, mask);
+        sweep_mode &= ~SWEEP_ONCE;
+        sweep_service_end_measurement();
+        measurement_performed = true;
+      }
     } else {
       sweep_service_end_measurement();
       app_process_event_queue(MS2ST(5));
+    }
+    if (!measurement_performed) {
+      app_process_event_queue(MS2ST(2));
     }
     app_process_event_queue(TIME_IMMEDIATE);
     // Process UI inputs
@@ -358,8 +364,8 @@ static void load_settings(void) {
   } else
     caldata_recall(0); // Try load 0 slot
   app_measurement_update_frequencies();
-  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
   app_publish_sweep_configuration_changed();
+  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
 #ifdef __VNA_MEASURE_MODULE__
   plot_set_measure_mode(current_props._measure);
 #endif
@@ -375,8 +381,8 @@ static void load_settings(void) {
 int load_properties(uint32_t id) {
   int r = caldata_recall(id);
   app_measurement_update_frequencies();
-  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
   app_publish_sweep_configuration_changed();
+  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
 #ifdef __VNA_MEASURE_MODULE__
   plot_set_measure_mode(current_props._measure);
 #endif
@@ -395,8 +401,8 @@ VNA_SHELL_FUNCTION(cmd_resume) {
 
   // restore frequencies array and cal
   app_measurement_update_frequencies();
-  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
   app_publish_sweep_configuration_changed();
+  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
   resume_sweep();
 }
 
@@ -503,8 +509,8 @@ VNA_SHELL_FUNCTION(cmd_freq) {
   uint32_t freq = my_atoui(argv[0]);
   pause_sweep();
   app_measurement_set_frequency(freq);
-  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
   app_publish_sweep_configuration_changed();
+  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
   return;
 }
 
@@ -750,9 +756,9 @@ usage:
 
 void set_bandwidth(uint16_t bw_count) {
   config._bandwidth = bw_count & 0x1FF;
-  request_to_redraw(REDRAW_BACKUP | REDRAW_FREQUENCY | REDRAW_AREA);
   config_service_notify_configuration_changed();
   app_publish_sweep_configuration_changed();
+  request_to_redraw(REDRAW_BACKUP | REDRAW_FREQUENCY | REDRAW_AREA);
 }
 
 uint32_t get_bandwidth_frequency(uint16_t bw_freq) {
@@ -802,9 +808,9 @@ void set_sweep_points(uint16_t points) {
   if (points == sweep_points)
     return;
   sweep_points = points;
-  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
-  app_publish_sweep_configuration_changed();
   app_measurement_update_frequencies();
+  app_publish_sweep_configuration_changed();
+  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
 }
 
 /*
@@ -855,8 +861,8 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   frequency1 = stop;
   sweep_points = points;
   app_measurement_update_frequencies();
-  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
   app_publish_sweep_configuration_changed();
+  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
 
 #if ENABLE_SCANBIN_COMMAND
   if (argc == 4) {
@@ -999,8 +1005,7 @@ void app_measurement_update_frequencies(void) {
   else
     cal_status &= ~CALSTAT_INTERPOLATED;
 
-  request_to_redraw(REDRAW_BACKUP | REDRAW_PLOT | REDRAW_CAL_STATUS | REDRAW_FREQUENCY |
-                    REDRAW_AREA);
+  request_to_redraw(REDRAW_BACKUP | REDRAW_PLOT | REDRAW_CAL_STATUS);
   sweep_service_reset_progress();
   if ((sweep_mode & SWEEP_ENABLE) == 0U) {
     sweep_mode |= SWEEP_ONCE;
@@ -1069,8 +1074,8 @@ static void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforc
     return;
   }
   app_measurement_update_frequencies();
-  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
   app_publish_sweep_configuration_changed();
+  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
 }
 
 void set_sweep_frequency(uint16_t type, freq_t freq) {
@@ -1082,8 +1087,8 @@ void reset_sweep_frequency(void) {
   frequency1 = cal_frequency1;
   sweep_points = cal_sweep_points;
   app_measurement_update_frequencies();
-  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
   app_publish_sweep_configuration_changed();
+  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
 }
 
 VNA_SHELL_FUNCTION(cmd_sweep) {
@@ -2442,7 +2447,7 @@ int app_main(void) {
       } while (shell_check_connect());
 #endif
     }
-    chThdSleepMilliseconds(1000);
+    chThdSleepMilliseconds(50);
   }
 }
 

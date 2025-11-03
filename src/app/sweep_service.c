@@ -253,19 +253,31 @@ void sweep_service_reset_progress(void) {
   sweep_reset_progress();
 }
 
-void sweep_service_wait_for_copy_release(void) {
+bool sweep_service_wait_for_copy_release(systime_t timeout) {
   event_listener_t listener;
   chEvtRegisterMask(&sweep_state_event, &listener, EVENT_MASK(0));
+  bool ready = false;
   while (true) {
     osalSysLock();
     bool busy = sweep_copy_in_progress;
     osalSysUnlock();
     if (!busy) {
+      ready = true;
       break;
     }
-    chEvtWaitAny(EVENT_MASK(0));
+    if (timeout == TIME_IMMEDIATE) {
+      break;
+    }
+    eventmask_t mask = chEvtWaitAnyTimeout(EVENT_MASK(0), timeout);
+    if (mask == 0) {
+      break;
+    }
+    if (timeout != TIME_INFINITE) {
+      timeout = TIME_IMMEDIATE;
+    }
   }
   chEvtUnregister(&sweep_state_event, &listener);
+  return ready;
 }
 
 void sweep_service_begin_measurement(void) {

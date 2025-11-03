@@ -50,7 +50,7 @@ typedef struct {
 } sweep_service_snapshot_t;
 
 void sweep_service_init(void);
-void sweep_service_wait_for_copy_release(void);
+bool sweep_service_wait_for_copy_release(systime_t timeout);
 void sweep_service_begin_measurement(void);
 void sweep_service_end_measurement(void);
 uint32_t sweep_service_increment_generation(void);
