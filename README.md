@@ -91,6 +91,32 @@ Complementary headers live in `include/`, while board support files, linker scri
 startup code reside in `boards/`. This structure lets the same measurement and UI engines run
 across both memory profiles with only targeted platform overrides.
 
+## Measurement-first runtime
+
+The refactored runtime keeps the sweep engine running continuously, independent of the
+USB console. The sweep thread now prioritises the DMA capture loop and measurement
+pipeline, while the LCD renderer and USB console consume the most recent generation in a
+best-effort fashion:
+
+* The TLV320 codec and I²S DMA are brought up before the USB stack, and the capture
+  semaphore is guarded with a timeout that automatically restarts the codec if the DMA
+  stalls. The sweep service keeps `measured[2][SWEEP_POINTS_MAX]` as the canonical buffer for
+  all consumers.
+* Each completed sweep increments a generation counter, notifies the UI through the
+  event bus, and opportunistically streams the exact on-screen dataset over USB. The
+  binary stream mirrors the `scan_bin` layout: `uint16_t mask`, `uint16_t points`,
+  `uint32_t generation`, followed by per-point frequency (when `mask & 1`) and complex
+  float pairs for the enabled channels. Frames are dropped instead of throttling the
+  sweep when the host back-pressures.
+* The UI thread polls inputs without inserting USB-paced sleeps; rendering time and sweep
+  duration are tracked along with USB drops and codec restarts. When the USB shell is
+  attached the firmware prints a `perf ...` line once per second and the same counters are
+  available through the `info` command.
+
+Host tools that already parse `scanbin` can subscribe to the opportunistic stream and
+receive the same data rendered on the LCD, while fully detached operation maintains the
+maximum sweep throughput.
+
 ## Event bus and scheduler
 
 The event bus (`services/event_bus.[ch]`) is a small publish/subscribe helper that avoids

@@ -24,6 +24,8 @@
 
 #include "hal.h"
 #include "si5351.h"
+#include "nanovna.h"
+#include "platform/boards/stm32_peripherals.h"
 
 #include <math.h>
 #include <string.h>
@@ -61,6 +63,7 @@ static void (*sample_func)(float* gamma) = calculate_gamma;
 
 static binary_semaphore_t capture_done_sem;
 static event_source_t sweep_state_event;
+static uint32_t capture_restart_counter = 0;
 
 static void sweep_notify_state_change_i(void) {
   chEvtBroadcastI(&sweep_state_event);
@@ -358,13 +361,34 @@ void sweep_service_start_capture(systime_t delay_ticks) {
   chBSemReset(&capture_done_sem, true);
 }
 
+static void sweep_restart_capture_hardware(void) {
+  // MEAS-FIRST: ensure the capture loop can self-heal if DMA stalls.
+  tlv320aic3204_init();
+  chThdSleepMilliseconds(10);
+  init_i2s((void*)rx_buffer,
+           (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
+  capture_restart_counter++;
+}
+
 void sweep_service_wait_for_capture(void) {
-  while (chBSemWait(&capture_done_sem) != MSG_OK) {
+  const systime_t timeout = MS2ST(20);
+  while (true) {
+    msg_t result = chBSemWaitTimeout(&capture_done_sem, timeout);
+    if (result == MSG_OK) {
+      return;
+    }
+    if (result == MSG_TIMEOUT) {
+      sweep_restart_capture_hardware();
+    }
   }
 }
 
 const audio_sample_t* sweep_service_rx_buffer(void) {
   return rx_buffer;
+}
+
+uint32_t sweep_service_capture_restart_count(void) {
+  return capture_restart_counter;
 }
 
 #if ENABLED_DUMP_COMMAND

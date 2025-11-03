@@ -86,6 +86,21 @@ uint8_t sweep_mode = SWEEP_ENABLE | SWEEP_ONCE;
 // Sweep measured data
 float measured[2][SWEEP_POINTS_MAX][2];
 
+// MEAS-FIRST: runtime metrics for measurement-first scheduling.
+typedef struct {
+  systime_t sweep_ticks;
+  systime_t ui_draw_ticks;
+  uint32_t usb_frames_sent;
+  uint32_t usb_frames_dropped;
+  uint32_t capture_restarts;
+  uint32_t last_generation;
+} runtime_metrics_t;
+
+static runtime_metrics_t runtime_metrics;
+static systime_t runtime_metrics_last_log = 0;
+
+static bool app_stream_generation(uint32_t generation, uint16_t sweep_mask);
+
 // Version text, displayed in Config->Version menu, also send by info command
 const char* info_about[] = {
     "Board: " BOARD_NAME, "NanoVNA-X maintainer: @momentics <momentics@gmail.com>",
@@ -176,46 +191,68 @@ static THD_FUNCTION(Thread1, arg) {
         boot_sweep_pending = false;
       }
     }
+
     app_process_event_queue(TIME_IMMEDIATE);
-    shell_service_pending_commands();
-    bool completed = false;
-    bool measurement_performed = false;
+
+    const bool sweep_enabled = (sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) != 0U;
     uint16_t mask = measurement_pipeline_active_mask(&measurement_pipeline);
-    if (sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) {
-      if (sweep_service_wait_for_copy_release(MS2ST(10))) {
-        sweep_service_begin_measurement();
-        event_bus_publish(&app_event_bus, EVENT_SWEEP_STARTED, &mask);
-        completed = measurement_pipeline_execute(&measurement_pipeline, true, mask);
-        sweep_mode &= ~SWEEP_ONCE;
-        sweep_service_end_measurement();
-        measurement_performed = true;
+    bool completed = false;
+    uint32_t generation = 0U;
+
+    if (sweep_enabled && sweep_service_wait_for_copy_release(TIME_IMMEDIATE)) {
+      sweep_service_begin_measurement();
+      event_bus_publish(&app_event_bus, EVENT_SWEEP_STARTED, &mask);
+      const systime_t sweep_start = chVTGetSystemTimeX();
+      completed = measurement_pipeline_execute(&measurement_pipeline, true, mask);
+      runtime_metrics.sweep_ticks = chVTTimeElapsedSinceX(sweep_start);
+      sweep_mode &= (uint8_t)~SWEEP_ONCE;
+      sweep_service_end_measurement();
+      if (completed) {
+        generation = sweep_service_increment_generation();
+        runtime_metrics.last_generation = generation;
+        event_bus_publish(&app_event_bus, EVENT_SWEEP_COMPLETED, &mask);
+        if ((props_mode & DOMAIN_MODE) == DOMAIN_TIME) {
+          app_measurement_transform_domain(mask);
+        }
+        app_process_event_queue(TIME_IMMEDIATE);
+        app_stream_generation(generation, mask);
       }
     } else {
       sweep_service_end_measurement();
-      app_process_event_queue(MS2ST(5));
     }
-    if (!measurement_performed) {
-      app_process_event_queue(MS2ST(2));
-    }
-    app_process_event_queue(TIME_IMMEDIATE);
-    // Process UI inputs
+
+    // MEAS-FIRST: keep UI responsive without throttling the sweep.
     sweep_mode |= SWEEP_UI_MODE;
     operation_requested |= (OP_LEVER | OP_TOUCH);
     ui_process();
-    sweep_mode &= ~SWEEP_UI_MODE;
-    // Process collected data, calculate trace coordinates and plot only if scan completed
-    if (completed) {
-      sweep_service_increment_generation();
-      event_bus_publish(&app_event_bus, EVENT_SWEEP_COMPLETED, &mask);
-      //      START_PROFILE
-      if ((props_mode & DOMAIN_MODE) == DOMAIN_TIME)
-        app_measurement_transform_domain(mask);
-      //      STOP_PROFILE;
-    }
+    sweep_mode &= (uint8_t)~SWEEP_UI_MODE;
+
 #ifndef DEBUG_CONSOLE_SHOW
-    // plot trace and other indications as raster
+    const systime_t ui_start = chVTGetSystemTimeX();
     draw_all();
+    runtime_metrics.ui_draw_ticks = chVTTimeElapsedSinceX(ui_start);
 #endif
+
+    runtime_metrics.capture_restarts = sweep_service_capture_restart_count();
+
+    if (shell_check_connect()) {
+      if ((runtime_metrics_last_log == 0) ||
+          chVTTimeElapsedSinceX(runtime_metrics_last_log) >= MS2ST(1000)) {
+        runtime_metrics_last_log = chVTGetSystemTimeX();
+        shell_printf("perf sweep=%lums ui=%lums usb=%lu/%lu caprst=%lu gen=%lu" VNA_SHELL_NEWLINE_STR,
+                     (unsigned long)TIME_I2MS(runtime_metrics.sweep_ticks),
+                     (unsigned long)TIME_I2MS(runtime_metrics.ui_draw_ticks),
+                     (unsigned long)runtime_metrics.usb_frames_sent,
+                     (unsigned long)runtime_metrics.usb_frames_dropped,
+                     (unsigned long)runtime_metrics.capture_restarts,
+                     (unsigned long)runtime_metrics.last_generation);
+      }
+    } else {
+      runtime_metrics_last_log = 0;
+    }
+
+    shell_service_pending_commands();
+    chThdYield();
   }
 }
 
@@ -827,6 +864,62 @@ static bool need_interpolate(freq_t start, freq_t stop, uint16_t points) {
 #define SCAN_MASK_NO_EDELAY 0b00010000
 #define SCAN_MASK_NO_S21OFFS 0b00100000
 #define SCAN_MASK_BINARY 0b10000000
+
+static bool app_stream_generation(uint32_t generation, uint16_t sweep_mask) {
+  if (!shell_check_connect()) {
+    return false;
+  }
+
+  uint16_t points;
+  osalSysLock();
+  points = sweep_points;
+  osalSysUnlock();
+
+  uint16_t output_mask = SCAN_MASK_BINARY | SCAN_MASK_OUT_FREQ;
+  if (sweep_mask & SWEEP_CH0_MEASURE) {
+    output_mask |= SCAN_MASK_OUT_DATA0;
+  }
+  if (sweep_mask & SWEEP_CH1_MEASURE) {
+    output_mask |= SCAN_MASK_OUT_DATA1;
+  }
+
+  // MEAS-FIRST: drop frames on back-pressure instead of stalling the sweep.
+  if (shell_stream_try_write(&output_mask, sizeof(output_mask)) != sizeof(output_mask)) {
+    runtime_metrics.usb_frames_dropped++;
+    return false;
+  }
+  if (shell_stream_try_write(&points, sizeof(points)) != sizeof(points)) {
+    runtime_metrics.usb_frames_dropped++;
+    return false;
+  }
+  if (shell_stream_try_write(&generation, sizeof(generation)) != sizeof(generation)) {
+    runtime_metrics.usb_frames_dropped++;
+    return false;
+  }
+
+  for (uint16_t i = 0; i < points; i++) {
+    freq_t f = get_frequency(i);
+    if (shell_stream_try_write(&f, sizeof(f)) != sizeof(f)) {
+      runtime_metrics.usb_frames_dropped++;
+      return false;
+    }
+    if (output_mask & SCAN_MASK_OUT_DATA0) {
+      if (shell_stream_try_write(&measured[0][i][0], sizeof(float) * 2U) != sizeof(float) * 2U) {
+        runtime_metrics.usb_frames_dropped++;
+        return false;
+      }
+    }
+    if (output_mask & SCAN_MASK_OUT_DATA1) {
+      if (shell_stream_try_write(&measured[1][i][0], sizeof(float) * 2U) != sizeof(float) * 2U) {
+        runtime_metrics.usb_frames_dropped++;
+        return false;
+      }
+    }
+  }
+
+  runtime_metrics.usb_frames_sent++;
+  return true;
+}
 
 VNA_SHELL_FUNCTION(cmd_scan) {
   freq_t start, stop;
@@ -1991,6 +2084,13 @@ VNA_SHELL_FUNCTION(cmd_info) {
   int i = 0;
   while (info_about[i])
     shell_printf("%s" VNA_SHELL_NEWLINE_STR, info_about[i++]);
+  shell_printf("perf sweep=%lums ui=%lums usb=%lu/%lu caprst=%lu gen=%lu" VNA_SHELL_NEWLINE_STR,
+               (unsigned long)TIME_I2MS(runtime_metrics.sweep_ticks),
+               (unsigned long)TIME_I2MS(runtime_metrics.ui_draw_ticks),
+               (unsigned long)runtime_metrics.usb_frames_sent,
+               (unsigned long)runtime_metrics.usb_frames_dropped,
+               (unsigned long)runtime_metrics.capture_restarts,
+               (unsigned long)runtime_metrics.last_generation);
 }
 #endif
 
@@ -2393,21 +2493,18 @@ int app_main(void) {
   si5351_set_frequency_offset(IF_OFFSET);
 #endif
   /*
+   * tlv320aic Initialize (audio codec)
+   */
+  tlv320aic3204_init();
+  chThdSleepMilliseconds(200); // MEAS-FIRST: wait for codec PLL to settle before USB bring-up.
+  init_i2s((void*)sweep_service_rx_buffer(),
+           (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
+
+  /*
    * Init Shell console connection data
    */
   shell_register_commands(commands);
   shell_init_connection();
-
-  /*
-   * tlv320aic Initialize (audio codec)
-   */
-  tlv320aic3204_init();
-  chThdSleepMilliseconds(200); // Wait for aic codec start
-                               /*
-                                * I2S Initialize
-                                */
-  init_i2s((void*)sweep_service_rx_buffer(),
-           (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
 
 /*
  * SD Card init (if inserted) allow fix issues

@@ -30,6 +30,7 @@
 
 #include <chprintf.h>
 #include <stdarg.h>
+#include <stdio.h>
 
 static const VNAShellCommand* command_table = NULL;
 
@@ -46,43 +47,57 @@ static event_bus_t* shell_event_bus = NULL;
 static void shell_on_event(const event_bus_message_t* message, void* user_data);
 
 static bool shell_connection_ready(void) {
-#ifdef __USE_SERIAL_CONSOLE__
-  if (VNA_MODE(VNA_MODE_CONNECTION)) {
-    return true;
-  }
-#endif
-  return (SDU1.config->usbp->state == USB_ACTIVE);
+  return shell_check_connect();
 }
 
-static void shell_write(const void* buf, size_t size) {
-  if (shell_stream == NULL || size == 0U) {
-    return;
+// MEAS-FIRST: Non-blocking writes drop data if the transport back-pressures.
+static size_t shell_write(const void* buf, size_t size) {
+  if (shell_stream == NULL || buf == NULL || size == 0U) {
+    return 0U;
   }
   if (!shell_connection_ready()) {
-    return;
+    return 0U;
   }
-  streamWrite(shell_stream, buf, size);
+  size_t written = 0U;
+  const uint8_t* data = (const uint8_t*)buf;
+  while (written < size) {
+    size_t chunk =
+        chnWriteTimeout((BaseChannel*)shell_stream, data + written, size - written, TIME_IMMEDIATE);
+    if (chunk == 0U) {
+      break;
+    }
+    written += chunk;
+  }
+  return written;
 }
 
-static int shell_read(void* buf, uint32_t size) {
-  if (shell_stream == NULL || size == 0U) {
-    return 0;
+static size_t shell_read(void* buf, size_t size) {
+  if (shell_stream == NULL || buf == NULL || size == 0U) {
+    return 0U;
   }
   if (!shell_connection_ready()) {
-    return 0;
+    return 0U;
   }
-  return streamRead(shell_stream, buf, size);
+  return chnReadTimeout((BaseChannel*)shell_stream, buf, size, TIME_IMMEDIATE);
 }
 
 int shell_printf(const char* fmt, ...) {
   if (shell_stream == NULL || !shell_connection_ready()) {
     return 0;
   }
+  char buffer[VNA_SHELL_MAX_LENGTH * 2];
   va_list ap;
   va_start(ap, fmt);
-  const int written = chvprintf(shell_stream, fmt, ap);
+  int len = vsnprintf(buffer, sizeof(buffer), fmt, ap);
   va_end(ap);
-  return written;
+  if (len <= 0) {
+    return len;
+  }
+  if ((size_t)len >= sizeof(buffer)) {
+    len = (int)(sizeof(buffer) - 1U);
+  }
+  size_t written = shell_write(buffer, (size_t)len);
+  return (int)written;
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
@@ -96,7 +111,11 @@ int serial_shell_printf(const char* fmt, ...) {
 #endif
 
 void shell_stream_write(const void* buffer, size_t size) {
-  shell_write(buffer, size);
+  (void)shell_write(buffer, size);
+}
+
+size_t shell_stream_try_write(const void* buffer, size_t size) {
+  return shell_write(buffer, size);
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
@@ -143,17 +162,18 @@ void shell_reset_console(void) {
 }
 
 bool shell_check_connect(void) {
-#ifdef __USE_SERIAL_CONSOLE__
-  if (VNA_MODE(VNA_MODE_CONNECTION)) {
-    return true;
-  }
   osalSysLock();
-  const bool active = usb_is_active_locked();
+  bool active = false;
+  if (shell_stream == (BaseSequentialStream*)&SDU1) {
+    active = usb_is_active_locked();
+  }
+#ifdef __USE_SERIAL_CONSOLE__
+  else if (shell_stream == (BaseSequentialStream*)&SD1) {
+    active = true;
+  }
+#endif
   osalSysUnlock();
   return active;
-#else
-  return SDU1.config->usbp->state == USB_ACTIVE;
-#endif
 }
 
 void shell_init_connection(void) {

@@ -60,6 +60,7 @@ int serial_shell_printf(const char* fmt, ...);
 #endif
 
 void shell_stream_write(const void* buffer, size_t size);
+size_t shell_stream_try_write(const void* buffer, size_t size);
 
 void shell_update_speed(uint32_t speed);
 void shell_reset_console(void);
