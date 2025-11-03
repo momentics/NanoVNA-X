@@ -57,6 +57,10 @@ static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
 
 static measurement_pipeline_t measurement_pipeline;
 
+static void sweep_init(void) {
+  sweep_service_reset_progress();
+}
+
 static inline void app_publish_sweep_configuration_changed(void) {
   event_bus_publish(&app_event_bus, EVENT_SWEEP_CONFIGURATION_CHANGED, NULL);
 }
@@ -354,6 +358,8 @@ static void load_settings(void) {
   } else
     caldata_recall(0); // Try load 0 slot
   app_measurement_update_frequencies();
+  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
+  app_publish_sweep_configuration_changed();
 #ifdef __VNA_MEASURE_MODULE__
   plot_set_measure_mode(current_props._measure);
 #endif
@@ -369,6 +375,8 @@ static void load_settings(void) {
 int load_properties(uint32_t id) {
   int r = caldata_recall(id);
   app_measurement_update_frequencies();
+  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
+  app_publish_sweep_configuration_changed();
 #ifdef __VNA_MEASURE_MODULE__
   plot_set_measure_mode(current_props._measure);
 #endif
@@ -387,6 +395,8 @@ VNA_SHELL_FUNCTION(cmd_resume) {
 
   // restore frequencies array and cal
   app_measurement_update_frequencies();
+  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
+  app_publish_sweep_configuration_changed();
   resume_sweep();
 }
 
@@ -493,6 +503,8 @@ VNA_SHELL_FUNCTION(cmd_freq) {
   uint32_t freq = my_atoui(argv[0]);
   pause_sweep();
   app_measurement_set_frequency(freq);
+  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
+  app_publish_sweep_configuration_changed();
   return;
 }
 
@@ -738,7 +750,7 @@ usage:
 
 void set_bandwidth(uint16_t bw_count) {
   config._bandwidth = bw_count & 0x1FF;
-  request_to_redraw(REDRAW_BACKUP | REDRAW_FREQUENCY);
+  request_to_redraw(REDRAW_BACKUP | REDRAW_FREQUENCY | REDRAW_AREA);
   config_service_notify_configuration_changed();
   app_publish_sweep_configuration_changed();
 }
@@ -790,6 +802,8 @@ void set_sweep_points(uint16_t points) {
   if (points == sweep_points)
     return;
   sweep_points = points;
+  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
+  app_publish_sweep_configuration_changed();
   app_measurement_update_frequencies();
 }
 
@@ -841,6 +855,8 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   frequency1 = stop;
   sweep_points = points;
   app_measurement_update_frequencies();
+  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
+  app_publish_sweep_configuration_changed();
 
 #if ENABLE_SCANBIN_COMMAND
   if (argc == 4) {
@@ -989,7 +1005,6 @@ void app_measurement_update_frequencies(void) {
   if ((sweep_mode & SWEEP_ENABLE) == 0U) {
     sweep_mode |= SWEEP_ONCE;
   }
-  app_publish_sweep_configuration_changed();
 }
 
 static void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforce_order) {
@@ -1054,6 +1069,8 @@ static void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforc
     return;
   }
   app_measurement_update_frequencies();
+  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
+  app_publish_sweep_configuration_changed();
 }
 
 void set_sweep_frequency(uint16_t type, freq_t freq) {
@@ -1065,6 +1082,8 @@ void reset_sweep_frequency(void) {
   frequency1 = cal_frequency1;
   sweep_points = cal_sweep_points;
   app_measurement_update_frequencies();
+  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
+  app_publish_sweep_configuration_changed();
 }
 
 VNA_SHELL_FUNCTION(cmd_sweep) {
@@ -2358,12 +2377,12 @@ int app_main(void) {
   /*
    * Kick the sweep engine so that a first acquisition is guaranteed even when
    * the USB console is not attached.  The boot configuration may pause the
-   * generator, therefore we explicitly reset the sweep progress and request a
-   * single run.
+   * generator, therefore we explicitly reset the sweep progress and enable the
+   * continuous sweep loop.
    */
-  sweep_service_reset_progress();
+  sweep_init();
   resume_sweep();
-  sweep_mode |= SWEEP_ONCE;
+  sweep_mode |= SWEEP_ENABLE;
 
 #ifdef USE_VARIABLE_OFFSET
   si5351_set_frequency_offset(IF_OFFSET);

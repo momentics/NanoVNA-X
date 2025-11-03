@@ -66,6 +66,7 @@ void ui_attach_event_bus(event_bus_t* bus) {
     event_bus_subscribe(bus, EVENT_SWEEP_STARTED, ui_on_event, NULL);
     event_bus_subscribe(bus, EVENT_SWEEP_COMPLETED, ui_on_event, NULL);
     event_bus_subscribe(bus, EVENT_STORAGE_UPDATED, ui_on_event, NULL);
+    event_bus_subscribe(bus, EVENT_CONFIGURATION_CHANGED, ui_on_event, NULL);
     event_bus_subscribe(bus, EVENT_SWEEP_CONFIGURATION_CHANGED, ui_on_event, NULL);
   }
 }
@@ -82,8 +83,11 @@ static void ui_on_event(const event_bus_message_t* message, void* user_data) {
   case EVENT_SWEEP_COMPLETED:
     request_to_redraw(REDRAW_PLOT | REDRAW_BATTERY | REDRAW_MARKER);
     break;
+  case EVENT_CONFIGURATION_CHANGED:
+    request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
+    break;
   case EVENT_SWEEP_CONFIGURATION_CHANGED:
-    request_to_redraw(REDRAW_FREQUENCY | REDRAW_MARKER);
+    request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA | REDRAW_MARKER);
     break;
   case EVENT_STORAGE_UPDATED:
     request_to_redraw(REDRAW_CAL_STATUS);
