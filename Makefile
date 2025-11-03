@@ -191,6 +191,7 @@ CSRC = $(STARTUPSRC) \
        src/services/scheduler.c \
        src/measurement/pipeline.c \
        src/platform/platform_hal.c \
+       src/platform/syscalls.c \
        src/platform/boards/board_registry.c \
        src/platform/boards/nanovna_board.c \
        src/platform/boards/stm32_peripherals.c \
