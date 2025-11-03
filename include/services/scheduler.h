@@ -26,14 +26,11 @@
 
 typedef msg_t (*scheduler_entry_t)(void* user_data);
 
-struct scheduler_slot;
-
 typedef struct {
-  struct scheduler_slot* slot;
+  thread_t* thread;
 } scheduler_task_t;
 
-scheduler_task_t scheduler_start(const char* name, tprio_t priority, void* working_area,
-                                 size_t working_area_size, scheduler_entry_t entry,
-                                 void* user_data);
+scheduler_task_t scheduler_start(const char* name, tprio_t priority, size_t stack_size,
+                                 scheduler_entry_t entry, void* user_data);
 
 void scheduler_stop(scheduler_task_t* task);

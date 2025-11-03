@@ -24,11 +24,8 @@
 
 #include "hal.h"
 #include "si5351.h"
-#include "nanovna.h"
-#include "platform/boards/stm32_peripherals.h"
 
 #include <math.h>
-#include <stdint.h>
 #include <string.h>
 
 #ifdef __VNA_Z_RENORMALIZATION__
@@ -40,10 +37,9 @@
  */
 static systime_t ready_time = 0;
 static volatile uint16_t wait_count = 0;
-static systime_t capture_timeout_ticks = MS2ST(20);
-static systime_t capture_delay_ticks = TIME_IMMEDIATE;
-static uint16_t capture_bandwidth_setting = 0;
 static audio_sample_t rx_buffer[AUDIO_BUFFER_LEN * 2];
+static binary_semaphore_t capture_sem;
+static binary_semaphore_t snapshot_sem;
 
 #if ENABLED_DUMP_COMMAND
 static audio_sample_t* dump_buffer = NULL;
@@ -64,18 +60,6 @@ static uint8_t sweep_bar_pending = 0;
 
 static uint8_t smooth_factor = 0;
 static void (*sample_func)(float* gamma) = calculate_gamma;
-
-static binary_semaphore_t capture_done_sem;
-static event_source_t sweep_state_event;
-static uint32_t capture_restart_counter = 0;
-
-static void sweep_notify_state_change_i(void) {
-  chEvtBroadcastI(&sweep_state_event);
-}
-
-static void sweep_notify_state_change(void) {
-  chEvtBroadcast(&sweep_state_event);
-}
 
 #ifdef __USE_FREQ_TABLE__
 static freq_t frequencies[SWEEP_POINTS_MAX];
@@ -232,8 +216,9 @@ void i2s_lld_serve_rx_interrupt(uint32_t flags) {
 #endif
   --wait_count;
   if (wait_count == 0U) {
-    chBSemSignalI(&capture_done_sem);
-    sweep_notify_state_change_i();
+    chSysLockFromISR();
+    chBSemSignalI(&capture_sem);
+    chSysUnlockFromISR();
   }
 }
 
@@ -247,64 +232,91 @@ void sweep_service_init(void) {
   sweep_bar_pending = 0;
   smooth_factor = 0;
   sample_func = calculate_gamma;
-  chBSemObjectInit(&capture_done_sem, true);
-  chEvtObjectInit(&sweep_state_event);
 #if ENABLED_DUMP_COMMAND
   dump_buffer = NULL;
   dump_len = 0;
   dump_selection = 0;
 #endif
+  chBSemObjectInit(&capture_sem, true);
+  /*
+   * The snapshot semaphore gates both the sweep loop and any asynchronous
+   * snapshot consumers.  The sweep thread waits on it before launching the
+   * first measurement pass so that outstanding snapshot copies can finish
+   * safely.  In the freshly booted firmware there are no in-flight copies,
+   * therefore the semaphore must start in the signaled state; otherwise the
+   * first wait call blocks forever and the UI never comes up.  Earlier
+   * releases initialised it by signalling immediately after creation.  When
+   * the DMA/event-bus refactor landed in v0.9.23 the initial signal was
+   * dropped, leaving the semaphore empty and the firmware stuck in
+   * sweep_service_wait_for_copy_release().
+   *
+   * The @p taken argument of chBSemObjectInit() follows ChibiOS semantics:
+   * passing @p false leaves the semaphore signaled (count = 1) while @p true
+   * starts it in the taken state.  Initialise it with @p false so the first
+   * wait succeeds.
+   */
+  chBSemObjectInit(&snapshot_sem, false);
 }
 
 void sweep_service_reset_progress(void) {
   sweep_reset_progress();
 }
 
-bool sweep_service_wait_for_copy_release(systime_t timeout) {
-  event_listener_t listener;
-  chEvtRegisterMask(&sweep_state_event, &listener, EVENT_MASK(0));
-  bool ready = false;
-  while (true) {
-    osalSysLock();
-    bool busy = sweep_copy_in_progress;
-    osalSysUnlock();
-    if (!busy) {
-      ready = true;
-      break;
-    }
-    if (timeout == TIME_IMMEDIATE) {
-      break;
-    }
-    eventmask_t mask = chEvtWaitAnyTimeout(EVENT_MASK(0), timeout);
-    if (mask == 0) {
-      break;
-    }
-    if (timeout != TIME_INFINITE) {
-      timeout = TIME_IMMEDIATE;
-    }
+void sweep_service_wait_for_copy_release(void) {
+  bool continuing_partial_sweep = false;
+  osalSysLock();
+  uint16_t total_points = sweep_points;
+  continuing_partial_sweep = (p_sweep != 0U && p_sweep < total_points);
+  osalSysUnlock();
+  if (continuing_partial_sweep) {
+    /*
+     * The sweep is resuming from a previous chunk, so no snapshot copy can be
+     * in flight yet.  Skip the semaphore wait to avoid deadlocking on the
+     * taken state left by sweep_service_begin_measurement().
+     */
+    return;
   }
-  chEvtUnregister(&sweep_state_event, &listener);
-  return ready;
+  while (true) {
+    msg_t msg = chBSemWait(&snapshot_sem);
+    if (msg == MSG_RESET) {
+      continue;
+    }
+    chBSemSignal(&snapshot_sem);
+    break;
+  }
 }
 
 void sweep_service_begin_measurement(void) {
   osalSysLock();
+  uint16_t total_points = sweep_points;
+  if (p_sweep == 0U || p_sweep >= total_points) {
+    /*
+     * Only take the snapshot semaphore when a brand new sweep is starting.
+     * Partial sweeps resume with the semaphore already taken; resetting it
+     * again would strand the UI loop in sweep_service_wait_for_copy_release().
+     */
+    chBSemResetI(&snapshot_sem, true);
+  }
   sweep_in_progress = true;
   osalSysUnlock();
-  sweep_notify_state_change();
 }
 
 void sweep_service_end_measurement(void) {
   osalSysLock();
   sweep_in_progress = false;
   osalSysUnlock();
-  sweep_notify_state_change();
 }
 
 uint32_t sweep_service_increment_generation(void) {
   osalSysLock();
   uint32_t generation = ++sweep_generation;
   osalSysUnlock();
+  /*
+   * Wake any snapshot waiters now that a fresh sweep is ready.  The previous
+   * refactor accidentally returned before signalling, so USB clients waiting
+   * for sweep data never resumed even though the pipeline advanced.
+   */
+  chBSemSignal(&snapshot_sem);
   return generation;
 }
 
@@ -325,13 +337,17 @@ bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* s
   if (snapshot == NULL || channel >= 2U) {
     return false;
   }
-  event_listener_t listener;
-  chEvtRegisterMask(&sweep_state_event, &listener, EVENT_MASK(1));
-  bool acquired = false;
-  while (!acquired) {
+  while (true) {
+    msg_t msg = chBSemWait(&snapshot_sem);
+    if (msg == MSG_RESET) {
+      continue;
+    }
+    if (msg != MSG_OK) {
+      return false;
+    }
+    bool acquired = false;
     osalSysLock();
-    bool busy = sweep_in_progress || sweep_copy_in_progress;
-    if (!busy) {
+   if (!sweep_in_progress && !sweep_copy_in_progress) {
       sweep_copy_in_progress = true;
       snapshot->generation = sweep_generation;
       snapshot->points = sweep_points;
@@ -339,12 +355,11 @@ bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* s
       acquired = true;
     }
     osalSysUnlock();
-    if (!acquired) {
-      chEvtWaitAny(EVENT_MASK(1));
+    if (acquired) {
+      return true;
     }
+    chBSemSignal(&snapshot_sem);
   }
-  chEvtUnregister(&sweep_state_event, &listener);
-  return true;
 }
 
 bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
@@ -355,98 +370,25 @@ bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
   }
   sweep_copy_in_progress = false;
   osalSysUnlock();
-  sweep_notify_state_change();
+  chBSemSignal(&snapshot_sem);
   return stable;
 }
 
-static systime_t sweep_capture_timeout_budget(uint16_t bandwidth_setting,
-                                              systime_t delay_ticks) {
-  uint32_t capture_cycles = (uint32_t)bandwidth_setting + 2U;
-  if (capture_cycles < 2U) {
-    capture_cycles = 2U;
-  }
-  uint64_t capture_us =
-      ((uint64_t)capture_cycles * (uint64_t)AUDIO_BUFFER_LEN * 1000000ULL) / AUDIO_ADC_FREQ;
-  if (capture_us < 1000ULL) {
-    capture_us = 1000ULL;
-  }
-  systime_t timeout = US2ST((uint32_t)capture_us);
-  const systime_t margin = MS2ST(5);
-  if (timeout < margin) {
-    timeout = margin;
-  }
-  if (timeout > (systime_t)(TIME_INFINITE - delay_ticks)) {
-    timeout = TIME_INFINITE;
-  } else {
-    timeout += delay_ticks;
-  }
-  if (timeout > (systime_t)(TIME_INFINITE - margin)) {
-    timeout = TIME_INFINITE;
-  } else {
-    timeout += margin;
-  }
-  return timeout;
-}
-
 void sweep_service_start_capture(systime_t delay_ticks) {
-  capture_delay_ticks = delay_ticks;
-  capture_bandwidth_setting = config._bandwidth;
+  chSysLock();
+  chBSemResetI(&capture_sem, true);
   ready_time = chVTGetSystemTimeX() + delay_ticks;
-  uint32_t capture_cycles = (uint32_t)capture_bandwidth_setting + 2U;
-  if (capture_cycles > UINT16_MAX) {
-    capture_cycles = UINT16_MAX;
-  }
-  wait_count = (uint16_t)capture_cycles;
-  capture_timeout_ticks = sweep_capture_timeout_budget(capture_bandwidth_setting, delay_ticks);
-  chBSemReset(&capture_done_sem, true);
-}
-
-static void sweep_restart_capture_hardware(void) {
-  // MEAS-FIRST: ensure the capture loop can self-heal if DMA stalls.
-  tlv320aic3204_init();
-  chThdSleepMilliseconds(10);
-  init_i2s((void*)rx_buffer,
-           (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
-  uint32_t capture_cycles = (uint32_t)capture_bandwidth_setting + 2U;
-  if (capture_cycles > UINT16_MAX) {
-    capture_cycles = UINT16_MAX;
-  }
-  wait_count = (uint16_t)capture_cycles;
-  ready_time = chVTGetSystemTimeX() + capture_delay_ticks;
-  capture_timeout_ticks =
-      sweep_capture_timeout_budget(capture_bandwidth_setting, capture_delay_ticks);
-  reset_dsp_accumerator();
-  chBSemReset(&capture_done_sem, true);
-  capture_restart_counter++;
+  wait_count = config._bandwidth + 2U;
+  chSysUnlock();
 }
 
 void sweep_service_wait_for_capture(void) {
-  systime_t timeout = capture_timeout_ticks;
-  const systime_t minimum_timeout = MS2ST(5);
-  if (timeout < minimum_timeout) {
-    timeout = minimum_timeout;
-  }
-  while (true) {
-    msg_t result = chBSemWaitTimeout(&capture_done_sem, timeout);
-    if (result == MSG_OK) {
-      return;
-    }
-    if (result == MSG_TIMEOUT) {
-      sweep_restart_capture_hardware();
-      timeout = capture_timeout_ticks;
-      if (timeout < minimum_timeout) {
-        timeout = minimum_timeout;
-      }
-    }
+  while (chBSemWait(&capture_sem) == MSG_RESET) {
   }
 }
 
 const audio_sample_t* sweep_service_rx_buffer(void) {
   return rx_buffer;
-}
-
-uint32_t sweep_service_capture_restart_count(void) {
-  return capture_restart_counter;
 }
 
 #if ENABLED_DUMP_COMMAND
@@ -463,7 +405,20 @@ bool sweep_service_dump_ready(void) {
 
 uint16_t app_measurement_get_sweep_mask(void) {
   uint16_t ch_mask = 0;
+#if 0
+  for (int t = 0; t < TRACES_MAX; t++) {
+    if (!trace[t].enabled) {
+      continue;
+    }
+    if ((trace[t].channel & 1) == 0) {
+      ch_mask |= SWEEP_CH0_MEASURE;
+    } else {
+      ch_mask |= SWEEP_CH1_MEASURE;
+    }
+  }
+#else
   ch_mask |= SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE;
+#endif
 #ifdef __VNA_MEASURE_MODULE__
   ch_mask |= plot_get_measure_channels();
 #endif

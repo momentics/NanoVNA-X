@@ -30,7 +30,6 @@
 
 #include <chprintf.h>
 #include <stdarg.h>
-#include <stdio.h>
 
 static const VNAShellCommand* command_table = NULL;
 
@@ -43,61 +42,58 @@ static uint16_t pending_argc = 0;
 static char** pending_argv = NULL;
 static bool shell_skip_linefeed = false;
 static event_bus_t* shell_event_bus = NULL;
+#if defined(__USE_SERIAL_CONSOLE__)
+static bool shell_serial_seen_rx = false;
+static systime_t shell_serial_mode_since = 0;
+#endif
 
-static void shell_on_event(const event_bus_message_t* message, void* user_data);
-
-static bool shell_connection_ready(void) {
-  return shell_check_connect();
+static void shell_handle_sweep_completed(const event_bus_message_t* message, void* user_data) {
+  (void)message;
+  (void)user_data;
+  shell_service_pending_commands();
 }
 
-// MEAS-FIRST: Non-blocking writes drop data if the transport back-pressures.
-static size_t shell_write(const void* buf, size_t size) {
-  if (shell_stream == NULL || buf == NULL || size == 0U) {
-    return 0U;
+void shell_bind_event_bus(event_bus_t* bus) {
+  shell_event_bus = bus;
+  if (bus == NULL) {
+    return;
   }
-  if (!shell_connection_ready()) {
-    return 0U;
+  (void)event_bus_subscribe(bus, EVENT_SWEEP_COMPLETED, shell_handle_sweep_completed, NULL);
+  (void)event_bus_subscribe(bus, EVENT_SHELL_COMMAND_PENDING, shell_handle_sweep_completed, NULL);
+}
+
+static void shell_write(const void* buf, size_t size) {
+  if (shell_stream == NULL) {
+    return;
   }
-  size_t written = 0U;
-  const uint8_t* data = (const uint8_t*)buf;
-  while (written < size) {
-    size_t chunk =
-        chnWriteTimeout((BaseChannel*)shell_stream, data + written, size - written, TIME_IMMEDIATE);
-    if (chunk == 0U) {
-      break;
+  streamWrite(shell_stream, buf, size);
+}
+
+static int shell_read(void* buf, uint32_t size) {
+  if (shell_stream == NULL) {
+    return 0;
+  }
+#if defined(__USE_SERIAL_CONSOLE__)
+  if (shell_stream == (BaseSequentialStream*)&SD1) {
+    const int received = streamRead(shell_stream, buf, size);
+    if (received > 0) {
+      shell_serial_seen_rx = true;
     }
-    written += chunk;
+    return received;
   }
-  return written;
-}
-
-static size_t shell_read(void* buf, size_t size) {
-  if (shell_stream == NULL || buf == NULL || size == 0U) {
-    return 0U;
-  }
-  if (!shell_connection_ready()) {
-    return 0U;
-  }
-  return chnReadTimeout((BaseChannel*)shell_stream, buf, size, TIME_IMMEDIATE);
+#endif
+  return streamRead(shell_stream, buf, size);
 }
 
 int shell_printf(const char* fmt, ...) {
-  if (shell_stream == NULL || !shell_connection_ready()) {
+  if (shell_stream == NULL) {
     return 0;
   }
-  char buffer[VNA_SHELL_MAX_LENGTH * 2];
   va_list ap;
   va_start(ap, fmt);
-  int len = vsnprintf(buffer, sizeof(buffer), fmt, ap);
+  const int written = chvprintf(shell_stream, fmt, ap);
   va_end(ap);
-  if (len <= 0) {
-    return len;
-  }
-  if ((size_t)len >= sizeof(buffer)) {
-    len = (int)(sizeof(buffer) - 1U);
-  }
-  size_t written = shell_write(buffer, (size_t)len);
-  return (int)written;
+  return written;
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
@@ -111,11 +107,7 @@ int serial_shell_printf(const char* fmt, ...) {
 #endif
 
 void shell_stream_write(const void* buffer, size_t size) {
-  (void)shell_write(buffer, size);
-}
-
-size_t shell_stream_try_write(const void* buffer, size_t size) {
-  return shell_write(buffer, size);
+  shell_write(buffer, size);
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
@@ -162,18 +154,29 @@ void shell_reset_console(void) {
 }
 
 bool shell_check_connect(void) {
-  osalSysLock();
-  bool active = false;
-  if (shell_stream == (BaseSequentialStream*)&SDU1) {
-    active = usb_is_active_locked();
-  }
 #ifdef __USE_SERIAL_CONSOLE__
-  else if (shell_stream == (BaseSequentialStream*)&SD1) {
-    active = true;
-  }
+  if (VNA_MODE(VNA_MODE_CONNECTION)) {
+    osalSysLock();
+    const bool usb_active = usb_is_active_locked();
+    osalSysUnlock();
+#if !defined(NANOVNA_F303)
+    if (usb_active && !shell_serial_seen_rx) {
+      const systime_t elapsed = chVTTimeElapsedSinceX(shell_serial_mode_since);
+      if (MS2ST(elapsed) > 2000U) {
+        apply_vna_mode(VNA_MODE_CONNECTION, VNA_MODE_CLR);
+        return usb_active;
+      }
+    }
 #endif
+    return true;
+  }
+  osalSysLock();
+  const bool active = usb_is_active_locked();
   osalSysUnlock();
   return active;
+#else
+  return SDU1.config->usbp->state == USB_ACTIVE;
+#endif
 }
 
 void shell_init_connection(void) {
@@ -194,6 +197,12 @@ void shell_init_connection(void) {
 
 void shell_restore_stream(void) {
   PREPARE_STREAM;
+#if defined(__USE_SERIAL_CONSOLE__)
+  if (shell_stream == (BaseSequentialStream*)&SD1) {
+    shell_serial_seen_rx = false;
+    shell_serial_mode_since = chVTGetSystemTimeX();
+  }
+#endif
 }
 
 void shell_register_commands(const VNAShellCommand* table) {
@@ -254,34 +263,13 @@ void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t a
 
 void shell_service_pending_commands(void) {
   while (pending_command != NULL) {
-    const VNAShellCommand* command = pending_command;
+    const VNAShellCommand* command = (const VNAShellCommand*)pending_command;
     command->sc_function(pending_argc, pending_argv);
     osalSysLock();
     pending_command = NULL;
     osalThreadDequeueNextI(&shell_thread, MSG_OK);
     osalSysUnlock();
   }
-}
-
-void shell_attach_event_bus(event_bus_t* bus) {
-  if (shell_event_bus == bus) {
-    return;
-  }
-  shell_event_bus = bus;
-  if (bus != NULL) {
-    event_bus_subscribe(bus, EVENT_SHELL_COMMAND_PENDING, shell_on_event, NULL);
-  }
-}
-
-static void shell_on_event(const event_bus_message_t* message, void* user_data) {
-  (void)user_data;
-  if (message == NULL) {
-    return;
-  }
-  if (message->topic != EVENT_SHELL_COMMAND_PENDING) {
-    return;
-  }
-  shell_service_pending_commands();
 }
 
 static const char backspace[] = {0x08, 0x20, 0x08, 0x00};

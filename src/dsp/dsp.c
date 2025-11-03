@@ -192,12 +192,22 @@ void dsp_process(audio_sample_t* capture, size_t length) {
 
 void calculate_gamma(float* gamma) {
   // calculate reflection coeff. by samp divide by ref
+#if 0
+  measure_t rs = acc_ref_s;
+  measure_t rc = acc_ref_c;
+  measure_t rr = rs * rs + rc * rc;
+  measure_t ss = acc_samp_s;
+  measure_t sc = acc_samp_c;
+  gamma[0] =  (sc * rc + ss * rs) / rr;
+  gamma[1] =  (ss * rc - sc * rs) / rr;
+#else
   measure_t rs_rc = (measure_t)acc_ref_s / acc_ref_c;
   measure_t sc_rc = (measure_t)acc_samp_c / acc_ref_c;
   measure_t ss_rc = (measure_t)acc_samp_s / acc_ref_c;
   measure_t rr = rs_rc * rs_rc + 1.0f;
   gamma[0] = (sc_rc + ss_rc * rs_rc) / rr;
   gamma[1] = (ss_rc - sc_rc * rs_rc) / rr;
+#endif
 }
 
 void fetch_amplitude(float* gamma) {

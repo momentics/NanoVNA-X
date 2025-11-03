@@ -53,6 +53,7 @@ enum {
 };
 
 void shell_register_commands(const VNAShellCommand* table);
+void shell_bind_event_bus(event_bus_t* bus);
 
 int shell_printf(const char* fmt, ...);
 #ifdef __USE_SERIAL_CONSOLE__
@@ -60,7 +61,6 @@ int serial_shell_printf(const char* fmt, ...);
 #endif
 
 void shell_stream_write(const void* buffer, size_t size);
-size_t shell_stream_try_write(const void* buffer, size_t size);
 
 void shell_update_speed(uint32_t speed);
 void shell_reset_console(void);
@@ -72,7 +72,6 @@ const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** a
                                            const char** name_out);
 void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t argc, char** argv);
 void shell_service_pending_commands(void);
-void shell_attach_event_bus(event_bus_t* bus);
 
 int vna_shell_read_line(char* line, int max_size);
 void vna_shell_execute_cmd_line(char* line);

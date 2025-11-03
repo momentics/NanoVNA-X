@@ -43,7 +43,7 @@ Commands are listed alphabetically within thematic groups. Optional commands are
 
 ### 5.1 Sweep configuration and measurement control
 * `bandwidth {count} | bandwidth {frequency_Hz} {measured_bw}` — Set or query the IF bandwidth. With one argument, the raw count (0–511) is applied; with two arguments, the firmware computes the nearest count for the requested Hertz value. Response echoes the active count and effective bandwidth.
-* `config {auto|avg|connection|mode|grid|dot|bk|flip|separator} {0|1}` (`ENABLE_CONFIG_COMMAND`) — Enable or disable UI and acquisition modes. `connection` switches between USB and UART console, `bk` toggles RTC backup usage, etc. The exact option list depends on which compile-time features are enabled. Responds with usage text if arguments are invalid.
+* `config {auto|avg|connection|mode|grid|dot|bk|flip|separator|tif} {0|1}` (`ENABLE_CONFIG_COMMAND`) — Enable or disable UI and acquisition modes. `connection` switches between USB and UART console, `bk` toggles RTC backup usage, etc. Responds with usage text if arguments are invalid.
 * `freq {frequency_Hz}` — Switch to CW mode at the specified frequency. The sweep pauses while the generator retunes.
 * `measure {mode}` (`__VNA_MEASURE_MODULE__`) — Select measurement post-processing (e.g., `lc`, `filter`, `cable`). Usage text is printed for unsupported modes.
 * `offset {frequency_offset_Hz}` (`USE_VARIABLE_OFFSET`) — Apply a global generator offset in Hz.
@@ -56,7 +56,7 @@ Commands are listed alphabetically within thematic groups. Optional commands are
 * `sweep {start_Hz} [stop_Hz] [points]` — Set sweep boundaries and optional point count. Alternatively use `sweep {start|stop|center|span|cw|step|var} {value}` to adjust a single parameter.
 * `tcxo {frequency_Hz}` — Configure the external TCXO frequency.
 * `threshold {frequency_Hz}` — Update the harmonic mode crossover threshold.
-* `transform {on|off|impulse|step|bandpass|minimum|normal|maximum}` (`ENABLE_TRANSFORM_COMMAND`) — Toggle time-domain transform and windowing.
+* `transform {on|off|impulse|step|bandpass|mininum|normal|maximum}` (`ENABLE_TRANSFORM_COMMAND`) — Toggle time-domain transform and windowing.
 
 **Scan mask bits** (combine via addition or bitwise OR):
 
@@ -89,9 +89,10 @@ When the binary bit is set, the reply starts with the 16-bit mask and 16-bit poi
 ### 5.4 Storage and configuration persistence
 * `clearconfig {1234}` — Factory reset of persistent configuration and calibration (requires the literal key `1234`).
 * `saveconfig` — Persist the current configuration.
+* `sd_list [pattern]`, `sd_read {filename}`, `sd_delete {filename}` (`ENABLE_SD_CARD_COMMAND`) — List FAT filesystem entries, read files (the response begins with a 32-bit size prefix, then raw bytes), or delete a file. All commands implicitly mount the SD card.
 
 ### 5.5 System information and diagnostics
-* `b {idx} {mode} {value}` (`ENABLE_BAND_COMMAND`) — Update Si5351 band-configuration tables. `{mode}` must be one of `mode|freq|div|mul|omul|pow|opow|l|r|lr|adj`.
+* `band {idx} {mode} {value}` (`ENABLE_BAND_COMMAND`) — Update Si5351 band-configuration tables.
 * `dac {0-4095}` (`__VNA_ENABLE_DAC__`) — Program the auxiliary DAC output.
 * `gain {lgain} [rgain]` (`ENABLE_GAIN_COMMAND`) — Adjust TLV320AIC3204 PGA gains.
 * `info` (`ENABLE_INFO_COMMAND`) — Print the null-terminated `info_about[]` strings that describe the firmware build.
@@ -103,6 +104,7 @@ When the binary bit is set, the reply starts with the 16-bit mask and 16-bit poi
 * `usart_cfg {baud}` / `usart {string} [timeout_ms]` (`ENABLE_USART_COMMAND` and `__USE_SERIAL_CONSOLE__`) — Reconfigure or use the hardware UART console. `usart` sends the string (plus newline) to the UART and streams any reply back over USB until the timeout expires.
 
 ### 5.6 Remote UI and automation
+* `msg {delay_ms} [text] [header]` (`__SD_CARD_LOAD__`) — Display a modal message box for the given duration.
 * `refresh {on|off}` (`__REMOTE_DESKTOP__`) — Enable (`on`) or disable (`off`) remote screen streaming. When enabled and the USB CDC link is active, the firmware periodically sends a `remote_region_t` header followed by pixel data for regions that changed, then terminates the update with the normal prompt.
 * `touch {x} {y}` / `release [x y]` (`__REMOTE_DESKTOP__`) — Inject remote touch-press or touch-release events. Passing `-1` for a coordinate preserves the last position.
 * `touchcal`, `touchtest` — Trigger on-device touch calibration or diagnostics.
@@ -138,10 +140,15 @@ When the binary bit is set, the reply starts with the 16-bit mask and 16-bit poi
 3. **Retrieve binary sweep data**
    *Send:* `scan 50000000 150000000 201 0x83\r\n`
    *Receive:* first four bytes contain the mask `0x0083` and point count `0x00C9` (201), followed by 201 records of frequency (`uint32_t`) and selected complex samples (`float[2]`).
-4. **Capture the LCD as raw RGB565**
+4. **Read a file from the SD card**
+   ```text
+   ch> sd_read log.csv\r\n
+   <4-byte size><binary file data>ch> 
+   ```
+5. **Capture the LCD as raw RGB565**
    ```text
    ch> capture\r\n
-   <LCD_WIDTH * LCD_HEIGHT * 2 bytes of pixel data>ch>
+   <LCD_WIDTH * LCD_HEIGHT * 2 bytes of pixel data>ch> 
    ```
 
 ## 7. Error handling and best practices
@@ -156,6 +163,7 @@ The availability of certain commands depends on compile-time options. Key macros
 | Macro | Enables |
 |-------|---------|
 | `__REMOTE_DESKTOP__` | Remote framebuffer streaming (`refresh`, `touch`, `release`). |
+| `__USE_SD_CARD__` + `ENABLE_SD_CARD_COMMAND` | SD card shell commands. |
 | `__VNA_MEASURE_MODULE__` | Advanced `measure` modes. |
 | `__USE_SMOOTH__` | `smooth` command. |
 | `ENABLE_SCANBIN_COMMAND` | Binary `scan` helper. |

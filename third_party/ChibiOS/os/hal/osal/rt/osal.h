@@ -196,6 +196,19 @@ typedef semaphore_t mutex_t;
 typedef uint32_t mutex_t;
 #endif
 
+#if 0
+/**
+ * @brief   Type of a thread queue.
+ * @details A thread queue is a queue of sleeping threads, queued threads
+ *          can be dequeued one at time or all together.
+ * @note    In this implementation it is implemented as a single reference
+ *          because there are no real threads.
+ */
+typedef struct {
+  thread_reference_t    tr;
+} threads_queue_t;
+#endif
+
 /*===========================================================================*/
 /* Module macros.                                                            */
 /*===========================================================================*/

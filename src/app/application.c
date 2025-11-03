@@ -26,7 +26,6 @@
 
 #include "ch.h"
 #include "hal.h"
-#include "hal_i2c_lld.h"
 #include "si5351.h"
 #include "nanovna.h"
 #include "app/shell.h"
@@ -51,21 +50,20 @@
 static event_bus_t app_event_bus;
 static event_bus_subscription_t app_event_slots[8];
 
-#define APP_EVENT_QUEUE_DEPTH 8U
-static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
-static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
-
 static measurement_pipeline_t measurement_pipeline;
 
-static void sweep_init(void) {
-  sweep_service_reset_progress();
+#ifdef __USE_SD_CARD__
+static FATFS fs_volume_instance;
+static FIL fs_file_instance;
+
+FATFS* filesystem_volume(void) {
+  return &fs_volume_instance;
 }
 
-static inline void app_publish_sweep_configuration_changed(void) {
-  event_bus_publish(&app_event_bus, EVENT_SWEEP_CONFIGURATION_CHANGED, NULL);
+FIL* filesystem_file(void) {
+  return &fs_file_instance;
 }
-
-// SD card access was removed; configuration persists using internal flash only.
+#endif
 
 // Shell frequency printf format
 // #define VNA_FREQ_FMT_STR         "%lu"
@@ -80,26 +78,54 @@ static char shell_line[VNA_SHELL_MAX_LENGTH];
 static void cmd_dump(int argc, char* argv[]);
 #endif
 
-// Optional commands are controlled through app_features.h profiles.
+// Allow get threads debug info
+// #define ENABLE_THREADS_COMMAND
+// Enable vbat_offset command, allow change battery voltage correction in config
+#define ENABLE_VBAT_OFFSET_COMMAND
+// Info about NanoVNA, need fore soft
+#define ENABLE_INFO_COMMAND
+// Enable color command, allow change config color for traces, grid, menu
+#define ENABLE_COLOR_COMMAND
+// Enable transform command
+#define ENABLE_TRANSFORM_COMMAND
+// Enable sample command
+// #define ENABLE_SAMPLE_COMMAND
+// Enable I2C command for send data to AIC3204, used for debug
+// #define ENABLE_I2C_COMMAND
+// Enable LCD command for send data to LCD screen, used for debug
+// #define ENABLE_LCD_COMMAND
+// Enable output debug data on screen on hard fault
+// #define ENABLE_HARD_FAULT_HANDLER_DEBUG
+// Enable test command, used for debug
+// #define ENABLE_TEST_COMMAND
+// Enable stat command, used for debug
+// #define ENABLE_STAT_COMMAND
+// Enable gain command, used for debug
+// #define ENABLE_GAIN_COMMAND
+// Enable port command, used for debug
+// #define ENABLE_PORT_COMMAND
+// Enable si5351 register write, used for debug
+// #define ENABLE_SI5351_REG_WRITE
+// Enable i2c timing command, used for debug
+// #define ENABLE_I2C_TIMINGS
+// Enable band setting command, used for debug
+// #define ENABLE_BAND_COMMAND
+// Enable debug for console command
+// #define DEBUG_CONSOLE_SHOW
+// Enable usart command
+// Enable config command
+#ifdef __USE_SD_CARD__
+// Enable SD card console command
+#define ENABLE_SD_CARD_COMMAND
+#endif
 
-uint8_t sweep_mode = SWEEP_ENABLE | SWEEP_ONCE;
+uint8_t sweep_mode = SWEEP_ENABLE;
 // Sweep measured data
+#if defined(NANOVNA_F303)
+__attribute__((section(".ram4"))) float measured[2][SWEEP_POINTS_MAX][2];
+#else
 float measured[2][SWEEP_POINTS_MAX][2];
-
-// MEAS-FIRST: runtime metrics for measurement-first scheduling.
-typedef struct {
-  systime_t sweep_ticks;
-  systime_t ui_draw_ticks;
-  uint32_t usb_frames_sent;
-  uint32_t usb_frames_dropped;
-  uint32_t capture_restarts;
-  uint32_t last_generation;
-} runtime_metrics_t;
-
-static runtime_metrics_t runtime_metrics;
-static systime_t runtime_metrics_last_log = 0;
-
-static bool app_stream_generation(uint32_t generation, uint16_t sweep_mask);
+#endif
 
 // Version text, displayed in Config->Version menu, also send by info command
 const char* info_about[] = {
@@ -141,14 +167,57 @@ void my_debug_log(int offs, char* log) {
 #define DEBUG_LOG(offs, text)
 #endif
 
-static void app_process_event_queue(systime_t timeout) {
-  while (event_bus_dispatch(&app_event_bus, TIME_IMMEDIATE)) {
-  }
-  if (timeout != TIME_IMMEDIATE) {
-    if (event_bus_dispatch(&app_event_bus, timeout)) {
-      while (event_bus_dispatch(&app_event_bus, TIME_IMMEDIATE)) {
-      }
+#if defined(NANOVNA_F303)
+static THD_WORKING_AREA(waThread1, 1024);
+#else
+static THD_WORKING_AREA(waThread1, 768);
+#endif
+static THD_FUNCTION(Thread1, arg) {
+  (void)arg;
+  chRegSetThreadName("sweep");
+#ifdef __FLIP_DISPLAY__
+  if (VNA_MODE(VNA_MODE_FLIP_DISPLAY))
+    lcd_set_flip(true);
+#endif
+  /*
+   * UI (menu, touch, buttons) and plot initialize
+   */
+  ui_init(&app_event_bus);
+  // Initialize graph plotting
+  plot_init();
+  while (1) {
+    bool completed = false;
+    uint16_t mask = measurement_pipeline_active_mask(&measurement_pipeline);
+    if (sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) {
+      sweep_service_wait_for_copy_release();
+      sweep_service_begin_measurement();
+      event_bus_publish(&app_event_bus, EVENT_SWEEP_STARTED, &mask);
+      completed = measurement_pipeline_execute(&measurement_pipeline, true, mask);
+      sweep_mode &= ~SWEEP_ONCE;
+      sweep_service_end_measurement();
+    } else {
+      sweep_service_end_measurement();
+      __WFI();
     }
+    // Process UI inputs
+    sweep_mode |= SWEEP_UI_MODE;
+    ui_process();
+    sweep_mode &= ~SWEEP_UI_MODE;
+    // Process collected data, calculate trace coordinates and plot only if scan completed
+    if (completed) {
+      sweep_service_increment_generation();
+      event_bus_publish(&app_event_bus, EVENT_SWEEP_COMPLETED, &mask);
+      //      START_PROFILE
+      if ((props_mode & DOMAIN_MODE) == DOMAIN_TIME)
+        app_measurement_transform_domain(mask);
+      //      STOP_PROFILE;
+      // Prepare draw graphics, cache all lines, mark screen cells for redraw
+    }
+    request_to_redraw(REDRAW_BATTERY);
+#ifndef DEBUG_CONSOLE_SHOW
+    // plot trace and other indications as raster
+    draw_all();
+#endif
   }
 }
 
@@ -162,98 +231,6 @@ static inline void resume_sweep(void) {
 
 void toggle_sweep(void) {
   sweep_mode ^= SWEEP_ENABLE;
-}
-
-static THD_WORKING_AREA(waThread1, 1024);
-static THD_FUNCTION(Thread1, arg) {
-  (void)arg;
-  chRegSetThreadName("sweep");
-#ifdef __FLIP_DISPLAY__
-  if (VNA_MODE(VNA_MODE_FLIP_DISPLAY))
-    lcd_set_flip(true);
-#endif
-  /*
-   * UI (menu, touch, buttons) and plot initialize
-   */
-  ui_attach_event_bus(&app_event_bus);
-  ui_init();
-  // Initialize graph plotting
-  plot_init();
-  bool boot_sweep_pending = true;
-  while (1) {
-    if (boot_sweep_pending) {
-      if ((sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) == 0U) {
-        sweep_service_reset_progress();
-        resume_sweep();
-        sweep_mode |= SWEEP_ONCE;
-      }
-      if (sweep_service_current_generation() != 0U) {
-        boot_sweep_pending = false;
-      }
-    }
-
-    app_process_event_queue(TIME_IMMEDIATE);
-
-    const bool sweep_enabled = (sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) != 0U;
-    uint16_t mask = measurement_pipeline_active_mask(&measurement_pipeline);
-    bool completed = false;
-    uint32_t generation = 0U;
-
-    if (sweep_enabled && sweep_service_wait_for_copy_release(TIME_IMMEDIATE)) {
-      sweep_service_begin_measurement();
-      event_bus_publish(&app_event_bus, EVENT_SWEEP_STARTED, &mask);
-      const systime_t sweep_start = chVTGetSystemTimeX();
-      completed = measurement_pipeline_execute(&measurement_pipeline, true, mask);
-      runtime_metrics.sweep_ticks = chVTTimeElapsedSinceX(sweep_start);
-      sweep_mode &= (uint8_t)~SWEEP_ONCE;
-      sweep_service_end_measurement();
-      if (completed) {
-        generation = sweep_service_increment_generation();
-        runtime_metrics.last_generation = generation;
-        event_bus_publish(&app_event_bus, EVENT_SWEEP_COMPLETED, &mask);
-        if ((props_mode & DOMAIN_MODE) == DOMAIN_TIME) {
-          app_measurement_transform_domain(mask);
-        }
-        app_process_event_queue(TIME_IMMEDIATE);
-        app_stream_generation(generation, mask);
-      }
-    } else {
-      sweep_service_end_measurement();
-    }
-
-    // MEAS-FIRST: keep UI responsive without throttling the sweep.
-    sweep_mode |= SWEEP_UI_MODE;
-    operation_requested |= (OP_LEVER | OP_TOUCH);
-    ui_process();
-    sweep_mode &= (uint8_t)~SWEEP_UI_MODE;
-
-#ifndef DEBUG_CONSOLE_SHOW
-    const systime_t ui_start = chVTGetSystemTimeX();
-    draw_all();
-    runtime_metrics.ui_draw_ticks = chVTTimeElapsedSinceX(ui_start);
-#endif
-
-    runtime_metrics.capture_restarts = sweep_service_capture_restart_count();
-
-    if (shell_check_connect()) {
-      if ((runtime_metrics_last_log == 0) ||
-          chVTTimeElapsedSinceX(runtime_metrics_last_log) >= MS2ST(1000)) {
-        runtime_metrics_last_log = chVTGetSystemTimeX();
-        shell_printf("perf sweep=%lums ui=%lums usb=%lu/%lu caprst=%lu gen=%lu" VNA_SHELL_NEWLINE_STR,
-                     (unsigned long)MS2ST(runtime_metrics.sweep_ticks),
-                     (unsigned long)MS2ST(runtime_metrics.ui_draw_ticks),
-                     (unsigned long)runtime_metrics.usb_frames_sent,
-                     (unsigned long)runtime_metrics.usb_frames_dropped,
-                     (unsigned long)runtime_metrics.capture_restarts,
-                     (unsigned long)runtime_metrics.last_generation);
-      }
-    } else {
-      runtime_metrics_last_log = 0;
-    }
-
-    shell_service_pending_commands();
-    chThdYield();
-  }
 }
 
 config_t config = {
@@ -401,8 +378,6 @@ static void load_settings(void) {
   } else
     caldata_recall(0); // Try load 0 slot
   app_measurement_update_frequencies();
-  app_publish_sweep_configuration_changed();
-  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
 #ifdef __VNA_MEASURE_MODULE__
   plot_set_measure_mode(current_props._measure);
 #endif
@@ -418,8 +393,6 @@ static void load_settings(void) {
 int load_properties(uint32_t id) {
   int r = caldata_recall(id);
   app_measurement_update_frequencies();
-  app_publish_sweep_configuration_changed();
-  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
 #ifdef __VNA_MEASURE_MODULE__
   plot_set_measure_mode(current_props._measure);
 #endif
@@ -438,8 +411,6 @@ VNA_SHELL_FUNCTION(cmd_resume) {
 
   // restore frequencies array and cal
   app_measurement_update_frequencies();
-  app_publish_sweep_configuration_changed();
-  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
   resume_sweep();
 }
 
@@ -490,6 +461,9 @@ VNA_SHELL_FUNCTION(cmd_config) {
 #endif
 #ifdef __DIGIT_SEPARATOR__
                                       "|separator"
+#endif
+#ifdef __SD_CARD_DUMP_TIFF__
+                                      "|tif"
 #endif
       ;
   int idx;
@@ -546,8 +520,6 @@ VNA_SHELL_FUNCTION(cmd_freq) {
   uint32_t freq = my_atoui(argv[0]);
   pause_sweep();
   app_measurement_set_frequency(freq);
-  app_publish_sweep_configuration_changed();
-  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
   return;
 }
 
@@ -561,7 +533,6 @@ void set_power(uint8_t value) {
   // Update power if pause, need for generation in CW mode
   if (!(sweep_mode & SWEEP_ENABLE))
     si5351_set_power(value);
-  app_publish_sweep_configuration_changed();
 }
 
 VNA_SHELL_FUNCTION(cmd_power) {
@@ -631,7 +602,6 @@ VNA_SHELL_FUNCTION(cmd_threshold) {
   }
   value = my_atoui(argv[0]);
   config._harmonic_freq_threshold = value;
-  config_service_notify_configuration_changed();
 }
 
 VNA_SHELL_FUNCTION(cmd_saveconfig) {
@@ -766,8 +736,25 @@ VNA_SHELL_FUNCTION(cmd_capture) {
   }
 }
 
+#if 0
+VNA_SHELL_FUNCTION(cmd_gamma)
+{
+  float gamma[2];
+  (void)argc;
+  (void)argv;
+  
+  pause_sweep();
+  chMtxLock(&mutex);
+  wait_dsp(4);  
+  calculate_gamma(gamma);
+  chMtxUnlock(&mutex);
+
+  shell_printf("%d %d" VNA_SHELL_NEWLINE_STR, gamma[0], gamma[1]);
+}
+#endif
+
+#ifdef ENABLE_SAMPLE_COMMAND
 static void (*sample_func)(float* gamma) = calculate_gamma;
-#if ENABLE_SAMPLE_COMMAND
 VNA_SHELL_FUNCTION(cmd_sample) {
   if (argc != 1)
     goto usage;
@@ -793,9 +780,7 @@ usage:
 
 void set_bandwidth(uint16_t bw_count) {
   config._bandwidth = bw_count & 0x1FF;
-  config_service_notify_configuration_changed();
-  app_publish_sweep_configuration_changed();
-  request_to_redraw(REDRAW_BACKUP | REDRAW_FREQUENCY | REDRAW_AREA);
+  request_to_redraw(REDRAW_BACKUP | REDRAW_FREQUENCY);
 }
 
 uint32_t get_bandwidth_frequency(uint16_t bw_freq) {
@@ -825,7 +810,7 @@ result:
                get_bandwidth_frequency(config._bandwidth));
 }
 
-#if ENABLE_GAIN_COMMAND
+#ifdef ENABLE_GAIN_COMMAND
 VNA_SHELL_FUNCTION(cmd_gain) {
   if (argc == 0 || argc > 2) {
     shell_printf("usage: gain {lgain(0-95)} [rgain(0-95)]" VNA_SHELL_NEWLINE_STR);
@@ -846,8 +831,6 @@ void set_sweep_points(uint16_t points) {
     return;
   sweep_points = points;
   app_measurement_update_frequencies();
-  app_publish_sweep_configuration_changed();
-  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
 }
 
 /*
@@ -865,65 +848,13 @@ static bool need_interpolate(freq_t start, freq_t stop, uint16_t points) {
 #define SCAN_MASK_NO_S21OFFS 0b00100000
 #define SCAN_MASK_BINARY 0b10000000
 
-static bool app_stream_generation(uint32_t generation, uint16_t sweep_mask) {
-  if (!shell_check_connect()) {
-    return false;
-  }
-
-  uint16_t points;
-  osalSysLock();
-  points = sweep_points;
-  osalSysUnlock();
-
-  uint16_t output_mask = SCAN_MASK_BINARY | SCAN_MASK_OUT_FREQ;
-  if (sweep_mask & SWEEP_CH0_MEASURE) {
-    output_mask |= SCAN_MASK_OUT_DATA0;
-  }
-  if (sweep_mask & SWEEP_CH1_MEASURE) {
-    output_mask |= SCAN_MASK_OUT_DATA1;
-  }
-
-  // MEAS-FIRST: drop frames on back-pressure instead of stalling the sweep.
-  if (shell_stream_try_write(&output_mask, sizeof(output_mask)) != sizeof(output_mask)) {
-    runtime_metrics.usb_frames_dropped++;
-    return false;
-  }
-  if (shell_stream_try_write(&points, sizeof(points)) != sizeof(points)) {
-    runtime_metrics.usb_frames_dropped++;
-    return false;
-  }
-  if (shell_stream_try_write(&generation, sizeof(generation)) != sizeof(generation)) {
-    runtime_metrics.usb_frames_dropped++;
-    return false;
-  }
-
-  for (uint16_t i = 0; i < points; i++) {
-    freq_t f = get_frequency(i);
-    if (shell_stream_try_write(&f, sizeof(f)) != sizeof(f)) {
-      runtime_metrics.usb_frames_dropped++;
-      return false;
-    }
-    if (output_mask & SCAN_MASK_OUT_DATA0) {
-      if (shell_stream_try_write(&measured[0][i][0], sizeof(float) * 2U) != sizeof(float) * 2U) {
-        runtime_metrics.usb_frames_dropped++;
-        return false;
-      }
-    }
-    if (output_mask & SCAN_MASK_OUT_DATA1) {
-      if (shell_stream_try_write(&measured[1][i][0], sizeof(float) * 2U) != sizeof(float) * 2U) {
-        runtime_metrics.usb_frames_dropped++;
-        return false;
-      }
-    }
-  }
-
-  runtime_metrics.usb_frames_sent++;
-  return true;
-}
-
 VNA_SHELL_FUNCTION(cmd_scan) {
   freq_t start, stop;
   uint16_t points = sweep_points;
+  const freq_t original_start = get_sweep_frequency(ST_START);
+  const freq_t original_stop = get_sweep_frequency(ST_STOP);
+  const uint16_t original_points = sweep_points;
+  bool restore_config = false;
 
   if (argc < 2 || argc > 4) {
     shell_printf("usage: scan {start(Hz)} {stop(Hz)} [points] [outmask]" VNA_SHELL_NEWLINE_STR);
@@ -936,6 +867,8 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     shell_printf("frequency range is invalid" VNA_SHELL_NEWLINE_STR);
     return;
   }
+  if (start != original_start || stop != original_stop)
+    restore_config = true;
   if (argc >= 3) {
     points = my_atoui(argv[2]);
     if (points == 0 || points > SWEEP_POINTS_MAX) {
@@ -943,19 +876,12 @@ VNA_SHELL_FUNCTION(cmd_scan) {
                        VNA_SHELL_NEWLINE_STR);
       return;
     }
-    if (points < SWEEP_POINTS_MIN)
-      points = SWEEP_POINTS_MIN;
+    sweep_points = points;
+    if (points != original_points)
+      restore_config = true;
   }
   uint16_t mask = 0;
   uint16_t sweep_ch = SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE;
-
-  FREQ_STARTSTOP();
-  frequency0 = start;
-  frequency1 = stop;
-  sweep_points = points;
-  app_measurement_update_frequencies();
-  app_publish_sweep_configuration_changed();
-  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
 
 #if ENABLE_SCANBIN_COMMAND
   if (argc == 4) {
@@ -984,6 +910,8 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   if (need_interpolate(start, stop, sweep_points))
     sweep_ch |= SWEEP_USE_INTERPOLATION;
 
+  sweep_points = points;
+  app_measurement_set_frequencies(start, stop, points);
   if (sweep_ch & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE))
     app_measurement_sweep(false, sweep_ch);
   pause_sweep();
@@ -1015,6 +943,10 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     }
   }
 
+  if (restore_config) {
+    sweep_points = original_points;
+    app_measurement_update_frequencies();
+  }
 }
 
 #if ENABLE_SCANBIN_COMMAND
@@ -1063,8 +995,16 @@ static void update_marker_index(freq_t fstart, freq_t fstop, uint16_t points) {
     else if (f >= fstop)
       idx = points - 1;
     else { // Search frequency index for marker frequency
+#if 0
+      for (idx = 1; idx < points; idx++) {
+        if (frequencies[idx] <= f) continue;
+        if (f < (frequencies[idx-1]/2 + frequencies[idx]/2)) idx--; // Correct closest idx
+        break;
+      }
+#else
       float r = ((float)(f - fstart)) / (fstop - fstart);
       idx = r * (points - 1);
+#endif
     }
     set_marker_index(m, idx);
   }
@@ -1098,11 +1038,9 @@ void app_measurement_update_frequencies(void) {
   else
     cal_status &= ~CALSTAT_INTERPOLATED;
 
-  request_to_redraw(REDRAW_BACKUP | REDRAW_PLOT | REDRAW_CAL_STATUS);
+  request_to_redraw(REDRAW_BACKUP | REDRAW_PLOT | REDRAW_CAL_STATUS | REDRAW_FREQUENCY |
+                    REDRAW_AREA);
   sweep_service_reset_progress();
-  if ((sweep_mode & SWEEP_ENABLE) == 0U) {
-    sweep_mode |= SWEEP_ONCE;
-  }
 }
 
 static void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforce_order) {
@@ -1167,8 +1105,6 @@ static void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforc
     return;
   }
   app_measurement_update_frequencies();
-  app_publish_sweep_configuration_changed();
-  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
 }
 
 void set_sweep_frequency(uint16_t type, freq_t freq) {
@@ -1180,8 +1116,6 @@ void reset_sweep_frequency(void) {
   frequency1 = cal_frequency1;
   sweep_points = cal_sweep_points;
   app_measurement_update_frequencies();
-  app_publish_sweep_configuration_changed();
-  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
 }
 
 VNA_SHELL_FUNCTION(cmd_sweep) {
@@ -1247,8 +1181,18 @@ static void eterm_calc_es(void) {
     // z=1/(jwc*z0) = 1/(2*pi*f*c*z0)  Note: normalized with Z0
     // s11ao = (z-1)/(z+1) = (1-1/z)/(1+1/z) = (1-jwcz0)/(1+jwcz0)
     // prepare 1/s11ao for effeiciency
+#if 0
+    float c = 50e-15;
+    //float c = 1.707e-12;
+    float z0 = 50;
+    float z = 2 * VNA_PI * frequencies[i] * c * z0;
+    float sq = 1 + z*z;
+    float s11aor = (1 - z*z) / sq;
+    float s11aoi = 2*z / sq;
+#else
     float s11aor = 1.0f;
     float s11aoi = 0.0f;
+#endif
     // S11mo’= S11mo - Ed
     // S11ms’= S11ms - Ed
     float s11or = cal_data[CAL_OPEN][i][0] - cal_data[ETERM_ED][i][0];
@@ -1311,36 +1255,74 @@ static void eterm_calc_et(void) {
   cal_status |= CALSTAT_ET;
 }
 
-static void apply_ch0_error_term(float data[4], float c_data[CAL_TYPE_COUNT][2]) {
-  // S11m' = S11m - Ed
-  // S11a = S11m' / (Er + Es S11m')
-  float s11mr = data[0] - c_data[ETERM_ED][0];
-  float s11mi = data[1] - c_data[ETERM_ED][1];
-  float err = c_data[ETERM_ER][0] + s11mr * c_data[ETERM_ES][0] - s11mi * c_data[ETERM_ES][1];
-  float eri = c_data[ETERM_ER][1] + s11mr * c_data[ETERM_ES][1] + s11mi * c_data[ETERM_ES][0];
-  float sq = err * err + eri * eri;
-  data[0] = (s11mr * err + s11mi * eri) / sq;
-  data[1] = (s11mi * err - s11mr * eri) / sq;
-}
+#if 0
+void apply_error_term(void)
+{
+  int i;
+  for (i = 0; i < sweep_points; i++) {
+    // S11m' = S11m - Ed
+    // S11a = S11m' / (Er + Es S11m')
+    float s11mr = measured[0][i][0] - cal_data[ETERM_ED][i][0];
+    float s11mi = measured[0][i][1] - cal_data[ETERM_ED][i][1];
+    float err = cal_data[ETERM_ER][i][0] + s11mr * cal_data[ETERM_ES][i][0] - s11mi * cal_data[ETERM_ES][i][1];
+    float eri = cal_data[ETERM_ER][i][1] + s11mr * cal_data[ETERM_ES][i][1] + s11mi * cal_data[ETERM_ES][i][0];
+    float sq = err*err + eri*eri;
+    float s11ar = (s11mr * err + s11mi * eri) / sq;
+    float s11ai = (s11mi * err - s11mr * eri) / sq;
+    measured[0][i][0] = s11ar;
+    measured[0][i][1] = s11ai;
 
-static void apply_ch1_error_term(float data[4], float c_data[CAL_TYPE_COUNT][2]) {
-  // CAUTION: Et is inversed for efficiency
-  // S21a = (S21m - Ex) * Et`
-  float s21mr = data[2] - c_data[ETERM_EX][0];
-  float s21mi = data[3] - c_data[ETERM_EX][1];
-  // Not made CH1 correction by CH0 data
-  data[2] = s21mr * c_data[ETERM_ET][0] - s21mi * c_data[ETERM_ET][1];
-  data[3] = s21mi * c_data[ETERM_ET][0] + s21mr * c_data[ETERM_ET][1];
-  if (cal_status & CALSTAT_ENHANCED_RESPONSE) {
-    // S21a*= 1 - Es * S11a
-    float esr = 1.0f - (c_data[ETERM_ES][0] * data[0] - c_data[ETERM_ES][1] * data[1]);
-    float esi = 0.0f - (c_data[ETERM_ES][1] * data[0] + c_data[ETERM_ES][0] * data[1]);
-    float re = data[2];
-    float im = data[3];
-    data[2] = esr * re - esi * im;
-    data[3] = esi * re + esr * im;
+    // CAUTION: Et is inversed for efficiency
+    // S21m' = S21m - Ex
+    // S21a = S21m' (1-EsS11a)Et
+    float s21mr = measured[1][i][0] - cal_data[ETERM_EX][i][0];
+    float s21mi = measured[1][i][1] - cal_data[ETERM_EX][i][1];
+    float esr = 1 - (cal_data[ETERM_ES][i][0] * s11ar - cal_data[ETERM_ES][i][1] * s11ai);
+    float esi = - (cal_data[ETERM_ES][i][1] * s11ar + cal_data[ETERM_ES][i][0] * s11ai);
+    float etr = esr * cal_data[ETERM_ET][i][0] - esi * cal_data[ETERM_ET][i][1];
+    float eti = esr * cal_data[ETERM_ET][i][1] + esi * cal_data[ETERM_ET][i][0];
+    float s21ar = s21mr * etr - s21mi * eti;
+    float s21ai = s21mi * etr + s21mr * eti;
+    measured[1][i][0] = s21ar;
+    measured[1][i][1] = s21ai;
   }
 }
+
+static void apply_error_term_at(int i)
+{
+    // S11m' = S11m - Ed
+    // S11a = S11m' / (Er + Es S11m')
+    float s11mr = measured[0][i][0] - cal_data[ETERM_ED][i][0];
+    float s11mi = measured[0][i][1] - cal_data[ETERM_ED][i][1];
+    float err = cal_data[ETERM_ER][i][0] + s11mr * cal_data[ETERM_ES][i][0] - s11mi * cal_data[ETERM_ES][i][1];
+    float eri = cal_data[ETERM_ER][i][1] + s11mr * cal_data[ETERM_ES][i][1] + s11mi * cal_data[ETERM_ES][i][0];
+    float sq = err*err + eri*eri;
+    float s11ar = (s11mr * err + s11mi * eri) / sq;
+    float s11ai = (s11mi * err - s11mr * eri) / sq;
+    measured[0][i][0] = s11ar;
+    measured[0][i][1] = s11ai;
+
+    // CAUTION: Et is inversed for efficiency
+    // S21m' = S21m - Ex
+    // S21a = S21m' (1-EsS11a)Et
+    float s21mr = measured[1][i][0] - cal_data[ETERM_EX][i][0];
+    float s21mi = measured[1][i][1] - cal_data[ETERM_EX][i][1];
+#if 1
+    float esr = 1 - (cal_data[ETERM_ES][i][0] * s11ar - cal_data[ETERM_ES][i][1] * s11ai);
+    float esi = 0 - (cal_data[ETERM_ES][i][1] * s11ar + cal_data[ETERM_ES][i][0] * s11ai);
+    float etr = esr * cal_data[ETERM_ET][i][0] - esi * cal_data[ETERM_ET][i][1];
+    float eti = esr * cal_data[ETERM_ET][i][1] + esi * cal_data[ETERM_ET][i][0];
+    float s21ar = s21mr * etr - s21mi * eti;
+    float s21ai = s21mi * etr + s21mr * eti;
+#else
+    // Not made CH1 correction by CH0 data
+    float s21ar = s21mr * cal_data[ETERM_ET][i][0] - s21mi * cal_data[ETERM_ET][i][1];
+    float s21ai = s21mi * cal_data[ETERM_ET][i][0] + s21mr * cal_data[ETERM_ET][i][1];
+#endif
+    measured[1][i][0] = s21ar;
+    measured[1][i][1] = s21ai;
+}
+#endif
 
 void cal_collect(uint16_t type) {
   uint16_t dst, src;
@@ -1453,67 +1435,6 @@ void cal_done(void) {
   cal_status |= CALSTAT_APPLY;
   lastsaveid = NO_SAVE_SLOT;
   request_to_redraw(REDRAW_BACKUP | REDRAW_CAL_STATUS);
-}
-
-static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
-  int eterm;
-  uint16_t src_points = cal_sweep_points - 1;
-  if (idx >= 0)
-    goto copy_point;
-  if (f <= cal_frequency0) {
-    idx = 0;
-    goto copy_point;
-  }
-  if (f >= cal_frequency1) {
-    idx = src_points;
-    goto copy_point;
-  }
-  // Calculate k for linear interpolation
-  freq_t span = cal_frequency1 - cal_frequency0;
-  idx = (uint64_t)(f - cal_frequency0) * (uint64_t)src_points / span;
-  uint64_t v = (uint64_t)span * idx + src_points / 2;
-  freq_t src_f0 = cal_frequency0 + (v) / src_points;
-  freq_t src_f1 = cal_frequency0 + (v + span) / src_points;
-
-  freq_t delta = src_f1 - src_f0;
-  // Not need interpolate
-  if (f == src_f0)
-    goto copy_point;
-
-  float k = (delta == 0) ? 0.0f : (float)(f - src_f0) / delta;
-  // avoid glitch between freqs in different harmonics mode
-  uint32_t hf0 = si5351_get_harmonic_lvl(src_f0);
-  if (hf0 != si5351_get_harmonic_lvl(src_f1)) {
-    // f in prev harmonic, need extrapolate from prev 2 points
-    if (hf0 == si5351_get_harmonic_lvl(f)) {
-      if (idx < 1)
-        goto copy_point; // point limit
-      idx--;
-      k += 1.0f;
-    }
-    // f in next harmonic, need extrapolate from next 2 points
-    else {
-      if (idx >= src_points)
-        goto copy_point; // point limit
-      idx++;
-      k -= 1.0f;
-    }
-  }
-  // Interpolate by k
-  for (eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
-    data[eterm][0] =
-        cal_data[eterm][idx][0] + k * (cal_data[eterm][idx + 1][0] - cal_data[eterm][idx][0]);
-    data[eterm][1] =
-        cal_data[eterm][idx][1] + k * (cal_data[eterm][idx + 1][1] - cal_data[eterm][idx][1]);
-  }
-  return;
-  // Direct point copy
-copy_point:
-  for (eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
-    data[eterm][0] = cal_data[eterm][idx][0];
-    data[eterm][1] = cal_data[eterm][idx][1];
-  }
-  return;
 }
 
 VNA_SHELL_FUNCTION(cmd_cal) {
@@ -1869,7 +1790,7 @@ VNA_SHELL_FUNCTION(cmd_frequencies) {
   }
 }
 
-#if ENABLE_TRANSFORM_COMMAND
+#ifdef ENABLE_TRANSFORM_COMMAND
 static void set_domain_mode(int mode) // accept DOMAIN_FREQ or DOMAIN_TIME
 {
   if (mode != (props_mode & DOMAIN_MODE)) {
@@ -1934,14 +1855,65 @@ usage:
 }
 #endif
 
-#if ENABLE_TEST_COMMAND
+#ifdef ENABLE_TEST_COMMAND
 VNA_SHELL_FUNCTION(cmd_test) {
   (void)argc;
   (void)argv;
+
+#if 0
+  int i;
+  for (i = 0; i < 100; i++) {
+    palClearPad(GPIOC, GPIOC_LED);
+    app_measurement_set_frequency(10000000);
+    palSetPad(GPIOC, GPIOC_LED);
+    chThdSleepMilliseconds(50);
+
+    palClearPad(GPIOC, GPIOC_LED);
+    app_measurement_set_frequency(90000000);
+    palSetPad(GPIOC, GPIOC_LED);
+    chThdSleepMilliseconds(50);
+  }
+#endif
+
+#if 0
+  int i;
+  int mode = 0;
+  if (argc >= 1)
+    mode = my_atoi(argv[0]);
+
+  for (i = 0; i < 20; i++) {
+    palClearPad(GPIOC, GPIOC_LED);
+    ili9341_test(mode);
+    palSetPad(GPIOC, GPIOC_LED);
+    chThdSleepMilliseconds(50);
+  }
+#endif
+
+#if 0
+  //extern adcsample_t adc_samples[2];
+  //shell_printf("adc: %d %d" VNA_SHELL_NEWLINE_STR, adc_samples[0], adc_samples[1]);
+  int i;
+  int x, y;
+  for (i = 0; i < 50; i++) {
+    test_touch(&x, &y);
+    shell_printf("adc: %d %d" VNA_SHELL_NEWLINE_STR, x, y);
+    chThdSleepMilliseconds(200);
+  }
+  //extern int touch_x, touch_y;
+  //shell_printf("adc: %d %d" VNA_SHELL_NEWLINE_STR, touch_x, touch_y);
+#endif
+#if 0
+  while (argc > 1) {
+    int16_t x, y;
+    touch_position(&x, &y);
+    shell_printf("touch: %d %d" VNA_SHELL_NEWLINE_STR, x, y);
+    chThdSleepMilliseconds(200);
+  }
+#endif
 }
 #endif
 
-#if ENABLE_PORT_COMMAND
+#ifdef ENABLE_PORT_COMMAND
 VNA_SHELL_FUNCTION(cmd_port) {
   int port;
   if (argc != 1) {
@@ -1953,10 +1925,16 @@ VNA_SHELL_FUNCTION(cmd_port) {
 }
 #endif
 
-#if ENABLE_STAT_COMMAND
+#ifdef ENABLE_STAT_COMMAND
 static struct {
   int16_t rms[2];
   int16_t ave[2];
+#if 0
+  int callback_count;
+  int32_t last_counter_value;
+  int32_t interval_cycles;
+  int32_t busy_cycles;
+#endif
 } stat;
 
 VNA_SHELL_FUNCTION(cmd_stat) {
@@ -2032,30 +2010,34 @@ VNA_SHELL_FUNCTION(cmd_vbat) {
   shell_printf("%d m" S_VOLT VNA_SHELL_NEWLINE_STR, adc_vbat_read());
 }
 
-#if ENABLE_VBAT_OFFSET_COMMAND
+#ifdef ENABLE_VBAT_OFFSET_COMMAND
 VNA_SHELL_FUNCTION(cmd_vbat_offset) {
   if (argc != 1) {
     shell_printf("%d" VNA_SHELL_NEWLINE_STR, config._vbat_offset);
     return;
   }
   config._vbat_offset = (int16_t)my_atoi(argv[0]);
-  config_service_notify_configuration_changed();
 }
 #endif
 
-#if ENABLE_SI5351_TIMINGS
+#ifdef ENABLE_SI5351_TIMINGS
 VNA_SHELL_FUNCTION(cmd_si5351time) {
-  if (argc != 2)
-    return;
+  (void)argc;
   int idx = my_atoui(argv[0]);
   uint16_t value = my_atoui(argv[1]);
   si5351_set_timing(idx, value);
 }
 #endif
 
-#if ENABLE_SI5351_REG_WRITE
+#ifdef ENABLE_SI5351_REG_WRITE
 VNA_SHELL_FUNCTION(cmd_si5351reg) {
-
+#if 0
+  (void) argc;
+  uint32_t reg = my_atoui(argv[0]);
+  uint8_t buf[1] = {0xAA};
+  if (si5351_bulk_read(reg, buf, 1))
+    shell_printf("si reg[%d] = 0x%02x" VNA_SHELL_NEWLINE_STR, reg, buf[0]);
+#else
   if (argc != 2) {
     shell_printf("usage: si reg data" VNA_SHELL_NEWLINE_STR);
     return;
@@ -2064,37 +2046,31 @@ VNA_SHELL_FUNCTION(cmd_si5351reg) {
   uint8_t dat = my_atoui(argv[1]);
   uint8_t buf[] = {reg, dat};
   si5351_bulk_write(buf, 2);
+#endif
 }
 #endif
 
-#if ENABLE_I2C_TIMINGS
+#ifdef ENABLE_I2C_TIMINGS
 VNA_SHELL_FUNCTION(cmd_i2ctime) {
-  if (argc != 4)
-    return;
-  uint32_t tim = STM32_I2C_TIMINGS(0U, my_atoui(argv[0]), my_atoui(argv[1]), my_atoui(argv[2]),
-                                   my_atoui(argv[3]));
-  i2c_set_timings(tim);
+  (void)argc;
+  uint32_t tim = STM32_TIMINGR_PRESC(0U) | STM32_TIMINGR_SCLDEL(my_atoui(argv[0])) |
+                 STM32_TIMINGR_SDADEL(my_atoui(argv[1])) | STM32_TIMINGR_SCLH(my_atoui(argv[2])) |
+                 STM32_TIMINGR_SCLL(my_atoui(argv[3]));
+  set_I2C_timings(tim);
 }
 #endif
 
-#if ENABLE_INFO_COMMAND
+#ifdef ENABLE_INFO_COMMAND
 VNA_SHELL_FUNCTION(cmd_info) {
   (void)argc;
   (void)argv;
   int i = 0;
   while (info_about[i])
     shell_printf("%s" VNA_SHELL_NEWLINE_STR, info_about[i++]);
-  shell_printf("perf sweep=%lums ui=%lums usb=%lu/%lu caprst=%lu gen=%lu" VNA_SHELL_NEWLINE_STR,
-               (unsigned long)MS2ST(runtime_metrics.sweep_ticks),
-               (unsigned long)MS2ST(runtime_metrics.ui_draw_ticks),
-               (unsigned long)runtime_metrics.usb_frames_sent,
-               (unsigned long)runtime_metrics.usb_frames_dropped,
-               (unsigned long)runtime_metrics.capture_restarts,
-               (unsigned long)runtime_metrics.last_generation);
 }
 #endif
 
-#if ENABLE_COLOR_COMMAND
+#ifdef ENABLE_COLOR_COMMAND
 VNA_SHELL_FUNCTION(cmd_color) {
   uint32_t color;
   uint16_t i;
@@ -2117,7 +2093,7 @@ VNA_SHELL_FUNCTION(cmd_color) {
 }
 #endif
 
-#if ENABLE_I2C_COMMAND
+#ifdef ENABLE_I2C_COMMAND
 VNA_SHELL_FUNCTION(cmd_i2c) {
   if (argc != 3) {
     shell_printf("usage: i2c page reg data" VNA_SHELL_NEWLINE_STR);
@@ -2130,7 +2106,7 @@ VNA_SHELL_FUNCTION(cmd_i2c) {
 }
 #endif
 
-#if ENABLE_BAND_COMMAND
+#ifdef ENABLE_BAND_COMMAND
 VNA_SHELL_FUNCTION(cmd_band) {
   static const char cmd_sweep_list[] = "mode|freq|div|mul|omul|pow|opow|l|r|lr|adj";
   if (argc != 3) {
@@ -2143,7 +2119,7 @@ VNA_SHELL_FUNCTION(cmd_band) {
 }
 #endif
 
-#if ENABLE_LCD_COMMAND
+#ifdef ENABLE_LCD_COMMAND
 VNA_SHELL_FUNCTION(cmd_lcd) {
   uint8_t d[VNA_SHELL_MAX_ARGUMENTS];
   if (argc == 0)
@@ -2156,7 +2132,10 @@ VNA_SHELL_FUNCTION(cmd_lcd) {
 }
 #endif
 
-#if ENABLE_THREADS_COMMAND && (CH_CFG_USE_REGISTRY == TRUE)
+#ifdef ENABLE_THREADS_COMMAND
+#if CH_CFG_USE_REGISTRY == FALSE
+#error "Threads Requite enabled CH_CFG_USE_REGISTRY in chconf.h"
+#endif
 VNA_SHELL_FUNCTION(cmd_threads) {
   static const char* states[] = {CH_STATE_NAMES};
   thread_t* tp;
@@ -2255,7 +2234,99 @@ VNA_SHELL_FUNCTION(cmd_release) {
 }
 #endif
 
-// All SD card shell commands were removed with the filesystem support.
+#ifdef ENABLE_SD_CARD_COMMAND
+#ifndef __USE_SD_CARD__
+#error "Need enable SD card support __USE_SD_CARD__ in nanovna.h, for use ENABLE_SD_CARD_COMMAND"
+#endif
+
+static FRESULT cmd_sd_card_mount(void) {
+  const FRESULT res = f_mount(filesystem_volume(), "", 1);
+  if (res != FR_OK)
+    shell_printf("err: no card" VNA_SHELL_NEWLINE_STR);
+  return res;
+}
+
+VNA_SHELL_FUNCTION(cmd_sd_list) {
+  DIR dj;
+  FILINFO fno;
+  if (cmd_sd_card_mount() != FR_OK)
+    return;
+  switch (argc) {
+  case 0:
+    dj.pat = "*.*";
+    break;
+  case 1:
+    dj.pat = argv[0];
+    break;
+  default:
+    shell_printf("usage: sd_list {pattern}" VNA_SHELL_NEWLINE_STR);
+    return;
+  }
+  if (f_opendir(&dj, "") == FR_OK) {
+    while (f_findnext(&dj, &fno) == FR_OK && fno.fname[0])
+      shell_printf("%s %u" VNA_SHELL_NEWLINE_STR, fno.fname, fno.fsize);
+  }
+  f_closedir(&dj);
+}
+
+VNA_SHELL_FUNCTION(cmd_sd_read) {
+  char* buf = (char*)spi_buffer;
+  if (argc != 1) {
+    shell_printf("usage: sd_read {filename}" VNA_SHELL_NEWLINE_STR);
+    return;
+  }
+  const char* filename = argv[0];
+  if (cmd_sd_card_mount() != FR_OK)
+    return;
+
+  FIL* const file = filesystem_file();
+  if (f_open(file, filename, FA_OPEN_EXISTING | FA_READ) != FR_OK) {
+    shell_printf("err: no file" VNA_SHELL_NEWLINE_STR);
+    return;
+  }
+  // shell_printf("sd_read: %s" VNA_SHELL_NEWLINE_STR, filename);
+  // number of bytes to follow (file size)
+  uint32_t filesize = f_size(file);
+  shell_stream_write(&filesize, 4);
+  UINT size = 0;
+  // file data (send all data from file)
+  while (f_read(file, buf, 512, &size) == FR_OK && size > 0)
+    shell_stream_write(buf, size);
+
+  f_close(file);
+  return;
+}
+
+VNA_SHELL_FUNCTION(cmd_sd_delete) {
+  FRESULT res;
+  if (argc != 1) {
+    shell_printf("usage: sd_delete {filename}" VNA_SHELL_NEWLINE_STR);
+    return;
+  }
+  if (cmd_sd_card_mount() != FR_OK)
+    return;
+  const char* filename = argv[0];
+  res = f_unlink(filename);
+  shell_printf("delete: %s %s" VNA_SHELL_NEWLINE_STR, filename, res == FR_OK ? "OK" : "err");
+  return;
+}
+#endif
+
+#ifdef __SD_CARD_LOAD__
+VNA_SHELL_FUNCTION(cmd_msg) {
+  if (argc == 0) {
+    shell_printf("usage: msg delay [text] [header]" VNA_SHELL_NEWLINE_STR);
+    return;
+  }
+  uint32_t delay = my_atoui(argv[0]);
+  char *header = 0, *text = 0;
+  if (argc > 1)
+    text = argv[1];
+  if (argc > 2)
+    header = argv[2];
+  ui_message_box(header, text, delay);
+}
+#endif
 
 //=============================================================================
 VNA_SHELL_FUNCTION(cmd_help);
@@ -2277,6 +2348,11 @@ static const VNAShellCommand commands[] = {
 #ifdef __USE_RTC__
     {"time", cmd_time, CMD_RUN_IN_UI},
 #endif
+#ifdef ENABLE_SD_CARD_COMMAND
+    {"sd_list", cmd_sd_list, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
+    {"sd_read", cmd_sd_read, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
+    {"sd_delete", cmd_sd_delete, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
+#endif
 #ifdef __VNA_ENABLE_DAC__
     {"dac", cmd_dac, CMD_RUN_IN_LOAD},
 #endif
@@ -2285,25 +2361,28 @@ static const VNAShellCommand commands[] = {
 #if ENABLED_DUMP_COMMAND
     {"dump", cmd_dump, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
 #endif
-#if ENABLE_PORT_COMMAND
+#ifdef ENABLE_PORT_COMMAND
     {"port", cmd_port, CMD_RUN_IN_LOAD},
 #endif
-#if ENABLE_STAT_COMMAND
+#ifdef ENABLE_STAT_COMMAND
     {"stat", cmd_stat, CMD_WAIT_MUTEX},
 #endif
-#if ENABLE_GAIN_COMMAND
+#ifdef ENABLE_GAIN_COMMAND
     {"gain", cmd_gain, CMD_WAIT_MUTEX},
 #endif
-#if ENABLE_SAMPLE_COMMAND
+#ifdef ENABLE_SAMPLE_COMMAND
     {"sample", cmd_sample, 0},
 #endif
-#if ENABLE_TEST_COMMAND
+#ifdef ENABLE_TEST_COMMAND
     {"test", cmd_test, 0},
 #endif
     {"touchcal", cmd_touchcal, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
     {"touchtest", cmd_touchtest, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
     {"pause", cmd_pause, CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
     {"resume", cmd_resume, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
+#ifdef __SD_CARD_LOAD__
+    {"msg", cmd_msg, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_LOAD},
+#endif
     {"cal", cmd_cal, CMD_WAIT_MUTEX},
     {"save", cmd_save, CMD_RUN_IN_LOAD},
     {"recall", cmd_recall, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
@@ -2336,40 +2415,40 @@ static const VNAShellCommand commands[] = {
     {"usart", cmd_usart, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
 #endif
-#if ENABLE_VBAT_OFFSET_COMMAND
+#ifdef ENABLE_VBAT_OFFSET_COMMAND
     {"vbat_offset", cmd_vbat_offset, CMD_RUN_IN_LOAD},
 #endif
-#if ENABLE_TRANSFORM_COMMAND
+#ifdef ENABLE_TRANSFORM_COMMAND
     {"transform", cmd_transform, CMD_RUN_IN_LOAD},
 #endif
     {"threshold", cmd_threshold, CMD_RUN_IN_LOAD},
     {"help", cmd_help, 0},
-#if ENABLE_INFO_COMMAND
+#ifdef ENABLE_INFO_COMMAND
     {"info", cmd_info, 0},
 #endif
     {"version", cmd_version, 0},
-#if ENABLE_COLOR_COMMAND
+#ifdef ENABLE_COLOR_COMMAND
     {"color", cmd_color, CMD_RUN_IN_LOAD},
 #endif
-#if ENABLE_I2C_COMMAND
+#ifdef ENABLE_I2C_COMMAND
     {"i2c", cmd_i2c, CMD_WAIT_MUTEX},
 #endif
-#if ENABLE_SI5351_REG_WRITE
+#ifdef ENABLE_SI5351_REG_WRITE
     {"si", cmd_si5351reg, CMD_WAIT_MUTEX},
 #endif
-#if ENABLE_LCD_COMMAND
+#ifdef ENABLE_LCD_COMMAND
     {"lcd", cmd_lcd, CMD_WAIT_MUTEX},
 #endif
-#if ENABLE_THREADS_COMMAND && (CH_CFG_USE_REGISTRY == TRUE)
+#ifdef ENABLE_THREADS_COMMAND
     {"threads", cmd_threads, 0},
 #endif
-#if ENABLE_SI5351_TIMINGS
+#ifdef ENABLE_SI5351_TIMINGS
     {"t", cmd_si5351time, CMD_WAIT_MUTEX},
 #endif
-#if ENABLE_I2C_TIMINGS
+#ifdef ENABLE_I2C_TIMINGS
     {"i", cmd_i2ctime, CMD_WAIT_MUTEX},
 #endif
-#if ENABLE_BAND_COMMAND
+#ifdef ENABLE_BAND_COMMAND
     {"b", cmd_band, CMD_WAIT_MUTEX},
 #endif
     {NULL, NULL, 0}};
@@ -2417,6 +2496,59 @@ static void vna_shell_execute_line(char* line) {
     shell_printf("%s?" VNA_SHELL_NEWLINE_STR, command_name);
   }
 }
+
+#ifdef __SD_CARD_LOAD__
+#ifndef __USE_SD_CARD__
+#error "Need enable SD card support __USE_SD_CARD__ in nanovna.h, for use __SD_CARD_LOAD__"
+#endif
+bool sd_card_load_config(void) {
+  // Mount card
+  if (f_mount(filesystem_volume(), "", 1) != FR_OK)
+    return FALSE;
+
+  FIL* const config_file = filesystem_file();
+  if (f_open(config_file, "config.ini", FA_OPEN_EXISTING | FA_READ) != FR_OK)
+    return FALSE;
+
+  char* buf = (char*)spi_buffer;
+  UINT size = 0;
+
+  uint16_t j = 0, i;
+  bool last_was_cr = false;
+  while (f_read(config_file, buf, 512, &size) == FR_OK && size > 0) {
+    i = 0;
+    while (i < size) {
+      uint8_t c = buf[i++];
+      if (c == '\r' || c == '\n') {
+        if (c == '\n' && last_was_cr) {
+          last_was_cr = false;
+          continue;
+        }
+        shell_line[j] = 0;
+        if (j > 0) {
+          vna_shell_execute_cmd_line(shell_line);
+        }
+        j = 0;
+        last_was_cr = (c == '\r');
+        continue;
+      }
+      last_was_cr = false;
+      // Others (skip)
+      if (c < 0x20)
+        continue;
+      // Store
+      if (j < VNA_SHELL_MAX_LENGTH - 1)
+        shell_line[j++] = (char)c;
+    }
+  }
+  if (j > 0) {
+    shell_line[j] = 0;
+    vna_shell_execute_cmd_line(shell_line);
+  }
+  f_close(config_file);
+  return TRUE;
+}
+#endif
 
 #ifdef VNA_SHELL_THREAD
 static THD_WORKING_AREA(waThread2, /* cmd_* max stack size + alpha */ 442);
@@ -2468,43 +2600,34 @@ int app_main(void) {
   sweep_service_init();
 
   config_service_init();
-  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
-                 app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage),
-                 app_event_nodes, ARRAY_COUNT(app_event_nodes));
-  config_service_attach_event_bus(&app_event_bus);
-  shell_attach_event_bus(&app_event_bus);
+  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots));
+  config_service_bind_event_bus(&app_event_bus);
+  shell_bind_event_bus(&app_event_bus);
 
   /*
    * restore config and calibration 0 slot from flash memory, also if need use backup data
    */
   load_settings();
 
-  /*
-   * Kick the sweep engine so that a first acquisition is guaranteed even when
-   * the USB console is not attached.  The boot configuration may pause the
-   * generator, therefore we explicitly reset the sweep progress and enable the
-   * continuous sweep loop.
-   */
-  sweep_init();
-  resume_sweep();
-  sweep_mode |= SWEEP_ENABLE;
-
 #ifdef USE_VARIABLE_OFFSET
   si5351_set_frequency_offset(IF_OFFSET);
 #endif
-  /*
-   * tlv320aic Initialize (audio codec)
-   */
-  tlv320aic3204_init();
-  chThdSleepMilliseconds(200); // MEAS-FIRST: wait for codec PLL to settle before USB bring-up.
-  init_i2s((void*)sweep_service_rx_buffer(),
-           (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
-
   /*
    * Init Shell console connection data
    */
   shell_register_commands(commands);
   shell_init_connection();
+
+  /*
+   * tlv320aic Initialize (audio codec)
+   */
+  tlv320aic3204_init();
+  chThdSleepMilliseconds(200); // Wait for aic codec start
+                               /*
+                                * I2S Initialize
+                                */
+  init_i2s((void*)sweep_service_rx_buffer(),
+           (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
 
 /*
  * SD Card init (if inserted) allow fix issues
@@ -2544,7 +2667,7 @@ int app_main(void) {
       } while (shell_check_connect());
 #endif
     }
-    chThdSleepMilliseconds(50);
+    chThdSleepMilliseconds(1000);
   }
 }
 
@@ -2595,7 +2718,7 @@ __attribute__((naked)) void HardFault_Handler(void) {
 
 void hard_fault_handler_c(uint32_t* sp, const hard_fault_extra_registers_t* extra,
                           uint32_t exc_return) {
-#if ENABLE_HARD_FAULT_HANDLER_DEBUG
+#ifdef ENABLE_HARD_FAULT_HANDLER_DEBUG
   uint32_t r0 = sp[0];
   uint32_t r1 = sp[1];
   uint32_t r2 = sp[2];

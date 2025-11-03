@@ -50,7 +50,7 @@ typedef struct {
 } sweep_service_snapshot_t;
 
 void sweep_service_init(void);
-bool sweep_service_wait_for_copy_release(systime_t timeout);
+void sweep_service_wait_for_copy_release(void);
 void sweep_service_begin_measurement(void);
 void sweep_service_end_measurement(void);
 uint32_t sweep_service_increment_generation(void);
@@ -63,7 +63,6 @@ bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot);
 void sweep_service_start_capture(systime_t delay_ticks);
 void sweep_service_wait_for_capture(void);
 const audio_sample_t* sweep_service_rx_buffer(void);
-uint32_t sweep_service_capture_restart_count(void);
 
 #if ENABLED_DUMP_COMMAND
 void sweep_service_prepare_dump(audio_sample_t* buffer, size_t count, int selection);

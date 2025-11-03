@@ -129,6 +129,9 @@ void palSetPadMode(GPIO_TypeDef *port, int bit, uint32_t mode) {
   port->OTYPER  = (port->OTYPER  & ~m1) | otyper;
   port->OSPEEDR = (port->OSPEEDR & ~m2) | ospeedr;
   port->PUPDR   = (port->PUPDR   & ~m2) | pupdr;
+#if 0
+  port->MODER   = (port->MODER & ~m2) | moder;
+#else
   uint32_t altrmask = ((mode & PAL_STM32_ALTERNATE_MASK) >> 7) << ((bit&7) * 4);
   uint32_t m4       = 0xF << ((bit&7) * 4);
   if (moder == PAL_STM32_MODE_ALTERNATE) {
@@ -141,4 +144,5 @@ void palSetPadMode(GPIO_TypeDef *port, int bit, uint32_t mode) {
     port->MODER = (port->MODER   & ~m2) | moder;
     port->AFR[(bit>>3)&1] = (port->AFR[(bit>>3)&1] & ~m4) | altrmask;
   }
+#endif
 }

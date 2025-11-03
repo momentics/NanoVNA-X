@@ -27,6 +27,16 @@
  * Check 0 byte of char bitmap data for get width
  */
 
+#if 0
+// Font definitions for header
+#define FONT_START_CHAR 0x16
+#define FONT_WIDTH 7
+#define FONT_GET_HEIGHT 11
+#define FONT_STR_HEIGHT 11
+#define FONT_GET_DATA(ch) (&x7x11b_bits[(ch - FONT_START_CHAR) * FONT_GET_HEIGHT])
+#define FONT_GET_WIDTH(ch) (8 - (x7x11b_bits[(ch - FONT_START_CHAR) * FONT_GET_HEIGHT] & 7))
+#endif
+
 #define CHAR7x11_WIDTH_MASK 0x07
 #define CW_01 (8 - 1)
 #define CW_02 (8 - 2)

@@ -24,7 +24,6 @@
 #include "app/shell.h"
 #include "hal.h"
 #include "services/event_bus.h"
-#include "services/config_service.h"
 #include "chprintf.h"
 #include <string.h>
 #include "si5351.h"
@@ -53,50 +52,6 @@ static int16_t last_touch_x;
 static int16_t last_touch_y;
 uint8_t operation_requested = OP_NONE;
 
-static event_bus_t* ui_event_bus = NULL;
-
-static void ui_on_event(const event_bus_message_t* message, void* user_data);
-
-void ui_attach_event_bus(event_bus_t* bus) {
-  if (ui_event_bus == bus) {
-    return;
-  }
-  ui_event_bus = bus;
-  if (bus != NULL) {
-    event_bus_subscribe(bus, EVENT_SWEEP_STARTED, ui_on_event, NULL);
-    event_bus_subscribe(bus, EVENT_SWEEP_COMPLETED, ui_on_event, NULL);
-    event_bus_subscribe(bus, EVENT_STORAGE_UPDATED, ui_on_event, NULL);
-    event_bus_subscribe(bus, EVENT_CONFIGURATION_CHANGED, ui_on_event, NULL);
-    event_bus_subscribe(bus, EVENT_SWEEP_CONFIGURATION_CHANGED, ui_on_event, NULL);
-  }
-}
-
-static void ui_on_event(const event_bus_message_t* message, void* user_data) {
-  (void)user_data;
-  if (message == NULL) {
-    return;
-  }
-  switch (message->topic) {
-  case EVENT_SWEEP_STARTED:
-    request_to_redraw(REDRAW_BATTERY | REDRAW_MARKER);
-    break;
-  case EVENT_SWEEP_COMPLETED:
-    request_to_redraw(REDRAW_PLOT | REDRAW_BATTERY | REDRAW_MARKER);
-    break;
-  case EVENT_CONFIGURATION_CHANGED:
-    request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
-    break;
-  case EVENT_SWEEP_CONFIGURATION_CHANGED:
-    request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA | REDRAW_MARKER);
-    break;
-  case EVENT_STORAGE_UPDATED:
-    request_to_redraw(REDRAW_CAL_STATUS);
-    break;
-  default:
-    break;
-  }
-}
-
 //==============================================
 static uint16_t menu_button_height = MENU_BUTTON_HEIGHT(MENU_BUTTON_MIN);
 
@@ -104,6 +59,9 @@ enum {
   UI_NORMAL,
   UI_MENU,
   UI_KEYPAD,
+#ifdef __SD_FILE_BROWSER__
+  UI_BROWSER,
+#endif
 };
 
 typedef struct {
@@ -120,7 +78,24 @@ typedef struct {
   char label[32];
 } button_t;
 
-// SD card formats removed; screenshot/config save relies on internal flash only.
+// Save/Load formats enum
+#ifdef __USE_SD_CARD__
+enum {
+  FMT_S1P_FILE = 0,
+  FMT_S2P_FILE,
+  FMT_BMP_FILE,
+#ifdef __SD_CARD_DUMP_TIFF__
+  FMT_TIF_FILE,
+#endif
+  FMT_CAL_FILE,
+#ifdef __SD_CARD_DUMP_FIRMWARE__
+  FMT_BIN_FILE,
+#endif
+#ifdef __SD_CARD_LOAD__
+  FMT_CMD_FILE,
+#endif
+};
+#endif
 
 // Keypad structures
 // Enum for keypads_list
@@ -162,6 +137,18 @@ enum {
   KM_RTC_TIME,
   KM_RTC_CAL,
 #endif
+#ifdef __USE_SD_CARD__
+  KM_S1P_NAME,
+  KM_S2P_NAME,
+  KM_BMP_NAME, // Must be equal to Save/Load format enum (TODO fix this)
+#ifdef __SD_CARD_DUMP_TIFF__
+  KM_TIF_NAME,
+#endif
+  KM_CAL_NAME,
+#ifdef __SD_CARD_DUMP_FIRMWARE__
+  KM_BIN_NAME,
+#endif
+#endif
   KM_NONE
 };
 
@@ -193,7 +180,11 @@ typedef struct {
 
 // Max keyboard input length
 #define NUMINPUT_LEN 12
+#if defined(FF_USE_LFN)
+#define TXTINPUT_LEN (FF_MAX_LFN - 4)
+#else
 #define TXTINPUT_LEN (8)
+#endif
 
 #if NUMINPUT_LEN + 2 > TXTINPUT_LEN + 1
 static char kp_buf[NUMINPUT_LEN +
@@ -205,6 +196,7 @@ static char kp_buf[TXTINPUT_LEN +
 static uint8_t ui_mode = UI_NORMAL;
 static const keypads_t* keypads;
 static uint8_t keypad_mode;
+static uint8_t keyboard_temp; // Use for custom keyboard processing
 static uint8_t menu_current_level = 0;
 static int8_t selection = -1;
 
@@ -265,6 +257,29 @@ static void menu_set_submenu(const menuitem_t* submenu);
 
 // Icons for UI
 #include "../resources/icons/icons_menu.c"
+
+#if 0
+static void btn_wait(void) {
+  while (READ_PORT()) chThdSleepMilliseconds(10);
+}
+#endif
+
+#if 0
+static void bubble_sort(uint16_t *v, int n) {
+  bool swapped = true;
+  int i = 0, j;
+  while (i < n - 1 && swapped) { // keep going while we swap in the unordered part
+    swapped = false;
+    for (j = n - 1; j > i; j--) { // unordered part
+      if (v[j] < v[j - 1]) {
+        SWAP(uint16_t, v[j], v[j - 1]);
+        swapped = true;
+      }
+    }
+    i++;
+  }
+}
+#endif
 
 #define SOFTWARE_TOUCH
 //*******************************************************************************
@@ -500,7 +515,6 @@ void ui_touch_cal_exec(void) {
 #endif
   get_touch_point(x1, y1, "UPPER LEFT", &config._touch_cal[p1]);
   get_touch_point(x2, y2, "LOWER RIGHT", &config._touch_cal[p2]);
-  config_service_notify_configuration_changed();
 }
 
 static void touch_position(int* x, int* y) {
@@ -751,6 +765,7 @@ enum {
   MENU_CONFIG_VERSION,
   MENU_CONFIG_SAVE,
   MENU_CONFIG_RESET,
+  MENU_CONFIG_LOAD,
 };
 
 static UI_FUNCTION_CALLBACK(menu_config_cb) {
@@ -772,6 +787,12 @@ static UI_FUNCTION_CALLBACK(menu_config_cb) {
     clear_all_config_prop_data();
     NVIC_SystemReset();
     break;
+#if defined(__SD_CARD_LOAD__) && !defined(__SD_FILE_BROWSER__)
+  case MENU_CONFIG_LOAD:
+    if (!sd_card_load_config())
+      ui_message_box("Error", "No config.ini", 2000);
+    break;
+#endif
   }
   ui_mode_normal();
   request_to_redraw(REDRAW_ALL);
@@ -986,6 +1007,9 @@ const vna_mode_data_t vna_mode_data[] = {
 #ifdef __DIGIT_SEPARATOR__
     [VNA_MODE_SEPARATOR] = {"DOT '.'\0COMMA ','", REDRAW_BACKUP | REDRAW_MARKER | REDRAW_FREQUENCY},
 #endif
+#ifdef __SD_CARD_DUMP_TIFF__
+    [VNA_MODE_TIFF] = {"BMP\0TIFF", REDRAW_BACKUP},
+#endif
 #ifdef __USB_UID__
     [VNA_MODE_USB_UID] = {0, REDRAW_BACKUP},
 #endif
@@ -1003,7 +1027,6 @@ void apply_vna_mode(uint16_t idx, vna_mode_ops operation) {
   if (old == config._vna_mode)
     return;
   request_to_redraw(vna_mode_data[idx].update_flag);
-  config_service_notify_configuration_changed();
   // Custom processing after apply
   switch (idx) {
 #ifdef __USE_SERIAL_CONSOLE__
@@ -1414,14 +1437,537 @@ static UI_FUNCTION_ADV_CALLBACK(menu_brightness_acb) {
   }
   config._brightness = (uint8_t)value;
   request_to_redraw(REDRAW_BACKUP | REDRAW_AREA);
-  config_service_notify_configuration_changed();
   ui_mode_normal();
 }
 #endif
 
 //=====================================================================================================
+//                                 SD card save / load functions
+//=====================================================================================================
+#ifdef __USE_SD_CARD__
+// Save file callback
+typedef FRESULT (*file_save_cb_t)(FIL* f, uint8_t format);
+#define FILE_SAVE_CALLBACK(save_function_name) FRESULT save_function_name(FIL* f, uint8_t format)
+// Load file callback
+typedef const char* (*file_load_cb_t)(FIL* f, FILINFO* fno, uint8_t format);
+#define FILE_LOAD_CALLBACK(load_function_name)                                                     \
+  const char* load_function_name(FIL* f, FILINFO* fno, uint8_t format)
 
-// SD card save/load support removed; external storage is no longer used.
+//=====================================================================================================
+// S1P and S2P file headers, and data structures
+// Save touchstone file for VNA (use rev 1.1 format)
+// https://en.wikipedia.org/wiki/Touchstone_file
+//=====================================================================================================
+static const char s1_file_header[] = "!File created by NanoVNA\r\n"
+                                     "# Hz S RI R 50\r\n";
+
+static const char s1_file_param[] = "%u % f % f\r\n";
+
+static const char s2_file_header[] = "!File created by NanoVNA\r\n"
+                                     "# Hz S RI R 50\r\n";
+
+static const char s2_file_param[] = "%u % f % f % f % f 0 0 0 0\r\n";
+
+static FILE_SAVE_CALLBACK(save_snp) {
+  const char* s_file_format;
+  char* buf_8 = (char*)spi_buffer;
+  FRESULT res;
+  UINT size;
+  // Write SxP file
+  if (format == FMT_S1P_FILE) {
+    s_file_format = s1_file_param;
+    // write sxp header (not write NULL terminate at end)
+    res = f_write(f, s1_file_header, sizeof(s1_file_header) - 1, &size);
+  } else {
+    s_file_format = s2_file_param;
+    // Write s2p header (not write NULL terminate at end)
+    res = f_write(f, s2_file_header, sizeof(s2_file_header) - 1, &size);
+  }
+  // Write all points data
+  for (int i = 0; i < sweep_points && res == FR_OK; i++) {
+    size = plot_printf(buf_8, 128, s_file_format, get_frequency(i), measured[0][i][0],
+                       measured[0][i][1], measured[1][i][0], measured[1][i][1]);
+    res = f_write(f, buf_8, size, &size);
+  }
+  return res;
+}
+
+// Support only NanoVNA format: Hz S RI R 50
+static FILE_LOAD_CALLBACK(load_snp) {
+  (void)fno;
+  UINT size;
+  const int buffer_size = 256;
+  const int line_size = 128;
+  char* buf_8 = (char*)spi_buffer; // must be greater then buffer_size + line_size
+  char* line = buf_8 + buffer_size;
+  uint16_t j = 0, i, count = 0;
+  freq_t start = 0, stop = 0, freq;
+  while (f_read(f, buf_8, buffer_size, &size) == FR_OK && size > 0) {
+    for (i = 0; i < size; i++) {
+      uint8_t c = buf_8[i];
+      if (c == '\r') { // New line (Enter)
+        line[j] = 0;
+        j = 0;
+        char* args[16];
+        int nargs = parse_line(line, args, 16); // Parse line to 16 args
+        if (nargs < 2 || args[0][0] == '#' || args[0][0] == '!')
+          continue;               // No data or comment or settings
+        freq = my_atoui(args[0]); // Get frequency
+        if (count >= SWEEP_POINTS_MAX || freq > FREQUENCY_MAX)
+          return "Format err";
+        if (count == 0)
+          start = freq; // For index 0 set as start
+        stop = freq;    // last set as stop
+        measured[0][count][0] = my_atof(args[1]);
+        measured[0][count][1] = my_atof(args[2]); // get S11 data
+        if (format == FMT_S2P_FILE && nargs >= 4) {
+          measured[1][count][0] = my_atof(args[3]);
+          measured[1][count][1] = my_atof(args[4]); // get S11 data
+        } else {
+          measured[1][count][0] = 0.0f;
+          measured[1][count][1] = 0.0f; // get S11 data
+        }
+        count++;
+      } else if (c < 0x20)
+        continue; // Others (skip)
+      else if (j < line_size)
+        line[j++] = (char)c; // Store
+    }
+  }
+  if (count != 0) { // Points count not zero, so apply data to traces
+    pause_sweep();
+    current_props._electrical_delay[0] = 0.0f; // Reset delays
+    current_props._electrical_delay[1] = 0.0f; // Reset delays
+    current_props._sweep_points = count;
+    set_sweep_frequency(ST_START, start);
+    set_sweep_frequency(ST_STOP, stop);
+    request_to_redraw(REDRAW_PLOT);
+  }
+  return NULL;
+}
+
+//=====================================================================================================
+// Bitmap file header for LCD_WIDTH x LCD_HEIGHT image 16bpp (v4 format allow set RGB mask)
+//=====================================================================================================
+#define BMP_UINT32(val)                                                                            \
+  ((val) >> 0) & 0xFF, ((val) >> 8) & 0xFF, ((val) >> 16) & 0xFF, ((val) >> 24) & 0xFF
+#define BMP_UINT16(val) ((val) >> 0) & 0xFF, ((val) >> 8) & 0xFF
+#define BMP_H1_SIZE (14)                          // BMP header 14 bytes
+#define BMP_V4_SIZE (108)                         // v4  header 108 bytes
+#define BMP_HEAD_SIZE (BMP_H1_SIZE + BMP_V4_SIZE) // Size of all headers
+#define BMP_SIZE (2 * LCD_WIDTH * LCD_HEIGHT)     // Bitmap size = 2*w*h
+#define BMP_FILE_SIZE (BMP_SIZE + BMP_HEAD_SIZE)  // File size = headers + bitmap
+static const uint8_t bmp_header_v4[BMP_H1_SIZE + BMP_V4_SIZE] = {
+    // BITMAPFILEHEADER (14 byte size)
+    0x42,
+    0x4D,                      // BM signature
+    BMP_UINT32(BMP_FILE_SIZE), // File size (h + v4 + bitmap)
+    BMP_UINT16(0),             // reserved
+    BMP_UINT16(0),             // reserved
+    BMP_UINT32(BMP_HEAD_SIZE), // Size of all headers (h + v4)
+                               // BITMAPINFOv4 (108 byte size)
+    BMP_UINT32(BMP_V4_SIZE),   // Data offset after this point (v4 size)
+    BMP_UINT32(LCD_WIDTH),     // Width
+    BMP_UINT32(LCD_HEIGHT),    // Height
+    BMP_UINT16(1),             // Planes
+    BMP_UINT16(16),            // 16bpp
+    BMP_UINT32(3),             // Compression (BI_BITFIELDS)
+    BMP_UINT32(BMP_SIZE),      // Bitmap size (w*h*2)
+    BMP_UINT32(0x0EC4),        // x Resolution (96 DPI = 96 * 39.3701 inches per meter = 0x0EC4)
+    BMP_UINT32(0x0EC4),        // y Resolution (96 DPI = 96 * 39.3701 inches per meter = 0x0EC4)
+    BMP_UINT32(0),             // Palette size
+    BMP_UINT32(0),             // Palette used
+                               // Extend v4 header data (color mask for RGB565)
+    BMP_UINT32(0b1111100000000000), // R mask = 0b11111000 00000000
+    BMP_UINT32(0b0000011111100000), // G mask = 0b00000111 11100000
+    BMP_UINT32(0b0000000000011111), // B mask = 0b00000000 00011111
+    BMP_UINT32(0b0000000000000000), // A mask = 0b00000000 00000000
+    'B',
+    'G',
+    'R',
+    's',           // CSType = 'sRGB'
+    BMP_UINT32(0), // ciexyzRed.ciexyzX    Endpoints
+    BMP_UINT32(0), // ciexyzRed.ciexyzY
+    BMP_UINT32(0), // ciexyzRed.ciexyzZ
+    BMP_UINT32(0), // ciexyzGreen.ciexyzX
+    BMP_UINT32(0), // ciexyzGreen.ciexyzY
+    BMP_UINT32(0), // ciexyzGreen.ciexyzZ
+    BMP_UINT32(0), // ciexyzBlue.ciexyzX
+    BMP_UINT32(0), // ciexyzBlue.ciexyzY
+    BMP_UINT32(0), // ciexyzBlue.ciexyzZ
+    BMP_UINT32(0), // GammaRed
+    BMP_UINT32(0), // GammaGreen
+    BMP_UINT32(0), // GammaBlue
+};
+
+// Save bitmap file (use v4 format allow set RGB mask)
+static FILE_SAVE_CALLBACK(save_bmp) {
+  (void)format;
+  UINT size;
+  uint16_t* buf_16 = (uint16_t*)spi_buffer;
+  FRESULT res = f_write(f, bmp_header_v4, sizeof(bmp_header_v4), &size); // Write header struct
+  lcd_set_background(LCD_SWEEP_LINE_COLOR);
+  for (int y = LCD_HEIGHT - 1; y >= 0 && res == FR_OK; y--) {
+    lcd_read_memory(0, y, LCD_WIDTH, 1, buf_16);
+    swap_bytes(buf_16, LCD_WIDTH);
+    res = f_write(f, buf_16, LCD_WIDTH * sizeof(uint16_t), &size);
+    lcd_fill(LCD_WIDTH - 1, y, 1, 1);
+  }
+  return res;
+}
+
+static FILE_LOAD_CALLBACK(load_bmp) {
+  (void)format;
+  UINT size;
+  uint16_t* buf_16 = (uint16_t*)spi_buffer;                             // prepare buffer
+  FRESULT res = f_read(f, (void*)buf_16, sizeof(bmp_header_v4), &size); // read header
+  if (res != FR_OK || buf_16[9] != LCD_WIDTH || buf_16[11] != LCD_HEIGHT || buf_16[14] != 16)
+    return "Format err";
+  for (int y = LCD_HEIGHT - 1; y >= 0 && res == FR_OK; y--) {
+    res = f_read(f, (void*)buf_16, LCD_WIDTH * sizeof(uint16_t), &size);
+    swap_bytes(buf_16, LCD_WIDTH);
+    lcd_bulk(0, y, LCD_WIDTH, 1);
+  }
+  lcd_printf(0, LCD_HEIGHT - 3 * FONT_STR_HEIGHT, fno->fname);
+  return NULL;
+}
+
+//=====================================================================================================
+// TIFF header for LCD_WIDTH x LCD_HEIGHT image 24bpp and RLE compression (packbits)
+//=====================================================================================================
+#ifdef __SD_CARD_DUMP_TIFF__
+#define IFD_ENTRY(type, val_t, count, value)                                                       \
+  BMP_UINT16(type), BMP_UINT16(val_t), BMP_UINT32(count), BMP_UINT32(value)
+
+#define IFD_BYTE 1 // 8-bit unsigned integer.
+#define IFD_ASCII                                                                                  \
+  2 // 8-bit byte that contains a 7-bit ASCII code; the last byte must be NUL (binary zero).
+#define IFD_SHORT 3 // 16-bit (2-byte) unsigned integer.
+#define IFD_LONG 4  // 32-bit (4-byte) unsigned integer.
+#define IFD_RATIONAL                                                                               \
+  5 // Two LONGs: the first represents the numerator of a fraction; the second, the denominator.
+
+// TIFF Compression
+#define TIFF_UNCOMPRESSED 1
+#define TIFF_CCITT_1D 2
+#define TIFF_CCITT_Group3 3
+#define TIFF_CCITT_Group4 4
+#define TIFF_LZW 5
+#define TIFF_JPEG 6
+#define TIFF_UNCOMPR 0x8003
+#define TIFF_PACKBITS 0x8005
+
+#define TIFF_PHOTOMETRIC_MINISWHITE 0
+#define TIFF_PHOTOMETRIC_MINISBLACK 1
+#define TIFF_PHOTOMETRIC_RGB 2
+#define TIFF_PHOTOMETRIC_PALETTE 3
+#define TIFF_PHOTOMETRIC_MASK 4
+#define TIFF_PHOTOMETRIC_SEPARATED 5
+#define TIFF_PHOTOMETRIC_YCBCR 6
+#define TIFF_PHOTOMETRIC_CIELAB 8
+#define TIFF_PHOTOMETRIC_ICCLAB 9
+#define TIFF_PHOTOMETRIC_ITULAB 10
+#define TIFF_PHOTOMETRIC_LOGL 32844
+#define TIFF_PHOTOMETRIC_LOGLUV 32845
+
+#define TIFF_RESUNIT_NONE 1
+#define TIFF_RESUNIT_INCH 2
+#define TIFF_RESUNIT_CENTIMETER 3
+
+// TIFF file header data
+#define IFD_ENTRIES_COUNT 7
+#define IFD_DATA_OFFSET (10 + 12 * IFD_ENTRIES_COUNT + 4)
+
+#define IFD_BPS_OFFSET IFD_DATA_OFFSET
+// #define IFD_XR_OFFSET        IFD_DATA_OFFSET + 6
+// #define IFD_YR_OFFSET        IFD_DATA_OFFSET + 6 + 8
+#define IFD_STRIP_OFFSET IFD_DATA_OFFSET + 6 // + 8 + 8
+
+static const uint8_t tif_header[] = {
+    0x49,
+    0x49,               // Byte order 'II' (0x4949) - little indian or 'MM' (0x4D4D) - big indian
+    BMP_UINT16(0x002A), // TIFF version number (always 2Ah)
+    BMP_UINT32(0x0008), // IFD offset
+    BMP_UINT16(IFD_ENTRIES_COUNT),                         // IFD entries NUM
+    IFD_ENTRY(0x0100, IFD_SHORT, 1, LCD_WIDTH),            // Image Width
+    IFD_ENTRY(0x0101, IFD_SHORT, 1, LCD_HEIGHT),           // Image Height
+    IFD_ENTRY(0x0102, IFD_SHORT, 3, IFD_BPS_OFFSET),       // BitsPerSample  = 0x0008 0x0008 0x0008
+    IFD_ENTRY(0x0103, IFD_SHORT, 1, TIFF_PACKBITS),        // Compression
+    IFD_ENTRY(0x0106, IFD_SHORT, 1, TIFF_PHOTOMETRIC_RGB), // PhotometricInterpretation = RGB
+    IFD_ENTRY(0x0111, IFD_LONG, 1, IFD_STRIP_OFFSET),      // StripOffsets    = Offset to image data
+    IFD_ENTRY(0x0115, IFD_SHORT, 1, 0x03),                 // SamplesPerPixel = 3
+    // IFD_ENTRY(0x0116, IFD_SHORT,   1, LCD_HEIGHT),          // RowsPerStrip    = LCD_HEIGHT
+    // IFD_ENTRY(0x0117, IFD_LONG,    1, 0x00000000),          // StripByteCounts = Image Width *
+    // Image Height * SamplesPerPixel (if set to 0, possible open any size image) IFD_ENTRY(0x011A,
+    // IFD_RATIONAL,1, IFD_XR_OFFSET),       // XResolution IFD_ENTRY(0x011B, IFD_RATIONAL,1,
+    // IFD_YR_OFFSET),       // YResolution IFD_ENTRY(0x0128, IFD_SHORT,   1, TIFF_RESUNIT_INCH), //
+    // ResolutionUnit = Inch
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    // IDF data
+    BMP_UINT16(8), //   BitsPerSample
+    BMP_UINT16(8),
+    BMP_UINT16(8),
+    // BMP_UINT32(72), BMP_UINT32(1),                          //   XResolution 72 / 1
+    // BMP_UINT32(72), BMP_UINT32(1),                          //   YResolution 72 / 1
+    //    After Image data
+};
+
+static FILE_SAVE_CALLBACK(save_tiff) {
+  (void)format;
+  UINT size;
+  uint16_t* buf_16 = (uint16_t*)spi_buffer;
+  char* buf_8;
+  FRESULT res = f_write(f, tif_header, sizeof(tif_header), &size); // Write header struct
+  lcd_set_background(LCD_SWEEP_LINE_COLOR);
+  for (int y = 0; y < LCD_HEIGHT && res == FR_OK; y++) {
+    // Use 128 bytes offset for RGB888 data
+    // Use 0 offset for compressed RLE (maximum need WIDTH * 4 + 128 bytes in spi_buffer)
+    buf_8 = (char*)buf_16 + 128;
+    // Read LCD line in RGB565 format (swapped bytes)
+    lcd_read_memory(0, y, LCD_WIDTH, 1, buf_16);
+    // Convert to RGB888
+    for (int x = LCD_WIDTH - 1; x >= 0; x--) {
+      uint16_t color = (buf_16[x] << 8) | (buf_16[x] >> 8);
+      buf_8[3 * x + 0] = (color >> 8) & 0xF8; // if (buf_8[3*x + 0] < 0) buf_8[3*x + 0]+= 7;
+      buf_8[3 * x + 1] = (color >> 3) & 0xFC; // if (buf_8[3*x + 1] < 0) buf_8[3*x + 1]+= 3;
+      buf_8[3 * x + 2] = (color << 3) & 0xF8; // if (buf_8[3*x + 2] < 0) buf_8[3*x + 2]+= 7;
+    }
+    size = packbits(buf_8, (char*)buf_16, LCD_WIDTH * 3);
+    res = f_write(f, buf_16, size, &size);
+    lcd_fill(LCD_WIDTH - 1, y, 1, 1);
+  }
+  return res;
+}
+
+static FILE_LOAD_CALLBACK(load_tiff) {
+  (void)format;
+  UINT size;
+  uint8_t* buf_8 = (uint8_t*)spi_buffer; // prepare buffer
+  uint16_t* buf_16 = (uint16_t*)spi_buffer;
+  FRESULT res = f_read(f, (void*)buf_16, sizeof(tif_header), &size); // read header
+  // Quick check for valid (not parse TIFF, use hardcoded values, for less code size)
+  // Check header id, width, height, compression (pass only self saved images)
+  if (res != FR_OK || buf_16[0] != 0x4949 || // Check header ID
+      buf_16[9] != LCD_WIDTH ||              // Check Width
+      buf_16[15] != LCD_HEIGHT ||            // Check Height
+      buf_16[27] != TIFF_PACKBITS)
+    return "Format err";
+  for (int y = 0; y < LCD_HEIGHT && res == FR_OK; y++) {
+    // Unpack RLE compression sequence
+    for (int x = 0; x < LCD_WIDTH * 3;) {
+      int8_t data[2];
+      res = f_read(f, data, 2, &size); // Read count and value
+      int count = data[0];             // count
+      buf_8[x++] = data[1];            // copy first value
+      if (count > 0) {                 // if count > 0 need read additional values
+        res = f_read(f, &buf_8[x], count, &size);
+        x += count;
+      } else
+        while (count++ < 0)
+          buf_8[x++] = data[1]; // if count < 0 need repeat value -count times
+    }
+    // Convert from RGB888 to RGB565 and copy to screen
+    for (int x = 0; x < LCD_WIDTH; x++)
+      buf_16[x] = RGB565(buf_8[3 * x + 0], buf_8[3 * x + 1], buf_8[3 * x + 2]);
+    lcd_bulk(0, y, LCD_WIDTH, 1);
+  }
+  lcd_printf(0, LCD_HEIGHT - 3 * FONT_STR_HEIGHT, fno->fname);
+  return NULL;
+}
+#endif
+
+//=====================================================================================================
+// Calibration save / load
+//=====================================================================================================
+static FILE_SAVE_CALLBACK(save_cal) {
+  (void)format;
+  UINT size;
+  const char* src = (char*)&current_props;
+  const uint32_t total = sizeof(current_props);
+  return f_write(f, src, total, &size);
+}
+
+static FILE_LOAD_CALLBACK(load_cal) {
+  (void)format;
+  UINT size;
+  uint32_t magic;
+  char* src = (char*)&current_props + sizeof(magic);
+  uint32_t total = sizeof(current_props) - sizeof(magic);
+  // Compare file size and try read magic header, if all OK load it
+  if (fno->fsize != sizeof(current_props) || f_read(f, &magic, sizeof(magic), &size) != FR_OK ||
+      magic != PROPERTIES_MAGIC || f_read(f, src, total, &size) != FR_OK)
+    return "Format err";
+  load_properties(NO_SAVE_SLOT);
+  return NULL;
+}
+
+//=====================================================================================================
+// Dump firmware to SD card as bin file image
+//=====================================================================================================
+#ifdef __SD_CARD_DUMP_FIRMWARE__
+static FILE_SAVE_CALLBACK(save_bin) {
+  (void)format;
+  UINT size;
+  //  START_PROFILE
+  const char* src = (const char*)FLASH_START_ADDRESS;
+  const uint32_t total = FLASH_TOTAL_SIZE;
+  return f_write(f, src, total, &size);
+  //  STOP_PROFILE
+}
+#endif
+
+//=====================================================================================================
+// Load command scripts
+//=====================================================================================================
+#ifdef __SD_CARD_LOAD__
+static FILE_LOAD_CALLBACK(load_cmd) {
+  (void)fno;
+  (void)format;
+  UINT size;
+  const int buffer_size = 256;
+  const int line_size = 128;
+  char* buf_8 = (char*)spi_buffer; // must be greater then buffer_size + line_size
+  char* line = buf_8 + buffer_size;
+  uint16_t j = 0, i;
+  while (f_read(f, buf_8, buffer_size, &size) == FR_OK && size > 0) {
+    for (i = 0; i < size; i++) {
+      uint8_t c = buf_8[i];
+      if (c == '\r') { // New line (Enter)
+        line[j] = 0;
+        j = 0;
+        vna_shell_execute_cmd_line(line);
+      } else if (c < 0x20)
+        continue; // Others (skip)
+      else if (j < line_size)
+        line[j++] = (char)c; // Store
+    }
+  }
+  return NULL;
+}
+#endif
+
+//=====================================================================================================
+//                                 SD card save / load file options
+//=====================================================================================================
+#ifdef __SD_FILE_BROWSER__
+#define FILE_OPTIONS(e, s, l, o) {e, s, l, o}
+#else
+#define FILE_OPTIONS(e, s, l, o) {e, s, o}
+#endif
+
+#define FILE_OPT_REDRAW (1 << 0)   // need full screen update before save
+#define FILE_OPT_CONTINUE (1 << 1) // in browser mode use leveler left/right for see next/prev file
+
+// Save / Load file options
+const struct {
+  const char* ext;     // file extension
+  file_save_cb_t save; // file save function
+#ifdef __SD_FILE_BROWSER__
+  file_load_cb_t load; // file load function (use in browser)
+#endif
+  uint32_t opt;
+} file_opt[] = {
+    [FMT_S1P_FILE] = FILE_OPTIONS("s1p", save_snp, load_snp, 0),
+    [FMT_S2P_FILE] = FILE_OPTIONS("s2p", save_snp, load_snp, 0),
+    [FMT_BMP_FILE] = FILE_OPTIONS("bmp", save_bmp, load_bmp, FILE_OPT_REDRAW | FILE_OPT_CONTINUE),
+#ifdef __SD_CARD_DUMP_TIFF__
+    [FMT_TIF_FILE] = FILE_OPTIONS("tif", save_tiff, load_tiff, FILE_OPT_REDRAW | FILE_OPT_CONTINUE),
+#endif
+    [FMT_CAL_FILE] = FILE_OPTIONS("cal", save_cal, load_cal, 0),
+#ifdef __SD_CARD_DUMP_FIRMWARE__
+    [FMT_BIN_FILE] = FILE_OPTIONS("bin", save_bin, NULL, 0),
+#endif
+#ifdef __SD_CARD_LOAD__
+    [FMT_CMD_FILE] = FILE_OPTIONS("cmd", NULL, load_cmd, 0),
+#endif
+};
+
+// Create file name from current time
+static FRESULT ui_create_file(char* fs_filename) {
+  //  shell_printf("S file\r\n");
+  FRESULT res = f_mount(filesystem_volume(), "", 1);
+  //  shell_printf("Mount = %d\r\n", res);
+  if (res != FR_OK)
+    return res;
+  FIL* const file = filesystem_file();
+  res = f_open(file, fs_filename, FA_CREATE_ALWAYS | FA_READ | FA_WRITE);
+  //  shell_printf("Open %s, = %d\r\n", fs_filename, res);
+  return res;
+}
+
+static void ui_save_file(char* name, uint8_t format) {
+  char fs_filename[FF_LFN_BUF];
+  file_save_cb_t save = file_opt[format].save;
+  if (save == NULL)
+    return;
+  // For screenshot need back to normal mode and redraw screen before capture!!
+  // Redraw use spi_buffer so need do it before any file ops
+  if (ui_mode != UI_NORMAL && (file_opt[format].opt & FILE_OPT_REDRAW)) {
+    ui_mode_normal();
+    draw_all();
+  }
+
+  // Prepare filename and open for write
+  if (name == NULL) { // Auto name, use date / time
+#if FF_USE_LFN >= 1
+    uint32_t tr = rtc_get_tr_bcd(); // TR read first
+    uint32_t dr = rtc_get_dr_bcd(); // DR read second
+    plot_printf(fs_filename, FF_LFN_BUF, "VNA_%06x_%06x.%s", dr, tr, file_opt[format].ext);
+#else
+    plot_printf(fs_filename, FF_LFN_BUF, "%08x.%s", rtc_get_fat(), file_opt[format].ext);
+#endif
+  } else
+    plot_printf(fs_filename, FF_LFN_BUF, "%s.%s", name, file_opt[format].ext);
+  // Create file
+  //  systime_t time = chVTGetSystemTimeX();
+  FRESULT res = ui_create_file(fs_filename);
+  if (res == FR_OK) {
+    //  uint32_t t = getSystemTime();
+    FIL* const file = filesystem_file();
+    res = save(file, format);
+    //  log_printf("dump = %d\n", getSystemTime() - t);
+    f_close(file);
+    //    time = chVTGetSystemTimeX() - time;
+    //    shell_printf("Total time: %dms (write %d byte/sec)\r\n", time/10, total_size*10000/time);
+  }
+  if (keyboard_temp == 1)
+    toggle_sweep();
+  ui_message_box("SD CARD SAVE", res == FR_OK ? fs_filename : "  Fail write  ", 2000);
+  request_to_redraw(REDRAW_AREA | REDRAW_FREQUENCY);
+  ui_mode_normal();
+}
+
+static uint16_t fix_screenshot_format(uint16_t data) {
+#ifdef __SD_CARD_DUMP_TIFF__
+  if (data == FMT_BMP_FILE && VNA_MODE(VNA_MODE_TIFF))
+    return FMT_TIF_FILE;
+#endif
+  return data;
+}
+
+#ifdef __SD_FILE_BROWSER__
+#include "../modules/vna_browser.c"
+
+static UI_FUNCTION_CALLBACK(menu_sdcard_browse_cb) {
+  data = fix_screenshot_format(data);
+  ui_mode_browser(data);
+}
+#endif
+
+static UI_FUNCTION_CALLBACK(menu_sdcard_cb) {
+  keyboard_temp = (sweep_mode & SWEEP_ENABLE) ? 1 : 0;
+  if (keyboard_temp)
+    toggle_sweep();
+  data = fix_screenshot_format(data);
+  if (VNA_MODE(VNA_MODE_AUTO_NAME))
+    ui_save_file(NULL, data);
+  else
+    ui_mode_keypad(data + KM_S1P_NAME); // If no auto name, call text keyboard input
+}
+#endif // __USE_SD_CARD__
 
 static UI_FUNCTION_ADV_CALLBACK(menu_band_sel_acb) {
   (void)data;
@@ -1433,7 +1979,6 @@ static UI_FUNCTION_ADV_CALLBACK(menu_band_sel_acb) {
   if (++config._band_mode >= ARRAY_COUNT(gen_names))
     config._band_mode = 0;
   si5351_set_band_mode(config._band_mode);
-  config_service_notify_configuration_changed();
 }
 
 #if STORED_TRACES > 0
@@ -1459,7 +2004,33 @@ static const menuitem_t menu_back[] = {
     {MT_CALLBACK, 0, S_LARROW " BACK", menu_back_cb}, {MT_NEXT, 0, NULL, NULL} // sentinel
 };
 
-// SD card menu removed.
+#ifdef __USE_SD_CARD__
+#ifdef __SD_FILE_BROWSER__
+static const menuitem_t menu_sdcard_browse[] = {
+    {MT_CALLBACK, FMT_BMP_FILE, "LOAD\nSCREENSHOT", menu_sdcard_browse_cb},
+    {MT_CALLBACK, FMT_S1P_FILE, "LOAD S1P", menu_sdcard_browse_cb},
+    {MT_CALLBACK, FMT_S2P_FILE, "LOAD S2P", menu_sdcard_browse_cb},
+    {MT_CALLBACK, FMT_CAL_FILE, "LOAD CAL", menu_sdcard_browse_cb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+#endif
+
+static const menuitem_t menu_sdcard[] = {
+#ifdef __SD_FILE_BROWSER__
+    {MT_SUBMENU, 0, "LOAD", menu_sdcard_browse},
+#endif
+    {MT_CALLBACK, FMT_S1P_FILE, "SAVE S1P", menu_sdcard_cb},
+    {MT_CALLBACK, FMT_S2P_FILE, "SAVE S2P", menu_sdcard_cb},
+    {MT_CALLBACK, FMT_BMP_FILE, "SCREENSHOT", menu_sdcard_cb},
+    {MT_CALLBACK, FMT_CAL_FILE, "SAVE\nCALIBRATION", menu_sdcard_cb},
+    {MT_ADV_CALLBACK, VNA_MODE_AUTO_NAME, "AUTO NAME", menu_vna_mode_acb},
+#ifdef __SD_CARD_DUMP_TIFF__
+    {MT_ADV_CALLBACK, VNA_MODE_TIFF, "IMAGE FORMAT\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
+#endif
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+#endif
+
 static const menuitem_t menu_calop[] = {
     {MT_ADV_CALLBACK, CAL_OPEN, "OPEN", menu_calop_acb},
     {MT_ADV_CALLBACK, CAL_SHORT, "SHORT", menu_calop_acb},
@@ -1473,6 +2044,9 @@ static const menuitem_t menu_calop[] = {
 };
 
 const menuitem_t menu_save[] = {
+#ifdef __SD_FILE_BROWSER__
+    {MT_CALLBACK, FMT_CAL_FILE, "SAVE TO\n SD CARD", menu_sdcard_cb},
+#endif
     {MT_ADV_CALLBACK, 0, "Empty %d", menu_save_acb},
     {MT_ADV_CALLBACK, 1, "Empty %d", menu_save_acb},
     {MT_ADV_CALLBACK, 2, "Empty %d", menu_save_acb},
@@ -1492,6 +2066,9 @@ const menuitem_t menu_save[] = {
 };
 
 const menuitem_t menu_recall[] = {
+#ifdef __SD_FILE_BROWSER__
+    {MT_CALLBACK, FMT_CAL_FILE, "LOAD FROM\n SD CARD", menu_sdcard_browse_cb},
+#endif
     {MT_ADV_CALLBACK, 0, "Empty %d", menu_recall_acb},
     {MT_ADV_CALLBACK, 1, "Empty %d", menu_recall_acb},
     {MT_ADV_CALLBACK, 2, "Empty %d", menu_recall_acb},
@@ -1941,6 +2518,16 @@ const menuitem_t menu_device1[] = {
 #ifdef __USB_UID__
     {MT_ADV_CALLBACK, VNA_MODE_USB_UID, "USB DEVICE\nUID", menu_vna_mode_acb},
 #endif
+#ifdef __SD_CARD_DUMP_FIRMWARE__
+    {MT_CALLBACK, FMT_BIN_FILE, "DUMP\nFIRMWARE", menu_sdcard_cb},
+#endif
+#ifdef __SD_CARD_LOAD__
+#ifdef __SD_FILE_BROWSER__
+    {MT_CALLBACK, FMT_CMD_FILE, "LOAD COMMAND\n SCRIPT", menu_sdcard_browse_cb},
+#else
+    {MT_CALLBACK, MENU_CONFIG_LOAD, "LOAD\nCONFIG.INI", menu_config_cb},
+#endif
+#endif
     {MT_SUBMENU, 0, "CLEAR CONFIG", menu_clear},
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
@@ -2014,6 +2601,9 @@ const menuitem_t menu_top[] = {
     {MT_SUBMENU, 0, "RECALL", menu_recall},
 #ifdef __VNA_MEASURE_MODULE__
     {MT_CALLBACK, 0, "MEASURE", menu_measure_cb},
+#endif
+#ifdef __USE_SD_CARD__
+    {MT_SUBMENU, 0, "SD CARD", menu_sdcard},
 #endif
     {MT_SUBMENU, 0, "CONFIG", menu_config},
     {MT_ADV_CALLBACK, 0, "%s\nSWEEP", menu_pause_acb},
@@ -2200,6 +2790,13 @@ static void menu_draw_buttons(const menuitem_t* m, uint32_t mask) {
 static void menu_draw(uint32_t mask) {
   menu_draw_buttons(menu_stack[menu_current_level], mask);
 }
+
+#if 0
+static void erase_menu_buttons(void) {
+  lcd_set_background(LCD_BG_COLOR);
+  lcd_fill(LCD_WIDTH-MENU_BUTTON_WIDTH, 0, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT*MENU_BUTTON_MAX);
+}
+#endif
 
 //  Menu mode processing
 static void ui_mode_menu(void) {
@@ -2543,7 +3140,6 @@ UI_KEYBOARD_CALLBACK(input_harmonic) {
     return;
   }
   config._harmonic_freq_threshold = keyboard_get_uint();
-  config_service_notify_configuration_changed();
 }
 
 UI_KEYBOARD_CALLBACK(input_vbat) {
@@ -2553,7 +3149,6 @@ UI_KEYBOARD_CALLBACK(input_vbat) {
     return;
   }
   config._vbat_offset = keyboard_get_uint();
-  config_service_notify_configuration_changed();
 }
 
 #ifdef __S21_MEASURE__
@@ -2564,7 +3159,6 @@ UI_KEYBOARD_CALLBACK(input_measure_r) {
     return;
   }
   config._measure_r = keyboard_get_float();
-  config_service_notify_configuration_changed();
 }
 #endif
 
@@ -2639,6 +3233,14 @@ UI_KEYBOARD_CALLBACK(input_rtc_cal) {
 }
 #endif
 
+#ifdef __USE_SD_CARD__
+UI_KEYBOARD_CALLBACK(input_filename) {
+  if (b)
+    return;
+  ui_save_file(kp_buf, data);
+}
+#endif
+
 const keypads_list keypads_mode_tbl[KM_NONE] = {
     //                      key format     data for cb    text at bottom        callback function
     [KM_START] = {KEYPAD_FREQ, ST_START, "START", input_freq},          // start
@@ -2680,6 +3282,18 @@ const keypads_list keypads_mode_tbl[KM_NONE] = {
     [KM_RTC_DATE] = {KEYPAD_UFLOAT, KM_RTC_DATE, "SET DATE\nYY MM DD", input_date_time}, // Date
     [KM_RTC_TIME] = {KEYPAD_UFLOAT, KM_RTC_TIME, "SET TIME\nHH MM SS", input_date_time}, // Time
     [KM_RTC_CAL] = {KEYPAD_FLOAT, 0, "RTC CAL", input_rtc_cal}, // RTC calibration in ppm
+#endif
+#ifdef __USE_SD_CARD__
+    [KM_S1P_NAME] = {KEYPAD_TEXT, FMT_S1P_FILE, "S1P", input_filename}, // s1p filename
+    [KM_S2P_NAME] = {KEYPAD_TEXT, FMT_S2P_FILE, "S2P", input_filename}, // s2p filename
+    [KM_BMP_NAME] = {KEYPAD_TEXT, FMT_BMP_FILE, "BMP", input_filename}, // bmp filename
+#ifdef __SD_CARD_DUMP_TIFF__
+    [KM_TIF_NAME] = {KEYPAD_TEXT, FMT_TIF_FILE, "TIF", input_filename}, // tif filename
+#endif
+    [KM_CAL_NAME] = {KEYPAD_TEXT, FMT_CAL_FILE, "CAL", input_filename}, // cal filename
+#ifdef __SD_CARD_DUMP_FIRMWARE__
+    [KM_BIN_NAME] = {KEYPAD_TEXT, FMT_BIN_FILE, "BIN", input_filename}, // bin filename
+#endif
 #endif
 };
 
@@ -3214,9 +3828,23 @@ static bool touch_apply_ref_scale(int touch_x, int touch_y) {
   return TRUE;
 }
 
+#ifdef __USE_SD_CARD__
+static bool touch_made_screenshot(int touch_x, int touch_y) {
+  if (touch_y < HEIGHT || touch_x < FREQUENCIES_XPOS3 || touch_x > FREQUENCIES_XPOS2)
+    return FALSE;
+  touch_wait_release();
+  menu_sdcard_cb(FMT_BMP_FILE);
+  return TRUE;
+}
+#endif
+
 static void ui_normal_touch(int touch_x, int touch_y) {
   if (touch_pickup_marker(touch_x, touch_y))
     return; // Try drag marker
+#ifdef __USE_SD_CARD__
+  if (touch_made_screenshot(touch_x, touch_y))
+    return; // Try made screenshot
+#endif
   if (touch_lever_mode_select(touch_x, touch_y))
     return; // Try select lever mode (top and bottom screen)
   if (touch_apply_ref_scale(touch_x, touch_y))
@@ -3325,7 +3953,14 @@ static void ui_init_ext(void) {
 }
 #endif
 
-void ui_init() {
+static void ui_handle_sweep_completed(const event_bus_message_t* message, void* user_data);
+static void ui_handle_storage_updated(const event_bus_message_t* message, void* user_data);
+
+void ui_init(event_bus_t* bus) {
+  if (bus != NULL) {
+    (void)event_bus_subscribe(bus, EVENT_SWEEP_COMPLETED, ui_handle_sweep_completed, NULL);
+    (void)event_bus_subscribe(bus, EVENT_STORAGE_UPDATED, ui_handle_storage_updated, NULL);
+  }
   ui_input_reset_state();
   // Activates the EXT driver 1.
   ui_init_ext();
@@ -3336,3 +3971,18 @@ void ui_init() {
   lcd_set_brightness(config._brightness);
 #endif
 }
+#define UI_UNUSED(x) (void)(x)
+
+static void ui_handle_sweep_completed(const event_bus_message_t* message, void* user_data) {
+  UI_UNUSED(message);
+  UI_UNUSED(user_data);
+  request_to_redraw(REDRAW_PLOT);
+  request_to_redraw(REDRAW_BATTERY);
+}
+
+static void ui_handle_storage_updated(const event_bus_message_t* message, void* user_data) {
+  UI_UNUSED(message);
+  UI_UNUSED(user_data);
+  request_to_redraw(REDRAW_CAL_STATUS | REDRAW_BACKUP);
+}
+

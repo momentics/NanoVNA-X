@@ -47,7 +47,7 @@ static void si5351_reset_cache(void) {
   current_freq = 0;
 }
 
-#if ENABLE_SI5351_TIMINGS
+#ifdef ENABLE_SI5351_TIMINGS
 // For debug
 uint16_t timings[8] = {
     DELAY_BAND_1_2,         // 0
@@ -58,7 +58,7 @@ uint16_t timings[8] = {
     DELAY_RESET_PLL_BEFORE, // 5
     DELAY_RESET_PLL_AFTER,  // 6
 };
-void si5351_set_timing(int i, int v) {
+inline void si5351_set_timing(int i, int v) {
   timings[i] = US2ST(v);
 }
 #undef DELAY_BAND_1_2
@@ -106,6 +106,26 @@ void si5351_bulk_write(const uint8_t* buf, int len) {
   i2c_transfer(SI5351_I2C_ADDR, buf, len);
 }
 
+#if 0
+bool si5351_bulk_read(uint8_t reg, uint8_t* buf, int len) {
+  return i2c_receive(SI5351_I2C_ADDR, &reg, 1, buf, len);
+}
+#endif
+
+#if 0
+static void si5351_wait_pll_lock(void)
+{
+  uint8_t status;
+  int count = 100;
+  do{
+    status=0xFF;
+    si5351_bulk_read(0, &status, 1);
+    if ((status & 0x60) == 0) // PLLA and PLLB locked
+      return;
+  }while (--count);
+}
+#endif
+
 static inline void si5351_write(uint8_t reg, uint8_t dat) {
   uint8_t buf[] = {reg, dat};
   si5351_bulk_write(buf, 2);
@@ -124,6 +144,17 @@ const uint8_t si5351_configs[] = {
     2,
     SI5351_REG_183_CRYSTAL_LOAD,
     SI5351_CRYSTAL_LOAD_6PF | (0 << 3) | (0 << 0),
+// All of this init code run late on sweep
+#if 0
+  // setup PLL (26MHz * 32 = 832MHz, 32/2-2=14)
+  9, SI5351_REG_PLL_A, /*P3*/0, 1, /*P1*/0, 14, 0, /*P3/P2*/0, 0, 0,
+  9, SI5351_REG_PLL_B, /*P3*/0, 1, /*P1*/0, 14, 0, /*P3/P2*/0, 0, 0,
+  // RESET PLL
+  2, SI5351_REG_177_PLL_RESET, SI5351_PLL_RESET_A | SI5351_PLL_RESET_B | 0x0C, //
+  // setup multisynth (832MHz / 104 = 8MHz, 104/2-2=50)
+  9, SI5351_REG_58_MULTISYNTH2, /*P3*/0, 1, /*P1*/0, 50, 0, /*P2|P3*/0, 0, 0,
+  2, SI5351_REG_18_CLK2_CONTROL, SI5351_CLK_DRIVE_STRENGTH_2MA | SI5351_CLK_INPUT_MULTISYNTH_N | SI5351_CLK_INTEGER_MODE,
+#endif
     2,
     SI5351_REG_3_OUTPUT_ENABLE_CONTROL,
     ~(SI5351_CLK0_EN | SI5351_CLK1_EN | SI5351_CLK2_EN),
@@ -330,6 +361,29 @@ static void si5351_setup_pll_freq(uint32_t pllSource, uint64_t pllfreq, uint32_t
   si5351_setup_pll(pllSource, multi, num, denom);
 }
 
+#if 0
+static void
+si5351_set_frequency_fixeddiv(uint8_t channel, uint32_t pll, uint32_t freq, uint32_t div,
+                              uint8_t chctrl, uint32_t mul)
+{
+  si5351_setup_pll_freq(pll, (uint64_t)freq * div, mul);
+  si5351_setupMultisynth(channel, div, 0, 1, SI5351_R_DIV_1, chctrl);
+}
+
+void
+si5351_set_frequency(int channel, uint32_t freq, uint8_t drive_strength)
+{
+  if (freq <= 100000000) {
+    si5351_setup_pll(SI5351_PLL_B, 32, 0, 1);
+    si5351_set_frequency_fixedpll(channel, SI5351_PLL_B, PLLFREQ, freq, SI5351_R_DIV_1, drive_strength, 1);
+  } else if (freq < 150000000) {
+    si5351_set_frequency_fixeddiv(channel, SI5351_PLL_B, freq, 6, drive_strength, 1);
+  } else {
+    si5351_set_frequency_fixeddiv(channel, SI5351_PLL_B, freq, 4, drive_strength, 1);
+  }
+}
+#endif
+
 typedef struct {
   uint32_t freq;
   uint8_t mode;
@@ -350,19 +404,12 @@ typedef struct {
 #define SI5351_FIXED_MULT 2
 #define SI5351_MIXED 3
 
-#if ENABLE_BAND_COMMAND
-typedef band_strategy_t band_strategy_storage_t;
-typedef band_strategy_t* band_strategy_ptr_t;
-#else
-typedef const band_strategy_t band_strategy_storage_t;
-typedef const band_strategy_t* band_strategy_ptr_t;
-#endif
-
-static band_strategy_ptr_t band_s;
-
-#if ENABLE_BAND_COMMAND
+#define CONST_BAND const
+#ifndef CONST_BAND
+#define CONST_BAND
+static band_strategy_t* band_s;
 void si5351_update_band_config(int idx, uint32_t pidx, uint32_t v) {
-  band_strategy_t* b = &band_s[idx];
+  CONST_BAND band_strategy_t* b = &band_s[idx];
   switch (pidx) {
   case 0:
     b->mode = v;
@@ -399,13 +446,15 @@ void si5351_update_band_config(int idx, uint32_t pidx, uint32_t v) {
     break;
   }
 }
+#else
+static const band_strategy_t* band_s;
 #endif
 
 /*
  * Frequency generation divide on band
  */
 // Mode for H board v3.3 and SI5351 installed
-band_strategy_storage_t band_strategy_33H_SI5351[] = {
+CONST_BAND band_strategy_t band_strategy_33H_SI5351[] = {
     {0U, 0, {0}, 0, 0, -1, -1, -1, -1, 1}, // 0
     {26000U,
      SI5351_FIXED_PLL,
@@ -566,7 +615,7 @@ band_strategy_storage_t band_strategy_33H_SI5351[] = {
 };
 
 // Mode for H4 board v3.4 and SI5351 installed
-band_strategy_storage_t band_strategy_H4_SI5351[] = {
+CONST_BAND band_strategy_t band_strategy_H4_SI5351[] = {
     {0U, 0, {0}, 0, 0, -1, -1, -1, -1, 1}, // 0
     {26000U,
      SI5351_FIXED_PLL,
@@ -727,7 +776,7 @@ band_strategy_storage_t band_strategy_H4_SI5351[] = {
 };
 
 // Mode for board v3.6 and MS5351 installed
-band_strategy_storage_t band_strategy_36H_MS5351[] = {
+CONST_BAND band_strategy_t band_strategy_36H_MS5351[] = {
     {0U, 0, {0}, 0, 0, -1, -1, -1, -1, 1}, // 0
     {26000U,
      SI5351_FIXED_PLL,
@@ -832,7 +881,7 @@ band_strategy_storage_t band_strategy_36H_MS5351[] = {
 };
 
 // Mode for board H v3.6+ or H4 v4.3+ and SWC5351 installed
-band_strategy_storage_t band_strategy_SWC5351[] = {
+CONST_BAND band_strategy_t band_strategy_SWC5351[] = {
     {0U, 0, {0}, 0, 0, -1, -1, -1, -1, 1}, // 0
     {32000U,
      SI5351_FIXED_PLL,
@@ -927,7 +976,7 @@ band_strategy_storage_t band_strategy_SWC5351[] = {
 };
 
 void si5351_set_band_mode(uint16_t t) {
-  static band_strategy_ptr_t bs[] = {
+  static const band_strategy_t* bs[] = {
 #if defined(NANOVNA_F303)
       band_strategy_H4_SI5351, band_strategy_36H_MS5351, band_strategy_SWC5351
 #else
@@ -984,6 +1033,14 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
   } else
     band = si5351_get_harmonic_lvl(freq);
 
+#if 0
+  uint32_t align = band_s[band].freq_align;
+  if (align > 1){
+    freq/=align;
+    freq*=align;
+    ofreq = freq + current_offset;
+  }
+#endif
   // Check current power settings
   if (current_power != drive_strength) {
     si5351_reset_cache();
@@ -1033,6 +1090,27 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
     si5351_set_frequency_fixedpll(FREQ_CHANNEL, (uint64_t)mul * config._xtal_freq * pll_n, freq,
                                   rdiv, ds | SI5351_CLK_PLL_SELECT_A);
     break;
+#if 0
+    case SI5351_MIXED:
+      fdiv  = band_s[band].div;
+      pll_n = 32;
+      // Calculate and set fixed PLL frequency for CH0 freq+offset
+      if (band_s[current_band].div != band_s[band].div)
+        si5351_setup_pll(SI5351_REG_PLL_A, pll_n, 0, 1);
+      // Calculate and set variable PLL frequency for CH1 freq
+      si5351_setup_pll_freq(SI5351_REG_PLL_B, (uint64_t)freq * fdiv,  mul);  // set PLLB freq = ( freq/ mul)*fdiv
+
+      // Setup CH1 constant fdiv divider at change
+      if (band_s[current_band].div != band_s[band].div)
+        si5351_setupMultisynth(FREQ_CHANNEL, fdiv, 0, 1, SI5351_R_DIV_1, ds | SI5351_CLK_PLL_SELECT_B);
+
+      // Set CH0 divider
+      si5351_set_frequency_fixedpll(OFREQ_CHANNEL, (uint64_t)omul * config._xtal_freq * pll_n, ofreq, rdiv, ods | SI5351_CLK_PLL_SELECT_A);
+      // Calculate CH2 freq = CLK2_FREQUENCY, depend from calculated before CH1 PLLB = (freq/mul)*fdiv
+      si5351_set_frequency_fixedpll(AUDIO_CODEC_CHANNEL, (uint64_t)freq * fdiv, CLK2_FREQUENCY * mul, SI5351_R_DIV_1, SI5351_CLK_DRIVE_STRENGTH_2MA | SI5351_CLK_PLL_SELECT_B);
+      delay= DELAY_BAND_3_4;
+    break;
+#endif
     // fdiv = 8, f 100-130   PLL 800-1040
     // fdiv = 6, f 130-170   PLL 780-1050
   case SI5351_FIXED_MULT: // fdiv = 4, f 170-270   PLL 680-1080

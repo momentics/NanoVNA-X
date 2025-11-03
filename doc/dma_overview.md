@@ -1,15 +1,16 @@
 # DMA Architecture Overview
 
 NanoVNA-X relies on DMA to keep the STM32F072 and STM32F303 parts responsive while streaming
-screen updates and shell traffic.  The firmware centralises the DMA setup so that the SPI display
-interface and the USART console can share the available channels without starving each other.
+screen updates, SD card payloads, and shell traffic.  The firmware now centralises the DMA setup
+so that the SPI display/SD interface and the USART console can share the available channels
+without starving each other.
 
 ## Channel allocation by platform
 
 | Peripheral | Direction | STM32F072 (NanoVNA-H) | STM32F303 (NanoVNA-H4) |
 |------------|-----------|------------------------|------------------------|
-| SPI1 (LCD) | TX | DMA1 Channel 3 | DMA1 Channel 3 |
-| SPI1 (LCD) | RX | DMA1 Channel 2 | DMA1 Channel 2 |
+| SPI1 (LCD & SD) | TX | DMA1 Channel 3 | DMA1 Channel 3 |
+| SPI1 (LCD & SD) | RX | DMA1 Channel 2 | DMA1 Channel 2 |
 | USART1 (console) | TX | DMA1 Channel 4 | DMA1 Channel 4 |
 | USART1 (console) | RX | DMA1 Channel 5 | DMA1 Channel 5 |
 
@@ -29,9 +30,9 @@ The helper functions:
 * provide `dma_channel_get_remaining()` so the LCD driver can poll DMA progress while parsing the
   RGB data returned by the panel.
 
-The LCD driver switches to these helpers instead of poking the registers directly.  The SPI1 DMA
-handles are initialised once in `spi_init()` and reused for LCD screen updates so only one set of
-interrupts and status bits has to be monitored.  Blocking calls now simply wait on
+The LCD/SD driver switches to these helpers instead of poking the registers directly.  The SPI1 DMA
+handles are initialised once in `spi_init()` and reused for both LCD screen updates and SD card I/O,
+so only one set of interrupts and status bits has to be monitored.  Blocking calls now simply wait on
 the new helper rather than busy loops that cleared the CCR register after every transfer.
 
 ## UART console via DMA

@@ -168,6 +168,8 @@ CSRC = $(STARTUPSRC) \
        $(PLATFORMSRC) \
        $(BOARDSRC) \
        $(STREAMSSRC) \
+       third_party/FatFs/ff.c \
+       third_party/FatFs/ffunicode.c \
        src/resources/fonts/numfont16x22.c \
        src/resources/fonts/Font5x7.c \
        src/resources/fonts/Font6x10.c \
@@ -177,7 +179,7 @@ CSRC = $(STARTUPSRC) \
        src/core/main.c \
        src/app/application.c \
        src/app/sweep_service.c \
-       src/app/shell.c \
+       src/app/shell/shell.c \
        src/core/common.c \
        src/drivers/si5351.c \
        src/drivers/tlv320aic3204.c \
@@ -191,7 +193,6 @@ CSRC = $(STARTUPSRC) \
        src/services/scheduler.c \
        src/measurement/pipeline.c \
        src/platform/platform_hal.c \
-       src/platform/syscalls.c \
        src/platform/boards/board_registry.c \
        src/platform/boards/nanovna_board.c \
        src/platform/boards/stm32_peripherals.c \
@@ -283,9 +284,9 @@ CPPWARN = -Wall -Wextra -Wundef
 
 # List all user C define here, like -D_DEBUG=1
 ifeq ($(TARGET),F303)
- UDEFS = -DARM_MATH_CM4 -DNANOVNA_F303 -DAPP_FEATURE_PROFILE=APP_FEATURE_PROFILE_MEDIUM
+ UDEFS = -DARM_MATH_CM4 -DNANOVNA_F303
 else
- UDEFS = -DARM_MATH_CM0 -DAPP_FEATURE_PROFILE=APP_FEATURE_PROFILE_MINIMAL
+ UDEFS = -DARM_MATH_CM0
 endif
 #Enable if use RTC and need auto select source LSE or LSI
 UDEFS+= -DVNA_AUTO_SELECT_RTC_SOURCE
@@ -297,7 +298,7 @@ UDEFS+= -DVNA_AUTO_SELECT_RTC_SOURCE
 UADEFS =
 
 # List all user directories here
-UINCDIR = config include include/drivers boards/STM32F072 boards/STM32F303 $(BUILDDIR)/generated
+UINCDIR = config include include/drivers third_party/FatFs boards/STM32F072 boards/STM32F303 $(BUILDDIR)/generated
 
 # List the user directory to look for the libraries here
 ULIBDIR =
