@@ -129,6 +129,18 @@ static void app_process_event_queue(systime_t timeout) {
   }
 }
 
+void pause_sweep(void) {
+  sweep_mode &= ~SWEEP_ENABLE;
+}
+
+static inline void resume_sweep(void) {
+  sweep_mode |= SWEEP_ENABLE;
+}
+
+void toggle_sweep(void) {
+  sweep_mode ^= SWEEP_ENABLE;
+}
+
 static THD_WORKING_AREA(waThread1, 1024);
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
@@ -190,18 +202,6 @@ static THD_FUNCTION(Thread1, arg) {
     draw_all();
 #endif
   }
-}
-
-void pause_sweep(void) {
-  sweep_mode &= ~SWEEP_ENABLE;
-}
-
-static inline void resume_sweep(void) {
-  sweep_mode |= SWEEP_ENABLE;
-}
-
-void toggle_sweep(void) {
-  sweep_mode ^= SWEEP_ENABLE;
 }
 
 config_t config = {
