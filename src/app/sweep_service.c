@@ -28,6 +28,7 @@
 #include "platform/boards/stm32_peripherals.h"
 
 #include <math.h>
+#include <stdint.h>
 #include <string.h>
 
 #ifdef __VNA_Z_RENORMALIZATION__
@@ -39,6 +40,9 @@
  */
 static systime_t ready_time = 0;
 static volatile uint16_t wait_count = 0;
+static systime_t capture_timeout_ticks = MS2ST(20);
+static systime_t capture_delay_ticks = TIME_IMMEDIATE;
+static uint16_t capture_bandwidth_setting = 0;
 static audio_sample_t rx_buffer[AUDIO_BUFFER_LEN * 2];
 
 #if ENABLED_DUMP_COMMAND
@@ -355,9 +359,45 @@ bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
   return stable;
 }
 
+static systime_t sweep_capture_timeout_budget(uint16_t bandwidth_setting,
+                                              systime_t delay_ticks) {
+  uint32_t capture_cycles = (uint32_t)bandwidth_setting + 2U;
+  if (capture_cycles < 2U) {
+    capture_cycles = 2U;
+  }
+  uint64_t capture_us =
+      ((uint64_t)capture_cycles * (uint64_t)AUDIO_BUFFER_LEN * 1000000ULL) / AUDIO_ADC_FREQ;
+  if (capture_us < 1000ULL) {
+    capture_us = 1000ULL;
+  }
+  systime_t timeout = US2ST((uint32_t)capture_us);
+  const systime_t margin = MS2ST(5);
+  if (timeout < margin) {
+    timeout = margin;
+  }
+  if (timeout > (systime_t)(TIME_INFINITE - delay_ticks)) {
+    timeout = TIME_INFINITE;
+  } else {
+    timeout += delay_ticks;
+  }
+  if (timeout > (systime_t)(TIME_INFINITE - margin)) {
+    timeout = TIME_INFINITE;
+  } else {
+    timeout += margin;
+  }
+  return timeout;
+}
+
 void sweep_service_start_capture(systime_t delay_ticks) {
+  capture_delay_ticks = delay_ticks;
+  capture_bandwidth_setting = config._bandwidth;
   ready_time = chVTGetSystemTimeX() + delay_ticks;
-  wait_count = config._bandwidth + 2U;
+  uint32_t capture_cycles = (uint32_t)capture_bandwidth_setting + 2U;
+  if (capture_cycles > UINT16_MAX) {
+    capture_cycles = UINT16_MAX;
+  }
+  wait_count = (uint16_t)capture_cycles;
+  capture_timeout_ticks = sweep_capture_timeout_budget(capture_bandwidth_setting, delay_ticks);
   chBSemReset(&capture_done_sem, true);
 }
 
@@ -367,11 +407,25 @@ static void sweep_restart_capture_hardware(void) {
   chThdSleepMilliseconds(10);
   init_i2s((void*)rx_buffer,
            (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
+  uint32_t capture_cycles = (uint32_t)capture_bandwidth_setting + 2U;
+  if (capture_cycles > UINT16_MAX) {
+    capture_cycles = UINT16_MAX;
+  }
+  wait_count = (uint16_t)capture_cycles;
+  ready_time = chVTGetSystemTimeX() + capture_delay_ticks;
+  capture_timeout_ticks =
+      sweep_capture_timeout_budget(capture_bandwidth_setting, capture_delay_ticks);
+  reset_dsp_accumerator();
+  chBSemReset(&capture_done_sem, true);
   capture_restart_counter++;
 }
 
 void sweep_service_wait_for_capture(void) {
-  const systime_t timeout = MS2ST(20);
+  systime_t timeout = capture_timeout_ticks;
+  const systime_t minimum_timeout = MS2ST(5);
+  if (timeout < minimum_timeout) {
+    timeout = minimum_timeout;
+  }
   while (true) {
     msg_t result = chBSemWaitTimeout(&capture_done_sem, timeout);
     if (result == MSG_OK) {
@@ -379,6 +433,10 @@ void sweep_service_wait_for_capture(void) {
     }
     if (result == MSG_TIMEOUT) {
       sweep_restart_capture_hardware();
+      timeout = capture_timeout_ticks;
+      if (timeout < minimum_timeout) {
+        timeout = minimum_timeout;
+      }
     }
   }
 }
