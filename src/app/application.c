@@ -144,7 +144,18 @@ static THD_FUNCTION(Thread1, arg) {
   ui_init();
   // Initialize graph plotting
   plot_init();
+  bool boot_sweep_pending = true;
   while (1) {
+    if (boot_sweep_pending) {
+      if ((sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) == 0U) {
+        sweep_service_reset_progress();
+        resume_sweep();
+        sweep_mode |= SWEEP_ONCE;
+      }
+      if (sweep_service_current_generation() != 0U) {
+        boot_sweep_pending = false;
+      }
+    }
     app_process_event_queue(TIME_IMMEDIATE);
     shell_service_pending_commands();
     bool completed = false;
@@ -191,12 +202,6 @@ static inline void resume_sweep(void) {
 
 void toggle_sweep(void) {
   sweep_mode ^= SWEEP_ENABLE;
-}
-
-static void app_force_resume_sweep(void) {
-  sweep_service_reset_progress();
-  resume_sweep();
-  sweep_mode |= SWEEP_ONCE;
 }
 
 config_t config = {
@@ -799,13 +804,6 @@ static bool need_interpolate(freq_t start, freq_t stop, uint16_t points) {
 VNA_SHELL_FUNCTION(cmd_scan) {
   freq_t start, stop;
   uint16_t points = sweep_points;
-  const freq_t original_start = get_sweep_frequency(ST_START);
-  const freq_t original_stop = get_sweep_frequency(ST_STOP);
-  const uint16_t original_points = sweep_points;
-  const uint32_t original_props_mode = props_mode;
-  const freq_t saved_frequency0 = frequency0;
-  const freq_t saved_frequency1 = frequency1;
-  bool restore_config = false;
 
   if (argc < 2 || argc > 4) {
     shell_printf("usage: scan {start(Hz)} {stop(Hz)} [points] [outmask]" VNA_SHELL_NEWLINE_STR);
@@ -818,8 +816,6 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     shell_printf("frequency range is invalid" VNA_SHELL_NEWLINE_STR);
     return;
   }
-  if (start != original_start || stop != original_stop)
-    restore_config = true;
   if (argc >= 3) {
     points = my_atoui(argv[2]);
     if (points == 0 || points > SWEEP_POINTS_MAX) {
@@ -827,16 +823,13 @@ VNA_SHELL_FUNCTION(cmd_scan) {
                        VNA_SHELL_NEWLINE_STR);
       return;
     }
-    if (points != original_points)
-      restore_config = true;
+    if (points < SWEEP_POINTS_MIN)
+      points = SWEEP_POINTS_MIN;
   }
   uint16_t mask = 0;
   uint16_t sweep_ch = SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE;
 
   FREQ_STARTSTOP();
-  if (props_mode != original_props_mode) {
-    restore_config = true;
-  }
   frequency0 = start;
   frequency1 = stop;
   sweep_points = points;
@@ -900,13 +893,6 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     }
   }
 
-  if (restore_config) {
-    props_mode = original_props_mode;
-    frequency0 = saved_frequency0;
-    frequency1 = saved_frequency1;
-    sweep_points = original_points;
-    app_measurement_update_frequencies();
-  }
 }
 
 #if ENABLE_SCANBIN_COMMAND
@@ -996,7 +982,6 @@ void app_measurement_update_frequencies(void) {
   if ((sweep_mode & SWEEP_ENABLE) == 0U) {
     sweep_mode |= SWEEP_ONCE;
   }
-  event_bus_publish(&app_event_bus, EVENT_SWEEP_CONFIGURATION_CHANGED, NULL);
 }
 
 static void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforce_order) {
@@ -2361,7 +2346,6 @@ int app_main(void) {
    * restore config and calibration 0 slot from flash memory, also if need use backup data
    */
   load_settings();
-  app_force_resume_sweep();
 
 #ifdef USE_VARIABLE_OFFSET
   si5351_set_frequency_offset(IF_OFFSET);
