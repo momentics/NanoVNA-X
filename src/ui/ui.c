@@ -65,7 +65,9 @@ void ui_attach_event_bus(event_bus_t* bus) {
   if (bus != NULL) {
     event_bus_subscribe(bus, EVENT_SWEEP_STARTED, ui_on_event, NULL);
     event_bus_subscribe(bus, EVENT_SWEEP_COMPLETED, ui_on_event, NULL);
+    event_bus_subscribe(bus, EVENT_SWEEP_CONFIGURATION_CHANGED, ui_on_event, NULL);
     event_bus_subscribe(bus, EVENT_STORAGE_UPDATED, ui_on_event, NULL);
+    event_bus_subscribe(bus, EVENT_CONFIGURATION_CHANGED, ui_on_event, NULL);
   }
 }
 
@@ -81,8 +83,14 @@ static void ui_on_event(const event_bus_message_t* message, void* user_data) {
   case EVENT_SWEEP_COMPLETED:
     request_to_redraw(REDRAW_PLOT | REDRAW_BATTERY);
     break;
+  case EVENT_SWEEP_CONFIGURATION_CHANGED:
+    request_to_redraw(REDRAW_FREQUENCY | REDRAW_MARKER | REDRAW_CAL_STATUS);
+    break;
   case EVENT_STORAGE_UPDATED:
     request_to_redraw(REDRAW_CAL_STATUS);
+    break;
+  case EVENT_CONFIGURATION_CHANGED:
+    request_to_redraw(REDRAW_FREQUENCY | REDRAW_MARKER | REDRAW_CAL_STATUS);
     break;
   default:
     break;
@@ -3249,9 +3257,19 @@ static void ui_process_touch(void) {
 
 void ui_process(void) {
   // if (ui_mode >= UI_END) return; // for safe
-  if (operation_requested & OP_LEVER)
+  uint8_t requests = operation_requested;
+  if ((requests & OP_LEVER) == 0U) {
+    uint16_t buttons = ui_input_get_buttons();
+    if (buttons & (BUTTON_DOWN | BUTTON_PUSH | BUTTON_UP)) {
+      requests |= OP_LEVER;
+    }
+  }
+  if ((requests & OP_TOUCH) == 0U && touch_status()) {
+    requests |= OP_TOUCH;
+  }
+  if (requests & OP_LEVER)
     ui_process_lever();
-  if (operation_requested & OP_TOUCH)
+  if (requests & OP_TOUCH)
     ui_process_touch();
 
   touch_start_watchdog();

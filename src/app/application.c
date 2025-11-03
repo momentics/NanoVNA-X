@@ -193,6 +193,12 @@ void toggle_sweep(void) {
   sweep_mode ^= SWEEP_ENABLE;
 }
 
+static void app_force_resume_sweep(void) {
+  sweep_service_reset_progress();
+  resume_sweep();
+  sweep_mode |= SWEEP_ONCE;
+}
+
 config_t config = {
     .magic = CONFIG_MAGIC,
     ._harmonic_freq_threshold = FREQUENCY_THRESHOLD,
@@ -796,6 +802,9 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   const freq_t original_start = get_sweep_frequency(ST_START);
   const freq_t original_stop = get_sweep_frequency(ST_STOP);
   const uint16_t original_points = sweep_points;
+  const uint32_t original_props_mode = props_mode;
+  const freq_t saved_frequency0 = frequency0;
+  const freq_t saved_frequency1 = frequency1;
   bool restore_config = false;
 
   if (argc < 2 || argc > 4) {
@@ -818,12 +827,20 @@ VNA_SHELL_FUNCTION(cmd_scan) {
                        VNA_SHELL_NEWLINE_STR);
       return;
     }
-    sweep_points = points;
     if (points != original_points)
       restore_config = true;
   }
   uint16_t mask = 0;
   uint16_t sweep_ch = SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE;
+
+  FREQ_STARTSTOP();
+  if (props_mode != original_props_mode) {
+    restore_config = true;
+  }
+  frequency0 = start;
+  frequency1 = stop;
+  sweep_points = points;
+  app_measurement_update_frequencies();
 
 #if ENABLE_SCANBIN_COMMAND
   if (argc == 4) {
@@ -852,8 +869,6 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   if (need_interpolate(start, stop, sweep_points))
     sweep_ch |= SWEEP_USE_INTERPOLATION;
 
-  sweep_points = points;
-  app_measurement_set_frequencies(start, stop, points);
   if (sweep_ch & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE))
     app_measurement_sweep(false, sweep_ch);
   pause_sweep();
@@ -886,6 +901,9 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   }
 
   if (restore_config) {
+    props_mode = original_props_mode;
+    frequency0 = saved_frequency0;
+    frequency1 = saved_frequency1;
     sweep_points = original_points;
     app_measurement_update_frequencies();
   }
@@ -978,6 +996,7 @@ void app_measurement_update_frequencies(void) {
   if ((sweep_mode & SWEEP_ENABLE) == 0U) {
     sweep_mode |= SWEEP_ONCE;
   }
+  event_bus_publish(&app_event_bus, EVENT_SWEEP_CONFIGURATION_CHANGED, NULL);
 }
 
 static void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforce_order) {
@@ -2342,6 +2361,7 @@ int app_main(void) {
    * restore config and calibration 0 slot from flash memory, also if need use backup data
    */
   load_settings();
+  app_force_resume_sweep();
 
 #ifdef USE_VARIABLE_OFFSET
   si5351_set_frequency_offset(IF_OFFSET);
