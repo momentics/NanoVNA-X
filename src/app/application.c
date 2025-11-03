@@ -240,8 +240,8 @@ static THD_FUNCTION(Thread1, arg) {
           chVTTimeElapsedSinceX(runtime_metrics_last_log) >= MS2ST(1000)) {
         runtime_metrics_last_log = chVTGetSystemTimeX();
         shell_printf("perf sweep=%lums ui=%lums usb=%lu/%lu caprst=%lu gen=%lu" VNA_SHELL_NEWLINE_STR,
-                     (unsigned long)TIME_I2MS(runtime_metrics.sweep_ticks),
-                     (unsigned long)TIME_I2MS(runtime_metrics.ui_draw_ticks),
+                     (unsigned long)MS2ST(runtime_metrics.sweep_ticks),
+                     (unsigned long)MS2ST(runtime_metrics.ui_draw_ticks),
                      (unsigned long)runtime_metrics.usb_frames_sent,
                      (unsigned long)runtime_metrics.usb_frames_dropped,
                      (unsigned long)runtime_metrics.capture_restarts,
@@ -2085,8 +2085,8 @@ VNA_SHELL_FUNCTION(cmd_info) {
   while (info_about[i])
     shell_printf("%s" VNA_SHELL_NEWLINE_STR, info_about[i++]);
   shell_printf("perf sweep=%lums ui=%lums usb=%lu/%lu caprst=%lu gen=%lu" VNA_SHELL_NEWLINE_STR,
-               (unsigned long)TIME_I2MS(runtime_metrics.sweep_ticks),
-               (unsigned long)TIME_I2MS(runtime_metrics.ui_draw_ticks),
+               (unsigned long)MS2ST(runtime_metrics.sweep_ticks),
+               (unsigned long)MS2ST(runtime_metrics.ui_draw_ticks),
                (unsigned long)runtime_metrics.usb_frames_sent,
                (unsigned long)runtime_metrics.usb_frames_dropped,
                (unsigned long)runtime_metrics.capture_restarts,
