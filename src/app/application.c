@@ -57,6 +57,10 @@ static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
 
 static measurement_pipeline_t measurement_pipeline;
 
+static inline void app_publish_sweep_configuration_changed(void) {
+  event_bus_publish(&app_event_bus, EVENT_SWEEP_CONFIGURATION_CHANGED, NULL);
+}
+
 // SD card access was removed; configuration persists using internal flash only.
 
 // Shell frequency printf format
@@ -186,6 +190,7 @@ static THD_FUNCTION(Thread1, arg) {
     app_process_event_queue(TIME_IMMEDIATE);
     // Process UI inputs
     sweep_mode |= SWEEP_UI_MODE;
+    operation_requested |= (OP_LEVER | OP_TOUCH);
     ui_process();
     sweep_mode &= ~SWEEP_UI_MODE;
     // Process collected data, calculate trace coordinates and plot only if scan completed
@@ -501,6 +506,7 @@ void set_power(uint8_t value) {
   // Update power if pause, need for generation in CW mode
   if (!(sweep_mode & SWEEP_ENABLE))
     si5351_set_power(value);
+  app_publish_sweep_configuration_changed();
 }
 
 VNA_SHELL_FUNCTION(cmd_power) {
@@ -734,6 +740,7 @@ void set_bandwidth(uint16_t bw_count) {
   config._bandwidth = bw_count & 0x1FF;
   request_to_redraw(REDRAW_BACKUP | REDRAW_FREQUENCY);
   config_service_notify_configuration_changed();
+  app_publish_sweep_configuration_changed();
 }
 
 uint32_t get_bandwidth_frequency(uint16_t bw_freq) {
@@ -982,6 +989,7 @@ void app_measurement_update_frequencies(void) {
   if ((sweep_mode & SWEEP_ENABLE) == 0U) {
     sweep_mode |= SWEEP_ONCE;
   }
+  app_publish_sweep_configuration_changed();
 }
 
 static void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforce_order) {
@@ -2346,6 +2354,16 @@ int app_main(void) {
    * restore config and calibration 0 slot from flash memory, also if need use backup data
    */
   load_settings();
+
+  /*
+   * Kick the sweep engine so that a first acquisition is guaranteed even when
+   * the USB console is not attached.  The boot configuration may pause the
+   * generator, therefore we explicitly reset the sweep progress and request a
+   * single run.
+   */
+  sweep_service_reset_progress();
+  resume_sweep();
+  sweep_mode |= SWEEP_ONCE;
 
 #ifdef USE_VARIABLE_OFFSET
   si5351_set_frequency_offset(IF_OFFSET);

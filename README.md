@@ -101,8 +101,8 @@ through the mailbox so a dedicated worker can call `event_bus_dispatch()` and fa
 listeners. Without a mailbox the bus falls back to immediate, synchronous dispatch. Interrupt
 handlers should invoke `event_bus_publish_from_isr()`, which acquires queue slots in a
 lock-aware fashion. The predefined topics (`EVENT_SWEEP_STARTED`, `EVENT_SWEEP_COMPLETED`,
-`EVENT_TOUCH_INPUT`, `EVENT_STORAGE_UPDATED`, `EVENT_CONFIGURATION_CHANGED`, and
-`EVENT_SHELL_COMMAND_PENDING`) cover the current coordination needs; adding new topics
+`EVENT_TOUCH_INPUT`, `EVENT_STORAGE_UPDATED`, `EVENT_CONFIGURATION_CHANGED`,
+`EVENT_SWEEP_CONFIGURATION_CHANGED`, and `EVENT_SHELL_COMMAND_PENDING`) cover the current coordination needs; adding new topics
 requires extending the `event_bus_topic_t` enum.
 
 The scheduler helper (`services/scheduler.[ch]`) keeps a fixed pool of four slots that wrap
