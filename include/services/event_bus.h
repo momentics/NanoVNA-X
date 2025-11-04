@@ -50,41 +50,31 @@ typedef struct {
   event_bus_topic_t topic;
 } event_bus_subscription_t;
 
-#if defined(NANOVNA_F303)
-#define EVENT_BUS_ENABLE_DISPATCHER 1
-#define EVENT_BUS_QUEUE_DEPTH 8U
-#define EVENT_BUS_DISPATCH_STACK_DEPTH 384U
-#define EVENT_BUS_DISPATCH_STACK_SIZE_BYTES \
-  (sizeof(stkalign_t) * THD_WORKING_AREA_SIZE(EVENT_BUS_DISPATCH_STACK_DEPTH))
-#else
-#define EVENT_BUS_ENABLE_DISPATCHER 0
-#define EVENT_BUS_QUEUE_DEPTH 0U
-#define EVENT_BUS_DISPATCH_STACK_DEPTH 0U
-#define EVENT_BUS_DISPATCH_STACK_SIZE_BYTES 0U
-#endif
-
 typedef struct {
   event_bus_message_t message;
   bool in_use;
-} event_bus_queue_entry_t;
+} event_bus_queue_node_t;
 
-typedef struct event_bus {
+typedef struct {
   event_bus_subscription_t* subscriptions;
   size_t capacity;
   size_t count;
-#if EVENT_BUS_ENABLE_DISPATCHER
   mailbox_t mailbox;
-  msg_t mailbox_buffer[EVENT_BUS_QUEUE_DEPTH];
-  event_bus_queue_entry_t queue[EVENT_BUS_QUEUE_DEPTH];
-#endif
-  scheduler_task_t dispatcher_task;
+  bool mailbox_ready;
+  msg_t* queue_storage;
+  size_t queue_length;
+  event_bus_queue_node_t* nodes;
+  size_t node_count;
 } event_bus_t;
 
-void event_bus_init(event_bus_t* bus, event_bus_subscription_t* storage, size_t capacity);
+void event_bus_init(event_bus_t* bus, event_bus_subscription_t* storage, size_t capacity,
+                    msg_t* queue_storage, size_t queue_length, event_bus_queue_node_t* nodes,
+                    size_t node_count);
 
 bool event_bus_subscribe(event_bus_t* bus, event_bus_topic_t topic, event_bus_listener_t listener,
                          void* user_data);
 
-void event_bus_publish(event_bus_t* bus, event_bus_topic_t topic, const void* payload);
-
+bool event_bus_publish(event_bus_t* bus, event_bus_topic_t topic, const void* payload);
 bool event_bus_publish_from_isr(event_bus_t* bus, event_bus_topic_t topic, const void* payload);
+
+bool event_bus_dispatch(event_bus_t* bus, systime_t timeout);

@@ -31,10 +31,17 @@ used in the NanoVNA-X project. The documentation describes the build and flash p
 macOS or a Linux (Debian or Ubuntu) system, other Linux (or even BSD) systems may behave
 similar.
 
+## Acknowledgment and Disclaimer
+
+- Profound thanks to @DiSlord for the original firmware text and the foundations that significantly inspired and enabled the start of this new firmware project.
+- This firmware evolves rapidly and, with each daily change, diverges further from the original implementation.
+- The original codebase was exceptionally feature‑rich; to make ongoing development feasible, the SD subsystem has been temporarily removed to reduce complexity and unblock core refactoring.
+- The SD subsystem will return once the key features are implemented as originally envisioned and the architecture is ready to support it cleanly.
+
 ## Improvements​
-* **Decoupled services and scheduling.** The firmware introduces an event bus with typed topics so UI code, measurement logic, storage handlers, and input adapters can exchange notifications without hard dependencies, while a cooperative scheduler wraps ChibiOS threads to hand deterministic slots to long-running jobs such as sweeping or rendering.
-* **Measurement pipeline facade.** A dedicated pipeline object now bridges platform drivers and the sweep service, exposing the active channel mask and delegating execution so higher layers remain agnostic of hardware-specific quirks.
-* **Sweep engine overhaul.** The sweep service adds snapshot APIs, generation counters, and breakable batches so automation clients can read coherent buffers without stalling the UI; it also manages LED/progress feedback, smoothing kernels, domain transforms, and calibration flags inside the measurement loop.
+* **Event bus and task helpers.** The firmware exposes a lightweight event bus with typed topics so UI code, measurement logic, storage handlers, and input adapters can exchange notifications without direct dependencies. A thin scheduler helper wraps ChibiOS thread creation/termination but otherwise relies on standard RTOS primitives.
+* **Measurement pipeline facade.** A dedicated pipeline object bridges platform drivers and the sweep service by handing off execution requests and exposing the active sweep mask, keeping higher layers agnostic of board-specific driver tables.
+* **Sweep engine tracking.** The sweep service maintains generation counters, UI progress indicators, and LED feedback while orchestrating measurement loops and calibration state.
 * **Persistent configuration service.** Configuration and calibration saves are validated with rolling checksums, cached per-slot integrity flags, and a single API surface that hides flash programming details from application code.
 * **Platform driver registry.** Hardware bring-up flows through a board registry that selects the correct driver table for each target and runs optional pre-initialisation hooks, reducing conditional logic scattered across the firmware.
 * **USB console handshake compatibility.** The USB shell now emits its `ch> ` prompt before the banner so host utilities such as NanoVNA-Saver detect the device without manual retries.
@@ -61,34 +68,51 @@ STM32F303 families.
   structure with its initialisation hooks and peripheral descriptors. This keeps the core
   application agnostic of whether it is running on the NanoVNA-H (STM32F072) or NanoVNA-H4
   (STM32F303) hardware variants.
-* **Services layer.** Shared infrastructure lives in `src/services/`. The event bus implements
-  a lightweight publish/subscribe mechanism used to announce sweep lifecycle events,
-  configuration changes and other signals across modules. The scheduler provides a wrapper
-  around ChibiOS threads for cooperative workers, while the configuration service is
-  responsible for persisting user settings and calibration slots in MCU flash with checksum
-  protection.
-* **Measurement pipeline and DSP.** `src/measurement/pipeline.c` provides the façade that
-  bridges platform drivers and the measurement routines inside `app/application.c`. It tracks
-  which channels are active, executes sweep loops and exposes hooks for smoothing or domain
-  transforms. Numerical helpers and calibration maths reside in `src/dsp/`, keeping
-  compute-heavy code isolated from hardware access.
+* **Services layer.** Shared infrastructure lives in `src/services/`. The event bus provides
+  a publish/subscribe mechanism with a fixed topic list and optional mailbox-backed delivery
+  so code running in interrupt context can queue work for later dispatch. The scheduler helper
+  wraps ChibiOS thread creation and termination, while the configuration service persists user
+  settings and calibration slots in MCU flash with checksum protection.
+* **Measurement pipeline and DSP.** `src/measurement/pipeline.c` provides a slim façade that
+  bridges platform drivers and the measurement routines inside `app/application.c`. It forwards
+  sweep execution to the application layer and reports the current channel mask. Numerical
+  helpers and calibration maths reside in `src/dsp/`, keeping compute-heavy code isolated from
+  hardware access.
 * **Drivers and middleware.** Low-level device interactions are implemented in `src/drivers/`
   for the LCD, Si5351 synthesiser, TLV320 codec and USB front-end, while `src/middleware/`
-  houses small integration shims such as the `chprintf` binding for ChibiOS streams. Common
-  third-party components (ChibiOS, FatFs) are vendored under `third_party/` and configured
-  through the headers in `config/` and top-level `chconf.h`/`halconf.h`.
+  houses small integration shims such as the `chprintf` binding for ChibiOS streams. ChibiOS
+  itself is vendored under `third_party/` and configured through the headers in `config/`
+  and top-level `chconf.h`/`halconf.h`.
 * **User interface layer.** The sweep thread initialises the UI toolkit (`src/ui/`), processes
   hardware inputs, refreshes plotting primitives and marks screen regions for redraw. Fonts
-  and icon bitmaps that back the rendering code are stored in `src/resources/`. Optional
-  feature modules, such as the embedded web browser under `src/modules/`, can subscribe to
-  events or schedule tasks without changing the core loop.
+  and icon bitmaps that back the rendering code are stored in `src/resources/`.
 
 Complementary headers live in `include/`, while board support files, linker scripts and
 startup code reside in `boards/`. This structure lets the same measurement and UI engines run
 across both memory profiles with only targeted platform overrides.
 
+## Event bus and scheduler
+
+The event bus (`services/event_bus.[ch]`) is a small publish/subscribe helper that avoids
+dynamic allocation. Call `event_bus_init()` with a static subscription array, optional
+mailbox storage (`msg_t` buffer plus queue length), and optional queue nodes that back the
+mailbox entries. When the mailbox buffers are provided, `event_bus_publish()` posts messages
+through the mailbox so a dedicated worker can call `event_bus_dispatch()` and fan them out to
+listeners. Without a mailbox the bus falls back to immediate, synchronous dispatch. Interrupt
+handlers should invoke `event_bus_publish_from_isr()`, which acquires queue slots in a
+lock-aware fashion. The predefined topics (`EVENT_SWEEP_STARTED`, `EVENT_SWEEP_COMPLETED`,
+`EVENT_TOUCH_INPUT`, `EVENT_STORAGE_UPDATED`, `EVENT_CONFIGURATION_CHANGED`, and
+`EVENT_SHELL_COMMAND_PENDING`) cover the current coordination needs; adding new topics
+requires extending the `event_bus_topic_t` enum.
+
+The scheduler helper (`services/scheduler.[ch]`) keeps a fixed pool of four slots that wrap
+`chThdCreateStatic()`/`chThdTerminate()`. `scheduler_start()` returns a handle containing the
+assigned slot so callers can later stop the worker through `scheduler_stop()`. It does not
+implement time slicing or cooperative yielding; task priorities and timing remain under the
+control of ChibiOS.
+
 ## Hardware platform and used chips
-The primary target MCUs are the STM32F072xB and STM32F303 (NanoVNA-H/H4); the F072 board employs an 8 MHz crystal, USB, SPI, I²C, and I²S lines for the display, SD, codec, and touch sensor, as described in board.h.
+The primary target MCUs are the STM32F072xB and STM32F303 (NanoVNA-H/H4); the F072 board employs an 8 MHz crystal plus USB, SPI, I²C, and I²S lines for the display, codec, and touch sensor, as described in board.h.
 
 The Si5351A clock generator (or a compatible part) drives the RF synthesizers and also produces reference frequencies for the audio ADC; its driver implements frequency caching, power management, and PLL initialization over I²C.
 
@@ -96,7 +120,7 @@ The TLV320AIC3204 acts as a dual-channel audio ADC/DAC (I²S), with PLL configur
 
 Display controllers ILI9341/ST7789 (320×240) and ST7796S (480×320) are selected per board; DMA is supported, along with brightness control (for the H4), inversion, and text shadows to improve readability.
 
-Additional features include an RTC, SD card (screenshots, firmware, file manager), USB UID, remote control, and a measurement module (LC matching, cable analysis, and resonance analysis).
+Additional features include an RTC, persistent calibration/configuration in internal flash, USB UID, remote control, and a measurement module (LC matching, cable analysis, and resonance analysis).
 
 ## Building the firmware
 

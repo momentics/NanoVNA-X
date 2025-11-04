@@ -38,8 +38,6 @@
 static systime_t ready_time = 0;
 static volatile uint16_t wait_count = 0;
 static audio_sample_t rx_buffer[AUDIO_BUFFER_LEN * 2];
-static binary_semaphore_t capture_sem;
-static binary_semaphore_t snapshot_sem;
 
 #if ENABLED_DUMP_COMMAND
 static audio_sample_t* dump_buffer = NULL;
@@ -58,31 +56,19 @@ static uint8_t sweep_state_flags = 0;
 static uint16_t sweep_bar_drawn_pixels = 0;
 static uint8_t sweep_bar_pending = 0;
 
-// Timer and semaphore for asynchronous PLL delay
-static binary_semaphore_t pll_delay_sem;
-static void pll_delay_timer_cb(GPTDriver* gptd) {
-  (void)gptd;
-  chSysLockFromISR();
-  chBSemSignalI(&pll_delay_sem);
-  chSysUnlockFromISR();
-}
-static const GPTConfig pll_delay_gpt_cfg = {
-  1000000, // 1MHz timer clock -> 1us resolution
-  pll_delay_timer_cb,
-  0,
-  0
-};
-
-static void async_delay_us(uint32_t us) {
-  if (us == 0) return;
-  chBSemReset(&pll_delay_sem, true);
-  gptStartOneShot(&GPTD3, us);
-  chBSemWait(&pll_delay_sem);
-}
-
-
 static uint8_t smooth_factor = 0;
 static void (*sample_func)(float* gamma) = calculate_gamma;
+
+static binary_semaphore_t capture_done_sem;
+static event_source_t sweep_state_event;
+
+static void sweep_notify_state_change_i(void) {
+  chEvtBroadcastI(&sweep_state_event);
+}
+
+static void sweep_notify_state_change(void) {
+  chEvtBroadcast(&sweep_state_event);
+}
 
 #ifdef __USE_FREQ_TABLE__
 static freq_t frequencies[SWEEP_POINTS_MAX];
@@ -239,9 +225,8 @@ void i2s_lld_serve_rx_interrupt(uint32_t flags) {
 #endif
   --wait_count;
   if (wait_count == 0U) {
-    chSysLockFromISR();
-    chBSemSignalI(&capture_sem);
-    chSysUnlockFromISR();
+    chBSemSignalI(&capture_done_sem);
+    sweep_notify_state_change_i();
   }
 }
 
@@ -255,32 +240,13 @@ void sweep_service_init(void) {
   sweep_bar_pending = 0;
   smooth_factor = 0;
   sample_func = calculate_gamma;
+  chBSemObjectInit(&capture_done_sem, true);
+  chEvtObjectInit(&sweep_state_event);
 #if ENABLED_DUMP_COMMAND
   dump_buffer = NULL;
   dump_len = 0;
   dump_selection = 0;
 #endif
-  chBSemObjectInit(&capture_sem, true);
-  chBSemObjectInit(&pll_delay_sem, true);
-  gptStart(&GPTD3, &pll_delay_gpt_cfg);
-  /*
-   * The snapshot semaphore gates both the sweep loop and any asynchronous
-   * snapshot consumers.  The sweep thread waits on it before launching the
-   * first measurement pass so that outstanding snapshot copies can finish
-   * safely.  In the freshly booted firmware there are no in-flight copies,
-   * therefore the semaphore must start in the signaled state; otherwise the
-   * first wait call blocks forever and the UI never comes up.  Earlier
-   * releases initialised it by signalling immediately after creation.  When
-   * the DMA/event-bus refactor landed in v0.9.23 the initial signal was
-   * dropped, leaving the semaphore empty and the firmware stuck in
-   * sweep_service_wait_for_copy_release().
-   *
-   * The @p taken argument of chBSemObjectInit() follows ChibiOS semantics:
-   * passing @p false leaves the semaphore signaled (count = 1) while @p true
-   * starts it in the taken state.  Initialise it with @p false so the first
-   * wait succeeds.
-   */
-  chBSemObjectInit(&snapshot_sem, false);
 }
 
 void sweep_service_reset_progress(void) {
@@ -288,60 +254,38 @@ void sweep_service_reset_progress(void) {
 }
 
 void sweep_service_wait_for_copy_release(void) {
-  bool continuing_partial_sweep = false;
-  osalSysLock();
-  uint16_t total_points = sweep_points;
-  continuing_partial_sweep = (p_sweep != 0U && p_sweep < total_points);
-  osalSysUnlock();
-  if (continuing_partial_sweep) {
-    /*
-     * The sweep is resuming from a previous chunk, so no snapshot copy can be
-     * in flight yet.  Skip the semaphore wait to avoid deadlocking on the
-     * taken state left by sweep_service_begin_measurement().
-     */
-    return;
-  }
+  event_listener_t listener;
+  chEvtRegisterMask(&sweep_state_event, &listener, EVENT_MASK(0));
   while (true) {
-    msg_t msg = chBSemWait(&snapshot_sem);
-    if (msg == MSG_RESET) {
-      continue;
+    osalSysLock();
+    bool busy = sweep_copy_in_progress;
+    osalSysUnlock();
+    if (!busy) {
+      break;
     }
-    chBSemSignal(&snapshot_sem);
-    break;
+    chEvtWaitAny(EVENT_MASK(0));
   }
+  chEvtUnregister(&sweep_state_event, &listener);
 }
 
 void sweep_service_begin_measurement(void) {
   osalSysLock();
-  uint16_t total_points = sweep_points;
-  if (p_sweep == 0U || p_sweep >= total_points) {
-    /*
-     * Only take the snapshot semaphore when a brand new sweep is starting.
-     * Partial sweeps resume with the semaphore already taken; resetting it
-     * again would strand the UI loop in sweep_service_wait_for_copy_release().
-     */
-    chBSemResetI(&snapshot_sem, true);
-  }
   sweep_in_progress = true;
   osalSysUnlock();
+  sweep_notify_state_change();
 }
 
 void sweep_service_end_measurement(void) {
   osalSysLock();
   sweep_in_progress = false;
   osalSysUnlock();
+  sweep_notify_state_change();
 }
 
 uint32_t sweep_service_increment_generation(void) {
   osalSysLock();
   uint32_t generation = ++sweep_generation;
   osalSysUnlock();
-  /*
-   * Wake any snapshot waiters now that a fresh sweep is ready.  The previous
-   * refactor accidentally returned before signalling, so USB clients waiting
-   * for sweep data never resumed even though the pipeline advanced.
-   */
-  chBSemSignal(&snapshot_sem);
   return generation;
 }
 
@@ -362,17 +306,13 @@ bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* s
   if (snapshot == NULL || channel >= 2U) {
     return false;
   }
-  while (true) {
-    msg_t msg = chBSemWait(&snapshot_sem);
-    if (msg == MSG_RESET) {
-      continue;
-    }
-    if (msg != MSG_OK) {
-      return false;
-    }
-    bool acquired = false;
+  event_listener_t listener;
+  chEvtRegisterMask(&sweep_state_event, &listener, EVENT_MASK(1));
+  bool acquired = false;
+  while (!acquired) {
     osalSysLock();
-   if (!sweep_in_progress && !sweep_copy_in_progress) {
+    bool busy = sweep_in_progress || sweep_copy_in_progress;
+    if (!busy) {
       sweep_copy_in_progress = true;
       snapshot->generation = sweep_generation;
       snapshot->points = sweep_points;
@@ -380,11 +320,12 @@ bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* s
       acquired = true;
     }
     osalSysUnlock();
-    if (acquired) {
-      return true;
+    if (!acquired) {
+      chEvtWaitAny(EVENT_MASK(1));
     }
-    chBSemSignal(&snapshot_sem);
   }
+  chEvtUnregister(&sweep_state_event, &listener);
+  return true;
 }
 
 bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
@@ -395,20 +336,18 @@ bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
   }
   sweep_copy_in_progress = false;
   osalSysUnlock();
-  chBSemSignal(&snapshot_sem);
+  sweep_notify_state_change();
   return stable;
 }
 
 void sweep_service_start_capture(systime_t delay_ticks) {
-  chSysLock();
-  chBSemResetI(&capture_sem, true);
   ready_time = chVTGetSystemTimeX() + delay_ticks;
   wait_count = config._bandwidth + 2U;
-  chSysUnlock();
+  chBSemReset(&capture_done_sem, true);
 }
 
 void sweep_service_wait_for_capture(void) {
-  while (chBSemWait(&capture_sem) == MSG_RESET) {
+  while (chBSemWait(&capture_done_sem) != MSG_OK) {
   }
 }
 
@@ -553,7 +492,6 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
   float c_data[CAL_TYPE_COUNT][2];
   bool completed = false;
   int delay = 0;
-  uint32_t settle_delay_us = 0;
   int st_delay = DELAY_SWEEP_START;
   int interpolation_idx = p_sweep;
   bool show_progress = config._bandwidth >= BANDWIDTH_100;
@@ -575,8 +513,7 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
     freq_t frequency = get_frequency(p_sweep);
     uint8_t extra_cycles = 0U;
     if (mask & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE)) {
-      delay = app_measurement_set_frequency(frequency, &settle_delay_us);
-      async_delay_us(settle_delay_us);
+      delay = app_measurement_set_frequency(frequency);
       interpolation_idx = (mask & SWEEP_USE_INTERPOLATION) ? -1 : (int)p_sweep;
       extra_cycles = si5351_take_settling_cycles();
     }
@@ -683,8 +620,8 @@ uint8_t get_smooth_factor(void) {
   return smooth_factor;
 }
 
-int app_measurement_set_frequency(freq_t freq, uint32_t* settle_delay_us) {
-  return si5351_set_frequency(freq, current_props._power, settle_delay_us);
+int app_measurement_set_frequency(freq_t freq) {
+  return si5351_set_frequency(freq, current_props._power);
 }
 
 #ifdef __USE_FREQ_TABLE__

@@ -78,7 +78,7 @@ void si5351_disable_output(void);
 void si5351_enable_output(void);
 
 void si5351_set_frequency_offset(int32_t offset);
-int si5351_set_frequency(uint32_t freq, uint8_t drive_strength, uint32_t* settle_delay_us);
+int si5351_set_frequency(uint32_t freq, uint8_t drive_strength);
 uint8_t si5351_take_settling_cycles(void);
 void si5351_set_power(uint8_t drive_strength);
 void si5351_set_band_mode(uint16_t t);

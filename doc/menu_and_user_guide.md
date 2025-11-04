@@ -18,7 +18,6 @@ This document describes the on-device menu tree implemented in the current NanoV
 | **CALIBRATE** | Calibration workflow, slot management and correction flags. |
 | **RECALL** | Load previously saved calibration data. |
 | **MEASURE** | (Enabled by `__VNA_MEASURE_MODULE__`.) Access context-aware measurement assistants. |
-| **SD CARD** | (Enabled by `__USE_SD_CARD__`.) File browser, import/export and screenshot controls. |
 | **CONFIG** | Device configuration, expert tools and utilities. |
 | **PAUSE/RESUME SWEEP** | Toggles the background sweep (`PAUSE` when running, `RESUME` when halted). |
 
@@ -60,7 +59,7 @@ This document describes the on-device menu tree implemented in the current NanoV
 
 * **CALIBRATE** → opens the calibration assistant with the ordered steps `OPEN`, `SHORT`, `LOAD`, `ISOLN`, `THRU`, followed by `DONE` (store to flash) and `DONE IN RAM` (apply without persistence). Completed steps show a check mark.
 * **POWER AUTO** → opens a drive-level submenu. You can force specific Si5351 drive strengths (2 mA through 8 mA) or revert to automatic control.
-* **SAVE** → submenu used to archive calibrations. Each slot shows the stored frequency span when populated. When SD support and the browser are enabled a `SAVE TO SD CARD` item is prepended.
+* **SAVE** → submenu used to archive calibrations. Each slot shows the stored frequency span when populated.
 * **RANGE** → displays the point count and frequency span of the loaded calibration and, when invoked, re-applies those limits and power settings if the calibration was interpolated.
 * **RESET** → clears the current calibration (except for the enhanced-response flag).
 * **APPLY** → toggles correction on/off without discarding coefficients.
@@ -70,7 +69,7 @@ This document describes the on-device menu tree implemented in the current NanoV
 ## RECALL menu
 
 * Lists every calibration slot with its stored span metadata. Selecting a populated slot loads it and highlights it as the active save ID.
-* When SD card browsing is enabled a `LOAD FROM SD CARD` entry at the top reads calibration archives directly.
+*
 
 ## MEASURE menu (`__VNA_MEASURE_MODULE__`)
 
@@ -84,14 +83,6 @@ Pressing **MEASURE** opens the submenu tied to the currently active measurement 
   * **S21 Shunt/Series/XTAL** → `OFF`, `SHUNT LC (S21)`, `SERIES LC (S21)`, `SERIES XTAL (S21)`, and an editable `Rl` load value.
   * **Filter (S21)** → `OFF`, `FILTER (S21)`.
 
-## SD CARD menu (`__USE_SD_CARD__`)
-
-* **LOAD** *(shown when `__SD_FILE_BROWSER__` is enabled)* → opens the SD browser filtered to screenshots (`LOAD SCREENSHOT`), `S1P`, `S2P` or calibration files.
-* **SAVE S1P / SAVE S2P** → exports the current data set using either automatic filenames or the keypad prompt, depending on the `AUTO NAME` flag.
-* **SCREENSHOT** → captures the current LCD contents (BMP by default, or TIFF when that format is selected).
-* **SAVE CALIBRATION** → stores the active calibration to removable media.
-* **AUTO NAME** → toggles timestamp-based filenames for exports.
-* **IMAGE FORMAT** *(available with `__SD_CARD_DUMP_TIFF__`)* → switches the screenshot encoder between BMP and TIFF.
 
 ## CONFIG menu
 
@@ -107,8 +98,6 @@ Pressing **MEASURE** opens the submenu tied to the currently active measurement 
     * `MODE` cycles the Si5351 generator variant (`Si5351`, `MS5351`, `SWC5351`).
     * `SEPARATOR` *(with `__DIGIT_SEPARATOR__`)* toggles between dot and comma numeric separators.
     * `USB DEVICE UID` *(with `__USB_UID__`)* displays the unique USB identifier.
-    * `DUMP FIRMWARE` *(with `__SD_CARD_DUMP_FIRMWARE__`)* writes the flash image to the SD card.
-    * `LOAD COMMAND SCRIPT` *(with both `__SD_CARD_LOAD__` and the browser enabled)* launches the file browser for command scripts. Builds without the browser expose `LOAD CONFIG.INI` instead.
     * `CLEAR CONFIG` → submenu containing `CLEAR ALL AND RESET`, which wipes configuration storage.
 * **SAVE CONFIG** → commits the in-memory configuration to non-volatile storage.
 * **CONNECTION** *(present with `__USE_SERIAL_CONSOLE__`)* → allows toggling the USB/serial console backend and choosing among the predefined UART bit rates.

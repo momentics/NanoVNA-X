@@ -50,20 +50,13 @@
 static event_bus_t app_event_bus;
 static event_bus_subscription_t app_event_slots[8];
 
+#define APP_EVENT_QUEUE_DEPTH 8U
+static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
+static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
+
 static measurement_pipeline_t measurement_pipeline;
 
-#ifdef __USE_SD_CARD__
-static FATFS fs_volume_instance;
-static FIL fs_file_instance;
-
-FATFS* filesystem_volume(void) {
-  return &fs_volume_instance;
-}
-
-FIL* filesystem_file(void) {
-  return &fs_file_instance;
-}
-#endif
+// SD card access was removed; configuration persists using internal flash only.
 
 // Shell frequency printf format
 // #define VNA_FREQ_FMT_STR         "%lu"
@@ -114,18 +107,10 @@ static void cmd_dump(int argc, char* argv[]);
 // #define DEBUG_CONSOLE_SHOW
 // Enable usart command
 // Enable config command
-#ifdef __USE_SD_CARD__
-// Enable SD card console command
-#define ENABLE_SD_CARD_COMMAND
-#endif
 
 uint8_t sweep_mode = SWEEP_ENABLE;
 // Sweep measured data
-#if defined(NANOVNA_F303)
-__attribute__((section(".ram4"))) float measured[2][SWEEP_POINTS_MAX][2];
-#else
 float measured[2][SWEEP_POINTS_MAX][2];
-#endif
 
 // Version text, displayed in Config->Version menu, also send by info command
 const char* info_about[] = {
@@ -167,11 +152,18 @@ void my_debug_log(int offs, char* log) {
 #define DEBUG_LOG(offs, text)
 #endif
 
-#if defined(NANOVNA_F303)
+static void app_process_event_queue(systime_t timeout) {
+  while (event_bus_dispatch(&app_event_bus, TIME_IMMEDIATE)) {
+  }
+  if (timeout != TIME_IMMEDIATE) {
+    if (event_bus_dispatch(&app_event_bus, timeout)) {
+      while (event_bus_dispatch(&app_event_bus, TIME_IMMEDIATE)) {
+      }
+    }
+  }
+}
+
 static THD_WORKING_AREA(waThread1, 1024);
-#else
-static THD_WORKING_AREA(waThread1, 768);
-#endif
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
   chRegSetThreadName("sweep");
@@ -182,10 +174,13 @@ static THD_FUNCTION(Thread1, arg) {
   /*
    * UI (menu, touch, buttons) and plot initialize
    */
-  ui_init(&app_event_bus);
+  ui_attach_event_bus(&app_event_bus);
+  ui_init();
   // Initialize graph plotting
   plot_init();
   while (1) {
+    app_process_event_queue(TIME_IMMEDIATE);
+    shell_service_pending_commands();
     bool completed = false;
     uint16_t mask = measurement_pipeline_active_mask(&measurement_pipeline);
     if (sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) {
@@ -197,8 +192,9 @@ static THD_FUNCTION(Thread1, arg) {
       sweep_service_end_measurement();
     } else {
       sweep_service_end_measurement();
-      __WFI();
+      app_process_event_queue(MS2ST(5));
     }
+    app_process_event_queue(TIME_IMMEDIATE);
     // Process UI inputs
     sweep_mode |= SWEEP_UI_MODE;
     ui_process();
@@ -211,9 +207,7 @@ static THD_FUNCTION(Thread1, arg) {
       if ((props_mode & DOMAIN_MODE) == DOMAIN_TIME)
         app_measurement_transform_domain(mask);
       //      STOP_PROFILE;
-      // Prepare draw graphics, cache all lines, mark screen cells for redraw
     }
-    request_to_redraw(REDRAW_BATTERY);
 #ifndef DEBUG_CONSOLE_SHOW
     // plot trace and other indications as raster
     draw_all();
@@ -462,9 +456,6 @@ VNA_SHELL_FUNCTION(cmd_config) {
 #ifdef __DIGIT_SEPARATOR__
                                       "|separator"
 #endif
-#ifdef __SD_CARD_DUMP_TIFF__
-                                      "|tif"
-#endif
       ;
   int idx;
   if (argc == 2 && (idx = get_str_index(argv[0], cmd_mode_list)) >= 0) {
@@ -519,7 +510,7 @@ VNA_SHELL_FUNCTION(cmd_freq) {
   }
   uint32_t freq = my_atoui(argv[0]);
   pause_sweep();
-  app_measurement_set_frequency(freq, NULL);
+  app_measurement_set_frequency(freq);
   return;
 }
 
@@ -602,6 +593,7 @@ VNA_SHELL_FUNCTION(cmd_threshold) {
   }
   value = my_atoui(argv[0]);
   config._harmonic_freq_threshold = value;
+  config_service_notify_configuration_changed();
 }
 
 VNA_SHELL_FUNCTION(cmd_saveconfig) {
@@ -753,8 +745,8 @@ VNA_SHELL_FUNCTION(cmd_gamma)
 }
 #endif
 
-#ifdef ENABLE_SAMPLE_COMMAND
 static void (*sample_func)(float* gamma) = calculate_gamma;
+#ifdef ENABLE_SAMPLE_COMMAND
 VNA_SHELL_FUNCTION(cmd_sample) {
   if (argc != 1)
     goto usage;
@@ -781,6 +773,7 @@ usage:
 void set_bandwidth(uint16_t bw_count) {
   config._bandwidth = bw_count & 0x1FF;
   request_to_redraw(REDRAW_BACKUP | REDRAW_FREQUENCY);
+  config_service_notify_configuration_changed();
 }
 
 uint32_t get_bandwidth_frequency(uint16_t bw_freq) {
@@ -1324,6 +1317,37 @@ static void apply_error_term_at(int i)
 }
 #endif
 
+static void apply_ch0_error_term(float data[4], float c_data[CAL_TYPE_COUNT][2]) {
+  // S11m' = S11m - Ed
+  // S11a = S11m' / (Er + Es S11m')
+  float s11mr = data[0] - c_data[ETERM_ED][0];
+  float s11mi = data[1] - c_data[ETERM_ED][1];
+  float err = c_data[ETERM_ER][0] + s11mr * c_data[ETERM_ES][0] - s11mi * c_data[ETERM_ES][1];
+  float eri = c_data[ETERM_ER][1] + s11mr * c_data[ETERM_ES][1] + s11mi * c_data[ETERM_ES][0];
+  float sq = err * err + eri * eri;
+  data[0] = (s11mr * err + s11mi * eri) / sq;
+  data[1] = (s11mi * err - s11mr * eri) / sq;
+}
+
+static void apply_ch1_error_term(float data[4], float c_data[CAL_TYPE_COUNT][2]) {
+  // CAUTION: Et is inversed for efficiency
+  // S21a = (S21m - Ex) * Et`
+  float s21mr = data[2] - c_data[ETERM_EX][0];
+  float s21mi = data[3] - c_data[ETERM_EX][1];
+  // Not made CH1 correction by CH0 data
+  data[2] = s21mr * c_data[ETERM_ET][0] - s21mi * c_data[ETERM_ET][1];
+  data[3] = s21mi * c_data[ETERM_ET][0] + s21mr * c_data[ETERM_ET][1];
+  if (cal_status & CALSTAT_ENHANCED_RESPONSE) {
+    // S21a*= 1 - Es * S11a
+    float esr = 1.0f - (c_data[ETERM_ES][0] * data[0] - c_data[ETERM_ES][1] * data[1]);
+    float esi = 0.0f - (c_data[ETERM_ES][1] * data[0] + c_data[ETERM_ES][0] * data[1]);
+    float re = data[2];
+    float im = data[3];
+    data[2] = esr * re - esi * im;
+    data[3] = esi * re + esr * im;
+  }
+}
+
 void cal_collect(uint16_t type) {
   uint16_t dst, src;
 
@@ -1435,6 +1459,67 @@ void cal_done(void) {
   cal_status |= CALSTAT_APPLY;
   lastsaveid = NO_SAVE_SLOT;
   request_to_redraw(REDRAW_BACKUP | REDRAW_CAL_STATUS);
+}
+
+static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
+  int eterm;
+  uint16_t src_points = cal_sweep_points - 1;
+  if (idx >= 0)
+    goto copy_point;
+  if (f <= cal_frequency0) {
+    idx = 0;
+    goto copy_point;
+  }
+  if (f >= cal_frequency1) {
+    idx = src_points;
+    goto copy_point;
+  }
+  // Calculate k for linear interpolation
+  freq_t span = cal_frequency1 - cal_frequency0;
+  idx = (uint64_t)(f - cal_frequency0) * (uint64_t)src_points / span;
+  uint64_t v = (uint64_t)span * idx + src_points / 2;
+  freq_t src_f0 = cal_frequency0 + (v) / src_points;
+  freq_t src_f1 = cal_frequency0 + (v + span) / src_points;
+
+  freq_t delta = src_f1 - src_f0;
+  // Not need interpolate
+  if (f == src_f0)
+    goto copy_point;
+
+  float k = (delta == 0) ? 0.0f : (float)(f - src_f0) / delta;
+  // avoid glitch between freqs in different harmonics mode
+  uint32_t hf0 = si5351_get_harmonic_lvl(src_f0);
+  if (hf0 != si5351_get_harmonic_lvl(src_f1)) {
+    // f in prev harmonic, need extrapolate from prev 2 points
+    if (hf0 == si5351_get_harmonic_lvl(f)) {
+      if (idx < 1)
+        goto copy_point; // point limit
+      idx--;
+      k += 1.0f;
+    }
+    // f in next harmonic, need extrapolate from next 2 points
+    else {
+      if (idx >= src_points)
+        goto copy_point; // point limit
+      idx++;
+      k -= 1.0f;
+    }
+  }
+  // Interpolate by k
+  for (eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
+    data[eterm][0] =
+        cal_data[eterm][idx][0] + k * (cal_data[eterm][idx + 1][0] - cal_data[eterm][idx][0]);
+    data[eterm][1] =
+        cal_data[eterm][idx][1] + k * (cal_data[eterm][idx + 1][1] - cal_data[eterm][idx][1]);
+  }
+  return;
+  // Direct point copy
+copy_point:
+  for (eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
+    data[eterm][0] = cal_data[eterm][idx][0];
+    data[eterm][1] = cal_data[eterm][idx][1];
+  }
+  return;
 }
 
 VNA_SHELL_FUNCTION(cmd_cal) {
@@ -2017,6 +2102,7 @@ VNA_SHELL_FUNCTION(cmd_vbat_offset) {
     return;
   }
   config._vbat_offset = (int16_t)my_atoi(argv[0]);
+  config_service_notify_configuration_changed();
 }
 #endif
 
@@ -2234,99 +2320,7 @@ VNA_SHELL_FUNCTION(cmd_release) {
 }
 #endif
 
-#ifdef ENABLE_SD_CARD_COMMAND
-#ifndef __USE_SD_CARD__
-#error "Need enable SD card support __USE_SD_CARD__ in nanovna.h, for use ENABLE_SD_CARD_COMMAND"
-#endif
-
-static FRESULT cmd_sd_card_mount(void) {
-  const FRESULT res = f_mount(filesystem_volume(), "", 1);
-  if (res != FR_OK)
-    shell_printf("err: no card" VNA_SHELL_NEWLINE_STR);
-  return res;
-}
-
-VNA_SHELL_FUNCTION(cmd_sd_list) {
-  DIR dj;
-  FILINFO fno;
-  if (cmd_sd_card_mount() != FR_OK)
-    return;
-  switch (argc) {
-  case 0:
-    dj.pat = "*.*";
-    break;
-  case 1:
-    dj.pat = argv[0];
-    break;
-  default:
-    shell_printf("usage: sd_list {pattern}" VNA_SHELL_NEWLINE_STR);
-    return;
-  }
-  if (f_opendir(&dj, "") == FR_OK) {
-    while (f_findnext(&dj, &fno) == FR_OK && fno.fname[0])
-      shell_printf("%s %u" VNA_SHELL_NEWLINE_STR, fno.fname, fno.fsize);
-  }
-  f_closedir(&dj);
-}
-
-VNA_SHELL_FUNCTION(cmd_sd_read) {
-  char* buf = (char*)spi_buffer;
-  if (argc != 1) {
-    shell_printf("usage: sd_read {filename}" VNA_SHELL_NEWLINE_STR);
-    return;
-  }
-  const char* filename = argv[0];
-  if (cmd_sd_card_mount() != FR_OK)
-    return;
-
-  FIL* const file = filesystem_file();
-  if (f_open(file, filename, FA_OPEN_EXISTING | FA_READ) != FR_OK) {
-    shell_printf("err: no file" VNA_SHELL_NEWLINE_STR);
-    return;
-  }
-  // shell_printf("sd_read: %s" VNA_SHELL_NEWLINE_STR, filename);
-  // number of bytes to follow (file size)
-  uint32_t filesize = f_size(file);
-  shell_stream_write(&filesize, 4);
-  UINT size = 0;
-  // file data (send all data from file)
-  while (f_read(file, buf, 512, &size) == FR_OK && size > 0)
-    shell_stream_write(buf, size);
-
-  f_close(file);
-  return;
-}
-
-VNA_SHELL_FUNCTION(cmd_sd_delete) {
-  FRESULT res;
-  if (argc != 1) {
-    shell_printf("usage: sd_delete {filename}" VNA_SHELL_NEWLINE_STR);
-    return;
-  }
-  if (cmd_sd_card_mount() != FR_OK)
-    return;
-  const char* filename = argv[0];
-  res = f_unlink(filename);
-  shell_printf("delete: %s %s" VNA_SHELL_NEWLINE_STR, filename, res == FR_OK ? "OK" : "err");
-  return;
-}
-#endif
-
-#ifdef __SD_CARD_LOAD__
-VNA_SHELL_FUNCTION(cmd_msg) {
-  if (argc == 0) {
-    shell_printf("usage: msg delay [text] [header]" VNA_SHELL_NEWLINE_STR);
-    return;
-  }
-  uint32_t delay = my_atoui(argv[0]);
-  char *header = 0, *text = 0;
-  if (argc > 1)
-    text = argv[1];
-  if (argc > 2)
-    header = argv[2];
-  ui_message_box(header, text, delay);
-}
-#endif
+// All SD card shell commands were removed with the filesystem support.
 
 //=============================================================================
 VNA_SHELL_FUNCTION(cmd_help);
@@ -2347,11 +2341,6 @@ static const VNAShellCommand commands[] = {
     {"bandwidth", cmd_bandwidth, CMD_RUN_IN_LOAD},
 #ifdef __USE_RTC__
     {"time", cmd_time, CMD_RUN_IN_UI},
-#endif
-#ifdef ENABLE_SD_CARD_COMMAND
-    {"sd_list", cmd_sd_list, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
-    {"sd_read", cmd_sd_read, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
-    {"sd_delete", cmd_sd_delete, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
 #endif
 #ifdef __VNA_ENABLE_DAC__
     {"dac", cmd_dac, CMD_RUN_IN_LOAD},
@@ -2380,9 +2369,6 @@ static const VNAShellCommand commands[] = {
     {"touchtest", cmd_touchtest, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
     {"pause", cmd_pause, CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
     {"resume", cmd_resume, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
-#ifdef __SD_CARD_LOAD__
-    {"msg", cmd_msg, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_LOAD},
-#endif
     {"cal", cmd_cal, CMD_WAIT_MUTEX},
     {"save", cmd_save, CMD_RUN_IN_LOAD},
     {"recall", cmd_recall, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
@@ -2497,59 +2483,6 @@ static void vna_shell_execute_line(char* line) {
   }
 }
 
-#ifdef __SD_CARD_LOAD__
-#ifndef __USE_SD_CARD__
-#error "Need enable SD card support __USE_SD_CARD__ in nanovna.h, for use __SD_CARD_LOAD__"
-#endif
-bool sd_card_load_config(void) {
-  // Mount card
-  if (f_mount(filesystem_volume(), "", 1) != FR_OK)
-    return FALSE;
-
-  FIL* const config_file = filesystem_file();
-  if (f_open(config_file, "config.ini", FA_OPEN_EXISTING | FA_READ) != FR_OK)
-    return FALSE;
-
-  char* buf = (char*)spi_buffer;
-  UINT size = 0;
-
-  uint16_t j = 0, i;
-  bool last_was_cr = false;
-  while (f_read(config_file, buf, 512, &size) == FR_OK && size > 0) {
-    i = 0;
-    while (i < size) {
-      uint8_t c = buf[i++];
-      if (c == '\r' || c == '\n') {
-        if (c == '\n' && last_was_cr) {
-          last_was_cr = false;
-          continue;
-        }
-        shell_line[j] = 0;
-        if (j > 0) {
-          vna_shell_execute_cmd_line(shell_line);
-        }
-        j = 0;
-        last_was_cr = (c == '\r');
-        continue;
-      }
-      last_was_cr = false;
-      // Others (skip)
-      if (c < 0x20)
-        continue;
-      // Store
-      if (j < VNA_SHELL_MAX_LENGTH - 1)
-        shell_line[j++] = (char)c;
-    }
-  }
-  if (j > 0) {
-    shell_line[j] = 0;
-    vna_shell_execute_cmd_line(shell_line);
-  }
-  f_close(config_file);
-  return TRUE;
-}
-#endif
-
 #ifdef VNA_SHELL_THREAD
 static THD_WORKING_AREA(waThread2, /* cmd_* max stack size + alpha */ 442);
 THD_FUNCTION(myshellThread, p) {
@@ -2600,9 +2533,11 @@ int app_main(void) {
   sweep_service_init();
 
   config_service_init();
-  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots));
-  config_service_bind_event_bus(&app_event_bus);
-  shell_bind_event_bus(&app_event_bus);
+  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
+                 app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage),
+                 app_event_nodes, ARRAY_COUNT(app_event_nodes));
+  config_service_attach_event_bus(&app_event_bus);
+  shell_attach_event_bus(&app_event_bus);
 
   /*
    * restore config and calibration 0 slot from flash memory, also if need use backup data

@@ -21,6 +21,7 @@
  */
 #pragma once
 #include "ch.h"
+#include "services/event_bus.h"
 #include <stdalign.h>
 #include <stdint.h>
 
@@ -51,8 +52,6 @@
 #define __USE_RTC__
 // Add RTC backup registers support
 #define __USE_BACKUP__
-// Add SD card support, req enable RTC (additional settings for file system see FatFS lib ffconf.h)
-#define __USE_SD_CARD__
 // Use unique serial string for USB
 #define __USB_UID__
 // If enabled serial in halconf.h, possible enable serial console control
@@ -89,21 +88,6 @@
 #define __VNA_MEASURE_MODULE__
 // Add Z normalization feature
 //#define __VNA_Z_RENORMALIZATION__
-
-/*
- * Submodules defines
- */
-// If SD card enabled
-#ifdef __USE_SD_CARD__
-// Allow run commands from SD card (config.ini in root)
-#define __SD_CARD_LOAD__
-// Allow screenshots in TIFF format
-#define __SD_CARD_DUMP_TIFF__
-// Allow dump firmware to SD card
-#define __SD_CARD_DUMP_FIRMWARE__
-// Enable SD card file browser, and allow load files from it
-#define __SD_FILE_BROWSER__
-#endif
 
 // If measure module enabled, add submodules
 #ifdef __VNA_MEASURE_MODULE__
@@ -274,13 +258,9 @@ typedef uint32_t freq_t;
 #define POINTS_SET_COUNT       3
 #define POINTS_SET             {51, 101, SWEEP_POINTS_MAX}
 #define POINTS_COUNT_DEFAULT   SWEEP_POINTS_MAX
-#elif SWEEP_POINTS_MAX >= 51
+#elif SWEEP_POINTS_MAX >=101
 #define POINTS_SET_COUNT       2
 #define POINTS_SET             {51, SWEEP_POINTS_MAX}
-#define POINTS_COUNT_DEFAULT   SWEEP_POINTS_MAX
-#else
-#define POINTS_SET_COUNT       1
-#define POINTS_SET             {SWEEP_POINTS_MAX}
 #define POINTS_COUNT_DEFAULT   SWEEP_POINTS_MAX
 #endif
 
@@ -365,8 +345,6 @@ void update_backup_data(void);
 #endif
 
 void set_sweep_points(uint16_t points);
-
-bool sd_card_load_config(void);
 
 #ifdef __REMOTE_DESKTOP__
 // State flags for remote touch state
@@ -947,10 +925,7 @@ enum {
 #ifdef __DIGIT_SEPARATOR__
   VNA_MODE_SEPARATOR,    // Comma or dot digit separator (0: dot, 1: comma)
 #endif
-#ifdef __SD_CARD_DUMP_TIFF__
-  VNA_MODE_TIFF,         // Save screenshot format (0: bmp, 1: tiff)
-#endif
-#ifdef __USB_UID__
+  #ifdef __USB_UID__
   VNA_MODE_USB_UID       // Use unique serial string for USB
 #endif
 };
@@ -982,12 +957,9 @@ enum {
 };
 #endif
 
-#if defined(NANOVNA_F303)
 #define STORED_TRACES  1
-#else
-#define STORED_TRACES  0
-#endif
 #define TRACES_MAX     4
+
 typedef struct trace {
   uint8_t enabled;
   uint8_t type;
@@ -1191,7 +1163,6 @@ typedef uint16_t pixel_t;
 #error "Define LCD pixel format"
 #endif
 
-
 enum {
   LCD_BG_COLOR = 0,       // background
   LCD_FG_COLOR,           // foreground (in most cases text on background)
@@ -1310,22 +1281,6 @@ void lcd_vector_draw(int x, int y, const vector_data *v);
 uint32_t lcd_send_register(uint8_t cmd, uint8_t len, const uint8_t *data);
 void     lcd_set_flip(bool flip);
 
-// SD Card support, discio functions for FatFS lib implemented in ili9341.c
-#ifdef  __USE_SD_CARD__
-#include "ff.h"
-#include "diskio.h"
-
-// Buffers for SD card use spi_buffer
-#if SPI_BUFFER_SIZE < 2048
-#error "SPI_BUFFER_SIZE for SD card support need size >= 2048"
-#endif
-
-FATFS *filesystem_volume(void);
-FIL   *filesystem_file(void);
-
-void test_log(void);        // debug log
-#endif
-
 /*
  * flash.c
  */
@@ -1422,10 +1377,9 @@ void clear_all_config_prop_data(void);
 // Enter in leveler search mode after search click
 //#define UI_USE_LEVELER_SEARCH_MODE
 
-struct event_bus;
-typedef struct event_bus event_bus_t;
-void ui_init(event_bus_t* bus);
+void ui_init(void);
 void ui_process(void);
+void ui_attach_event_bus(event_bus_t* bus);
 
 void handle_touch_interrupt(void);
 

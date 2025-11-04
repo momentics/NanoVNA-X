@@ -35,4 +35,5 @@ typedef struct {
 
 const config_service_api_t* config_service_api(void);
 void config_service_init(void);
-void config_service_bind_event_bus(event_bus_t* bus);
+void config_service_attach_event_bus(event_bus_t* bus);
+void config_service_notify_configuration_changed(void);

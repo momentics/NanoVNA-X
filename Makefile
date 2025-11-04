@@ -168,8 +168,6 @@ CSRC = $(STARTUPSRC) \
        $(PLATFORMSRC) \
        $(BOARDSRC) \
        $(STREAMSSRC) \
-       third_party/FatFs/ff.c \
-       third_party/FatFs/ffunicode.c \
        src/resources/fonts/numfont16x22.c \
        src/resources/fonts/Font5x7.c \
        src/resources/fonts/Font6x10.c \
@@ -179,7 +177,7 @@ CSRC = $(STARTUPSRC) \
        src/core/main.c \
        src/app/application.c \
        src/app/sweep_service.c \
-       src/app/shell/shell.c \
+       src/app/shell.c \
        src/core/common.c \
        src/drivers/si5351.c \
        src/drivers/tlv320aic3204.c \
@@ -298,7 +296,7 @@ UDEFS+= -DVNA_AUTO_SELECT_RTC_SOURCE
 UADEFS =
 
 # List all user directories here
-UINCDIR = config include include/drivers third_party/FatFs boards/STM32F072 boards/STM32F303 $(BUILDDIR)/generated
+UINCDIR = config include include/drivers boards/STM32F072 boards/STM32F303 $(BUILDDIR)/generated
 
 # List the user directory to look for the libraries here
 ULIBDIR =
