@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     name: Build ${{ matrix.target }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
@@ -17,10 +17,10 @@ jobs:
 
     env:
       TARGET: ${{ matrix.target }}
+      OSNAME: ubuntu-24.04
       APTPACKAGES: gcc-arm-none-eabi libnewlib-arm-none-eabi dfu-util ccache python3
       CCACHEDIR: .ccache
       CCACHEMAXSIZE: 500M
-      OSNAME: ubuntu-latest
       APT_USER_CACHE: ${{ github.workspace }}/.apt
       APT_USER_ARCHIVES: ${{ github.workspace }}/.apt/archives
       APT_USER_LISTS: ${{ github.workspace }}/.apt/lists
@@ -32,7 +32,7 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      # APT user cache: уникальный ключ для матрицы
+      # APT user cache: ключ разделён по TARGET, чтобы исключить коллизии
       - name: Restore APT user cache
         id: apt-restore
         uses: actions/cache/restore@v4
@@ -41,9 +41,6 @@ jobs:
             .apt/archives
             .apt/lists
           key: apt-${{ env.OSNAME }}-${{ matrix.target }}-${{ hashFiles('.github/workflows/**','Makefile') }}-${{ env.APTPACKAGES }}
-          restore-keys: |
-            apt-${{ env.OSNAME }}-${{ matrix.target }}-
-            apt-${{ env.OSNAME }}-
 
       - name: Prime APT from user cache
         shell: bash
@@ -118,16 +115,13 @@ jobs:
           echo "ver=$ver" >> "$GITHUB_OUTPUT"
           echo "ARM_GCC_VER=$ver" >> "$GITHUB_ENV"
 
+      # Жёстко изолированный ccache: НЕТ restore-keys, только точный key (исключает попадание F303)
       - name: Restore ccache
         id: ccache-restore
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.CCACHEDIR }}
           key: ccache-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('**/*.ch','**/*.ld','Makefile','tools/**','boards/**','include/**','src/**') }}
-          restore-keys: |
-            ccache-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-
-            ccache-${{ env.OSNAME }}-${{ matrix.target }}-
-            ccache-${{ env.OSNAME }}-
 
       - name: Configure ccache
         shell: bash
@@ -137,15 +131,13 @@ jobs:
           ccache --set-config=compression=true
           ccache -z || true
 
-      - name: Cache build directory
-        uses: actions/cache@v4
+      # Жёстко изолированный build-кеш: НЕТ restore-keys
+      - name: Restore build cache
+        id: build-restore
+        uses: actions/cache/restore@v4
         with:
           path: build
           key: build-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}
-          restore-keys: |
-            build-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-
-            build-${{ env.OSNAME }}-${{ matrix.target }}-
-            build-${{ env.OSNAME }}-
 
       - name: Build firmware
         env:
@@ -194,6 +186,14 @@ jobs:
             build/${{ steps.project.outputs.name }}.bin
             build/${{ steps.project.outputs.name }}.hex
             build/${{ steps.project.outputs.name }}.dfu
+
+      # Сохранение кэшей — только после успешной сборки; отдельные ключи исключают пересечения
+      - name: Save build cache
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: build
+          key: build-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}
 
       - name: Save ccache
         if: always()
