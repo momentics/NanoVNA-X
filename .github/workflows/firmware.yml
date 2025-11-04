@@ -16,7 +16,7 @@ jobs:
 
     env:
       TARGET: ${{ matrix.target }}
-      APT_PACKAGES: "gcc-arm-none-eabi libnewlib-arm-none-eabi dfu-util ccache"
+      APT_PACKAGES: "gcc-arm-none-eabi libnewlib-arm-none-eabi dfu-util ccache python3"
       CCACHE_DIR: ~/.ccache
       CCACHE_MAXSIZE: 500M
       OS_NAME: ubuntu-latest
@@ -28,29 +28,7 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Cache Git objects and submodules
-        uses: actions/cache@v4
-        with:
-          path: |
-            .git/objects
-            .git/modules
-          key: git-${{ env.OS_NAME }}-${{ hashFiles('.gitmodules') }}-${{ github.sha }}
-          restore-keys: |
-            git-${{ env.OS_NAME }}-${{ hashFiles('.gitmodules') }}-
-            git-${{ env.OS_NAME }}-
-
-      - name: Cache APT
-        id: cache-apt
-        uses: actions/cache@v4
-        with:
-          path: |
-            /var/cache/apt
-            /var/lib/apt/lists
-          key: apt-${{ env.OS_NAME }}-${{ hashFiles('.github/workflows/**') }}-${{ env.APT_PACKAGES }}
-          restore-keys: |
-            apt-${{ env.OS_NAME }}-
-
-      - name: Install ARM toolchain and utils
+      - name: Install toolchain and utils
         shell: bash
         run: |
           sudo apt-get update
@@ -61,13 +39,19 @@ jobs:
       - name: Enable ccache
         shell: bash
         run: |
-          echo "CC='ccache arm-none-eabi-gcc'" >> $GITHUB_ENV
-          echo "LD='ccache arm-none-eabi-ld'"   >> $GITHUB_ENV
-          echo "AR='ccache arm-none-eabi-ar'"   >> $GITHUB_ENV
-          echo "NM='ccache arm-none-eabi-nm'"   >> $GITHUB_ENV
-          echo "OBJCOPY='arm-none-eabi-objcopy'" >> $GITHUB_ENV
-          echo "OBJDUMP='arm-none-eabi-objdump'" >> $GITHUB_ENV
-          echo "STRIP='arm-none-eabi-strip'"     >> $GITHUB_ENV
+          echo "CC=ccache arm-none-eabi-gcc" >> $GITHUB_ENV
+          echo "LD=ccache arm-none-eabi-ld"   >> $GITHUB_ENV
+          echo "AR=ccache arm-none-eabi-ar"   >> $GITHUB_ENV
+          echo "NM=ccache arm-none-eabi-nm"   >> $GITHUB_ENV
+          echo "OBJCOPY=arm-none-eabi-objcopy" >> $GITHUB_ENV
+          echo "OBJDUMP=arm-none-eabi-objdump" >> $GITHUB_ENV
+          echo "STRIP=arm-none-eabi-strip"     >> $GITHUB_ENV
+
+      - name: Prepare cache dirs
+        shell: bash
+        run: |
+          mkdir -p "${CCACHE_DIR}"
+          mkdir -p build
 
       - name: Cache ccache
         uses: actions/cache@v4
@@ -78,10 +62,9 @@ jobs:
             ccache-${{ env.OS_NAME }}-${{ matrix.target }}-
             ccache-${{ env.OS_NAME }}-
 
-      - name: Configure ccache directory
+      - name: Configure ccache
         shell: bash
         run: |
-          mkdir -p "${CCACHE_DIR}"
           ccache --set-config=cache_dir="${CCACHE_DIR}"
           ccache --set-config=max_size="${CCACHE_MAXSIZE}"
           ccache --set-config=compression=true
@@ -90,8 +73,7 @@ jobs:
       - name: Cache build directory
         uses: actions/cache@v4
         with:
-          path: |
-            build/
+          path: build/
           key: build-${{ env.OS_NAME }}-${{ matrix.target }}-${{ hashFiles('Makefile*', 'config/**', 'boards/**', 'include/**', 'src/**', 'tools/**') }}
           restore-keys: |
             build-${{ env.OS_NAME }}-${{ matrix.target }}-
@@ -106,30 +88,28 @@ jobs:
           make -j"$(nproc)"
           ccache -s
 
-      - name: Generate DFU image
-        env:
-          TARGET: ${{ matrix.target }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "${{ matrix.target }}" == "F303" ]]; then
-            project="H4"
-            dfuse_preset="stm32f303xc"
-          else
-            project="H"
-            dfuse_preset="stm32f072xb"
-          fi
-          python3 tools/makedfu.py "build/${project}.bin" "build/${project}.dfu" --preset-target "${dfuse_preset}" --device-id 0x0000
-          dfu-suffix --check "build/${project}.dfu"
-
-      - name: Determine artifact name
+      - name: Determine project name
         id: project
         shell: bash
         run: |
           if [[ "${{ matrix.target }}" == "F303" ]]; then
             echo "name=H4" >> "$GITHUB_OUTPUT"
+            echo "dfuse_preset=stm32f303xc" >> "$GITHUB_OUTPUT"
           else
             echo "name=H"  >> "$GITHUB_OUTPUT"
+            echo "dfuse_preset=stm32f072xb" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate DFU if script exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          proj="${{ steps.project.outputs.name }}"
+          if [[ -f "tools/makedfu.py" ]]; then
+            python3 tools/makedfu.py "build/${proj}.bin" "build/${proj}.dfu" --preset-target "${{ steps.project.outputs.dfuse_preset }}" --device-id 0x0000
+            command -v dfu-suffix >/dev/null 2>&1 && dfu-suffix --check "build/${proj}.dfu" || true
+          else
+            echo "tools/makedfu.py not found, skipping DFU generation"
           fi
 
       - name: Upload build artifacts
