@@ -2571,7 +2571,7 @@ int app_main(void) {
   init_i2s((void*)sweep_service_rx_buffer(),
            (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
 
-  // Give I2S system time to properly initialize
+ytn  // Give I2S system time to properly initialize
   chThdSleepMilliseconds(50);
 
   // Additional audio system initialization to ensure proper operation regardless of USB connection
@@ -2628,8 +2628,8 @@ int app_main(void) {
       } while (shell_check_connect());
 #endif
     }
-    // Sleep for a reasonable time to allow other threads to run
-    chThdSleepMilliseconds(100);
+    // Shorter sleep to improve system responsiveness regardless of USB connection status
+    chThdSleepMilliseconds(10);
   }
 }
 
