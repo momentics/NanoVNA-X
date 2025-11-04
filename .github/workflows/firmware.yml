@@ -32,7 +32,7 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      # APT user cache: ключ разделён по TARGET, чтобы исключить коллизии
+      # APT user cache: ключ разделён по TARGET, restore со стабильным ключом и fallback префикса
       - name: Restore APT user cache
         id: apt-restore
         uses: actions/cache/restore@v4
@@ -41,6 +41,8 @@ jobs:
             .apt/archives
             .apt/lists
           key: apt-${{ env.OSNAME }}-${{ matrix.target }}-${{ hashFiles('.github/workflows/**','Makefile') }}-${{ env.APTPACKAGES }}
+          restore-keys: |
+            apt-${{ env.OSNAME }}-${{ matrix.target }}-
 
       - name: Prime APT from user cache
         shell: bash
@@ -78,31 +80,19 @@ jobs:
           sudo rsync -a --exclude 'lock' --exclude 'partial' /var/cache/apt/archives/ "$APT_USER_ARCHIVES/"
           sudo chown -R "$(id -u):$(id -g)" "$APT_USER_CACHE"
 
-      - name: Save APT user cache
+      - name: Save APT user cache (unique key)
         if: always()
         uses: actions/cache/save@v4
         with:
           path: |
             .apt/archives
             .apt/lists
-          key: apt-${{ env.OSNAME }}-${{ matrix.target }}-${{ hashFiles('.github/workflows/**','Makefile') }}-${{ env.APTPACKAGES }}
-
-      - name: Enable ccache
-        shell: bash
-        run: |
-          {
-            echo "CC=ccache arm-none-eabi-gcc"
-            echo "LD=ccache arm-none-eabi-ld"
-            echo "AR=ccache arm-none-eabi-ar"
-            echo "NM=ccache arm-none-eabi-nm"
-            echo "OBJCOPY=arm-none-eabi-objcopy"
-            echo "OBJDUMP=arm-none-eabi-objdump"
-            echo "STRIP=arm-none-eabi-strip"
-          } >> "$GITHUB_ENV"
+          key: apt-${{ env.OSNAME }}-${{ matrix.target }}-${{ hashFiles('.github/workflows/**','Makefile') }}-${{ env.APTPACKAGES }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Prepare cache dirs
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p "$CCACHEDIR"
           mkdir -p build
 
@@ -115,29 +105,52 @@ jobs:
           echo "ver=$ver" >> "$GITHUB_OUTPUT"
           echo "ARM_GCC_VER=$ver" >> "$GITHUB_ENV"
 
-      # Жёстко изолированный ccache: НЕТ restore-keys, только точный key (исключает попадание F303)
+      # Восстановить ccache стабильным ключом
       - name: Restore ccache
         id: ccache-restore
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.CCACHEDIR }}
-          key: ccache-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('**/*.ch','**/*.ld','Makefile','tools/**','boards/**','include/**','src/**') }}
+          key: ccache-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}
+          restore-keys: |
+            ccache-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-
 
       - name: Configure ccache
         shell: bash
         run: |
+          set -euo pipefail
           ccache --set-config=cache_dir="$CCACHEDIR"
           ccache --set-config=max_size="$CCACHEMAXSIZE"
           ccache --set-config=compression=true
-          ccache -z || true
+          # Не обнуляем статистику перед сборкой, чтобы видеть хиты; покажем её после сборки
+          ccache -p || true
 
-      # Жёстко изолированный build-кеш: НЕТ restore-keys
+      # Экспорт компиляторов и стабильных префиксов путей только после конфигурации ccache
+      - name: Export toolchain environment
+        shell: bash
+        run: |
+          {
+            echo "CC=ccache arm-none-eabi-gcc"
+            echo "CXX=ccache arm-none-eabi-g++"
+            echo "AR=arm-none-eabi-ar"
+            echo "NM=arm-none-eabi-nm"
+            echo "OBJCOPY=arm-none-eabi-objcopy"
+            echo "OBJDUMP=arm-none-eabi-objdump"
+            echo "STRIP=arm-none-eabi-strip"
+            # Стабилизация путей для детерминированных хэшей ccache
+            echo "CFLAGS_EXTRA=-fdebug-prefix-map=${GITHUB_WORKSPACE}=/workspace -ffile-prefix-map=${GITHUB_WORKSPACE}=/workspace"
+            echo "CPPFLAGS_EXTRA=-fdebug-prefix-map=${GITHUB_WORKSPACE}=/workspace -ffile-prefix-map=${GITHUB_WORKSPACE}=/workspace"
+          } >> "$GITHUB_ENV"
+
+      # Восстановить build-кеш стабильным ключом
       - name: Restore build cache
         id: build-restore
         uses: actions/cache/restore@v4
         with:
           path: build
           key: build-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}
+          restore-keys: |
+            build-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-
 
       - name: Build firmware
         env:
@@ -145,6 +158,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Если Makefile поддерживает local overrides, подмешаем EXTRA-флаги
+          if grep -q '^CFLAGS' Makefile 2>/dev/null || true; then
+            :
+          fi
+          export CFLAGS="${CFLAGS_EXTRA:-} ${CFLAGS:-}"
+          export CPPFLAGS="${CPPFLAGS_EXTRA:-} ${CPPFLAGS:-}"
           if [ "${CLEAN-0}" = "1" ]; then
             make clean
           fi
@@ -187,17 +206,25 @@ jobs:
             build/${{ steps.project.outputs.name }}.hex
             build/${{ steps.project.outputs.name }}.dfu
 
-      # Сохранение кэшей — только после успешной сборки; отдельные ключи исключают пересечения
+      # Лёгкий backoff перед сохранениями, чтобы снизить вероятность гонок резервирования ключей
+      - name: Backoff before saving caches
+        if: always()
+        shell: bash
+        run: |
+          sleep $((RANDOM % 5 + 1))s
+
+      # Сохранение build-кеша уникальным ключом этого запуска
       - name: Save build cache
         if: success()
         uses: actions/cache/save@v4
         with:
           path: build
-          key: build-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}
+          key: build-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
+      # Сохранение ccache уникальным ключом этого запуска
       - name: Save ccache
         if: always()
         uses: actions/cache/save@v4
         with:
           path: ${{ env.CCACHEDIR }}
-          key: ccache-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('**/*.ch','**/*.ld','Makefile','tools/**','boards/**','include/**','src/**') }}
+          key: ccache-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
