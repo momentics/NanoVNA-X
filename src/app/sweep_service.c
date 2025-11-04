@@ -58,6 +58,29 @@ static uint8_t sweep_state_flags = 0;
 static uint16_t sweep_bar_drawn_pixels = 0;
 static uint8_t sweep_bar_pending = 0;
 
+// Timer and semaphore for asynchronous PLL delay
+static binary_semaphore_t pll_delay_sem;
+static void pll_delay_timer_cb(GPTDriver* gptd) {
+  (void)gptd;
+  chSysLockFromISR();
+  chBSemSignalI(&pll_delay_sem);
+  chSysUnlockFromISR();
+}
+static const GPTConfig pll_delay_gpt_cfg = {
+  1000000, // 1MHz timer clock -> 1us resolution
+  pll_delay_timer_cb,
+  0,
+  0
+};
+
+static void async_delay_us(uint32_t us) {
+  if (us == 0) return;
+  chBSemReset(&pll_delay_sem, true);
+  gptStartOneShot(&GPTD4, us);
+  chBSemWait(&pll_delay_sem);
+}
+
+
 static uint8_t smooth_factor = 0;
 static void (*sample_func)(float* gamma) = calculate_gamma;
 
@@ -238,6 +261,8 @@ void sweep_service_init(void) {
   dump_selection = 0;
 #endif
   chBSemObjectInit(&capture_sem, true);
+  chBSemObjectInit(&pll_delay_sem, true);
+  gptStart(&GPTD4, &pll_delay_gpt_cfg);
   /*
    * The snapshot semaphore gates both the sweep loop and any asynchronous
    * snapshot consumers.  The sweep thread waits on it before launching the
@@ -528,6 +553,7 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
   float c_data[CAL_TYPE_COUNT][2];
   bool completed = false;
   int delay = 0;
+  uint32_t settle_delay_us = 0;
   int st_delay = DELAY_SWEEP_START;
   int interpolation_idx = p_sweep;
   bool show_progress = config._bandwidth >= BANDWIDTH_100;
@@ -549,7 +575,8 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
     freq_t frequency = get_frequency(p_sweep);
     uint8_t extra_cycles = 0U;
     if (mask & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE)) {
-      delay = app_measurement_set_frequency(frequency);
+      delay = app_measurement_set_frequency(frequency, &settle_delay_us);
+      async_delay_us(settle_delay_us);
       interpolation_idx = (mask & SWEEP_USE_INTERPOLATION) ? -1 : (int)p_sweep;
       extra_cycles = si5351_take_settling_cycles();
     }
@@ -656,8 +683,8 @@ uint8_t get_smooth_factor(void) {
   return smooth_factor;
 }
 
-int app_measurement_set_frequency(freq_t freq) {
-  return si5351_set_frequency(freq, current_props._power);
+int app_measurement_set_frequency(freq_t freq, uint32_t* settle_delay_us) {
+  return si5351_set_frequency(freq, current_props._power, settle_delay_us);
 }
 
 #ifdef __USE_FREQ_TABLE__

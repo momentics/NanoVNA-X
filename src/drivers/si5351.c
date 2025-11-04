@@ -99,7 +99,7 @@ void si5351_set_frequency_offset(int32_t offset) {
 void si5351_set_power(uint8_t drive_strength) {
   if (drive_strength == current_power)
     return;
-  si5351_set_frequency(current_freq, drive_strength);
+  si5351_set_frequency(current_freq, drive_strength, NULL);
 }
 
 void si5351_bulk_write(const uint8_t* buf, int len) {
@@ -170,7 +170,7 @@ void si5351_init(void) {
   }
   si5351_set_band_mode(config._band_mode);
   // Set any (let it be XTALFREQ) frequency for AIC can run
-  si5351_set_frequency(XTALFREQ, 0);
+  si5351_set_frequency(XTALFREQ, 0, NULL);
 }
 
 static const uint8_t disable_output[] = {
@@ -1009,7 +1009,7 @@ uint32_t si5351_get_harmonic_lvl(uint32_t freq) {
 #define FREQ_CHANNEL 1
 #define AUDIO_CODEC_CHANNEL 2
 
-int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
+int si5351_set_frequency(uint32_t freq, uint8_t drive_strength, uint32_t* settle_delay_us) {
   uint8_t band;
   int delay = 0;
   if (freq == 0)
@@ -1047,6 +1047,9 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
     current_power = drive_strength;
   }
 
+  if (settle_delay_us)
+    *settle_delay_us = 0;
+
   if (freq == current_freq)
     return DELAY_CHANNEL_CHANGE;
 
@@ -1060,8 +1063,12 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
         band_s[current_band].r_gain != band_s[band].r_gain)
       tlv320aic3204_set_gain(band_s[band].l_gain, band_s[band].r_gain);
     // Add delay
-    if (DELAY_RESET_PLL_BEFORE)
-      chThdSleepMicroseconds(DELAY_RESET_PLL_BEFORE);
+    if (DELAY_RESET_PLL_BEFORE) {
+      if (settle_delay_us)
+        *settle_delay_us += 250;
+      else
+        chThdSleepMicroseconds(250);
+    }
   }
   uint32_t mul = band_s[band].mul;
   uint32_t omul = band_s[band].omul;
@@ -1139,7 +1146,11 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
     //    ~(SI5351_CLK0_EN|SI5351_CLK1_EN|SI5351_CLK2_EN));
     // Possibly not need add delay now
     if (DELAY_RESET_PLL_AFTER) {
-      chThdSleepMicroseconds(DELAY_RESET_PLL_AFTER);
+      if (settle_delay_us) {
+        *settle_delay_us += 250;
+      } else {
+        chThdSleepMicroseconds(250);
+      }
       si5351_reset_pll(SI5351_PLL_RESET_A | SI5351_PLL_RESET_B);
     }
     pending_settling_cycles = SI5351_SETTLING_CYCLES_ON_BAND_CHANGE;
