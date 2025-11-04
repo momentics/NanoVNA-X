@@ -37,6 +37,7 @@
  */
 static systime_t ready_time = 0;
 static volatile uint16_t wait_count = 0;
+static volatile bool last_capture_success = false;
 static audio_sample_t rx_buffer[AUDIO_BUFFER_LEN * 2];
 
 #if ENABLED_DUMP_COMMAND
@@ -226,6 +227,7 @@ void i2s_lld_serve_rx_interrupt(uint32_t flags) {
   --wait_count;
   if (wait_count == 0U) {
     chBSemSignalI(&capture_done_sem);
+    last_capture_success = true;  // Successful capture
     sweep_notify_state_change_i();
   }
 }
@@ -346,13 +348,13 @@ void sweep_service_start_capture(systime_t delay_ticks) {
   chBSemReset(&capture_done_sem, true);
 }
 
-bool sweep_service_wait_for_capture(void) {
+void sweep_service_wait_for_capture(void) {
   msg_t msg;
   systime_t timeout = MS2ST(500); // 500ms timeout - adjust as needed
   msg = chBSemWaitTimeout(&capture_done_sem, timeout);
   
-  // Return true if we got the semaphore (capture successful), false if timeout
-  return msg == MSG_OK;
+  // Set success flag based on whether we got the semaphore
+  last_capture_success = (msg == MSG_OK);
 }
 
 const audio_sample_t* sweep_service_rx_buffer(void) {
@@ -533,8 +535,9 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
           cal_interpolate(interpolation_idx, frequency, c_data);
         }
-        bool capture_success = sweep_service_wait_for_capture();
-        if (capture_success) {
+        last_capture_success = false;  // Reset before capture attempt
+        sweep_service_wait_for_capture();
+        if (last_capture_success) {
           // Successful capture - process the data
           (*sample_func)(&data[0]);
           if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
@@ -564,8 +567,9 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION) && (mask & SWEEP_CH0_MEASURE) == 0U) {
           cal_interpolate(interpolation_idx, frequency, c_data);
         }
-        bool capture_success = sweep_service_wait_for_capture();
-        if (capture_success) {
+        last_capture_success = false;  // Reset before capture attempt
+        sweep_service_wait_for_capture();
+        if (last_capture_success) {
           // Successful capture - process the data
           (*sample_func)(&data[2]);
           if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
