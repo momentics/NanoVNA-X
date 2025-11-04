@@ -2552,6 +2552,13 @@ int app_main(void) {
    */
   shell_register_commands(commands);
   shell_init_connection();
+  
+  // Even if USB is not physically connected, ensure SDU is properly configured
+  // This mimics the configuration that happens when USB cable is connected
+  sduConfigureHookI(&SDU1);
+  
+  // Wait for USB to properly initialize and stabilize regardless of connection status
+  chThdSleepMilliseconds(200);
 
   /*
    * tlv320aic Initialize (audio codec)
@@ -2580,13 +2587,16 @@ int app_main(void) {
    */
   i2c_set_timings(STM32_I2C_TIMINGR);
 
+  // Additional delay to allow all systems to stabilize after USB and peripheral initialization
+  chThdSleepMilliseconds(200);
+
   /*
    * Startup sweep thread
    */
   chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO - 1, Thread1, NULL);
 
   // Give sweep thread time to complete its initialization before main thread enters its loop
-  chThdSleepMilliseconds(50);
+  chThdSleepMilliseconds(100);
 
   // Main thread: periodically check for shell connection and handle shell operations
   // This should run continuously but be non-blocking to the sweep thread
