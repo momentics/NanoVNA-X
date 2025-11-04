@@ -76,7 +76,7 @@ static const GPTConfig pll_delay_gpt_cfg = {
 static void async_delay_us(uint32_t us) {
   if (us == 0) return;
   chBSemReset(&pll_delay_sem, true);
-  gptStartOneShot(&GPTD4, us);
+  gptStartOneShot(&GPTD3, us);
   chBSemWait(&pll_delay_sem);
 }
 
@@ -262,7 +262,7 @@ void sweep_service_init(void) {
 #endif
   chBSemObjectInit(&capture_sem, true);
   chBSemObjectInit(&pll_delay_sem, true);
-  gptStart(&GPTD4, &pll_delay_gpt_cfg);
+  gptStart(&GPTD3, &pll_delay_gpt_cfg);
   /*
    * The snapshot semaphore gates both the sweep loop and any asynchronous
    * snapshot consumers.  The sweep thread waits on it before launching the
