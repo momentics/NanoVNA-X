@@ -2571,7 +2571,7 @@ int app_main(void) {
   init_i2s((void*)sweep_service_rx_buffer(),
            (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
 
-ytn  // Give I2S system time to properly initialize
+  // Give I2S system time to properly initialize
   chThdSleepMilliseconds(50);
 
   // Additional audio system initialization to ensure proper operation regardless of USB connection
