@@ -346,18 +346,13 @@ void sweep_service_start_capture(systime_t delay_ticks) {
   chBSemReset(&capture_done_sem, true);
 }
 
-void sweep_service_wait_for_capture(void) {
+bool sweep_service_wait_for_capture(void) {
   msg_t msg;
   systime_t timeout = MS2ST(500); // 500ms timeout - adjust as needed
-  do {
-    msg = chBSemWaitTimeout(&capture_done_sem, timeout);
-    // If timeout occurred and we still haven't received the signal, 
-    // we should break to avoid hanging indefinitely
-    if (msg != MSG_OK) {
-      // Break if we've timed out to avoid infinite hang
-      break;
-    }
-  } while (msg != MSG_OK);
+  msg = chBSemWaitTimeout(&capture_done_sem, timeout);
+  
+  // Return true if we got the semaphore (capture successful), false if timeout
+  return msg == MSG_OK;
 }
 
 const audio_sample_t* sweep_service_rx_buffer(void) {
@@ -538,13 +533,26 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
           cal_interpolate(interpolation_idx, frequency, c_data);
         }
-        sweep_service_wait_for_capture();
-        (*sample_func)(&data[0]);
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-          apply_ch0_error_term(data, c_data);
-        }
-        if (mask & SWEEP_APPLY_EDELAY_S11) {
-          apply_edelay(electrical_delayS11 * frequency, &data[0]);
+        bool capture_success = sweep_service_wait_for_capture();
+        if (capture_success) {
+          // Successful capture - process the data
+          (*sample_func)(&data[0]);
+          if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
+            apply_ch0_error_term(data, c_data);
+          }
+          if (mask & SWEEP_APPLY_EDELAY_S11) {
+            apply_edelay(electrical_delayS11 * frequency, &data[0]);
+          }
+        } else {
+          // Capture failed - use default values indicating no measurement
+          data[0] = 1.0f; // Default S11 real part (no reflection)
+          data[1] = 0.0f; // Default S11 imag part
+          if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
+            apply_ch0_error_term(data, c_data);
+          }
+          if (mask & SWEEP_APPLY_EDELAY_S11) {
+            apply_edelay(electrical_delayS11 * frequency, &data[0]);
+          }
         }
         measured[0][p_sweep][0] = data[0];
         measured[0][p_sweep][1] = data[1];
@@ -556,16 +564,32 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION) && (mask & SWEEP_CH0_MEASURE) == 0U) {
           cal_interpolate(interpolation_idx, frequency, c_data);
         }
-        sweep_service_wait_for_capture();
-        (*sample_func)(&data[2]);
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-          apply_ch1_error_term(data, c_data);
-        }
-        if (mask & SWEEP_APPLY_EDELAY_S21) {
-          apply_edelay(electrical_delayS21 * frequency, &data[2]);
-        }
-        if (mask & SWEEP_APPLY_S21_OFFSET) {
-          apply_offset(&data[2], offset);
+        bool capture_success = sweep_service_wait_for_capture();
+        if (capture_success) {
+          // Successful capture - process the data
+          (*sample_func)(&data[2]);
+          if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
+            apply_ch1_error_term(data, c_data);
+          }
+          if (mask & SWEEP_APPLY_EDELAY_S21) {
+            apply_edelay(electrical_delayS21 * frequency, &data[2]);
+          }
+          if (mask & SWEEP_APPLY_S21_OFFSET) {
+            apply_offset(&data[2], offset);
+          }
+        } else {
+          // Capture failed - use default values indicating no measurement
+          data[2] = 0.0f; // Default S21 real part (no transmission)
+          data[3] = 0.0f; // Default S21 imag part
+          if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
+            apply_ch1_error_term(data, c_data);
+          }
+          if (mask & SWEEP_APPLY_EDELAY_S21) {
+            apply_edelay(electrical_delayS21 * frequency, &data[2]);
+          }
+          if (mask & SWEEP_APPLY_S21_OFFSET) {
+            apply_offset(&data[2], offset);
+          }
         }
         measured[1][p_sweep][0] = data[2];
         measured[1][p_sweep][1] = data[3];
