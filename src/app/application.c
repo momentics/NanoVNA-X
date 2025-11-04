@@ -2574,6 +2574,14 @@ int app_main(void) {
   // Give I2S system time to properly initialize
   chThdSleepMilliseconds(50);
 
+  // Additional audio system initialization to ensure proper operation regardless of USB connection
+  tlv320aic3204_init();
+  chThdSleepMilliseconds(50);
+
+  // Additional delay to ensure audio system is fully ready before sweep thread starts
+  // This may help when USB is not connected during startup
+  chThdSleepMilliseconds(100);
+
 /*
  * SD Card init (if inserted) allow fix issues
  * Some card after insert work in SDIO mode and can corrupt SPI exchange (need switch it to SPI)
