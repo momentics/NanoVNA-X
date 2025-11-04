@@ -21,6 +21,9 @@ jobs:
       CCACHEDIR: .ccache
       CCACHEMAXSIZE: 500M
       OSNAME: ubuntu-latest
+      APT_USER_CACHE: ${{ github.workspace }}/.apt
+      APT_USER_ARCHIVES: ${{ github.workspace }}/.apt/archives
+      APT_USER_LISTS: ${{ github.workspace }}/.apt/lists
 
     steps:
       - name: Checkout repository
@@ -29,28 +32,68 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      # Восстановление APT-кэша (раздельные restore/save, чтобы задать excludes на save)
-      - name: Restore APT cache
-        id: apt-cache-restore
+      # Кешируем ТОЛЬКО пользовательские каталоги .apt/*
+      - name: Restore APT user cache
+        id: apt-restore
         uses: actions/cache/restore@v4
         with:
           path: |
-            /var/cache/apt
-            /var/lib/apt/lists
+            .apt/archives
+            .apt/lists
           key: apt-${{ env.OSNAME }}-${{ env.APTPACKAGES }}
           restore-keys: |
             apt-${{ env.OSNAME }}-
+
+      - name: Prime APT from user cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$APT_USER_ARCHIVES/partial" "$APT_USER_LISTS/partial"
+          # Подготовим системные каталоги
+          sudo mkdir -p /var/cache/apt/archives /var/lib/apt/lists
+          # Скопируем индексы и .deb из пользовательского кеша в системные каталоги (без lock/partial)
+          if [ -d "$APT_USER_LISTS" ]; then
+            sudo rsync -a --delete --exclude 'lock' --exclude 'partial' "$APT_USER_LISTS/" /var/lib/apt/lists/
+          fi
+          if [ -d "$APT_USER_ARCHIVES" ]; then
+            sudo rsync -a --exclude 'lock' --exclude 'partial' "$APT_USER_ARCHIVES/" /var/cache/apt/archives/
+          fi
 
       - name: Install toolchain and utils
         shell: bash
         run: |
           set -euo pipefail
-          sudo mkdir -p /var/cache/apt/archives /var/lib/apt/lists
-          # Ускорение: не трогать recommends и интерактив
-          sudo apt-get -o Acquire::Retries=3 update
-          sudo apt-get -y --no-install-recommends install $APTPACKAGES
+          # Направляем apt использовать пользовательские каталоги для скачивания и списков,
+          # но фактическая установка идёт в систему (sudo).
+          sudo apt-get -o Dir::Cache::archives="$APT_USER_ARCHIVES" \
+                       -o Dir::State::lists="$APT_USER_LISTS" \
+                       -o Acquire::Retries=3 update
+          sudo apt-get -y --no-install-recommends \
+                       -o Dir::Cache::archives="$APT_USER_ARCHIVES" \
+                       -o Dir::State::lists="$APT_USER_LISTS" \
+                       install $APTPACKAGES
           arm-none-eabi-gcc --version || true
           ccache --version || true
+
+      - name: Persist APT user cache back
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$APT_USER_ARCHIVES" "$APT_USER_LISTS"
+          # Обновим пользовательский кеш из системных каталогов без lock/partial
+          sudo rsync -a --delete --exclude 'lock' --exclude 'partial' /var/lib/apt/lists/ "$APT_USER_LISTS/"
+          sudo rsync -a --exclude 'lock' --exclude 'partial' /var/cache/apt/archives/ "$APT_USER_ARCHIVES/"
+          # Нормализуем владельца, чтобы actions/cache мог читать
+          sudo chown -R "$(id -u):$(id -g)" "$APT_USER_CACHE"
+
+      - name: Save APT user cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .apt/archives
+            .apt/lists
+          key: apt-${{ env.OSNAME }}-${{ env.APTPACKAGES }}
 
       - name: Enable ccache
         shell: bash
@@ -156,21 +199,6 @@ jobs:
             build/${{ steps.project.outputs.name }}.hex
             build/${{ steps.project.outputs.name }}.dfu
 
-      # Явное сохранение APT-кэша c исключением lock/partial (решает Permission denied на tar)
-      - name: Save APT cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            /var/cache/apt
-            !/var/cache/apt/archives/lock
-            !/var/cache/apt/archives/partial/**
-            /var/lib/apt/lists
-            !/var/lib/apt/lists/lock
-            !/var/lib/apt/lists/partial/**
-          key: apt-${{ env.OSNAME }}-${{ env.APTPACKAGES }}
-
-      # Финальное сохранение ccache на первом прогоне
       - name: Save ccache (final)
         if: always()
         uses: actions/cache/save@v4
