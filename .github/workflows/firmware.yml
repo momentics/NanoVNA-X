@@ -32,7 +32,7 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      # Кешируем ТОЛЬКО пользовательские каталоги .apt/*
+      # APT user cache: уникальный ключ для матрицы
       - name: Restore APT user cache
         id: apt-restore
         uses: actions/cache/restore@v4
@@ -40,8 +40,9 @@ jobs:
           path: |
             .apt/archives
             .apt/lists
-          key: apt-${{ env.OSNAME }}-${{ env.APTPACKAGES }}
+          key: apt-${{ env.OSNAME }}-${{ matrix.target }}-${{ hashFiles('.github/workflows/**','Makefile') }}-${{ env.APTPACKAGES }}
           restore-keys: |
+            apt-${{ env.OSNAME }}-${{ matrix.target }}-
             apt-${{ env.OSNAME }}-
 
       - name: Prime APT from user cache
@@ -49,9 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$APT_USER_ARCHIVES/partial" "$APT_USER_LISTS/partial"
-          # Подготовим системные каталоги
           sudo mkdir -p /var/cache/apt/archives /var/lib/apt/lists
-          # Скопируем индексы и .deb из пользовательского кеша в системные каталоги (без lock/partial)
           if [ -d "$APT_USER_LISTS" ]; then
             sudo rsync -a --delete --exclude 'lock' --exclude 'partial' "$APT_USER_LISTS/" /var/lib/apt/lists/
           fi
@@ -63,8 +62,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Направляем apt использовать пользовательские каталоги для скачивания и списков,
-          # но фактическая установка идёт в систему (sudo).
           sudo apt-get -o Dir::Cache::archives="$APT_USER_ARCHIVES" \
                        -o Dir::State::lists="$APT_USER_LISTS" \
                        -o Acquire::Retries=3 update
@@ -80,10 +77,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$APT_USER_ARCHIVES" "$APT_USER_LISTS"
-          # Обновим пользовательский кеш из системных каталогов без lock/partial
           sudo rsync -a --delete --exclude 'lock' --exclude 'partial' /var/lib/apt/lists/ "$APT_USER_LISTS/"
           sudo rsync -a --exclude 'lock' --exclude 'partial' /var/cache/apt/archives/ "$APT_USER_ARCHIVES/"
-          # Нормализуем владельца, чтобы actions/cache мог читать
           sudo chown -R "$(id -u):$(id -g)" "$APT_USER_CACHE"
 
       - name: Save APT user cache
@@ -93,7 +88,7 @@ jobs:
           path: |
             .apt/archives
             .apt/lists
-          key: apt-${{ env.OSNAME }}-${{ env.APTPACKAGES }}
+          key: apt-${{ env.OSNAME }}-${{ matrix.target }}-${{ hashFiles('.github/workflows/**','Makefile') }}-${{ env.APTPACKAGES }}
 
       - name: Enable ccache
         shell: bash
@@ -123,8 +118,9 @@ jobs:
           echo "ver=$ver" >> "$GITHUB_OUTPUT"
           echo "ARM_GCC_VER=$ver" >> "$GITHUB_ENV"
 
-      - name: Cache ccache
-        uses: actions/cache@v4
+      - name: Restore ccache
+        id: ccache-restore
+        uses: actions/cache/restore@v4
         with:
           path: ${{ env.CCACHEDIR }}
           key: ccache-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('**/*.ch','**/*.ld','Makefile','tools/**','boards/**','include/**','src/**') }}
@@ -199,7 +195,7 @@ jobs:
             build/${{ steps.project.outputs.name }}.hex
             build/${{ steps.project.outputs.name }}.dfu
 
-      - name: Save ccache (final)
+      - name: Save ccache
         if: always()
         uses: actions/cache/save@v4
         with:
