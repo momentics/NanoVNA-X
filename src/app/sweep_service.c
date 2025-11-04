@@ -633,6 +633,7 @@ void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points)
   freq_t f = start;
   freq_t df = step >> 1;
   uint32_t i = 0;
+  osalSysLock();
   for (; i <= step; i++, f += delta) {
     frequencies[i] = f;
     if ((df += error) >= step) {
@@ -643,33 +644,45 @@ void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points)
   for (; i < SWEEP_POINTS_MAX; i++) {
     frequencies[i] = 0;
   }
+  osalSysUnlock();
 }
 
 freq_t get_frequency(uint16_t idx) {
-  return frequencies[idx];
+  osalSysLock();
+  freq_t result = frequencies[idx];
+  osalSysUnlock();
+  return result;
 }
 
 freq_t get_frequency_step(void) {
-  if (sweep_points <= 1U) {
-    return 0;
-  }
-  return frequencies[1] - frequencies[0];
+  osalSysLock();
+  freq_t step = (sweep_points <= 1U) ? 0 : (frequencies[1] - frequencies[0]);
+  osalSysUnlock();
+  return step;
 }
 #else
 void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points) {
   freq_t span = stop - start;
+  osalSysLock();
   _f_start = start;
   _f_points = points - 1U;
   _f_delta = span / _f_points;
   _f_error = span % _f_points;
+  osalSysUnlock();
 }
 
 freq_t get_frequency(uint16_t idx) {
-  return _f_start + _f_delta * idx + (_f_points / 2U + _f_error * idx) / _f_points;
+  osalSysLock();
+  freq_t result = _f_start + _f_delta * idx + (_f_points / 2U + _f_error * idx) / _f_points;
+  osalSysUnlock();
+  return result;
 }
 
 freq_t get_frequency_step(void) {
-  return _f_delta;
+  osalSysLock();
+  freq_t result = _f_delta;
+  osalSysUnlock();
+  return result;
 }
 #endif
 
