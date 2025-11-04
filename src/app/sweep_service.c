@@ -347,8 +347,17 @@ void sweep_service_start_capture(systime_t delay_ticks) {
 }
 
 void sweep_service_wait_for_capture(void) {
-  while (chBSemWait(&capture_done_sem) != MSG_OK) {
-  }
+  msg_t msg;
+  systime_t timeout = MS2ST(500); // 500ms timeout - adjust as needed
+  do {
+    msg = chBSemWaitTimeout(&capture_done_sem, timeout);
+    // If timeout occurred and we still haven't received the signal, 
+    // we should break to avoid hanging indefinitely
+    if (msg != MSG_OK) {
+      // Break if we've timed out to avoid infinite hang
+      break;
+    }
+  } while (msg != MSG_OK);
 }
 
 const audio_sample_t* sweep_service_rx_buffer(void) {

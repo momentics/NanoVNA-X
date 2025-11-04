@@ -180,7 +180,10 @@ static THD_FUNCTION(Thread1, arg) {
   plot_init();
   while (1) {
     app_process_event_queue(TIME_IMMEDIATE);
+    
+    // Process shell commands but don't let them block the sweep process
     shell_service_pending_commands();
+    
     bool completed = false;
     uint16_t mask = measurement_pipeline_active_mask(&measurement_pipeline);
     if (sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) {
@@ -2553,10 +2556,6 @@ int app_main(void) {
   shell_register_commands(commands);
   shell_init_connection();
   
-  // Even if USB is not physically connected, ensure SDU is properly configured
-  // This mimics the configuration that happens when USB cable is connected
-  sduConfigureHookI(&SDU1);
-  
   // Wait for USB to properly initialize and stabilize regardless of connection status
   chThdSleepMilliseconds(200);
 
@@ -2574,13 +2573,8 @@ int app_main(void) {
   // Give I2S system time to properly initialize
   chThdSleepMilliseconds(50);
 
-  // Additional audio system initialization to ensure proper operation regardless of USB connection
-  tlv320aic3204_init();
-  chThdSleepMilliseconds(50);
-
-  // Additional delay to ensure audio system is fully ready before sweep thread starts
-  // This may help when USB is not connected during startup
-  chThdSleepMilliseconds(100);
+  init_i2s((void*)sweep_service_rx_buffer(),
+           (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
 
 /*
  * SD Card init (if inserted) allow fix issues
@@ -2595,16 +2589,13 @@ int app_main(void) {
    */
   i2c_set_timings(STM32_I2C_TIMINGR);
 
-  // Additional delay to allow all systems to stabilize after USB and peripheral initialization
-  chThdSleepMilliseconds(200);
-
   /*
    * Startup sweep thread
    */
   chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO - 1, Thread1, NULL);
 
-  // Give sweep thread time to complete its initialization before main thread enters its loop
-  chThdSleepMilliseconds(100);
+  // Give sweep thread a moment to initialize before main thread enters its loop
+  chThdSleepMilliseconds(10);
 
   // Main thread: periodically check for shell connection and handle shell operations
   // This should run continuously but be non-blocking to the sweep thread
@@ -2628,8 +2619,8 @@ int app_main(void) {
       } while (shell_check_connect());
 #endif
     }
-    // Shorter sleep to improve system responsiveness regardless of USB connection status
-    chThdSleepMilliseconds(10);
+    // Sleep for a reasonable time to allow other threads to run
+    chThdSleepMilliseconds(1000);
   }
 }
 
