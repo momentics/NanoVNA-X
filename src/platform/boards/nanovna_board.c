@@ -75,7 +75,7 @@ static void generator_driver_init(void) {
 }
 
 static void generator_driver_set_frequency(uint32_t frequency) {
-  si5351_set_frequency(frequency, SI5351_CLK_DRIVE_STRENGTH_AUTO);
+  si5351_set_frequency(frequency, SI5351_CLK_DRIVE_STRENGTH_AUTO, NULL);
 }
 
 static void generator_driver_set_power(uint16_t drive_strength) {

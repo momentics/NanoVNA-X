@@ -519,7 +519,7 @@ VNA_SHELL_FUNCTION(cmd_freq) {
   }
   uint32_t freq = my_atoui(argv[0]);
   pause_sweep();
-  app_measurement_set_frequency(freq);
+  app_measurement_set_frequency(freq, NULL);
   return;
 }
 
