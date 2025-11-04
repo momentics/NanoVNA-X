@@ -2582,6 +2582,8 @@ int app_main(void) {
    */
   chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO - 1, Thread1, NULL);
 
+  // Main thread: periodically check for shell connection and handle shell operations
+  // This should run continuously but be non-blocking to the sweep thread
   while (1) {
     if (shell_check_connect()) {
       shell_printf(VNA_SHELL_NEWLINE_STR "NanoVNA Shell" VNA_SHELL_NEWLINE_STR);
@@ -2602,7 +2604,8 @@ int app_main(void) {
       } while (shell_check_connect());
 #endif
     }
-    chThdSleepMilliseconds(1000);
+    // Shorter sleep to remain responsive while allowing other threads to run
+    chThdSleepMilliseconds(100);
   }
 }
 
