@@ -16,14 +16,14 @@ jobs:
       fail-fast: false
     env:
       TARGET: ${{ matrix.target }}
-      OS_NAME: ubuntu-24.04
-      # APT user-cache (локально в рабочем каталоге, без sudo прав)
-      APT_USER_CACHE: ${{ github.workspace }}/.apt
-      APT_USER_ARCHIVES: ${{ github.workspace }}/.apt/archives
-      APT_USER_LISTS: ${{ github.workspace }}/.apt/lists
+      OSNAME: ubuntu-24.04
+      # APT user-cache
+      APTUSERCACHE: ${{ github.workspace }}/.apt
+      APTUSERARCHIVES: ${{ github.workspace }}/.apt/archives
+      APTUSERLISTS: ${{ github.workspace }}/.apt/lists
       # ccache
-      CCACHE_DIR: .ccache
-      CCACHE_MAXSIZE: 500M
+      CCACHEDIR: .ccache
+      CCACHEMAXSIZE: 500M
 
     steps:
       - name: Checkout repository
@@ -32,7 +32,7 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      # Восстановление пользовательского кеша APT (архивы и списки)
+      # Restore APT cache
       - name: Restore APT user cache
         id: apt-restore
         uses: actions/cache/restore@v4
@@ -40,49 +40,47 @@ jobs:
           path: |
             .apt/archives
             .apt/lists
-          key: apt-${{ env.OS_NAME }}-${{ matrix.target }}-${{ hashFiles('.github/workflows/**','Makefile') }}-gcc-arm-none-eabi-libnewlib-arm-none-eabi-dfu-util
+          key: apt-${{ env.OSNAME }}-${{ matrix.target }}-${{ hashFiles('.github/workflows/**','Makefile') }}-gcc-arm-none-eabi-libnewlib-arm-none-eabi-dfu-util-ccache-python3
           restore-keys: |
-            apt-${{ env.OS_NAME }}-${{ matrix.target }}-
+            apt-${{ env.OSNAME }}-${{ matrix.target }}-
 
-      # Прайминг каталогов APT из пользовательского кеша в системные пути
       - name: Prime APT from user cache
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "${APT_USER_ARCHIVES}/partial" "${APT_USER_LISTS}/partial"
+          mkdir -p "${APTUSERARCHIVES}/partial" "${APTUSERLISTS}/partial"
           sudo mkdir -p /var/cache/apt/archives /var/lib/apt/lists
-          if [ -d "${APT_USER_LISTS}" ]; then
-            sudo rsync -a --delete --exclude 'lock' --exclude 'partial' "${APT_USER_LISTS}/" /var/lib/apt/lists/
+          if [ -d "${APTUSERLISTS}" ]; then
+            sudo rsync -a --delete --exclude 'lock' --exclude 'partial' "${APTUSERLISTS}/" /var/lib/apt/lists/
           fi
-          if [ -d "${APT_USER_ARCHIVES}" ]; then
-            sudo rsync -a --exclude 'lock' --exclude 'partial' "${APT_USER_ARCHIVES}/" /var/cache/apt/archives/
+          if [ -d "${APTUSERARCHIVES}" ]; then
+            sudo rsync -a --exclude 'lock' --exclude 'partial' "${APTUSERARCHIVES}/" /var/cache/apt/archives/
           fi
 
-      # Установка тулчейна и dfu-util с использованием user-cache APT
-      - name: Install ARM toolchain
+      # INSTALL toolchain + dfu-util + ccache (фикс: добавить ccache)
+      - name: Install ARM toolchain and ccache
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get -o Dir::Cache::archives="${APT_USER_ARCHIVES}" \
-                       -o Dir::State::lists="${APT_USER_LISTS}" \
+          sudo apt-get -o Dir::Cache::archives="${APTUSERARCHIVES}" \
+                       -o Dir::State::lists="${APTUSERLISTS}" \
                        -o Acquire::Retries=3 update
           sudo apt-get -y --no-install-recommends \
-                       -o Dir::Cache::archives="${APT_USER_ARCHIVES}" \
-                       -o Dir::State::lists="${APT_USER_LISTS}" \
-                       install gcc-arm-none-eabi libnewlib-arm-none-eabi dfu-util
+                       -o Dir::Cache::archives="${APTUSERARCHIVES}" \
+                       -o Dir::State::lists="${APTUSERLISTS}" \
+                       install gcc-arm-none-eabi libnewlib-arm-none-eabi dfu-util ccache python3
           arm-none-eabi-gcc --version || true
+          ccache --version || true
 
-      # Возврат списков и архивов APT обратно в пользовательский кеш
       - name: Persist APT user cache back
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "${APT_USER_ARCHIVES}" "${APT_USER_LISTS}"
-          sudo rsync -a --delete --exclude 'lock' --exclude 'partial' /var/lib/apt/lists/ "${APT_USER_LISTS}/"
-          sudo rsync -a --exclude 'lock' --exclude 'partial' /var/cache/apt/archives/ "${APT_USER_ARCHIVES}/"
-          sudo chown -R "$(id -u)":"$(id -g)" "${APT_USER_CACHE}"
+          mkdir -p "${APTUSERARCHIVES}" "${APTUSERLISTS}"
+          sudo rsync -a --delete --exclude 'lock' --exclude 'partial' /var/lib/apt/lists/ "${APTUSERLISTS}/"
+          sudo rsync -a --exclude 'lock' --exclude 'partial' /var/cache/apt/archives/ "${APTUSERARCHIVES}/"
+          sudo chown -R "$(id -u)":"$(id -g)" "${APTUSERCACHE}"
 
-      # Сохранение APT-кеша уникальным ключом этого запуска (чтобы не мешать параллельным джобам)
       - name: Save APT user cache (unique key)
         if: always()
         uses: actions/cache/save@v4
@@ -90,17 +88,15 @@ jobs:
           path: |
             .apt/archives
             .apt/lists
-          key: apt-${{ env.OS_NAME }}-${{ matrix.target }}-${{ hashFiles('.github/workflows/**','Makefile') }}-gcc-arm-none-eabi-libnewlib-arm-none-eabi-dfu-util-${{ github.run_id }}-${{ github.run_attempt }}
+          key: apt-${{ env.OSNAME }}-${{ matrix.target }}-${{ hashFiles('.github/workflows/**','Makefile') }}-gcc-arm-none-eabi-libnewlib-arm-none-eabi-dfu-util-ccache-python3-${{ github.run_id }}-${{ github.run_attempt }}
 
-      # Подготовка директорий кэширования
       - name: Prepare cache dirs
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "${CCACHE_DIR}"
+          mkdir -p "${CCACHEDIR}"
           mkdir -p build
 
-      # Определение версии ARM GCC (для ключей кеша)
       - name: Detect ARM GCC version
         id: gccver
         shell: bash
@@ -108,48 +104,45 @@ jobs:
           set -euo pipefail
           ver="$(arm-none-eabi-gcc -dumpversion 2>/dev/null || echo unknown)"
           echo "ver=${ver}" >> "$GITHUB_OUTPUT"
+          echo "ARMGCCVER=${ver}" >> "$GITHUB_ENV"
 
-      # Восстановление кеша ccache
       - name: Restore ccache
         id: ccache-restore
         uses: actions/cache/restore@v4
         with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ env.OS_NAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}
+          path: ${{ env.CCACHEDIR }}
+          key: ccache-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}
           restore-keys: |
-            ccache-${{ env.OS_NAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-
+            ccache-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-
 
-      # Настройка ccache и экспорт переменных компилятора
       - name: Configure ccache and toolchain env
         shell: bash
         run: |
           set -euo pipefail
-          ccache --set-config=cache_dir="${CCACHE_DIR}"
-          ccache --set-config=max_size="${CCACHE_MAXSIZE}"
+          ccache --set-config=cache_dir="${CCACHEDIR}"
+          ccache --set-config=max_size="${CCACHEMAXSIZE}"
           ccache --set-config=compression=true || true
           ccache -p || true
           {
-            echo 'CC="ccache arm-none-eabi-gcc"'
-            echo 'CXX="ccache arm-none-eabi-g++"'
-            echo 'AR="arm-none-eabi-ar"'
-            echo 'NM="arm-none-eabi-nm"'
-            echo 'OBJCOPY="arm-none-eabi-objcopy"'
-            echo 'OBJDUMP="arm-none-eabi-objdump"'
-            echo 'STRIP="arm-none-eabi-strip"'
-            # Убираем абсолютные пути из отладочной информации
+            echo 'CC=ccache arm-none-eabi-gcc'
+            echo 'CXX=ccache arm-none-eabi-g++'
+            echo 'AR=arm-none-eabi-ar'
+            echo 'NM=arm-none-eabi-nm'
+            echo 'OBJCOPY=arm-none-eabi-objcopy'
+            echo 'OBJDUMP=arm-none-eabi-objdump'
+            echo 'STRIP=arm-none-eabi-strip'
             echo 'CFLAGS_EXTRA=-fdebug-prefix-map=${GITHUB_WORKSPACE}=workspace -ffile-prefix-map=${GITHUB_WORKSPACE}=workspace'
             echo 'CPPFLAGS_EXTRA=-fdebug-prefix-map=${GITHUB_WORKSPACE}=workspace -ffile-prefix-map=${GITHUB_WORKSPACE}=workspace'
           } >> "$GITHUB_ENV"
 
-      # Восстановление кеша каталога сборки (ускоряет повторные релизы)
       - name: Restore build cache
         id: build-restore
         uses: actions/cache/restore@v4
         with:
           path: build
-          key: build-${{ env.OS_NAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}
+          key: build-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}
           restore-keys: |
-            build-${{ env.OS_NAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-
+            build-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-
 
       - name: Determine firmware version
         id: version
@@ -173,7 +166,6 @@ jobs:
 
       - name: Build firmware
         env:
-          # Применяем дополнительные флаги (если Makefile их подхватывает)
           CFLAGS: ${{ env.CFLAGS_EXTRA }}
           CPPFLAGS: ${{ env.CPPFLAGS_EXTRA }}
         run: |
@@ -211,7 +203,6 @@ jobs:
             sha_file="$dist_dir/${base_name}.${ext}.sha256"
             sha256sum "$dist_dir/${base_name}.${ext}" > "$sha_file"
           done
-          printf 'Prepared %s artifacts in %s\n' "$base_name" "$dist_dir"
 
       - name: Upload assets to release
         uses: softprops/action-gh-release@v1
@@ -227,25 +218,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Небольшая задержка перед сохранением кешей чтобы снизить гонки
       - name: Backoff before saving caches
         if: always()
         shell: bash
         run: |
           sleep $((RANDOM % 5 + 1))s
 
-      # Сохранение build-кеша с уникальным ключом запуска
       - name: Save build cache
         if: success()
         uses: actions/cache/save@v4
         with:
           path: build
-          key: build-${{ env.OS_NAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: build-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
-      # Сохранение ccache с уникальным ключом запуска
       - name: Save ccache
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ env.OS_NAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.CCACHEDIR }}
+          key: ccache-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
