@@ -2564,6 +2564,9 @@ int app_main(void) {
   init_i2s((void*)sweep_service_rx_buffer(),
            (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
 
+  // Give I2S system time to properly initialize
+  chThdSleepMilliseconds(50);
+
 /*
  * SD Card init (if inserted) allow fix issues
  * Some card after insert work in SDIO mode and can corrupt SPI exchange (need switch it to SPI)
@@ -2581,6 +2584,9 @@ int app_main(void) {
    * Startup sweep thread
    */
   chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO - 1, Thread1, NULL);
+
+  // Give sweep thread time to complete its initialization before main thread enters its loop
+  chThdSleepMilliseconds(50);
 
   // Main thread: periodically check for shell connection and handle shell operations
   // This should run continuously but be non-blocking to the sweep thread
@@ -2604,7 +2610,7 @@ int app_main(void) {
       } while (shell_check_connect());
 #endif
     }
-    // Shorter sleep to remain responsive while allowing other threads to run
+    // Sleep for a reasonable time to allow other threads to run
     chThdSleepMilliseconds(100);
   }
 }
