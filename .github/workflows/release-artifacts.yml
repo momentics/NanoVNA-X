@@ -20,29 +20,81 @@ jobs:
       TARGET: ${{ matrix.target }}
       APT_PACKAGES: "dfu-util python3"
       OS_NAME: ubuntu-latest
+      # Пользовательские директории для APT-кеша (как в firmware.yml)
+      APT_USER_CACHE: ${{ github.workspace }}/.apt
+      APT_USER_ARCHIVES: ${{ github.workspace }}/.apt/archives
+      APT_USER_LISTS: ${{ github.workspace }}/.apt/lists
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 0
+          fetch-depth: 0  # [attached_file:1]
 
-      - name: Cache APT
-        uses: actions/cache@v4
+      # Восстановление пользовательского APT-кеша (fallback-restore)
+      - name: Restore APT user cache
+        id: apt-restore
+        uses: actions/cache/restore@v4
         with:
           path: |
-            /var/cache/apt
-            /var/lib/apt/lists
-          key: apt-${{ env.OS_NAME }}-${{ env.APT_PACKAGES }}
+            .apt/archives
+            .apt/lists
+          key: apt-${{ env.OS_NAME }}-${{ env.APT_PACKAGES }}-${{ hashFiles('.github/workflows/**','Makefile') }}
           restore-keys: |
-            apt-${{ env.OS_NAME }}-
+            apt-${{ env.OS_NAME }}-${{ env.APT_PACKAGES }}-
+            apt-${{ env.OS_NAME }}-  # [attached_file:1]
 
+      # Примирование системного APT из пользовательского кеша (списки и архивы)
+      - name: Prime APT from user cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${APT_USER_ARCHIVES}/partial" "${APT_USER_LISTS}/partial"
+          sudo mkdir -p /var/cache/apt/archives /var/lib/apt/lists
+          if [[ -d "${APT_USER_LISTS}" ]]; then
+            sudo rsync -a --delete --exclude 'lock' --exclude 'partial' "${APT_USER_LISTS}/" /var/lib/apt/lists/
+          fi
+          if [[ -d "${APT_USER_ARCHIVES}" ]]; then
+            sudo rsync -a --exclude 'lock' --exclude 'partial' "${APT_USER_ARCHIVES}/" /var/cache/apt/archives/
+          fi  # [attached_file:1]
+
+      # Установка инструментов с использованием пользовательских каталогов APT
       - name: Install runtime tools
         shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ${APT_PACKAGES}
+          set -euo pipefail
+          sudo apt-get \
+            -o Dir::Cache::archives="${APT_USER_ARCHIVES}" \
+            -o Dir::State::lists="${APT_USER_LISTS}" \
+            -o Acquire::Retries=3 \
+            update
+          sudo apt-get -y --no-install-recommends \
+            -o Dir::Cache::archives="${APT_USER_ARCHIVES}" \
+            -o Dir::State::lists="${APT_USER_LISTS}" \
+            install ${APT_PACKAGES}
+          dfu-util --version >/dev/null 2>&1 || true
+          python3 --version >/dev/null 2>&1 || true  # [attached_file:1]
+
+      # Синхронизация обратно в пользовательский кеш из системных путей
+      - name: Persist APT user cache back
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${APT_USER_ARCHIVES}" "${APT_USER_LISTS}"
+          sudo rsync -a --delete --exclude 'lock' --exclude 'partial' /var/lib/apt/lists/ "${APT_USER_LISTS}/"
+          sudo rsync -a --exclude 'lock' --exclude 'partial' /var/cache/apt/archives/ "${APT_USER_ARCHIVES}/"
+          sudo chown -R "$(id -u)":"$(id -g)" "${APT_USER_CACHE}"  # [attached_file:1]
+
+      # Сохранение пользовательского APT-кеша уникальным ключом запуска
+      - name: Save APT user cache (unique key)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .apt/archives
+            .apt/lists
+          key: apt-${{ env.OS_NAME }}-${{ env.APT_PACKAGES }}-${{ hashFiles('.github/workflows/**','Makefile') }}-${{ github.run_id }}-${{ github.run_attempt }}  # [attached_file:1]
 
       - name: Determine firmware version
         id: version
@@ -60,13 +112,13 @@ jobs:
             echo "Release tag '$tag' must match firmware version 'v$fwversion'" >&2
             exit 1
           fi
-          echo "fwversion=$fwversion" >> "$GITHUB_OUTPUT"
+          echo "fwversion=$fwversion" >> "$GITHUB_OUTPUT"  # [attached_file:1]
 
       - name: Download CI artifacts
         uses: actions/download-artifact@v4
         with:
           name: NanoVNA-X-${{ matrix.target }}
-          path: dist
+          path: dist  # [attached_file:1]
 
       - name: Ensure DFU present or generate
         shell: bash
@@ -87,7 +139,7 @@ jobs:
               echo "Missing dist/${project}.bin to generate DFU" >&2
               exit 1
             fi
-          fi
+          fi  # [attached_file:1]
 
       - name: Prepare release assets
         id: prep
@@ -108,7 +160,7 @@ jobs:
           for ext in bin hex dfu; do
             sha256sum "dist/release/${base}.${ext}" > "dist/release/${base}.${ext}.sha256"
           done
-          echo "base=${base}" >> "$GITHUB_OUTPUT"
+          echo "base=${base}" >> "$GITHUB_OUTPUT"  # [attached_file:1]
 
       - name: Upload assets to release
         uses: softprops/action-gh-release@v2
@@ -122,4 +174,4 @@ jobs:
             dist/release/${{ steps.prep.outputs.base }}.hex.sha256
             dist/release/${{ steps.prep.outputs.base }}.dfu.sha256
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # [attached_file:1]
