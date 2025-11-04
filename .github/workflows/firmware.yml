@@ -17,7 +17,6 @@ jobs:
 
     env:
       TARGET: ${{ matrix.target }}
-      # Пакеты инструментария и утилит для сборки
       APTPACKAGES: gcc-arm-none-eabi libnewlib-arm-none-eabi dfu-util ccache python3
       CCACHEDIR: .ccache
       CCACHEMAXSIZE: 500M
@@ -30,9 +29,10 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      # Новый шаг: кеширование APT индексов/пакетов как в release-artifacts.yml
-      - name: Cache APT
-        uses: actions/cache@v4
+      # Восстановление APT-кэша (раздельные restore/save, чтобы задать excludes на save)
+      - name: Restore APT cache
+        id: apt-cache-restore
+        uses: actions/cache/restore@v4
         with:
           path: |
             /var/cache/apt
@@ -45,8 +45,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends $APTPACKAGES
+          sudo mkdir -p /var/cache/apt/archives /var/lib/apt/lists
+          # Ускорение: не трогать recommends и интерактив
+          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get -y --no-install-recommends install $APTPACKAGES
           arm-none-eabi-gcc --version || true
           ccache --version || true
 
@@ -69,7 +71,6 @@ jobs:
           mkdir -p "$CCACHEDIR"
           mkdir -p build
 
-      # Определяем версию gcc для включения в ключи кэша
       - name: Detect ARM GCC version
         id: gccver
         shell: bash
@@ -113,7 +114,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Поддержка принудительной очистки через CLEAN=1
           if [ "${CLEAN-0}" = "1" ]; then
             make clean
           fi
@@ -156,7 +156,21 @@ jobs:
             build/${{ steps.project.outputs.name }}.hex
             build/${{ steps.project.outputs.name }}.dfu
 
-      # Отдельный финальный шаг для гарантированного сохранения ccache на первом прогоне
+      # Явное сохранение APT-кэша c исключением lock/partial (решает Permission denied на tar)
+      - name: Save APT cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            /var/cache/apt
+            !/var/cache/apt/archives/lock
+            !/var/cache/apt/archives/partial/**
+            /var/lib/apt/lists
+            !/var/lib/apt/lists/lock
+            !/var/lib/apt/lists/partial/**
+          key: apt-${{ env.OSNAME }}-${{ env.APTPACKAGES }}
+
+      # Финальное сохранение ccache на первом прогоне
       - name: Save ccache (final)
         if: always()
         uses: actions/cache/save@v4
