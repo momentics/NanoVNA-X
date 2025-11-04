@@ -4,174 +4,91 @@ on:
   release:
     types: [published]
 
-permissions:
-  contents: write
-
 jobs:
-  upload:
-    name: Release (${{ matrix.target }})
+  build-and-upload:
+    name: Release ${{ matrix.target }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     strategy:
-      fail-fast: false
       matrix:
-        target: [ F072, F303 ]
-
+        target: [F072, F303]
     env:
       TARGET: ${{ matrix.target }}
-      APT_PACKAGES: "dfu-util python3"
-      OS_NAME: ubuntu-latest
-      # Пользовательские директории для APT-кеша (как в firmware.yml)
-      APT_USER_CACHE: ${{ github.workspace }}/.apt
-      APT_USER_ARCHIVES: ${{ github.workspace }}/.apt/archives
-      APT_USER_LISTS: ${{ github.workspace }}/.apt/lists
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 0  # [attached_file:1]
 
-      # Восстановление пользовательского APT-кеша (fallback-restore)
-      - name: Restore APT user cache
-        id: apt-restore
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            .apt/archives
-            .apt/lists
-          key: apt-${{ env.OS_NAME }}-${{ env.APT_PACKAGES }}-${{ hashFiles('.github/workflows/**','Makefile') }}
-          restore-keys: |
-            apt-${{ env.OS_NAME }}-${{ env.APT_PACKAGES }}-
-            apt-${{ env.OS_NAME }}-  # [attached_file:1]
-
-      # Примирование системного APT из пользовательского кеша (списки и архивы)
-      - name: Prime APT from user cache
-        shell: bash
+      - name: Install ARM toolchain
         run: |
-          set -euo pipefail
-          mkdir -p "${APT_USER_ARCHIVES}/partial" "${APT_USER_LISTS}/partial"
-          sudo mkdir -p /var/cache/apt/archives /var/lib/apt/lists
-          if [[ -d "${APT_USER_LISTS}" ]]; then
-            sudo rsync -a --delete --exclude 'lock' --exclude 'partial' "${APT_USER_LISTS}/" /var/lib/apt/lists/
-          fi
-          if [[ -d "${APT_USER_ARCHIVES}" ]]; then
-            sudo rsync -a --exclude 'lock' --exclude 'partial' "${APT_USER_ARCHIVES}/" /var/cache/apt/archives/
-          fi  # [attached_file:1]
-
-      # Установка инструментов с использованием пользовательских каталогов APT
-      - name: Install runtime tools
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get \
-            -o Dir::Cache::archives="${APT_USER_ARCHIVES}" \
-            -o Dir::State::lists="${APT_USER_LISTS}" \
-            -o Acquire::Retries=3 \
-            update
-          sudo apt-get -y --no-install-recommends \
-            -o Dir::Cache::archives="${APT_USER_ARCHIVES}" \
-            -o Dir::State::lists="${APT_USER_LISTS}" \
-            install ${APT_PACKAGES}
-          dfu-util --version >/dev/null 2>&1 || true
-          python3 --version >/dev/null 2>&1 || true  # [attached_file:1]
-
-      # Синхронизация обратно в пользовательский кеш из системных путей
-      - name: Persist APT user cache back
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "${APT_USER_ARCHIVES}" "${APT_USER_LISTS}"
-          sudo rsync -a --delete --exclude 'lock' --exclude 'partial' /var/lib/apt/lists/ "${APT_USER_LISTS}/"
-          sudo rsync -a --exclude 'lock' --exclude 'partial' /var/cache/apt/archives/ "${APT_USER_ARCHIVES}/"
-          sudo chown -R "$(id -u)":"$(id -g)" "${APT_USER_CACHE}"  # [attached_file:1]
-
-      # Сохранение пользовательского APT-кеша уникальным ключом запуска
-      - name: Save APT user cache (unique key)
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            .apt/archives
-            .apt/lists
-          key: apt-${{ env.OS_NAME }}-${{ env.APT_PACKAGES }}-${{ hashFiles('.github/workflows/**','Makefile') }}-${{ github.run_id }}-${{ github.run_attempt }}  # [attached_file:1]
+          # sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi dfu-util
 
       - name: Determine firmware version
         id: version
-        shell: bash
         run: |
           set -euo pipefail
-          fwversion="$(make -s print-version)"
-          if ! printf "%s" "$fwversion" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z\.-]+)?$'; then
-            echo "Firmware version '$fwversion' is not semantic" >&2
+          fw_version=$(make -s print-version)
+          if ! printf '%s' "$fw_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "Firmware version '$fw_version' is not semantic" >&2
             exit 1
           fi
-          tag="${{ github.event.release.tag_name }}"
+          tag='${{ github.event.release.tag_name }}'
           tag_stripped="${tag#v}"
-          if [[ "$tag_stripped" != "$fwversion" ]]; then
-            echo "Release tag '$tag' must match firmware version 'v$fwversion'" >&2
+          if [ "$tag_stripped" != "$fw_version" ]; then
+            echo "Release tag '$tag' must match firmware version 'v$fw_version'" >&2
             exit 1
           fi
-          echo "fwversion=$fwversion" >> "$GITHUB_OUTPUT"  # [attached_file:1]
+          echo "fw_version=$fw_version" >> "$GITHUB_OUTPUT"
 
-      - name: Download CI artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: NanoVNA-X-${{ matrix.target }}
-          path: dist  # [attached_file:1]
+      - name: Clean workspace
+        run: make clean
 
-      - name: Ensure DFU present or generate
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "${{ matrix.target }}" == "F303" ]]; then
-            project="H4"
-            dfuse_preset="stm32f303xc"
-          else
-            project="H"
-            dfuse_preset="stm32f072xb"
-          fi
-          if [[ ! -f "dist/${project}.dfu" ]]; then
-            if [[ -f "dist/${project}.bin" ]]; then
-              python3 tools/makedfu.py "dist/${project}.bin" "dist/${project}.dfu" --preset-target "${dfuse_preset}" --device-id 0x0000
-              dfu-suffix --check "dist/${project}.dfu"
-            else
-              echo "Missing dist/${project}.bin to generate DFU" >&2
-              exit 1
-            fi
-          fi  # [attached_file:1]
+      - name: Build firmware
+        run: make -j"$(nproc)"
 
       - name: Prepare release assets
-        id: prep
-        shell: bash
         run: |
           set -euo pipefail
-          if [[ "${{ matrix.target }}" == "F303" ]]; then
-            project="H4"
+          if [ "${{ matrix.target }}" = "F303" ]; then
+            project=H4
+            dfuse_preset=stm32f303xc
           else
-            project="H"
+            project=H
+            dfuse_preset=stm32f072xb
           fi
-          fwversion="${{ steps.version.outputs.fwversion }}"
-          base="NanoVNA-X-${{ matrix.target }}-v${fwversion}"
-          mkdir -p dist/release
-          cp "dist/${project}.bin" "dist/release/${base}.bin"
-          cp "dist/${project}.hex" "dist/release/${base}.hex"
-          cp "dist/${project}.dfu" "dist/release/${base}.dfu"
-          for ext in bin hex dfu; do
-            sha256sum "dist/release/${base}.${ext}" > "dist/release/${base}.${ext}.sha256"
+          fw_version='${{ steps.version.outputs.fw_version }}'
+          dist_dir=dist
+          mkdir -p "$dist_dir"
+          base_name="NanoVNA-X_${{ matrix.target }}_v${fw_version}"
+          for ext in bin hex; do
+            cp "build/${project}.${ext}" "$dist_dir/${base_name}.${ext}"
           done
-          echo "base=${base}" >> "$GITHUB_OUTPUT"  # [attached_file:1]
+          dfu_path="$dist_dir/${base_name}.dfu"
+          python3 tools/makedfu.py \
+            "build/${project}.bin" \
+            "$dfu_path" \
+            --preset-target "$dfuse_preset" \
+            --device-id 0x0000
+          dfu-suffix --check "$dfu_path"
+          for ext in bin hex dfu; do
+            sha_file="$dist_dir/${base_name}.${ext}.sha256"
+            sha256sum "$dist_dir/${base_name}.${ext}" > "$sha_file"
+          done
+          printf 'Prepared %s artifacts in %s\n' "$base_name" "$dist_dir"
 
       - name: Upload assets to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.event.release.tag_name }}
           files: |
-            dist/release/${{ steps.prep.outputs.base }}.bin
-            dist/release/${{ steps.prep.outputs.base }}.hex
-            dist/release/${{ steps.prep.outputs.base }}.dfu
-            dist/release/${{ steps.prep.outputs.base }}.bin.sha256
-            dist/release/${{ steps.prep.outputs.base }}.hex.sha256
-            dist/release/${{ steps.prep.outputs.base }}.dfu.sha256
+            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.bin
+            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.hex
+            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.dfu
+            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.bin.sha256
+            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.hex.sha256
+            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.dfu.sha256
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # [attached_file:1]
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
