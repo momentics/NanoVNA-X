@@ -423,10 +423,73 @@ static void render_smith_grid_cell(const RenderCellCtx* rcx, pixel_t color) {
 static void render_admittance_grid_cell(const RenderCellCtx* rcx, pixel_t color) {
   const int32_t base_x = P_CENTER_X - (int32_t)rcx->x0;
   const int32_t base_y = (int32_t)rcx->y0 - P_CENTER_Y;
-  for (uint16_t y = 0; y < rcx->h; ++y) {
-    for (uint16_t x = 0; x < rcx->w; ++x) {
-      if (smith_grid_point(-((int32_t)x) + base_x, base_y + y))
-        *cell_ptr(rcx, x, y) = color;
+
+  const uint32_t r = P_RADIUS;
+  const uint32_t radius_sq = (uint32_t)r * r;
+  const int32_t r_div_2 = (int32_t)r / 2;
+  const int32_t r_div_4 = (int32_t)r / 4;
+  const uint32_t r_mul_2 = 2u * r;
+  const uint32_t r_mul_3_div_2 = (3u * r) / 2u;
+  const uint32_t r_mul_4 = 4u * r;
+
+  for (uint16_t y_offset = 0; y_offset < rcx->h; ++y_offset) {
+    const int32_t y_orig = base_y + y_offset;
+    const int32_t y_abs = y_orig < 0 ? -y_orig : y_orig;
+    const uint32_t r_y = r * (uint32_t)y_abs;
+
+    for (uint16_t x_offset = 0; x_offset < rcx->w; ++x_offset) {
+      const int32_t x = -((int32_t)x_offset) + base_x;
+      const uint32_t distance = squared_distance(x, y_orig);
+
+      if (distance > radius_sq + r)
+        continue;
+      if (distance > radius_sq - r) {
+        *cell_ptr(rcx, x_offset, y_offset) = color;
+        continue;
+      }
+      if (y_orig == 0) {
+        *cell_ptr(rcx, x_offset, y_offset) = color;
+        continue;
+      }
+
+      if (x >= 0) {
+        if (x >= r_div_2) {
+          int32_t d = (int32_t)distance - (int32_t)(r_mul_2 * (uint32_t)x + r_y) +
+                      (int32_t)radius_sq + r_div_2;
+          if (abs_u32(d) <= r) {
+            *cell_ptr(rcx, x_offset, y_offset) = color;
+            continue;
+          }
+          d = (int32_t)distance - (int32_t)(r_mul_3_div_2 * (uint32_t)x) +
+              (int32_t)radius_sq / 2 + r_div_4;
+          if (d >= 0 && (uint32_t)d <= (uint32_t)r_div_2) {
+            *cell_ptr(rcx, x_offset, y_offset) = color;
+            continue;
+          }
+        }
+        int32_t d = (int32_t)distance - (int32_t)(r_mul_2 * (uint32_t)x + 2u * r_y) +
+                    (int32_t)radius_sq + (int32_t)r;
+        if (abs_u32(d) <= r_mul_2) {
+          *cell_ptr(rcx, x_offset, y_offset) = color;
+          continue;
+        }
+        d = (int32_t)distance - (int32_t)(r * (uint32_t)x) + r_div_2;
+        if (d >= 0 && (uint32_t)d <= r) {
+          *cell_ptr(rcx, x_offset, y_offset) = color;
+          continue;
+        }
+      }
+      int32_t d = (int32_t)distance - (int32_t)(r_mul_2 * (uint32_t)x + r_mul_4 * (uint32_t)y_abs) +
+                  (int32_t)radius_sq + (int32_t)r_mul_2;
+      if (abs_u32(d) <= r_mul_4) {
+        *cell_ptr(rcx, x_offset, y_offset) = color;
+        continue;
+      }
+      d = (int32_t)distance - (int32_t)((r / 2u) * (uint32_t)x) - (int32_t)radius_sq / 2 +
+          (int32_t)(3u * r / 4u);
+      if (abs_u32(d) <= r_mul_3_div_2) {
+        *cell_ptr(rcx, x_offset, y_offset) = color;
+      }
     }
   }
 }
