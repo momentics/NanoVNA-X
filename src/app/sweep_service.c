@@ -284,6 +284,9 @@ bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* s
   if (snapshot == NULL || channel >= 2U) {
     return false;
   }
+  systime_t start_time = chVTGetSystemTimeX();
+  systime_t timeout = MS2ST(2000); // 2 second timeout to prevent infinite wait
+  
   while (true) {
     osalSysLock();
     bool busy = sweep_in_progress || sweep_copy_in_progress;
@@ -296,6 +299,12 @@ bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* s
       return true;
     }
     osalSysUnlock();
+    
+    // Check for timeout
+    if (chVTGetSystemTimeX() - start_time >= timeout) {
+      return false; // Timeout occurred, unable to acquire snapshot
+    }
+    
     chThdSleepMilliseconds(1);
   }
 }
@@ -322,13 +331,12 @@ void sweep_service_wait_for_capture(void) {
   
   while (wait_count != 0U) {
     systime_t current_time = chVTGetSystemTimeX();
-    if (current_time - start_time < timeout) {
-      __WFI();
-    } else {
+    if (current_time - start_time >= timeout) {
       // Timeout occurred - break to prevent hanging
       // This can happen if I2S interrupts don't fire properly (e.g. USB not connected)
       break;
     }
+    __WFI();
   }
 }
 
