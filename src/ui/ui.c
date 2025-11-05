@@ -526,21 +526,39 @@ static void touch_position(int* x, int* y) {
     return;
   }
 #endif
+
+  static int16_t cal_cache[4] = {0};
+  static int32_t scale_x = 1 << 16;
+  static int32_t scale_y = 1 << 16;
+
+  // Check if calibration data has changed and recalculate scales if needed
+  if (memcmp(cal_cache, config._touch_cal, sizeof(cal_cache)) != 0) {
+    memcpy(cal_cache, config._touch_cal, sizeof(cal_cache));
+
+    int32_t denom_x = config._touch_cal[2] - config._touch_cal[0];
+    int32_t denom_y = config._touch_cal[3] - config._touch_cal[1];
+
+    if (denom_x != 0 && denom_y != 0) {
+      scale_x = ((int32_t)(LCD_WIDTH - 1 - 2 * CALIBRATION_OFFSET) << 16) / denom_x;
+      scale_y = ((int32_t)(LCD_HEIGHT - 1 - 2 * CALIBRATION_OFFSET) << 16) / denom_y;
+    } else {
+      // Division by zero, keep default scale
+    }
+  }
+
   int tx, ty;
-  tx = (LCD_WIDTH - 1 - 2 * CALIBRATION_OFFSET) * (last_touch_x - config._touch_cal[0]) /
-           (config._touch_cal[2] - config._touch_cal[0]) +
-       CALIBRATION_OFFSET;
+  tx = (int)(((int64_t)scale_x * (last_touch_x - config._touch_cal[0])) >> 16) + CALIBRATION_OFFSET;
   if (tx < 0)
     tx = 0;
   else if (tx >= LCD_WIDTH)
     tx = LCD_WIDTH - 1;
-  ty = (LCD_HEIGHT - 1 - 2 * CALIBRATION_OFFSET) * (last_touch_y - config._touch_cal[1]) /
-           (config._touch_cal[3] - config._touch_cal[1]) +
-       CALIBRATION_OFFSET;
+
+  ty = (int)(((int64_t)scale_y * (last_touch_y - config._touch_cal[1])) >> 16) + CALIBRATION_OFFSET;
   if (ty < 0)
     ty = 0;
   else if (ty >= LCD_HEIGHT)
     ty = LCD_HEIGHT - 1;
+
 #ifdef __FLIP_DISPLAY__
   if (VNA_MODE(VNA_MODE_FLIP_DISPLAY)) {
     tx = LCD_WIDTH - 1 - tx;
@@ -576,21 +594,6 @@ void ui_touch_draw_test(void) {
   }
 }
 
-#ifdef QR_CODE_DRAW
-// 31x31 QR code image
-// Firmware source: https://github.com/momentics/NanoVNA-X (based on
-// https://github.com/DiSlord/NanoVNA-D)
-static const uint8_t qr_code_map[] = {
-    0xff, 0xff, 0xff, 0xfe, 0x80, 0xa2, 0x2e, 0x02, 0xbe, 0xe8, 0xea, 0xfa, 0xa2, 0xaa, 0x4a, 0x8a,
-    0xa2, 0xce, 0xca, 0x8a, 0xa2, 0xe8, 0x66, 0x8a, 0xbe, 0x93, 0x8a, 0xfa, 0x80, 0xaa, 0xaa, 0x02,
-    0xff, 0xea, 0xaf, 0xfe, 0xae, 0x58, 0xbb, 0x6a, 0xab, 0x00, 0x60, 0x72, 0xca, 0x63, 0x62, 0x0a,
-    0xe1, 0xbd, 0xf9, 0x9e, 0x8a, 0xa5, 0x32, 0x7a, 0xbd, 0x8b, 0xba, 0x72, 0xae, 0x40, 0x14, 0x3a,
-    0xb3, 0xfe, 0x32, 0x7e, 0x98, 0x58, 0xa8, 0xfa, 0xe9, 0x30, 0x96, 0x62, 0x8c, 0x27, 0x37, 0x9a,
-    0xfb, 0xfd, 0x2a, 0xbe, 0x96, 0xb1, 0x58, 0x16, 0xff, 0xab, 0x9b, 0x8a, 0x80, 0xac, 0x7a, 0xba,
-    0xbe, 0xf6, 0x33, 0xbe, 0xa2, 0xdc, 0xb0, 0x1a, 0xa2, 0xd4, 0x31, 0x8a, 0xa2, 0x87, 0x0d, 0xb2,
-    0xbe, 0xc1, 0x2b, 0x1e, 0x80, 0xbf, 0xbb, 0x9a, 0xff, 0xff, 0xff, 0xfe,
-};
-#endif
 
 static void ui_show_version(void) {
   int x = 5, y = 5, i = 1;
@@ -616,9 +619,6 @@ static void ui_show_version(void) {
   lcd_printf(LCD_WIDTH - FONT_STR_WIDTH(20), LCD_HEIGHT - FONT_STR_HEIGHT - 2,
              SET_FGCOLOR(\x16) "In memory of Maya" SET_FGCOLOR(\x01));
   y += str_height * 2;
-#ifdef QR_CODE_DRAW
-  lcd_blit_bitmap_scale(LCD_WIDTH - 32 * 3, 5, 31, 31, 3, qr_code_map);
-#endif
   // Update battery and time - limit iterations to allow measurement cycle to continue
   uint16_t cnt = 0;
   uint16_t max_iterations = 500; // Limit iterations to ~20 seconds before returning control
@@ -1142,29 +1142,54 @@ static UI_FUNCTION_ADV_CALLBACK(menu_scale_keyboard_acb) {
 //
 static UI_FUNCTION_CALLBACK(menu_auto_scale_cb) {
   (void)data;
-  if (current_trace == TRACE_INVALID)
+  if (current_trace == TRACE_INVALID || sweep_points == 0)
     return;
   int type = trace[current_trace].type;
   get_value_cb_t c = trace_info_list[type].get_value_cb; // Get callback for value calculation
   if (c == NULL)
-    return; // No callback, skip                                                   // No callback,
-            // skip
+    return; // No callback, skip
+
   float (*array)[2] = measured[trace[current_trace].channel];
-  float min_val, max_val; // search min and max trace values
-  int i = 0;
-  do {
-    float v = c(i, array[i]); // get trace value
+  float min_val, max_val;
+
+  // Initialize with the first point
+  float v = c(0, array[0]);
+  if (vna_fabsf(v) == infinityf())
+    return;
+  min_val = max_val = v;
+
+  // Find min and max in one pass with fewer comparisons
+  int i;
+  for (i = 1; i < sweep_points - 1; i += 2) {
+    float v1 = c(i, array[i]);
+    float v2 = c(i + 1, array[i + 1]);
+    if (vna_fabsf(v1) == infinityf() || vna_fabsf(v2) == infinityf())
+      return;
+
+    if (v1 < v2) {
+      if (v1 < min_val)
+        min_val = v1;
+      if (v2 > max_val)
+        max_val = v2;
+    } else {
+      if (v2 < min_val)
+        min_val = v2;
+      if (v1 > max_val)
+        max_val = v1;
+    }
+  }
+
+  // Process the last element if the number of points is odd
+  if (i < sweep_points) {
+    v = c(i, array[i]);
     if (vna_fabsf(v) == infinityf())
-      return; // prevent inf scale search
-    if (i == 0) {
-      min_val = max_val = v;
-      continue;
-    } // first point -> init min and max
-    if (max_val < v)
-      max_val = v; // set max
-    if (min_val > v)
-      min_val = v; // set min
-  } while (++i < sweep_points);
+      return;
+    if (v < min_val)
+      min_val = v;
+    if (v > max_val)
+      max_val = v;
+  }
+
   const float N = NGRIDY;                 // Grid count
   float delta = max_val - min_val;        // delta
   float mid = (max_val + min_val) * 0.5f; // middle point (align around it)

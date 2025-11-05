@@ -216,7 +216,7 @@ void dsp_process(audio_sample_t* capture, size_t length) {
 
 void calculate_gamma(float* gamma) {
   // calculate reflection coeff. by samp divide by ref
-#if 0
+#if 1
   measure_t rs = acc_ref_s;
   measure_t rc = acc_ref_c;
   measure_t rr = rs * rs + rc * rc;

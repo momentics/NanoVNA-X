@@ -284,82 +284,64 @@ static inline uint32_t squared_distance(int32_t x, int32_t y) {
   return (uint32_t)(dx + dy);
 }
 
-static bool polar_grid_point(int32_t x, int32_t y) {
-  const uint32_t radius = P_RADIUS;
-  const uint32_t radius_sq = (uint32_t)radius * radius;
-  const uint32_t distance = squared_distance(x, y);
-  if (distance > radius_sq + radius)
-    return false;
-  if (distance > radius_sq - radius)
-    return true;
-  if (x == 0 || y == 0)
-    return true;
-  const uint32_t radius_sq_1 = radius_sq / 25u;
-  if (distance < radius_sq_1 - radius / 5u)
-    return false;
-  if (distance < radius_sq_1 + radius / 5u)
-    return true;
-  const uint32_t radius_sq_4 = (radius_sq * 4u) / 25u;
-  if (distance < radius_sq_4 - (radius * 2u) / 5u)
-    return false;
-  if (distance < radius_sq_4 + (radius * 2u) / 5u)
-    return true;
-  if (x == y || x == -y)
-    return true;
-  const uint32_t radius_sq_9 = (radius_sq * 9u) / 25u;
-  if (distance < radius_sq_9 - (radius * 3u) / 5u)
-    return false;
-  if (distance < radius_sq_9 + (radius * 3u) / 5u)
-    return true;
-  const uint32_t radius_sq_16 = (radius_sq * 16u) / 25u;
-  if (distance < radius_sq_16 - (radius * 4u) / 5u)
-    return false;
-  return distance < radius_sq_16 + (radius * 4u) / 5u;
-}
-
-static bool smith_grid_point(int32_t x, int32_t y) {
-  const uint32_t r = P_RADIUS;
-  const uint32_t radius_sq = (uint32_t)r * r;
-  uint32_t distance = squared_distance(x, y);
-  if (distance > radius_sq + r)
-    return false;
-  if (distance > radius_sq - r)
-    return true;
-  if (y == 0)
-    return true;
-  if (y < 0)
-    y = -y;
-  const uint32_t r_y = r * (uint32_t)y;
-  if (x >= 0) {
-    if (x >= (int32_t)r / 2) {
-      int32_t d = (int32_t)distance - (int32_t)(2u * r * (uint32_t)x + r_y) + (int32_t)radius_sq + (int32_t)r / 2;
-      if (abs_u32(d) <= r)
-        return true;
-      d = (int32_t)distance - (int32_t)((3u * r / 2u) * (uint32_t)x) + (int32_t)radius_sq / 2 + (int32_t)r / 4;
-      if (d >= 0 && (uint32_t)d <= r / 2u)
-        return true;
-    }
-    int32_t d = (int32_t)distance - (int32_t)(2u * r * (uint32_t)x + 2u * r_y) + (int32_t)radius_sq + (int32_t)r;
-    if (abs_u32(d) <= 2u * r)
-      return true;
-    d = (int32_t)distance - (int32_t)(r * (uint32_t)x) + (int32_t)r / 2;
-    if (d >= 0 && (uint32_t)d <= r)
-      return true;
-  }
-  int32_t d = (int32_t)distance - (int32_t)(2u * r * (uint32_t)x + 4u * r_y) + (int32_t)radius_sq + (int32_t)(2u * r);
-  if (abs_u32(d) <= 4u * r)
-    return true;
-  d = (int32_t)distance - (int32_t)((r / 2u) * (uint32_t)x) - (int32_t)radius_sq / 2 + (int32_t)(3u * r / 4u);
-  return abs_u32(d) <= (3u * r) / 2u;
-}
-
 static void render_polar_grid_cell(const RenderCellCtx* rcx, pixel_t color) {
   const int32_t base_x = (int32_t)rcx->x0 - P_CENTER_X;
   const int32_t base_y = (int32_t)rcx->y0 - P_CENTER_Y;
-  for (uint16_t y = 0; y < rcx->h; ++y) {
-    for (uint16_t x = 0; x < rcx->w; ++x) {
-      if (polar_grid_point(base_x + x, base_y + y))
-        *cell_ptr(rcx, x, y) = color;
+
+  const uint32_t radius = P_RADIUS;
+  const uint32_t radius_sq = (uint32_t)radius * radius;
+  const uint32_t r_div_5 = radius / 5u;
+  const uint32_t r_mul_2_div_5 = (radius * 2u) / 5u;
+  const uint32_t r_mul_3_div_5 = (radius * 3u) / 5u;
+  const uint32_t r_mul_4_div_5 = (radius * 4u) / 5u;
+  const uint32_t radius_sq_1 = radius_sq / 25u;
+  const uint32_t radius_sq_4 = (radius_sq * 4u) / 25u;
+  const uint32_t radius_sq_9 = (radius_sq * 9u) / 25u;
+  const uint32_t radius_sq_16 = (radius_sq * 16u) / 25u;
+
+  for (uint16_t y_offset = 0; y_offset < rcx->h; ++y_offset) {
+    const int32_t y = base_y + y_offset;
+    for (uint16_t x_offset = 0; x_offset < rcx->w; ++x_offset) {
+      const int32_t x = base_x + x_offset;
+      const uint32_t distance = squared_distance(x, y);
+
+      if (distance > radius_sq + radius)
+        continue;
+      if (distance > radius_sq - radius) {
+        *cell_ptr(rcx, x_offset, y_offset) = color;
+        continue;
+      }
+      if (x == 0 || y == 0) {
+        *cell_ptr(rcx, x_offset, y_offset) = color;
+        continue;
+      }
+      if (distance < radius_sq_1 - r_div_5)
+        continue;
+      if (distance < radius_sq_1 + r_div_5) {
+        *cell_ptr(rcx, x_offset, y_offset) = color;
+        continue;
+      }
+      if (distance < radius_sq_4 - r_mul_2_div_5)
+        continue;
+      if (distance < radius_sq_4 + r_mul_2_div_5) {
+        *cell_ptr(rcx, x_offset, y_offset) = color;
+        continue;
+      }
+      if (x == y || x == -y) {
+        *cell_ptr(rcx, x_offset, y_offset) = color;
+        continue;
+      }
+      if (distance < radius_sq_9 - r_mul_3_div_5)
+        continue;
+      if (distance < radius_sq_9 + r_mul_3_div_5) {
+        *cell_ptr(rcx, x_offset, y_offset) = color;
+        continue;
+      }
+      if (distance < radius_sq_16 - r_mul_4_div_5)
+        continue;
+      if (distance < radius_sq_16 + r_mul_4_div_5) {
+        *cell_ptr(rcx, x_offset, y_offset) = color;
+      }
     }
   }
 }
@@ -367,10 +349,73 @@ static void render_polar_grid_cell(const RenderCellCtx* rcx, pixel_t color) {
 static void render_smith_grid_cell(const RenderCellCtx* rcx, pixel_t color) {
   const int32_t base_x = (int32_t)rcx->x0 - P_CENTER_X;
   const int32_t base_y = (int32_t)rcx->y0 - P_CENTER_Y;
-  for (uint16_t y = 0; y < rcx->h; ++y) {
-    for (uint16_t x = 0; x < rcx->w; ++x) {
-      if (smith_grid_point(base_x + x, base_y + y))
-        *cell_ptr(rcx, x, y) = color;
+
+  const uint32_t r = P_RADIUS;
+  const uint32_t radius_sq = (uint32_t)r * r;
+  const int32_t r_div_2 = (int32_t)r / 2;
+  const int32_t r_div_4 = (int32_t)r / 4;
+  const uint32_t r_mul_2 = 2u * r;
+  const uint32_t r_mul_3_div_2 = (3u * r) / 2u;
+  const uint32_t r_mul_4 = 4u * r;
+
+  for (uint16_t y_offset = 0; y_offset < rcx->h; ++y_offset) {
+    const int32_t y_orig = base_y + y_offset;
+    const int32_t y_abs = y_orig < 0 ? -y_orig : y_orig;
+    const uint32_t r_y = r * (uint32_t)y_abs;
+
+    for (uint16_t x_offset = 0; x_offset < rcx->w; ++x_offset) {
+      const int32_t x = base_x + x_offset;
+      const uint32_t distance = squared_distance(x, y_orig);
+
+      if (distance > radius_sq + r)
+        continue;
+      if (distance > radius_sq - r) {
+        *cell_ptr(rcx, x_offset, y_offset) = color;
+        continue;
+      }
+      if (y_orig == 0) {
+        *cell_ptr(rcx, x_offset, y_offset) = color;
+        continue;
+      }
+
+      if (x >= 0) {
+        if (x >= r_div_2) {
+          int32_t d = (int32_t)distance - (int32_t)(r_mul_2 * (uint32_t)x + r_y) +
+                      (int32_t)radius_sq + r_div_2;
+          if (abs_u32(d) <= r) {
+            *cell_ptr(rcx, x_offset, y_offset) = color;
+            continue;
+          }
+          d = (int32_t)distance - (int32_t)(r_mul_3_div_2 * (uint32_t)x) +
+              (int32_t)radius_sq / 2 + r_div_4;
+          if (d >= 0 && (uint32_t)d <= (uint32_t)r_div_2) {
+            *cell_ptr(rcx, x_offset, y_offset) = color;
+            continue;
+          }
+        }
+        int32_t d = (int32_t)distance - (int32_t)(r_mul_2 * (uint32_t)x + 2u * r_y) +
+                    (int32_t)radius_sq + (int32_t)r;
+        if (abs_u32(d) <= r_mul_2) {
+          *cell_ptr(rcx, x_offset, y_offset) = color;
+          continue;
+        }
+        d = (int32_t)distance - (int32_t)(r * (uint32_t)x) + r_div_2;
+        if (d >= 0 && (uint32_t)d <= r) {
+          *cell_ptr(rcx, x_offset, y_offset) = color;
+          continue;
+        }
+      }
+      int32_t d = (int32_t)distance - (int32_t)(r_mul_2 * (uint32_t)x + r_mul_4 * (uint32_t)y_abs) +
+                  (int32_t)radius_sq + (int32_t)r_mul_2;
+      if (abs_u32(d) <= r_mul_4) {
+        *cell_ptr(rcx, x_offset, y_offset) = color;
+        continue;
+      }
+      d = (int32_t)distance - (int32_t)((r / 2u) * (uint32_t)x) - (int32_t)radius_sq / 2 +
+          (int32_t)(3u * r / 4u);
+      if (abs_u32(d) <= r_mul_3_div_2) {
+        *cell_ptr(rcx, x_offset, y_offset) = color;
+      }
     }
   }
 }

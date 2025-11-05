@@ -303,6 +303,7 @@ int vna_shell_read_line(char* line, int max_size) {
     shell_write(&c, 1);
     line[j++] = (char)c;
   }
+  line[j] = 0;
   return 0;
 }
 
