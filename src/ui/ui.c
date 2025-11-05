@@ -619,9 +619,10 @@ static void ui_show_version(void) {
 #ifdef QR_CODE_DRAW
   lcd_blit_bitmap_scale(LCD_WIDTH - 32 * 3, 5, 31, 31, 3, qr_code_map);
 #endif
-  // Update battery and time
+  // Update battery and time - limit iterations to allow measurement cycle to continue
   uint16_t cnt = 0;
-  while (true) {
+  uint16_t max_iterations = 500; // Limit iterations to ~20 seconds before returning control
+  while (cnt < max_iterations) {
     if (touch_check() == EVT_TOUCH_PRESSED)
       break;
     if (ui_input_check() & EVT_BUTTON_SINGLE_CLICK)
