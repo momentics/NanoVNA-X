@@ -221,7 +221,7 @@ config_t config = {
     ._harmonic_freq_threshold = FREQUENCY_THRESHOLD,
     ._IF_freq = FREQUENCY_OFFSET,
     ._touch_cal = DEFAULT_TOUCH_CONFIG,
-    ._vna_mode = 0, // USB mode, search max
+    ._vna_mode = (1 << VNA_MODE_BACKUP), // Enable backup of UI settings by default, USB mode, search max
     ._brightness = DEFAULT_BRIGHTNESS,
     ._dac_value = 1922,
     ._vbat_offset = 420,
@@ -354,7 +354,14 @@ static void load_settings(void) {
       // Here need restore settings not depend from cal data
       config._brightness = bk.brightness;
       lever_mode = bk.leveler;
-      config._vna_mode = get_backup_data32(4) | (1 << VNA_MODE_BACKUP); // refresh backup settings
+      // Check if backup data is valid before restoring VNA mode flags
+      uint32_t backup_mode = get_backup_data32(4);
+      if (backup_mode != 0xFFFFFFFF) {  // Check if flash is uninitialized
+        config._vna_mode = backup_mode | (1 << VNA_MODE_BACKUP); // restore backed up mode flags
+      } else {
+        // Keep default values but ensure BACKUP flag remains enabled
+        config._vna_mode |= (1 << VNA_MODE_BACKUP);
+      }
       set_bandwidth(bk.bw);
     } else
       caldata_recall(0); // Try load 0 slot
