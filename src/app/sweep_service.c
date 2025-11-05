@@ -46,29 +46,8 @@ static volatile int16_t dump_len = 0;
 static int16_t dump_selection = 0;
 #endif
 
-// Timer and semaphore for asynchronous PLL delay
 static binary_semaphore_t capture_sem;
 static binary_semaphore_t snapshot_sem;
-static binary_semaphore_t pll_delay_sem;
-static void pll_delay_timer_cb(GPTDriver* gptd) {
-  (void)gptd;
-  chSysLockFromISR();
-  chBSemSignalI(&pll_delay_sem);
-  chSysUnlockFromISR();
-}
-static const GPTConfig pll_delay_gpt_cfg = {
-  1000000, // 1MHz timer clock -> 1us resolution
-  pll_delay_timer_cb,
-  0,
-  0
-};
-
-static void async_delay_us(uint32_t us) {
-  if (us == 0) return;
-  chBSemReset(&pll_delay_sem, true);
-  gptStartOneShot(&GPTD3, us);
-  chBSemWait(&pll_delay_sem);
-}
 
 /*
  * Sweep execution state shared across the firmware.
@@ -274,8 +253,6 @@ void sweep_service_init(void) {
   chBSemObjectInit(&capture_done_sem, true);
   chBSemObjectInit(&capture_sem, true);
   chBSemObjectInit(&snapshot_sem, false);  // Initialize with false to allow first wait to succeed
-  chBSemObjectInit(&pll_delay_sem, true);
-  gptStart(&GPTD3, &pll_delay_gpt_cfg);
   chEvtObjectInit(&sweep_state_event);
 }
 
