@@ -50,6 +50,10 @@
 static event_bus_t app_event_bus;
 static event_bus_subscription_t app_event_slots[8];
 
+#define APP_EVENT_QUEUE_DEPTH 8U
+static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
+static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
+
 static measurement_pipeline_t measurement_pipeline;
 
 // SD card access was removed; configuration persists using internal flash only.
@@ -2515,7 +2519,9 @@ int app_main(void) {
   sweep_service_init();
 
   config_service_init();
-  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots));
+  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
+                 app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage),
+                 app_event_nodes, ARRAY_COUNT(app_event_nodes));
 
   /*
    * restore config and calibration 0 slot from flash memory, also if need use backup data
