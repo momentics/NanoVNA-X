@@ -211,9 +211,15 @@ int parse_line(char* line, char* args[], int max_cnt) {
       else {
         brk = " \t";
       } // string end is tab or space or end
-      if (nargs < max_cnt)
+      
+      if (nargs < max_cnt) {
         args[nargs] = lp;     // Put pointer in args buffer (if possible)
-      nargs++;                // Substring count
+        nargs++;             // Substring count
+      } else {
+        // Exceeded maximum number of arguments - terminate safely
+        break;
+      }
+      
       lp = _strpbrk(lp, brk); // search end
       if (*lp == 0)
         break; // Stop, end of input string

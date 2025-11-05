@@ -317,8 +317,18 @@ void sweep_service_start_capture(systime_t delay_ticks) {
 }
 
 void sweep_service_wait_for_capture(void) {
+  systime_t start_time = chVTGetSystemTimeX();
+  systime_t timeout = MS2ST(500); // 500ms timeout - adjust as needed
+  
   while (wait_count != 0U) {
-    __WFI();
+    systime_t current_time = chVTGetSystemTimeX();
+    if (current_time - start_time < timeout) {
+      __WFI();
+    } else {
+      // Timeout occurred - break to prevent hanging
+      // This can happen if I2S interrupts don't fire properly (e.g. USB not connected)
+      break;
+    }
   }
 }
 
