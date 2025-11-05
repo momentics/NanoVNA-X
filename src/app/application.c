@@ -178,6 +178,7 @@ static THD_FUNCTION(Thread1, arg) {
   ui_init();
   // Initialize graph plotting
   plot_init();
+  systime_t last_measurement_time = chVTGetSystemTimeX();
   while (1) {
     app_process_event_queue(TIME_IMMEDIATE);
     
@@ -193,6 +194,7 @@ static THD_FUNCTION(Thread1, arg) {
       completed = measurement_pipeline_execute(&measurement_pipeline, true, mask);
       sweep_mode &= ~SWEEP_ONCE;
       sweep_service_end_measurement();
+      last_measurement_time = chVTGetSystemTimeX(); // Update time after successful measurement
     } else {
       sweep_service_end_measurement();
       app_process_event_queue(MS2ST(5));
@@ -215,6 +217,9 @@ static THD_FUNCTION(Thread1, arg) {
     // plot trace and other indications as raster
     draw_all();
 #endif
+    // Small delay to ensure system responsiveness
+    // This helps ensure the thread doesn't get stuck if measurements fail
+    chThdSleepMilliseconds(1);
   }
 }
 
