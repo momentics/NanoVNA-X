@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * Based on Dmitry (DiSlord) dislordlive@gmail.com
+ * Copyright (c) 2019-2020, Dmitry (DiSlord) dislordlive@gmail.com
  * All rights reserved.
  *
  * This is free software; you can redistribute it and/or modify
@@ -38,26 +37,11 @@ void i2c_start(void) {
 bool i2c_transfer(uint8_t addr, const uint8_t *w, size_t wn)
 {
   //if (wn == 0) return false;
-  // Add timeout to avoid hanging if I2C bus is stuck
-  systime_t start_time = chVTGetSystemTimeX();
-  systime_t timeout = MS2ST(100);  // 100ms timeout
-  while((VNA_I2C->ISR & I2C_ISR_BUSY) && (chVTGetSystemTimeX() - start_time < timeout));
-  if (VNA_I2C->ISR & I2C_ISR_BUSY) {
-    // If still busy after timeout, reset I2C
-    VNA_I2C->CR1 = 0;
-    VNA_I2C->CR1 = I2C_CR1_PE;
-    return false;
-  }
+  while(VNA_I2C->ISR & I2C_ISR_BUSY); // wait last transaction
   VNA_I2C->CR1|= I2C_CR1_PE;
   VNA_I2C->CR2 = (addr << I2C_CR2_SADD_7BIT_SHIFT) | (wn << I2C_CR2_NBYTES_SHIFT) | I2C_CR2_AUTOEND | I2C_CR2_START;
-  start_time = chVTGetSystemTimeX();
   do {
-    while (((VNA_I2C->ISR & (I2C_ISR_TXE|I2C_ISR_NACKF)) == 0) && (chVTGetSystemTimeX() - start_time < timeout));
-    if ((VNA_I2C->ISR & (I2C_ISR_TXE|I2C_ISR_NACKF)) == 0) {
-      // Timeout occurred
-      VNA_I2C->CR1 = 0;
-      return false;
-    }
+    while ((VNA_I2C->ISR & (I2C_ISR_TXE|I2C_ISR_NACKF)) == 0);
     if (VNA_I2C->ISR & I2C_ISR_NACKF) {VNA_I2C->CR1 = 0; return false;}  // NO ASK error
     VNA_I2C->TXDR = *w++;
   } while (--wn);
@@ -67,51 +51,26 @@ bool i2c_transfer(uint8_t addr, const uint8_t *w, size_t wn)
 // I2C TX and RX variant
 bool i2c_receive(uint8_t addr, const uint8_t *w, size_t wn, uint8_t *r, size_t rn)
 {
-  systime_t start_time = chVTGetSystemTimeX();
-  systime_t timeout = MS2ST(100);  // 100ms timeout
-  while((VNA_I2C->ISR & I2C_ISR_BUSY) && (chVTGetSystemTimeX() - start_time < timeout));
-  if (VNA_I2C->ISR & I2C_ISR_BUSY) {
-    // If still busy after timeout, reset I2C
-    VNA_I2C->CR1 = 0;
-    VNA_I2C->CR1 = I2C_CR1_PE;
-    return false;
-  }
+  while(VNA_I2C->ISR & I2C_ISR_BUSY); // wait last transaction
   VNA_I2C->CR1|= I2C_CR1_PE;
   if (wn) {
     VNA_I2C->CR2 = (addr << I2C_CR2_SADD_7BIT_SHIFT) | (wn << I2C_CR2_NBYTES_SHIFT);
     if (rn == 0) VNA_I2C->CR2|= I2C_CR2_AUTOEND;
     VNA_I2C->CR2|= I2C_CR2_START;
-    start_time = chVTGetSystemTimeX();
     do {
-      while ((VNA_I2C->ISR & (I2C_ISR_TXE|I2C_ISR_NACKF)) == 0 && (chVTGetSystemTimeX() - start_time < timeout));
-      if ((VNA_I2C->ISR & (I2C_ISR_TXE|I2C_ISR_NACKF)) == 0) {
-        // Timeout occurred
-        VNA_I2C->CR1 = 0;
-        return false;
-      }
+      while ((VNA_I2C->ISR & (I2C_ISR_TXE|I2C_ISR_NACKF)) == 0);
       if (VNA_I2C->ISR & I2C_ISR_NACKF) {VNA_I2C->CR1 = 0; return false;}  // NO ASK error
       VNA_I2C->TXDR = *w++;
     } while (--wn);
   }
 
   if (rn) {
-    start_time = chVTGetSystemTimeX();
-    while((!(VNA_I2C->ISR & I2C_ISR_TC)) && (chVTGetSystemTimeX() - start_time < timeout)); // wait transfer completion if need
-    if (!(VNA_I2C->ISR & I2C_ISR_TC)) {
-      VNA_I2C->CR1 = 0;
-      return false;
-    }
+    while (!(VNA_I2C->ISR & I2C_ISR_TC)); // wait transfer completion if need
     VNA_I2C->CR2 = (addr << I2C_CR2_SADD_7BIT_SHIFT) | (rn << I2C_CR2_NBYTES_SHIFT) | I2C_CR2_RD_WRN;
     VNA_I2C->CR2|= I2C_CR2_START | I2C_CR2_AUTOEND;   // start transfer
     //VNA_I2C->CR2|= I2C_CR2_AUTOEND; // important to do it afterwards to do a proper repeated start!
-    start_time = chVTGetSystemTimeX();
     do {
-      while((VNA_I2C->ISR & (I2C_ISR_RXNE|I2C_ISR_NACKF)) == 0 && (chVTGetSystemTimeX() - start_time < timeout));
-      if ((VNA_I2C->ISR & (I2C_ISR_RXNE|I2C_ISR_NACKF)) == 0) {
-        // Timeout occurred
-        VNA_I2C->CR1 = 0;
-        return false;
-      }
+      while((VNA_I2C->ISR & (I2C_ISR_RXNE|I2C_ISR_NACKF)) == 0);
       if (VNA_I2C->ISR & I2C_ISR_NACKF) {VNA_I2C->CR1 = 0; return false;}  // NO ASK error
       *r++ = VNA_I2C->RXDR;
     } while (--rn);

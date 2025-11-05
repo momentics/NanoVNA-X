@@ -50,10 +50,6 @@
 static event_bus_t app_event_bus;
 static event_bus_subscription_t app_event_slots[8];
 
-#define APP_EVENT_QUEUE_DEPTH 8U
-static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
-static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
-
 static measurement_pipeline_t measurement_pipeline;
 
 // SD card access was removed; configuration persists using internal flash only.
@@ -152,17 +148,6 @@ void my_debug_log(int offs, char* log) {
 #define DEBUG_LOG(offs, text)
 #endif
 
-static void app_process_event_queue(systime_t timeout) {
-  while (event_bus_dispatch(&app_event_bus, TIME_IMMEDIATE)) {
-  }
-  if (timeout != TIME_IMMEDIATE) {
-    if (event_bus_dispatch(&app_event_bus, timeout)) {
-      while (event_bus_dispatch(&app_event_bus, TIME_IMMEDIATE)) {
-      }
-    }
-  }
-}
-
 static THD_WORKING_AREA(waThread1, 1024);
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
@@ -174,17 +159,10 @@ static THD_FUNCTION(Thread1, arg) {
   /*
    * UI (menu, touch, buttons) and plot initialize
    */
-  ui_attach_event_bus(&app_event_bus);
   ui_init();
   // Initialize graph plotting
   plot_init();
-  systime_t last_measurement_time = chVTGetSystemTimeX();
   while (1) {
-    app_process_event_queue(TIME_IMMEDIATE);
-    
-    // Process shell commands but don't let them block the sweep process
-    shell_service_pending_commands();
-    
     bool completed = false;
     uint16_t mask = measurement_pipeline_active_mask(&measurement_pipeline);
     if (sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) {
@@ -194,12 +172,11 @@ static THD_FUNCTION(Thread1, arg) {
       completed = measurement_pipeline_execute(&measurement_pipeline, true, mask);
       sweep_mode &= ~SWEEP_ONCE;
       sweep_service_end_measurement();
-      last_measurement_time = chVTGetSystemTimeX(); // Update time after successful measurement
     } else {
       sweep_service_end_measurement();
-      app_process_event_queue(MS2ST(5));
+      __WFI();
     }
-    app_process_event_queue(TIME_IMMEDIATE);
+    shell_service_pending_commands();
     // Process UI inputs
     sweep_mode |= SWEEP_UI_MODE;
     ui_process();
@@ -212,14 +189,14 @@ static THD_FUNCTION(Thread1, arg) {
       if ((props_mode & DOMAIN_MODE) == DOMAIN_TIME)
         app_measurement_transform_domain(mask);
       //      STOP_PROFILE;
+      // Prepare draw graphics, cache all lines, mark screen cells for redraw
+      request_to_redraw(REDRAW_PLOT);
     }
+    request_to_redraw(REDRAW_BATTERY);
 #ifndef DEBUG_CONSOLE_SHOW
     // plot trace and other indications as raster
     draw_all();
 #endif
-    // Small delay to ensure system responsiveness
-    // This helps ensure the thread doesn't get stuck if measurements fail
-    chThdSleepMilliseconds(1);
   }
 }
 
@@ -601,7 +578,6 @@ VNA_SHELL_FUNCTION(cmd_threshold) {
   }
   value = my_atoui(argv[0]);
   config._harmonic_freq_threshold = value;
-  config_service_notify_configuration_changed();
 }
 
 VNA_SHELL_FUNCTION(cmd_saveconfig) {
@@ -781,7 +757,6 @@ usage:
 void set_bandwidth(uint16_t bw_count) {
   config._bandwidth = bw_count & 0x1FF;
   request_to_redraw(REDRAW_BACKUP | REDRAW_FREQUENCY);
-  config_service_notify_configuration_changed();
 }
 
 uint32_t get_bandwidth_frequency(uint16_t bw_freq) {
@@ -2110,7 +2085,6 @@ VNA_SHELL_FUNCTION(cmd_vbat_offset) {
     return;
   }
   config._vbat_offset = (int16_t)my_atoi(argv[0]);
-  config_service_notify_configuration_changed();
 }
 #endif
 
@@ -2541,11 +2515,7 @@ int app_main(void) {
   sweep_service_init();
 
   config_service_init();
-  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
-                 app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage),
-                 app_event_nodes, ARRAY_COUNT(app_event_nodes));
-  config_service_attach_event_bus(&app_event_bus);
-  shell_attach_event_bus(&app_event_bus);
+  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots));
 
   /*
    * restore config and calibration 0 slot from flash memory, also if need use backup data
@@ -2560,9 +2530,6 @@ int app_main(void) {
    */
   shell_register_commands(commands);
   shell_init_connection();
-  
-  // Wait for USB to properly initialize and stabilize regardless of connection status
-  chThdSleepMilliseconds(200);
 
   /*
    * tlv320aic Initialize (audio codec)
@@ -2572,12 +2539,6 @@ int app_main(void) {
                                /*
                                 * I2S Initialize
                                 */
-  init_i2s((void*)sweep_service_rx_buffer(),
-           (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
-
-  // Give I2S system time to properly initialize
-  chThdSleepMilliseconds(50);
-
   init_i2s((void*)sweep_service_rx_buffer(),
            (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
 
@@ -2599,11 +2560,6 @@ int app_main(void) {
    */
   chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO - 1, Thread1, NULL);
 
-  // Give sweep thread a moment to initialize before main thread enters its loop
-  chThdSleepMilliseconds(10);
-
-  // Main thread: periodically check for shell connection and handle shell operations
-  // This should run continuously but be non-blocking to the sweep thread
   while (1) {
     if (shell_check_connect()) {
       shell_printf(VNA_SHELL_NEWLINE_STR "NanoVNA Shell" VNA_SHELL_NEWLINE_STR);
@@ -2624,7 +2580,6 @@ int app_main(void) {
       } while (shell_check_connect());
 #endif
     }
-    // Sleep for a reasonable time to allow other threads to run
     chThdSleepMilliseconds(1000);
   }
 }

@@ -37,7 +37,6 @@
  */
 static systime_t ready_time = 0;
 static volatile uint16_t wait_count = 0;
-static volatile bool last_capture_success = false;
 static audio_sample_t rx_buffer[AUDIO_BUFFER_LEN * 2];
 
 #if ENABLED_DUMP_COMMAND
@@ -45,9 +44,6 @@ static audio_sample_t* dump_buffer = NULL;
 static volatile int16_t dump_len = 0;
 static int16_t dump_selection = 0;
 #endif
-
-static binary_semaphore_t capture_sem;
-static binary_semaphore_t snapshot_sem;
 
 /*
  * Sweep execution state shared across the firmware.
@@ -62,17 +58,6 @@ static uint8_t sweep_bar_pending = 0;
 
 static uint8_t smooth_factor = 0;
 static void (*sample_func)(float* gamma) = calculate_gamma;
-
-static binary_semaphore_t capture_done_sem;
-static event_source_t sweep_state_event;
-
-static void sweep_notify_state_change_i(void) {
-  chEvtBroadcastI(&sweep_state_event);
-}
-
-static void sweep_notify_state_change(void) {
-  chEvtBroadcast(&sweep_state_event);
-}
 
 #ifdef __USE_FREQ_TABLE__
 static freq_t frequencies[SWEEP_POINTS_MAX];
@@ -228,10 +213,6 @@ void i2s_lld_serve_rx_interrupt(uint32_t flags) {
   duplicate_buffer_to_dump(p, AUDIO_BUFFER_LEN);
 #endif
   --wait_count;
-  if (wait_count == 0U) {
-    chBSemSignalI(&capture_sem);
-    sweep_notify_state_change_i();
-  }
 }
 
 void sweep_service_init(void) {
@@ -244,16 +225,11 @@ void sweep_service_init(void) {
   sweep_bar_pending = 0;
   smooth_factor = 0;
   sample_func = calculate_gamma;
-  chEvtObjectInit(&sweep_state_event);
 #if ENABLED_DUMP_COMMAND
   dump_buffer = NULL;
   dump_len = 0;
   dump_selection = 0;
 #endif
-  chBSemObjectInit(&capture_done_sem, true);
-  chBSemObjectInit(&capture_sem, true);
-  chBSemObjectInit(&snapshot_sem, false);  // Initialize with false to allow first wait to succeed
-  chEvtObjectInit(&sweep_state_event);
 }
 
 void sweep_service_reset_progress(void) {
@@ -261,62 +237,33 @@ void sweep_service_reset_progress(void) {
 }
 
 void sweep_service_wait_for_copy_release(void) {
-  bool continuing_partial_sweep = false;
-  osalSysLock();
-  uint16_t total_points = sweep_points;
-  continuing_partial_sweep = (p_sweep != 0U && p_sweep < total_points);
-  osalSysUnlock();
-  if (continuing_partial_sweep) {
-    /*
-     * The sweep is resuming from a previous chunk, so no snapshot copy can be
-     * in flight yet.  Skip the semaphore wait to avoid deadlocking on the
-     * taken state left by sweep_service_begin_measurement().
-     */
-    return;
-  }
   while (true) {
-    msg_t msg = chBSemWait(&snapshot_sem);
-    if (msg == MSG_RESET) {
-      continue;
+    osalSysLock();
+    bool busy = sweep_copy_in_progress;
+    osalSysUnlock();
+    if (!busy) {
+      break;
     }
-    chBSemSignal(&snapshot_sem);
-    break;
+    chThdYield();
   }
 }
 
 void sweep_service_begin_measurement(void) {
   osalSysLock();
-  uint16_t total_points = sweep_points;
-  if (p_sweep == 0U || p_sweep >= total_points) {
-    /*
-     * Only take the snapshot semaphore when a brand new sweep is starting.
-     * Partial sweeps resume with the semaphore already taken; resetting it
-     * again would strand the UI loop in sweep_service_wait_for_copy_release().
-     */
-    chBSemResetI(&snapshot_sem, true);
-  }
   sweep_in_progress = true;
   osalSysUnlock();
-  sweep_notify_state_change();
 }
 
 void sweep_service_end_measurement(void) {
   osalSysLock();
   sweep_in_progress = false;
   osalSysUnlock();
-  sweep_notify_state_change();
 }
 
 uint32_t sweep_service_increment_generation(void) {
   osalSysLock();
   uint32_t generation = ++sweep_generation;
   osalSysUnlock();
-  /*
-   * Wake any snapshot waiters now that a fresh sweep is ready.  The previous
-   * refactor accidentally returned before signaling, so USB clients waiting
-   * for sweep data never resumed even though the pipeline advanced.
-   */
-  chBSemSignal(&snapshot_sem);
   return generation;
 }
 
@@ -337,28 +284,20 @@ bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* s
   if (snapshot == NULL || channel >= 2U) {
     return false;
   }
-  msg_t msg = chBSemWait(&snapshot_sem);
-  if (msg == MSG_RESET) {
-    return false;
+  while (true) {
+    osalSysLock();
+    bool busy = sweep_in_progress || sweep_copy_in_progress;
+    if (!busy) {
+      sweep_copy_in_progress = true;
+      snapshot->generation = sweep_generation;
+      snapshot->points = sweep_points;
+      snapshot->data = measured[channel];
+      osalSysUnlock();
+      return true;
+    }
+    osalSysUnlock();
+    chThdSleepMilliseconds(1);
   }
-  if (msg != MSG_OK) {
-    return false;
-  }
-  bool acquired = false;
-  osalSysLock();
-  if (!sweep_in_progress && !sweep_copy_in_progress) {
-    sweep_copy_in_progress = true;
-    snapshot->generation = sweep_generation;
-    snapshot->points = sweep_points;
-    snapshot->data = measured[channel];
-    acquired = true;
-  }
-  osalSysUnlock();
-  if (acquired) {
-    return true;
-  }
-  chBSemSignal(&snapshot_sem);
-  return false;
 }
 
 bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
@@ -369,21 +308,17 @@ bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
   }
   sweep_copy_in_progress = false;
   osalSysUnlock();
-  chBSemSignal(&snapshot_sem);
-  sweep_notify_state_change();
   return stable;
 }
 
 void sweep_service_start_capture(systime_t delay_ticks) {
-  chSysLock();
-  chBSemResetI(&capture_sem, true);
   ready_time = chVTGetSystemTimeX() + delay_ticks;
   wait_count = config._bandwidth + 2U;
-  chSysUnlock();
 }
 
 void sweep_service_wait_for_capture(void) {
-  while (chBSemWait(&capture_sem) == MSG_RESET) {
+  while (wait_count != 0U) {
+    __WFI();
   }
 }
 
@@ -565,27 +500,13 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
           cal_interpolate(interpolation_idx, frequency, c_data);
         }
-        last_capture_success = false;  // Reset before capture attempt
         sweep_service_wait_for_capture();
-        if (last_capture_success) {
-          // Successful capture - process the data
-          (*sample_func)(&data[0]);
-          if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-            apply_ch0_error_term(data, c_data);
-          }
-          if (mask & SWEEP_APPLY_EDELAY_S11) {
-            apply_edelay(electrical_delayS11 * frequency, &data[0]);
-          }
-        } else {
-          // Capture failed - use default values indicating no measurement
-          data[0] = 1.0f; // Default S11 real part (no reflection)
-          data[1] = 0.0f; // Default S11 imag part
-          if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-            apply_ch0_error_term(data, c_data);
-          }
-          if (mask & SWEEP_APPLY_EDELAY_S11) {
-            apply_edelay(electrical_delayS11 * frequency, &data[0]);
-          }
+        (*sample_func)(&data[0]);
+        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
+          apply_ch0_error_term(data, c_data);
+        }
+        if (mask & SWEEP_APPLY_EDELAY_S11) {
+          apply_edelay(electrical_delayS11 * frequency, &data[0]);
         }
         measured[0][p_sweep][0] = data[0];
         measured[0][p_sweep][1] = data[1];
@@ -597,33 +518,16 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION) && (mask & SWEEP_CH0_MEASURE) == 0U) {
           cal_interpolate(interpolation_idx, frequency, c_data);
         }
-        last_capture_success = false;  // Reset before capture attempt
         sweep_service_wait_for_capture();
-        if (last_capture_success) {
-          // Successful capture - process the data
-          (*sample_func)(&data[2]);
-          if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-            apply_ch1_error_term(data, c_data);
-          }
-          if (mask & SWEEP_APPLY_EDELAY_S21) {
-            apply_edelay(electrical_delayS21 * frequency, &data[2]);
-          }
-          if (mask & SWEEP_APPLY_S21_OFFSET) {
-            apply_offset(&data[2], offset);
-          }
-        } else {
-          // Capture failed - use default values indicating no measurement
-          data[2] = 0.0f; // Default S21 real part (no transmission)
-          data[3] = 0.0f; // Default S21 imag part
-          if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-            apply_ch1_error_term(data, c_data);
-          }
-          if (mask & SWEEP_APPLY_EDELAY_S21) {
-            apply_edelay(electrical_delayS21 * frequency, &data[2]);
-          }
-          if (mask & SWEEP_APPLY_S21_OFFSET) {
-            apply_offset(&data[2], offset);
-          }
+        (*sample_func)(&data[2]);
+        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
+          apply_ch1_error_term(data, c_data);
+        }
+        if (mask & SWEEP_APPLY_EDELAY_S21) {
+          apply_edelay(electrical_delayS21 * frequency, &data[2]);
+        }
+        if (mask & SWEEP_APPLY_S21_OFFSET) {
+          apply_offset(&data[2], offset);
         }
         measured[1][p_sweep][0] = data[2];
         measured[1][p_sweep][1] = data[3];
@@ -700,7 +604,6 @@ void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points)
   freq_t f = start;
   freq_t df = step >> 1;
   uint32_t i = 0;
-  osalSysLock();
   for (; i <= step; i++, f += delta) {
     frequencies[i] = f;
     if ((df += error) >= step) {
@@ -711,45 +614,33 @@ void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points)
   for (; i < SWEEP_POINTS_MAX; i++) {
     frequencies[i] = 0;
   }
-  osalSysUnlock();
 }
 
 freq_t get_frequency(uint16_t idx) {
-  osalSysLock();
-  freq_t result = frequencies[idx];
-  osalSysUnlock();
-  return result;
+  return frequencies[idx];
 }
 
 freq_t get_frequency_step(void) {
-  osalSysLock();
-  freq_t step = (sweep_points <= 1U) ? 0 : (frequencies[1] - frequencies[0]);
-  osalSysUnlock();
-  return step;
+  if (sweep_points <= 1U) {
+    return 0;
+  }
+  return frequencies[1] - frequencies[0];
 }
 #else
 void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points) {
   freq_t span = stop - start;
-  osalSysLock();
   _f_start = start;
   _f_points = points - 1U;
   _f_delta = span / _f_points;
   _f_error = span % _f_points;
-  osalSysUnlock();
 }
 
 freq_t get_frequency(uint16_t idx) {
-  osalSysLock();
-  freq_t result = _f_start + _f_delta * idx + (_f_points / 2U + _f_error * idx) / _f_points;
-  osalSysUnlock();
-  return result;
+  return _f_start + _f_delta * idx + (_f_points / 2U + _f_error * idx) / _f_points;
 }
 
 freq_t get_frequency_step(void) {
-  osalSysLock();
-  freq_t result = _f_delta;
-  osalSysUnlock();
-  return result;
+  return _f_delta;
 }
 #endif
 
