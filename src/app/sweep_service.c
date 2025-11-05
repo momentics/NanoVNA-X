@@ -46,6 +46,30 @@ static volatile int16_t dump_len = 0;
 static int16_t dump_selection = 0;
 #endif
 
+// Timer and semaphore for asynchronous PLL delay
+static binary_semaphore_t capture_sem;
+static binary_semaphore_t snapshot_sem;
+static binary_semaphore_t pll_delay_sem;
+static void pll_delay_timer_cb(GPTDriver* gptd) {
+  (void)gptd;
+  chSysLockFromISR();
+  chBSemSignalI(&pll_delay_sem);
+  chSysUnlockFromISR();
+}
+static const GPTConfig pll_delay_gpt_cfg = {
+  1000000, // 1MHz timer clock -> 1us resolution
+  pll_delay_timer_cb,
+  0,
+  0
+};
+
+static void async_delay_us(uint32_t us) {
+  if (us == 0) return;
+  chBSemReset(&pll_delay_sem, true);
+  gptStartOneShot(&GPTD3, us);
+  chBSemWait(&pll_delay_sem);
+}
+
 /*
  * Sweep execution state shared across the firmware.
  */
@@ -226,8 +250,7 @@ void i2s_lld_serve_rx_interrupt(uint32_t flags) {
 #endif
   --wait_count;
   if (wait_count == 0U) {
-    chBSemSignalI(&capture_done_sem);
-    last_capture_success = true;  // Successful capture
+    chBSemSignalI(&capture_sem);
     sweep_notify_state_change_i();
   }
 }
@@ -242,13 +265,18 @@ void sweep_service_init(void) {
   sweep_bar_pending = 0;
   smooth_factor = 0;
   sample_func = calculate_gamma;
-  chBSemObjectInit(&capture_done_sem, true);
   chEvtObjectInit(&sweep_state_event);
 #if ENABLED_DUMP_COMMAND
   dump_buffer = NULL;
   dump_len = 0;
   dump_selection = 0;
 #endif
+  chBSemObjectInit(&capture_done_sem, true);
+  chBSemObjectInit(&capture_sem, true);
+  chBSemObjectInit(&snapshot_sem, false);  // Initialize with false to allow first wait to succeed
+  chBSemObjectInit(&pll_delay_sem, true);
+  gptStart(&GPTD3, &pll_delay_gpt_cfg);
+  chEvtObjectInit(&sweep_state_event);
 }
 
 void sweep_service_reset_progress(void) {
@@ -256,22 +284,40 @@ void sweep_service_reset_progress(void) {
 }
 
 void sweep_service_wait_for_copy_release(void) {
-  event_listener_t listener;
-  chEvtRegisterMask(&sweep_state_event, &listener, EVENT_MASK(0));
-  while (true) {
-    osalSysLock();
-    bool busy = sweep_copy_in_progress;
-    osalSysUnlock();
-    if (!busy) {
-      break;
-    }
-    chEvtWaitAny(EVENT_MASK(0));
+  bool continuing_partial_sweep = false;
+  osalSysLock();
+  uint16_t total_points = sweep_points;
+  continuing_partial_sweep = (p_sweep != 0U && p_sweep < total_points);
+  osalSysUnlock();
+  if (continuing_partial_sweep) {
+    /*
+     * The sweep is resuming from a previous chunk, so no snapshot copy can be
+     * in flight yet.  Skip the semaphore wait to avoid deadlocking on the
+     * taken state left by sweep_service_begin_measurement().
+     */
+    return;
   }
-  chEvtUnregister(&sweep_state_event, &listener);
+  while (true) {
+    msg_t msg = chBSemWait(&snapshot_sem);
+    if (msg == MSG_RESET) {
+      continue;
+    }
+    chBSemSignal(&snapshot_sem);
+    break;
+  }
 }
 
 void sweep_service_begin_measurement(void) {
   osalSysLock();
+  uint16_t total_points = sweep_points;
+  if (p_sweep == 0U || p_sweep >= total_points) {
+    /*
+     * Only take the snapshot semaphore when a brand new sweep is starting.
+     * Partial sweeps resume with the semaphore already taken; resetting it
+     * again would strand the UI loop in sweep_service_wait_for_copy_release().
+     */
+    chBSemResetI(&snapshot_sem, true);
+  }
   sweep_in_progress = true;
   osalSysUnlock();
   sweep_notify_state_change();
@@ -288,6 +334,12 @@ uint32_t sweep_service_increment_generation(void) {
   osalSysLock();
   uint32_t generation = ++sweep_generation;
   osalSysUnlock();
+  /*
+   * Wake any snapshot waiters now that a fresh sweep is ready.  The previous
+   * refactor accidentally returned before signaling, so USB clients waiting
+   * for sweep data never resumed even though the pipeline advanced.
+   */
+  chBSemSignal(&snapshot_sem);
   return generation;
 }
 
@@ -308,26 +360,28 @@ bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* s
   if (snapshot == NULL || channel >= 2U) {
     return false;
   }
-  event_listener_t listener;
-  chEvtRegisterMask(&sweep_state_event, &listener, EVENT_MASK(1));
-  bool acquired = false;
-  while (!acquired) {
-    osalSysLock();
-    bool busy = sweep_in_progress || sweep_copy_in_progress;
-    if (!busy) {
-      sweep_copy_in_progress = true;
-      snapshot->generation = sweep_generation;
-      snapshot->points = sweep_points;
-      snapshot->data = measured[channel];
-      acquired = true;
-    }
-    osalSysUnlock();
-    if (!acquired) {
-      chEvtWaitAny(EVENT_MASK(1));
-    }
+  msg_t msg = chBSemWait(&snapshot_sem);
+  if (msg == MSG_RESET) {
+    return false;
   }
-  chEvtUnregister(&sweep_state_event, &listener);
-  return true;
+  if (msg != MSG_OK) {
+    return false;
+  }
+  bool acquired = false;
+  osalSysLock();
+  if (!sweep_in_progress && !sweep_copy_in_progress) {
+    sweep_copy_in_progress = true;
+    snapshot->generation = sweep_generation;
+    snapshot->points = sweep_points;
+    snapshot->data = measured[channel];
+    acquired = true;
+  }
+  osalSysUnlock();
+  if (acquired) {
+    return true;
+  }
+  chBSemSignal(&snapshot_sem);
+  return false;
 }
 
 bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
@@ -338,23 +392,22 @@ bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
   }
   sweep_copy_in_progress = false;
   osalSysUnlock();
+  chBSemSignal(&snapshot_sem);
   sweep_notify_state_change();
   return stable;
 }
 
 void sweep_service_start_capture(systime_t delay_ticks) {
+  chSysLock();
+  chBSemResetI(&capture_sem, true);
   ready_time = chVTGetSystemTimeX() + delay_ticks;
   wait_count = config._bandwidth + 2U;
-  chBSemReset(&capture_done_sem, true);
+  chSysUnlock();
 }
 
 void sweep_service_wait_for_capture(void) {
-  msg_t msg;
-  systime_t timeout = MS2ST(500); // 500ms timeout - adjust as needed
-  msg = chBSemWaitTimeout(&capture_done_sem, timeout);
-  
-  // Set success flag based on whether we got the semaphore
-  last_capture_success = (msg == MSG_OK);
+  while (chBSemWait(&capture_sem) == MSG_RESET) {
+  }
 }
 
 const audio_sample_t* sweep_service_rx_buffer(void) {
