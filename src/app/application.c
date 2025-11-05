@@ -272,12 +272,12 @@ static const marker_t def_markers[MARKERS_MAX] = {
 static void load_default_properties(void) {
   // Magic add on caldata_save
   current_props.magic = PROPERTIES_MAGIC;
-  current_props._frequency0 = 50000;     // start =  50kHz
-  current_props._frequency1 = 900000000; // end   = 900MHz
+  current_props._frequency0 = 50000;      // start =  50kHz
+  current_props._frequency1 = 2700000000U; // end   = 2.7GHz
   current_props._var_freq = 0;
   current_props._sweep_points = POINTS_COUNT_DEFAULT;     // Set default points count
   current_props._cal_frequency0 = 50000;                  // calibration start =  50kHz
-  current_props._cal_frequency1 = 900000000;              // calibration end   = 900MHz
+  current_props._cal_frequency1 = 2700000000U;            // calibration end   = 2.7GHz
   current_props._cal_sweep_points = POINTS_COUNT_DEFAULT; // Set calibration default points count
   current_props._cal_status = 0;
   //=============================================
@@ -498,6 +498,11 @@ VNA_SHELL_FUNCTION(cmd_freq) {
     return;
   }
   uint32_t freq = my_atoui(argv[0]);
+  // Validate frequency range: 50kHz to 2.7GHz (2700000000 Hz)
+  if (freq < 50000 || freq > 2700000000U) {
+    shell_printf("error: frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, freq);
+    return;
+  }
   pause_sweep();
   app_measurement_set_frequency(freq);
   return;
@@ -843,8 +848,15 @@ VNA_SHELL_FUNCTION(cmd_scan) {
 
   start = my_atoui(argv[0]);
   stop = my_atoui(argv[1]);
-  if (start == 0 || stop == 0 || start > stop) {
-    shell_printf("frequency range is invalid" VNA_SHELL_NEWLINE_STR);
+  // Validate frequency range: 50kHz to 2.7GHz
+  if (start == 0 || stop == 0 || start > stop || start < 50000 || stop > 2700000000U) {
+    if (start < 50000 || start > 2700000000U) {
+      shell_printf("start frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, start);
+    } else if (stop < 50000 || stop > 2700000000U) {
+      shell_printf("stop frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, stop);
+    } else {
+      shell_printf("frequency range is invalid" VNA_SHELL_NEWLINE_STR);
+    }
     return;
   }
   if (start != original_start || stop != original_stop)
@@ -1126,10 +1138,26 @@ VNA_SHELL_FUNCTION(cmd_sweep) {
     if (type == -1)
       goto usage;
     bool enforce = !(type == ST_START || type == ST_STOP);
+    // Validate frequency range when setting specific frequency types
+    if ((type == ST_START || type == ST_STOP || type == ST_CENTER || 
+         type == ST_SPAN || type == ST_CW || type == ST_STEP || type == ST_VAR) && 
+        (value1 < 50000 || value1 > 2700000000U)) {
+      shell_printf("error: frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, value1);
+      return;
+    }
     set_sweep_frequency_internal(type, value1, enforce);
     return;
   }
   //  Parse sweep {start(Hz)} [stop(Hz)]
+  // Validate frequency ranges for start and stop frequencies
+  if (value0 && (value0 < 50000 || value0 > 2700000000U)) {
+    shell_printf("error: start frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, value0);
+    return;
+  }
+  if (value1 && (value1 < 50000 || value1 > 2700000000U)) {
+    shell_printf("error: stop frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, value1);
+    return;
+  }
   if (value0)
     set_sweep_frequency_internal(ST_START, value0, false);
   if (value1)
@@ -1561,22 +1589,40 @@ VNA_SHELL_FUNCTION(cmd_cal) {
 
 VNA_SHELL_FUNCTION(cmd_save) {
   uint32_t id;
-  if (argc == 1 && (id = my_atoui(argv[0])) < SAVEAREA_MAX) {
-    caldata_save(id);
-    request_to_redraw(REDRAW_CAL_STATUS);
+  if (argc != 1) {
+    shell_printf("usage: save 0..%d" VNA_SHELL_NEWLINE_STR, SAVEAREA_MAX - 1);
     return;
   }
-  shell_printf("usage: %s 0..%d" VNA_SHELL_NEWLINE_STR, SAVEAREA_MAX - 1, "save");
+  
+  id = my_atoui(argv[0]);
+  if (id >= SAVEAREA_MAX) {
+    shell_printf("error: save slot index out of range (0-%d): %lu" VNA_SHELL_NEWLINE_STR, 
+                 SAVEAREA_MAX - 1, id);
+    return;
+  }
+  
+  caldata_save(id);
+  request_to_redraw(REDRAW_CAL_STATUS);
+  return;
 }
 
 VNA_SHELL_FUNCTION(cmd_recall) {
   uint32_t id;
-  if (argc == 1 && (id = my_atoui(argv[0])) < SAVEAREA_MAX) {
-    if (load_properties(id)) // Check for success
-      shell_printf("Err, default load" VNA_SHELL_NEWLINE_STR);
+  if (argc != 1) {
+    shell_printf("usage: recall 0..%d" VNA_SHELL_NEWLINE_STR, SAVEAREA_MAX - 1);
     return;
   }
-  shell_printf("usage: %s 0..%d" VNA_SHELL_NEWLINE_STR, SAVEAREA_MAX - 1, "recall");
+  
+  id = my_atoui(argv[0]);
+  if (id >= SAVEAREA_MAX) {
+    shell_printf("error: recall slot index out of range (0-%d): %lu" VNA_SHELL_NEWLINE_STR, 
+                 SAVEAREA_MAX - 1, id);
+    return;
+  }
+  
+  if (load_properties(id)) // Check for success
+    shell_printf("Err, default load" VNA_SHELL_NEWLINE_STR);
+  return;
 }
 
 static const char* const trc_channel_name[] = {"S11", "S21"};
@@ -2094,9 +2140,17 @@ VNA_SHELL_FUNCTION(cmd_vbat_offset) {
 
 #ifdef ENABLE_SI5351_TIMINGS
 VNA_SHELL_FUNCTION(cmd_si5351time) {
-  (void)argc;
+  if (argc != 2) {
+    shell_printf("usage: si5351time {idx(0-7)} {value}" VNA_SHELL_NEWLINE_STR);
+    return;
+  }
   int idx = my_atoui(argv[0]);
   uint16_t value = my_atoui(argv[1]);
+  // Check bounds to prevent buffer overflow
+  if (idx < 0 || idx >= 8) {
+    shell_printf("error: timing index out of range (0-7): %d" VNA_SHELL_NEWLINE_STR, idx);
+    return;
+  }
   si5351_set_timing(idx, value);
 }
 #endif
