@@ -131,7 +131,7 @@ static bool measure_get_value(uint16_t ch, freq_t f, float* data) {
   uint16_t _points = sweep_points - 1;
   freq_t span = frequency1 - frequency0;
   uint32_t idx = (uint64_t)(f - frequency0) * (uint64_t)_points / span;
-  if (idx < 1 && idx > _points)
+  if (idx < 1 || idx >= _points)
     return false;
   uint64_t v = (uint64_t)span * idx + _points / 2;
   freq_t src_f0 = frequency0 + (v) / _points;

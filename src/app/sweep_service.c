@@ -275,7 +275,14 @@ uint32_t sweep_service_current_generation(void) {
 }
 
 void sweep_service_wait_for_generation(void) {
+  systime_t start_time = chVTGetSystemTimeX();
+  systime_t timeout = MS2ST(1000); // 1 second timeout to prevent infinite wait
+  
   while (sweep_service_current_generation() == 0U) {
+    if (chVTGetSystemTimeX() - start_time >= timeout) {
+      // Timeout occurred, break to prevent hanging
+      break;
+    }
     chThdSleepMilliseconds(1);
   }
 }
