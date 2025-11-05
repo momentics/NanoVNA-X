@@ -773,6 +773,13 @@ usage:
 void set_bandwidth(uint16_t bw_count) {
   config._bandwidth = bw_count & 0x1FF;
   request_to_redraw(REDRAW_BACKUP | REDRAW_FREQUENCY);
+  update_backup_data();
+}
+
+void set_brightness(uint8_t brightness) {
+  config._brightness = brightness;
+  lcd_set_brightness(brightness);
+  update_backup_data();
 }
 
 uint32_t get_bandwidth_frequency(uint16_t bw_freq) {
@@ -823,6 +830,7 @@ void set_sweep_points(uint16_t points) {
     return;
   sweep_points = points;
   app_measurement_update_frequencies();
+  update_backup_data();
 }
 
 /*
@@ -1101,9 +1109,11 @@ static void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforc
   case ST_VAR:
     var_freq = freq;
     request_to_redraw(REDRAW_BACKUP);
+    update_backup_data();
     return;
   }
   app_measurement_update_frequencies();
+  update_backup_data();
 }
 
 void set_sweep_frequency(uint16_t type, freq_t freq) {
