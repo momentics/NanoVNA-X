@@ -251,6 +251,9 @@ static const char backspace[] = {0x08, 0x20, 0x08, 0x00};
 int vna_shell_read_line(char* line, int max_size) {
   uint8_t c;
   uint16_t j = 0;
+  if (shell_stream == NULL) {
+    return 0;
+  }
   while (sdReadTimeout((SerialDriver*)shell_stream, &c, 1, MS2ST(10))) {
     if (shell_skip_linefeed) {
       shell_skip_linefeed = false;
