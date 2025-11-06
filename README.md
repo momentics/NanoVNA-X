@@ -38,18 +38,34 @@ similar.
 - The original codebase was exceptionally feature‑rich; to make ongoing development feasible, the SD subsystem has been temporarily removed to reduce complexity and unblock core refactoring.
 - The SD subsystem will return once the key features are implemented as originally envisioned and the architecture is ready to support it cleanly.
 
-## Improvements​
-* **Event bus and task helpers.** The firmware exposes a lightweight event bus with typed topics so UI code, measurement logic, storage handlers, and input adapters can exchange notifications without direct dependencies. A thin scheduler helper wraps ChibiOS thread creation/termination but otherwise relies on standard RTOS primitives.
-* **Measurement pipeline facade.** A dedicated pipeline object bridges platform drivers and the sweep service by handing off execution requests and exposing the active sweep mask, keeping higher layers agnostic of board-specific driver tables.
-* **Sweep engine tracking.** The sweep service maintains generation counters, UI progress indicators, and LED feedback while orchestrating measurement loops and calibration state.
-* **Persistent configuration service.** Configuration and calibration saves are validated with rolling checksums, cached per-slot integrity flags, and a single API surface that hides flash programming details from application code.
-* **Platform driver registry.** Hardware bring-up flows through a board registry that selects the correct driver table for each target and runs optional pre-initialisation hooks, reducing conditional logic scattered across the firmware.
-* **USB console handshake compatibility.** The USB shell now emits its `ch> ` prompt before the banner so host utilities such as NanoVNA-Saver detect the device without manual retries.
+## Improvements
+The firmware has undergone significant re-architecture and stabilization since the @DiSlord release, focusing on responsiveness, standalone usability, and performance on memory-constrained hardware.
 
-### PLL transient stabilization​
-PLL transients are stabilized by optimizing the synthesizer programming sequence and precomputing capture parameters: staged delays, lock‑status gating, and reference frequency caching minimize retuning overhead, reducing overshoot and drift at sweep start and during rapid retunes.​
-Loop‑filter parameters and output enable order were further refined to cut transient amplitude and accelerate phase settling across operating sub‑bands; this improves measurement repeatability and reduces reliance on additional DSP smoothing.
-The Si5351 driver now tracks pending band changes, triggers PLL resets only when necessary, and requests extra settling cycles so the sweep loop automatically discards unstable conversions before logging final data; fractional divider approximations were tightened to keep output frequencies aligned with the cached PLL plans.
+### Firmware Stability and Responsiveness
+The core of the firmware was reworked from blocking calls to a fully asynchronous, event-driven architecture using ChibiOS primitives (Mailboxes, Events, and Semaphores).
+* **Non-Blocking USB:** The USB CDC (serial) stack is now fully asynchronous. The firmware no longer hangs if a host PC connects, disconnects, or stalls during a data transfer. This resolves the most common source of device freezes.
+* **Timeout-Driven Recovery:** Critical subsystems, including the measurement engine and I2C bus, are guarded by timeouts. A stalled operation will no longer lock up the device; instead, the subsystem attempts to recover cleanly.
+* **RTOS-based Concurrency:** Busy-wait loops and polling have been replaced with efficient RTOS-based signaling, reducing CPU load and improving battery life. The measurement thread, UI, and USB stack now cooperate without race conditions or deadlocks.
+* **USB Handshake:** The shell prompt (`ch>`) is now sent *before* the welcome banner, improving compatibility with host software like NanoVNA-Saver.
+
+* **Persistent State:** Key settings like IF bandwidth and electrical delay are now saved to flash memory alongside calibrations.
+* **UI/Sweep Sync:** The UI and sweep engine are now decoupled. The UI remains responsive even during complex calculations, and on-screen data is always synchronized with the underlying measurement state.
+
+### Performance and Resource Management
+* **Link-Time Optimization (LTO):** The firmware is now built with LTO enabled, resulting in a smaller binary and improved performance.
+* **Targeted Memory Optimization:** Static RAM consumption has been significantly reduced, especially for the 16 kB STM32F072 (NanoVNA-H) target. This was achieved by tuning buffer sizes, disabling features like trace caching on low-memory models, and moving key buffers to CCM RAM on the STM32F303.
+* **Strategic DMA Usage:** The DMA architecture was refined to prioritize measurement stability. DMA is used for the most demanding data paths:
+    *   **LCD Interface (SPI):** Ensures smooth, high-speed UI and graph rendering.
+    *   **Measurement Pipeline (I2S):** Guarantees sample delivery from the codec without dropping data.
+    *   To free up DMA channels for these critical tasks, the **UART console was intentionally moved to a non-DMA, interrupt-driven driver.** This prevents resource conflicts and prioritizes measurement integrity.
+
+### New Features and Capabilities
+* **PLL Stabilization:** The Si5351 synthesizer programming sequence was optimized to reduce frequency overshoot and drift, improving measurement repeatability, especially at the start of a sweep.
+
+### Build and Development Workflow
+* **Automated Versioning:** The firmware version is now automatically embedded during the build process from a single `VERSION` file.
+* **Improved CI/CD:** The GitHub Actions workflows have been optimized for faster, more reliable builds with better caching.
+* **DFU File Generation:** A Python-based script for creating DfuSe-compatible firmware files has been integrated into the release process.
 
 ## Architecture Overview
 

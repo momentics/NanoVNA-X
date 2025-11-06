@@ -1,66 +1,30 @@
 # DMA Architecture Overview
 
-NanoVNA-X relies on DMA to keep the STM32F072 and STM32F303 parts responsive while streaming
-screen updates and shell traffic.  The firmware centralises the DMA setup so that the SPI display
-interface and the USART console can share the available channels without starving each other.
+NanoVNA-X relies on Direct Memory Access (DMA) to ensure high performance and responsiveness on the STM32F072 and STM32F303 platforms. The DMA strategy is designed to prioritize the integrity of the measurement pipeline while offloading high-throughput tasks like screen rendering from the CPU.
 
-## Channel allocation by platform
+## Architectural Rationale
 
-| Peripheral | Direction | STM32F072 (NanoVNA-H) | STM32F303 (NanoVNA-H4) |
-|------------|-----------|------------------------|------------------------|
+Early firmware versions used DMA for the USART console, but this created resource conflicts with the measurement pipeline. To guarantee measurement stability, a key architectural decision was made: **DMA channels are now exclusively reserved for performance-critical hardware.**
+
+The console has been moved to a standard interrupt-driven serial driver, which has a negligible impact on console performance but frees up DMA resources for the time-sensitive I2S audio codec and SPI display interface. This prevents data loss during sweeps and ensures a smooth, responsive user interface.
+
+## Channel Allocation by Platform
+
+The firmware reserves the following DMA1 channels for specific peripherals. These assignments are consistent across both supported platforms.
+
+| Peripheral | Stream | STM32F072 (NanoVNA-H) | STM32F303 (NanoVNA-H4) |
+|--------------------|-----------|------------------------|------------------------|
 | SPI1 (LCD) | TX | DMA1 Channel 3 | DMA1 Channel 3 |
 | SPI1 (LCD) | RX | DMA1 Channel 2 | DMA1 Channel 2 |
-| USART1 (console) | TX | DMA1 Channel 4 | DMA1 Channel 4 |
-| USART1 (console) | RX | DMA1 Channel 5 | DMA1 Channel 5 |
+| SPI2 (I2S Codec) | RX | DMA1 Channel 4 | DMA1 Channel 4 |
 
-The F072 uses fixed channel assignments, therefore USART1 is explicitly remapped to channel 4/5 in
-`mcuconf.h` to avoid clashing with the SPI1 transfers on channels 2/3.  The F303 shares the same DMA1
-layout and benefits from the identical mapping.
+## High-Performance Subsystems
 
-## DMA manager
+### Measurement Pipeline (I2S)
+The audio codec (TLV320AIC3204) streams measurement data to the MCU via the I2S protocol, which is implemented on the SPI2 peripheral. A circular DMA buffer on **DMA1 Channel 4** continuously receives this data in the background. The use of DMA is critical for ensuring that no samples are lost, which would otherwise corrupt the measurement results. The DMA controller issues half-transfer and full-transfer interrupts, which signal the DSP processing task to consume the new data.
 
-`src/drivers/dma.c` exposes a lightweight handle (`dma_channel_t`) that tracks the configured
-peripheral address, base control bits (direction, priority), and the associated hardware channel.
-The helper functions:
+### Display Rendering (SPI)
+The LCD driver uses **DMA1 Channel 3 (TX)** and **Channel 2 (RX)** to handle all high-throughput rendering operations. Bulk transfers, such as drawing graph data or filling screen regions, are offloaded to the DMA controller. This allows the CPU to perform other tasks, such as processing user input, while the screen is being updated, leading to a much more responsive user interface.
 
-* disable the channel safely before changing any registers;
-* wait for a running transfer to complete when a new transaction is queued;
-* restart the channel with the required element size and increment flags; and
-* provide `dma_channel_get_remaining()` so the LCD driver can poll DMA progress while parsing the
-  RGB data returned by the panel.
-
-The LCD driver switches to these helpers instead of poking the registers directly.  The SPI1 DMA
-handles are initialised once in `spi_init()` and reused for LCD screen updates so only one set of
-interrupts and status bits has to be monitored.  Blocking calls now simply wait on
-the new helper rather than busy loops that cleared the CCR register after every transfer.
-
-## UART console via DMA
-
-`src/drivers/uart_dma.c` converts the ChibiOS `UARTDriver` into a `BaseSequentialStream` so the shell
-code can keep using `streamWrite`, `streamRead` and `chvprintf`.  `HAL_USE_UART` and `UART_USE_WAIT`
-are enabled and USART1 is configured for DMA in both board configurations.  The wrapper:
-
-* starts and restarts the driver with the requested baud rate;
-* handles chunked transfers for buffers larger than 65,535 frames (the DMA counter limit);
-* exposes `uart_dma_write_timeout()` and `uart_dma_read_timeout()` helpers that return the actual
-  number of bytes moved; and
-* provides `uart_dma_flush_queues()` so the shell can drop pending transfers when switching between
-  USB and UART endpoints.
-
-This replaces the former interrupt-driven `SerialDriver` instance (`SD1`) and removes the need to
-manually poke the TX/RX queues in `shell_reset_console()`.
-
-## Extending the DMA setup
-
-* Configure the desired stream in the board `mcuconf.h` file using `STM32_DMA_STREAM_ID(dma, channel)`
-  and update the driver priority macros.  The helper will assert if a handle is initialised twice.
-* Initialise a `dma_channel_t` handle early (usually when the peripheral itself is brought up), then
-  call `dma_channel_start()` whenever a transfer is required.  The function can be invoked back to
-  back: if the channel is still active the helper waits until `CNDTR` reaches zero before arming the
-  next transaction.
-* Use `dma_channel_wait()` only when the CPU must block.  For background operations (for example the
-  LCD read-back path) poll `dma_channel_get_remaining()` and perform incremental work while DMA fills
-  the buffer.
-* Remember that all transfers share DMA1, so avoid assigning overlapping channels when enabling extra
-  peripherals.  The table above documents the slots that are now reserved by the firmware.
-
+### Console Implementation
+The shell and console previously used a DMA-backed UART driver. This has been replaced by the standard ChibiOS `SerialDriver`, which uses a more traditional interrupt-based approach. While this driver does not use DMA, it provides a compatible `BaseSequentialStream` interface for the rest of the firmware. This change was a deliberate trade-off to ensure that the most critical DMA channels were available for the measurement pipeline.
