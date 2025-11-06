@@ -2708,7 +2708,7 @@ __attribute__((naked)) void HardFault_Handler(void) {
                  "b .\n");
 }
 
-void hard_fault_handler_c(uint32_t* sp, const hard_fault_extra_registers_t* extra,
+__attribute__((used)) void hard_fault_handler_c(uint32_t* sp, const hard_fault_extra_registers_t* extra,
                           uint32_t exc_return) {
 #ifdef ENABLE_HARD_FAULT_HANDLER_DEBUG
   uint32_t r0 = sp[0];
