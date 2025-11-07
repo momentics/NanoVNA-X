@@ -857,7 +857,6 @@ void set_sweep_points(uint16_t points) {
   sweep_points = points;
   app_measurement_update_frequencies();
   update_backup_data();
-  caldata_save(0);
 }
 
 /*
@@ -1141,7 +1140,6 @@ static void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforc
   }
   app_measurement_update_frequencies();
   update_backup_data();
-  caldata_save(0);
 }
 
 void set_sweep_frequency(uint16_t type, freq_t freq) {
