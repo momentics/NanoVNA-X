@@ -58,7 +58,17 @@ static size_t shell_read_timeout(void* buf, size_t size, systime_t timeout) {
   if (shell_stream == NULL) {
     return 0;
   }
-  return chnReadTimeout((BaseChannel*)shell_stream, buf, size, timeout);
+#if HAL_USE_SERIAL_USB
+  if (shell_stream == (BaseSequentialStream*)&SDU1) {
+    return ibqReadTimeout(&SDU1.ibqueue, buf, size, timeout);
+  }
+#endif
+#ifdef __USE_SERIAL_CONSOLE__
+  if (shell_stream == (BaseSequentialStream*)&SD1) {
+    return sdReadTimeout(&SD1, buf, size, timeout);
+  }
+#endif
+  return streamRead(shell_stream, buf, size);
 }
 
 
