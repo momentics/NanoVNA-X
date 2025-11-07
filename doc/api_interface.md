@@ -9,7 +9,7 @@ NanoVNA-X exposes a USB CDC ACM interface implemented by the ChibiOS serial-over
 | 0x81     | IN        | Bulk      | 64 bytes   | Device-to-host replies and data |
 | 0x82     | IN        | Interrupt | 8 bytes    | CDC notification endpoint |
 
-The device strings identify the manufacturer as `nanovna.com`, the product as the configured NanoVNA model, and the serial number can be generated from the MCU unique ID when `__USB_UID__` is enabled.
+The device strings identify the manufacturer, the product as the configured NanoVNA model, and the serial number is derived from the MCU unique ID by default (it can be disabled from Config → Mode → *USB DEVICE UID* for legacy workflows).
 
 ## 2. Session framing
 The USB CDC link presents itself as a virtual serial port. No manual baud-rate configuration is required, but ASCII commands and responses are framed by carriage return + line feed (`\r\n`). The firmware echoes user input and displays the prompt `ch> ` when it is ready to accept a command. Upon connection the initial bytes are `\r\nch> \r\nNanoVNA Shell\r\nch> ` so that host auto-detection logic can key off the prompt before reading the banner text.

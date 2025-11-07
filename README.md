@@ -33,34 +33,37 @@ similar.
 
 ## Acknowledgment and Disclaimer
 
-- Profound thanks to @DiSlord for the original firmware text and the foundations that significantly inspired and enabled the start of this new firmware project.
+- Profound thanks to [@DiSlord](https://github.com/DiSlord/) for the original firmware text and the foundations that significantly inspired and enabled the start of this new firmware project.
 - This firmware evolves rapidly and, with each daily change, diverges further from the original implementation.
-- The original codebase was exceptionally feature‑rich; to make ongoing development feasible, the SD subsystem has been temporarily removed to reduce complexity and unblock core refactoring.
-- The SD subsystem will return once the key features are implemented as originally envisioned and the architecture is ready to support it cleanly.
+- The original codebase was exceptionally feature‑rich; to make ongoing development feasible, the SD subsystem has been temporarily removed to reduce complexity and unblock core refactoring. The SD subsystem will return once the key features are implemented as originally envisioned and the architecture is ready to support it cleanly.
+
+## What Makes NanoVNA-X Different
+
+- **Predictable, event-driven architecture.** The sweep engine, UI, USB CDC shell, and measurement DSP cooperate through the ChibiOS event bus and watchdog-guarded timeouts. A hung codec, synthesiser, or PC host can no longer freeze the instrument mid-calibration.
+- **Measurement-focused DMA budget.** SPI LCD transfers and TLV320 I²S captures use DMA, while the UART console was intentionally moved to an IRQ driver so that DMA channels are always available for RF data paths.
+- **Unique USB identity by default.** Every unit now enumerates with a serial number derived from its MCU unique ID (Config → Mode → *USB DEVICE UID* still allows opting out for legacy workflows).
 
 ## Improvements
-The firmware has undergone significant re-architecture and stabilization since the @DiSlord release, focusing on responsiveness, standalone usability, and performance on memory-constrained hardware.
+The firmware has undergone significant re-architecture and stabilization since the [@DiSlord](https://github.com/DiSlord/) release, focusing on responsiveness, standalone usability, and performance on memory-constrained hardware.
 
 ### Firmware Stability and Responsiveness
 The core of the firmware was reworked from blocking calls to a fully asynchronous, event-driven architecture using ChibiOS primitives (Mailboxes, Events, and Semaphores).
 * **Non-Blocking USB:** The USB CDC (serial) stack is now fully asynchronous. The firmware no longer hangs if a host PC connects, disconnects, or stalls during a data transfer. This resolves the most common source of device freezes.
-* **Timeout-Driven Recovery:** Critical subsystems, including the measurement engine and I2C bus, are guarded by timeouts. A stalled operation will no longer lock up the device; instead, the subsystem attempts to recover cleanly.
+* **Timeout-Driven Recovery:** Critical subsystems, including the measurement engine and I²C bus, are guarded by timeouts. A stalled operation will no longer lock up the device; instead, the subsystem attempts to recover cleanly.
 * **RTOS-based Concurrency:** Busy-wait loops and polling have been replaced with efficient RTOS-based signaling, reducing CPU load and improving battery life. The measurement thread, UI, and USB stack now cooperate without race conditions or deadlocks.
-* **USB Handshake:** The shell prompt (`ch>`) is now sent *before* the welcome banner, improving compatibility with host software like NanoVNA-Saver.
-
 * **Persistent State:** Key settings like IF bandwidth and electrical delay are now saved to flash memory alongside calibrations.
 * **UI/Sweep Sync:** The UI and sweep engine are now decoupled. The UI remains responsive even during complex calculations, and on-screen data is always synchronized with the underlying measurement state.
 
 ### Performance and Resource Management
-* **Link-Time Optimization (LTO):** The firmware is now built with LTO enabled, resulting in a smaller binary and improved performance.
 * **Targeted Memory Optimization:** Static RAM consumption has been significantly reduced, especially for the 16 kB STM32F072 (NanoVNA-H) target. This was achieved by tuning buffer sizes, disabling features like trace caching on low-memory models, and moving key buffers to CCM RAM on the STM32F303.
 * **Strategic DMA Usage:** The DMA architecture was refined to prioritize measurement stability. DMA is used for the most demanding data paths:
     *   **LCD Interface (SPI):** Ensures smooth, high-speed UI and graph rendering.
-    *   **Measurement Pipeline (I2S):** Guarantees sample delivery from the codec without dropping data.
+    *   **Measurement Pipeline (I²S):** Guarantees sample delivery from the codec without dropping data.
     *   To free up DMA channels for these critical tasks, the **UART console was intentionally moved to a non-DMA, interrupt-driven driver.** This prevents resource conflicts and prioritizes measurement integrity.
 
 ### New Features and Capabilities
 * **PLL Stabilization:** The Si5351 synthesizer programming sequence was optimized to reduce frequency overshoot and drift, improving measurement repeatability, especially at the start of a sweep.
+* **Deterministic USB serial numbers:** The firmware now enables the USB unique-ID mode at boot, so every unit enumerates with a stable serial number that host software (NanoVNA-App, NanoVNA Saver, etc.) can display without extra configuration.
 
 ### Build and Development Workflow
 * **Automated Versioning:** The firmware version is now automatically embedded during the build process from a single `VERSION` file.
@@ -247,4 +250,3 @@ Hardware design material is disclosed to prevent bad quality clone. Please let m
 * [@DiSlord](https://github.com/DiSlord/) – original NanoVNA-D firmware author whose
   work forms the foundation of this project and remains licensed under the GNU GPL.
 * [@edy555](https://github.com/edy555)
-

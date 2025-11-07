@@ -97,7 +97,7 @@ Pressing **MEASURE** opens the submenu tied to the currently active measurement 
   * `→ MORE` → exposes manufacturer-level tools:
     * `MODE` cycles the Si5351 generator variant (`Si5351`, `MS5351`, `SWC5351`).
     * `SEPARATOR` *(with `__DIGIT_SEPARATOR__`)* toggles between dot and comma numeric separators.
-    * `USB DEVICE UID` *(with `__USB_UID__`)* displays the unique USB identifier.
+    * `USB DEVICE UID` *(with `__USB_UID__`)* shows the currently applied unique USB identifier and allows disabling it for legacy hosts. The UID is enabled by default in public firmware builds.
     * `CLEAR CONFIG` → submenu containing `CLEAR ALL AND RESET`, which wipes configuration storage.
 * **SAVE CONFIG** → commits the in-memory configuration to non-volatile storage.
 * **CONNECTION** *(present with `__USE_SERIAL_CONSOLE__`)* → allows toggling the USB/serial console backend and choosing among the predefined UART bit rates.

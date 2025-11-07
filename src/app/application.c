@@ -246,7 +246,8 @@ config_t config = {
     ._harmonic_freq_threshold = FREQUENCY_THRESHOLD,
     ._IF_freq = FREQUENCY_OFFSET,
     ._touch_cal = DEFAULT_TOUCH_CONFIG,
-    ._vna_mode = (1 << VNA_MODE_BACKUP), // Enable backup of UI settings by default, USB mode, search max
+    ._vna_mode =
+        (1 << VNA_MODE_BACKUP) | (1 << VNA_MODE_USB_UID), // Enable backup + unique USB serial by default
     ._brightness = DEFAULT_BRIGHTNESS,
     ._dac_value = 1922,
     ._vbat_offset = 420,
