@@ -35,7 +35,9 @@
 #include "services/event_bus.h"
 #include "version_info.h"
 #include "measurement/pipeline.h"
+#include "platform/boards/stm32_peripherals.h"
 
+#include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -112,6 +114,15 @@ uint8_t sweep_mode = SWEEP_ENABLE;
 // Sweep measured data
 float measured[2][SWEEP_POINTS_MAX][2];
 
+static int16_t battery_last_mv = INT16_MIN;
+static systime_t battery_next_sample = 0;
+
+#ifndef VBAT_MEASURE_INTERVAL
+#define BATTERY_REDRAW_INTERVAL S2ST(5)
+#else
+#define BATTERY_REDRAW_INTERVAL VBAT_MEASURE_INTERVAL
+#endif
+
 // Version text, displayed in Config->Version menu, also send by info command
 const char* info_about[] = {
     "Board: " BOARD_NAME, "NanoVNA-X maintainer: @momentics <momentics@gmail.com>",
@@ -151,6 +162,20 @@ void my_debug_log(int offs, char* log) {
 #else
 #define DEBUG_LOG(offs, text)
 #endif
+
+static void schedule_battery_redraw(void) {
+  systime_t now = chVTGetSystemTimeX();
+  if ((int32_t)(now - battery_next_sample) < 0) {
+    return;
+  }
+  battery_next_sample = now + BATTERY_REDRAW_INTERVAL;
+  int16_t vbat = adc_vbat_read();
+  if (vbat == battery_last_mv) {
+    return;
+  }
+  battery_last_mv = vbat;
+  request_to_redraw(REDRAW_BATTERY);
+}
 
 static THD_WORKING_AREA(waThread1, 1024);
 static THD_FUNCTION(Thread1, arg) {
@@ -196,7 +221,7 @@ static THD_FUNCTION(Thread1, arg) {
       // Prepare draw graphics, cache all lines, mark screen cells for redraw
       request_to_redraw(REDRAW_PLOT);
     }
-    request_to_redraw(REDRAW_BATTERY);
+    schedule_battery_redraw();
 #ifndef DEBUG_CONSOLE_SHOW
     // plot trace and other indications as raster
     draw_all();
@@ -2087,7 +2112,10 @@ VNA_SHELL_FUNCTION(cmd_stat) {
   for (int ch = 0; ch < 2; ch++) {
     tlv320aic3204_select(ch);
     sweep_service_start_capture(4);
-    sweep_service_wait_for_capture();
+    if (!sweep_service_wait_for_capture()) {
+      shell_printf("stat: capture timeout on channel %d" VNA_SHELL_NEWLINE_STR, ch);
+      return;
+    }
     //    reset_dsp_accumerator();
     //    dsp_process(&p[               0], AUDIO_BUFFER_LEN);
     //    dsp_process(&p[AUDIO_BUFFER_LEN], AUDIO_BUFFER_LEN);

@@ -332,19 +332,21 @@ void sweep_service_start_capture(systime_t delay_ticks) {
   wait_count = config._bandwidth + 2U;
 }
 
-void sweep_service_wait_for_capture(void) {
+bool sweep_service_wait_for_capture(void) {
   systime_t start_time = chVTGetSystemTimeX();
   systime_t timeout = MS2ST(500); // 500ms timeout - adjust as needed
-  
   while (wait_count != 0U) {
     systime_t current_time = chVTGetSystemTimeX();
     if (current_time - start_time >= timeout) {
       // Timeout occurred - break to prevent hanging
       // This can happen if I2S interrupts don't fire properly (e.g. USB not connected)
-      break;
+      wait_count = 0;
+      reset_dsp_accumerator();
+      return false;
     }
     __WFI();
   }
+  return true;
 }
 
 const audio_sample_t* sweep_service_rx_buffer(void) {
@@ -525,7 +527,9 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
           cal_interpolate(interpolation_idx, frequency, c_data);
         }
-        sweep_service_wait_for_capture();
+        if (!sweep_service_wait_for_capture()) {
+          goto capture_failure;
+        }
         (*sample_func)(&data[0]);
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
           apply_ch0_error_term(data, c_data);
@@ -543,7 +547,9 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION) && (mask & SWEEP_CH0_MEASURE) == 0U) {
           cal_interpolate(interpolation_idx, frequency, c_data);
         }
-        sweep_service_wait_for_capture();
+        if (!sweep_service_wait_for_capture()) {
+          goto capture_failure;
+        }
         (*sample_func)(&data[2]);
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
           apply_ch1_error_term(data, c_data);
@@ -575,6 +581,12 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
     sweep_led_end();
   }
   return completed;
+
+capture_failure:
+  sweep_reset_progress();
+  sweep_progress_end();
+  sweep_led_end();
+  return false;
 }
 
 void measurement_data_smooth(uint16_t ch_mask) {

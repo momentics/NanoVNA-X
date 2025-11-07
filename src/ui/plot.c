@@ -2229,8 +2229,12 @@ static void draw_cal_status(void) {
 #define BATTERY_WARNING_LEVEL 3300
 static void draw_battery_status(void) {
   int16_t vbat = adc_vbat_read();
-  if (vbat <= 0)
+  static int16_t last_drawn_vbat = INT16_MIN;
+  if (vbat <= 0 && last_drawn_vbat <= 0)
     return;
+  if (vbat == last_drawn_vbat)
+    return;
+  last_drawn_vbat = vbat;
   uint8_t string_buf[24];
   // Set battery color
   lcd_set_colors(vbat < BATTERY_WARNING_LEVEL ? LCD_LOW_BAT_COLOR : LCD_NORMAL_BAT_COLOR,

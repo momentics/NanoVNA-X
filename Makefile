@@ -329,6 +329,9 @@ dfu:
 print-version:
 	@echo $(VERSION)
 
+.PHONY: clear
+clear: clean
+
 TAGS: Makefile
 ifeq ($(TARGET),F303)
 	@etags *.[ch] boards/STM32F303/*.[ch] $(shell find third_party/ChibiOS -name \*.\[ch\] -print)
@@ -336,4 +339,3 @@ else
 	@etags *.[ch] boards/STM32F072/*.[ch] $(shell find third_party/ChibiOS -name \*.\[ch\] -print)
 endif
 	@ls -l TAGS
-
