@@ -54,6 +54,13 @@ static void shell_write(const void* buf, size_t size) {
   streamWrite(shell_stream, buf, size);
 }
 
+static size_t shell_read_timeout(void* buf, size_t size, systime_t timeout) {
+  if (shell_stream == NULL) {
+    return 0;
+  }
+  return chnReadTimeout((BaseChannel*)shell_stream, buf, size, timeout);
+}
+
 
 
 int shell_printf(const char* fmt, ...) {
@@ -254,7 +261,16 @@ int vna_shell_read_line(char* line, int max_size) {
   if (shell_stream == NULL) {
     return 0;
   }
-  while (sdReadTimeout((SerialDriver*)shell_stream, &c, 1, MS2ST(10))) {
+  while (shell_stream != NULL) {
+    if (!shell_read_timeout(&c, 1, MS2ST(10))) {
+      if (!shell_check_connect()) {
+        return 0;
+      }
+      if (j == 0) {
+        return 0;
+      }
+      continue;
+    }
     if (shell_skip_linefeed) {
       shell_skip_linefeed = false;
       if (c == '\n') {
