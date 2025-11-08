@@ -57,6 +57,7 @@ static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
 static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
 
 static measurement_pipeline_t measurement_pipeline;
+static void service_sweep_state_autosave(void);
 
 // SD card access was removed; configuration persists using internal flash only.
 
@@ -226,6 +227,7 @@ static THD_FUNCTION(Thread1, arg) {
     // plot trace and other indications as raster
     draw_all();
 #endif
+    service_sweep_state_autosave();
   }
 }
 
@@ -329,6 +331,49 @@ static void load_default_properties(void) {
   // current_props._cal_data[5][POINTS_COUNT][2];
   // Checksum add on caldata_save
   // current_props.checksum = 0;
+}
+
+#define SWEEP_STATE_AUTOSAVE_DELAY   MS2ST(750)
+#define SWEEP_STATE_AUTOSAVE_MIN_GAP S2ST(3)
+
+static bool sweep_state_dirty = false;
+static systime_t sweep_state_deadline = 0;
+static systime_t sweep_state_last_save = 0;
+
+static inline uint16_t active_calibration_slot(void) {
+  uint16_t slot = lastsaveid;
+  if (slot == NO_SAVE_SLOT || slot >= SAVEAREA_MAX) {
+    slot = 0;
+  }
+  return slot;
+}
+
+static void schedule_sweep_state_autosave(void) {
+  sweep_state_dirty = true;
+  sweep_state_deadline = chVTGetSystemTimeX() + SWEEP_STATE_AUTOSAVE_DELAY;
+}
+
+void persist_user_settings_to_flash(void) {
+  caldata_save(active_calibration_slot());
+  sweep_state_dirty = false;
+  sweep_state_last_save = chVTGetSystemTimeX();
+}
+
+static void service_sweep_state_autosave(void) {
+  if (!VNA_MODE(VNA_MODE_BACKUP)) {
+    return;
+  }
+  if (!sweep_state_dirty) {
+    return;
+  }
+  const systime_t now = chVTGetSystemTimeX();
+  if ((int32_t)(now - sweep_state_deadline) < 0) {
+    return;
+  }
+  if ((int32_t)(now - sweep_state_last_save) < (int32_t)SWEEP_STATE_AUTOSAVE_MIN_GAP) {
+    return;
+  }
+  persist_user_settings_to_flash();
 }
 
 //
@@ -626,6 +671,7 @@ VNA_SHELL_FUNCTION(cmd_saveconfig) {
   (void)argc;
   (void)argv;
   config_save();
+  persist_user_settings_to_flash();
   shell_printf("Config saved" VNA_SHELL_NEWLINE_STR);
 }
 
@@ -857,6 +903,7 @@ void set_sweep_points(uint16_t points) {
   sweep_points = points;
   app_measurement_update_frequencies();
   update_backup_data();
+  schedule_sweep_state_autosave();
 }
 
 /*
@@ -1140,6 +1187,7 @@ static void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforc
   }
   app_measurement_update_frequencies();
   update_backup_data();
+  schedule_sweep_state_autosave();
 }
 
 void set_sweep_frequency(uint16_t type, freq_t freq) {
@@ -1151,6 +1199,8 @@ void reset_sweep_frequency(void) {
   frequency1 = cal_frequency1;
   sweep_points = cal_sweep_points;
   app_measurement_update_frequencies();
+  update_backup_data();
+  schedule_sweep_state_autosave();
 }
 
 VNA_SHELL_FUNCTION(cmd_sweep) {

@@ -21,3 +21,4 @@
 #pragma once
 
 int app_main(void);
+void persist_user_settings_to_flash(void);

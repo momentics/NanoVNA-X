@@ -21,6 +21,7 @@
  */
 
 #include "nanovna.h"
+#include "app/application.h"
 #include "app/shell.h"
 #include "hal.h"
 #include "services/event_bus.h"
@@ -782,6 +783,7 @@ static UI_FUNCTION_CALLBACK(menu_config_cb) {
     break;
   case MENU_CONFIG_SAVE:
     config_save();
+    persist_user_settings_to_flash();
     menu_move_back(true);
     return;
   case MENU_CONFIG_RESET:
