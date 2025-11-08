@@ -28,6 +28,14 @@ Each shell command entry defines flag bits that affect execution:
 
 When a command modifies sweep settings it typically pauses generation, performs the change, and optionally resumes. Long-running commands (e.g., sweeping or file I/O) do not send additional acknowledgements; wait for the prompt before issuing the next command.
 
+### 3.1 State persistence and autosave
+
+The `system/state_manager` layer owns sweep/GUI persistence:
+
+* When `REMEMBER STATE` (Config → Expert Settings) is on, edits to sweep points, start/stop limits, brightness, lever mode, and the active calibration slot are staged in RAM and automatically written back to flash a short time after the last change.
+* Issuing `saveconfig` or selecting **SAVE CONFIG** in the UI forces both the configuration block and any pending autosave data to be committed immediately. Hosts that modify sweep settings via USB should either wait for the prompt plus ~1 second or explicitly call `saveconfig` to guarantee persistence.
+* Autosaves target the currently-selected calibration slot (`lastsaveid`, default slot 0). This mirrors the on-device workflow: changing the active slot with `recall` also changes where subsequent autosaves land.
+
 ## 4. Binary data formats
 Most replies are textual. When binary data is transmitted, the firmware writes raw memory structures through the shell stream without additional framing:
 

@@ -91,7 +91,7 @@ Pressing **MEASURE** opens the submenu tied to the currently active measurement 
 * **EXPERT SETTINGS** → opens advanced hardware controls:
   * `THRESHOLD` (magnitude threshold), `TCXO` (reference oscillator trim) and `VBAT OFFSET` (battery calibration) all use the keypad.
   * `IF OFFSET` *(when `USE_VARIABLE_OFFSET_MENU` is defined)* → opens a submenu listing the available IF offset presets.
-  * `REMEMBER STATE` *(with `__USE_BACKUP__`)* → toggles retention of UI state across restarts.
+  * `REMEMBER STATE` *(with `__USE_BACKUP__`)* → enables the `state_manager` autosave loop. When on, sweep limits, point counts, brightness, lever mode, and the active calibration slot are written back to flash shortly after edits without hammering the storage.
   * `FLIP DISPLAY` *(with `__FLIP_DISPLAY__`)* → mirrors the LCD orientation.
   * `→ DFU` *(with `__DFU_SOFTWARE_MODE__`)* → jumps to the DFU bootloader.
   * `→ MORE` → exposes manufacturer-level tools:
@@ -99,7 +99,7 @@ Pressing **MEASURE** opens the submenu tied to the currently active measurement 
     * `SEPARATOR` *(with `__DIGIT_SEPARATOR__`)* toggles between dot and comma numeric separators.
     * `USB DEVICE UID` *(with `__USB_UID__`)* shows the currently applied unique USB identifier and allows disabling it for legacy hosts. The UID is enabled by default in public firmware builds.
     * `CLEAR CONFIG` → submenu containing `CLEAR ALL AND RESET`, which wipes configuration storage.
-* **SAVE CONFIG** → commits the in-memory configuration to non-volatile storage.
+* **SAVE CONFIG** → commits the in-memory configuration to non-volatile storage and immediately forces the autosave pipeline to flush any pending sweep/UI changes.
 * **CONNECTION** *(present with `__USE_SERIAL_CONSOLE__`)* → allows toggling the USB/serial console backend and choosing among the predefined UART bit rates.
 * **VERSION** → shows firmware version details.
 * **BRIGHTNESS** *(with `__LCD_BRIGHTNESS__`)* → interactive slider for the backlight level.

@@ -51,7 +51,7 @@ The core of the firmware was reworked from blocking calls to a fully asynchronou
 * **Non-Blocking USB:** The USB CDC (serial) stack is now fully asynchronous. The firmware no longer hangs if a host PC connects, disconnects, or stalls during a data transfer. This resolves the most common source of device freezes.
 * **Timeout-Driven Recovery:** Critical subsystems, including the measurement engine and I²C bus, are guarded by timeouts. A stalled operation will no longer lock up the device; instead, the subsystem attempts to recover cleanly.
 * **RTOS-based Concurrency:** Busy-wait loops and polling have been replaced with efficient RTOS-based signaling, reducing CPU load and improving battery life. The measurement thread, UI, and USB stack now cooperate without race conditions or deadlocks.
-* **Persistent State:** Key settings like IF bandwidth and electrical delay are now saved to flash memory alongside calibrations.
+* **Persistent State:** A dedicated `system/state_manager` module snapshots sweep limits, UI flags, and calibration slots to flash. Changes are auto-saved after you stop editing (or immediately via *Save Config*), so editing the sweep on the device or over USB survives a cold boot without hammering flash.
 * **UI/Sweep Sync:** The UI and sweep engine are now decoupled. The UI remains responsive even during complex calculations, and on-screen data is always synchronized with the underlying measurement state.
 
 ### Performance and Resource Management
@@ -140,6 +140,19 @@ The TLV320AIC3204 acts as a dual-channel audio ADC/DAC (I²S), with PLL configur
 Display controllers ILI9341/ST7789 (320×240) and ST7796S (480×320) are selected per board; DMA is supported, along with brightness control (for the H4), inversion, and text shadows to improve readability.
 
 Additional features include an RTC, persistent calibration/configuration in internal flash, USB UID, remote control, and a measurement module (LC matching, cable analysis, and resonance analysis).
+
+## Repository layout
+
+The source tree has been reorganised so it is no longer a line-for-line fork of the legacy NanoVNA firmware:
+
+| Path | Purpose |
+| --- | --- |
+| `include/app`, `src/app` | Application-facing APIs: the sweep service, shell, measurement pipeline, and UI glue. |
+| `include/services`, `src/services` | Cross-cutting infrastructure (config service, scheduler, event bus). |
+| `include/system`, `src/system` | Platform-level building blocks such as the new `state_manager` that owns persistence, backup registers, and autosave scheduling. |
+| `src/platform`, `boards/STM32F0/STM32F3` | Low-level board support code shared with ChibiOS. |
+
+This separation lets you trace dependencies easily (e.g. `ui/` depends on `system/state_manager.h` but not vice versa) and removes duplicated helper tables from multiple files. When porting patches from older firmware trees, map the functionality onto the closest module instead of copying entire source files.
 
 ## Building the firmware
 
