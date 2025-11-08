@@ -195,6 +195,7 @@ CSRC = $(STARTUPSRC) \
        src/platform/boards/nanovna_board.c \
        src/platform/boards/stm32_peripherals.c \
        src/ui/hardware_input.c \
+       src/system/state_manager.c \
        src/middleware/chprintf.c
 
 # C++ sources that can be compiled in ARM or THUMB mode depending on the global

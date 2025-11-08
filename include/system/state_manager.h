@@ -18,6 +18,12 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+ #pragma once
 
-int app_main(void);
+#include <stdint.h>
+
+void state_manager_init(void);
+void state_manager_mark_dirty(void);
+void state_manager_force_save(void);
+void state_manager_service(void);
+void update_backup_data(void);

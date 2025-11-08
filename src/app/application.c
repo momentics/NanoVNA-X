@@ -36,6 +36,7 @@
 #include "version_info.h"
 #include "measurement/pipeline.h"
 #include "platform/boards/stm32_peripherals.h"
+#include "system/state_manager.h"
 
 #include <limits.h>
 #include <stdbool.h>
@@ -57,7 +58,6 @@ static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
 static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
 
 static measurement_pipeline_t measurement_pipeline;
-static void service_sweep_state_autosave(void);
 
 // SD card access was removed; configuration persists using internal flash only.
 
@@ -227,7 +227,7 @@ static THD_FUNCTION(Thread1, arg) {
     // plot trace and other indications as raster
     draw_all();
 #endif
-    service_sweep_state_autosave();
+    state_manager_service();
   }
 }
 
@@ -263,193 +263,6 @@ config_t config = {
 };
 
 properties_t current_props;
-
-// NanoVNA Default settings
-static const trace_t def_trace[TRACES_MAX] = { // enable, type, channel, smith format, scale, refpos
-    {TRUE, TRC_LOGMAG, 0, MS_RX, 10.0, NGRIDY - 1},
-    {TRUE, TRC_LOGMAG, 1, MS_REIM, 10.0, NGRIDY - 1},
-    {TRUE, TRC_SMITH, 0, MS_RX, 1.0, 0},
-    {TRUE, TRC_PHASE, 1, MS_REIM, 90.0, NGRIDY / 2}};
-
-static const marker_t def_markers[MARKERS_MAX] = {
-    {TRUE, 0, 10 * SWEEP_POINTS_MAX / 100 - 1, 0},
-#if MARKERS_MAX > 1
-    {FALSE, 0, 20 * SWEEP_POINTS_MAX / 100 - 1, 0},
-#endif
-#if MARKERS_MAX > 2
-    {FALSE, 0, 30 * SWEEP_POINTS_MAX / 100 - 1, 0},
-#endif
-#if MARKERS_MAX > 3
-    {FALSE, 0, 40 * SWEEP_POINTS_MAX / 100 - 1, 0},
-#endif
-#if MARKERS_MAX > 4
-    {FALSE, 0, 50 * SWEEP_POINTS_MAX / 100 - 1, 0},
-#endif
-#if MARKERS_MAX > 5
-    {FALSE, 0, 60 * SWEEP_POINTS_MAX / 100 - 1, 0},
-#endif
-#if MARKERS_MAX > 6
-    {FALSE, 0, 70 * SWEEP_POINTS_MAX / 100 - 1, 0},
-#endif
-#if MARKERS_MAX > 7
-    {FALSE, 0, 80 * SWEEP_POINTS_MAX / 100 - 1, 0},
-#endif
-};
-
-// Load propeties default settings
-static void load_default_properties(void) {
-  // Magic add on caldata_save
-  current_props.magic = PROPERTIES_MAGIC;
-  current_props._frequency0 = 50000;      // start =  50kHz
-  current_props._frequency1 = 2700000000U; // end   = 2.7GHz
-  current_props._var_freq = 0;
-  current_props._sweep_points = POINTS_COUNT_DEFAULT;     // Set default points count
-  current_props._cal_frequency0 = 50000;                  // calibration start =  50kHz
-  current_props._cal_frequency1 = 2700000000U;            // calibration end   = 2.7GHz
-  current_props._cal_sweep_points = POINTS_COUNT_DEFAULT; // Set calibration default points count
-  current_props._cal_status = 0;
-  //=============================================
-  memcpy(current_props._trace, def_trace, sizeof(def_trace));
-  memcpy(current_props._markers, def_markers, sizeof(def_markers));
-  //=============================================
-  current_props._electrical_delay[0] = 0.0f;
-  current_props._electrical_delay[1] = 0.0f;
-  current_props._var_delay = 0.0f;
-  current_props._s21_offset = 0.0f;
-  current_props._portz = 50.0f;
-  current_props._cal_load_r = 50.0f;
-  current_props._velocity_factor = 70;
-  current_props._current_trace = 0;
-  current_props._active_marker = 0;
-  current_props._previous_marker = MARKER_INVALID;
-  current_props._mode = 0;
-  current_props._reserved = 0;
-  current_props._power = SI5351_CLK_DRIVE_STRENGTH_AUTO;
-  current_props._cal_power = SI5351_CLK_DRIVE_STRENGTH_AUTO;
-  current_props._measure = 0;
-  // This data not loaded by default
-  // current_props._cal_data[5][POINTS_COUNT][2];
-  // Checksum add on caldata_save
-  // current_props.checksum = 0;
-}
-
-#define SWEEP_STATE_AUTOSAVE_DELAY   MS2ST(750)
-#define SWEEP_STATE_AUTOSAVE_MIN_GAP S2ST(3)
-
-static bool sweep_state_dirty = false;
-static systime_t sweep_state_deadline = 0;
-static systime_t sweep_state_last_save = 0;
-
-static inline uint16_t active_calibration_slot(void) {
-  uint16_t slot = lastsaveid;
-  if (slot == NO_SAVE_SLOT || slot >= SAVEAREA_MAX) {
-    slot = 0;
-  }
-  return slot;
-}
-
-static void schedule_sweep_state_autosave(void) {
-  sweep_state_dirty = true;
-  sweep_state_deadline = chVTGetSystemTimeX() + SWEEP_STATE_AUTOSAVE_DELAY;
-}
-
-void persist_user_settings_to_flash(void) {
-  caldata_save(active_calibration_slot());
-  sweep_state_dirty = false;
-  sweep_state_last_save = chVTGetSystemTimeX();
-}
-
-static void service_sweep_state_autosave(void) {
-  if (!VNA_MODE(VNA_MODE_BACKUP)) {
-    return;
-  }
-  if (!sweep_state_dirty) {
-    return;
-  }
-  const systime_t now = chVTGetSystemTimeX();
-  if ((int32_t)(now - sweep_state_deadline) < 0) {
-    return;
-  }
-  if ((int32_t)(now - sweep_state_last_save) < (int32_t)SWEEP_STATE_AUTOSAVE_MIN_GAP) {
-    return;
-  }
-  persist_user_settings_to_flash();
-}
-
-//
-// Backup registers support, allow save data on power off (while vbat power enabled)
-//
-#ifdef __USE_BACKUP__
-#if SWEEP_POINTS_MAX > 511 || SAVEAREA_MAX > 15
-#error "Check backup data limits!!"
-#endif
-
-// backup_0 bitfield
-typedef union {
-  struct {
-    uint32_t points : 9;     //  9 !! limit 511 points!!
-    uint32_t bw : 9;         // 18 !! limit 511
-    uint32_t id : 4;         // 22 !! 15 save slots
-    uint32_t leveler : 3;    // 25
-    uint32_t brightness : 7; // 32
-  };
-  uint32_t v;
-} backup_0;
-
-void update_backup_data(void) {
-  backup_0 bk = {.points = sweep_points,
-                 .bw = config._bandwidth,
-                 .id = lastsaveid,
-                 .leveler = lever_mode,
-                 .brightness = config._brightness};
-  set_backup_data32(0, bk.v);
-  set_backup_data32(1, frequency0);
-  set_backup_data32(2, frequency1);
-  set_backup_data32(3, var_freq);
-  set_backup_data32(4, config._vna_mode);
-}
-
-static void load_settings(void) {
-  load_default_properties(); // Load default settings
-  if (config_recall() == 0 &&
-      VNA_MODE(VNA_MODE_BACKUP)) { // Config loaded ok and need restore backup if enabled
-    backup_0 bk = {.v = get_backup_data32(0)};
-    if (bk.v != 0) {                                            // if backup data valid
-      if (bk.id < SAVEAREA_MAX && caldata_recall(bk.id) == 0) { // Slot valid and Load ok
-        sweep_points = bk.points; // Restore settings depend from calibration data
-        frequency0 = get_backup_data32(1);
-        frequency1 = get_backup_data32(2);
-        var_freq = get_backup_data32(3);
-      } else
-        caldata_recall(0);
-      // Here need restore settings not depend from cal data
-      config._brightness = bk.brightness;
-      lever_mode = bk.leveler;
-      // Check if backup data is valid before restoring VNA mode flags
-      uint32_t backup_mode = get_backup_data32(4);
-      if (backup_mode != 0xFFFFFFFF) {  // Check if flash is uninitialized
-        config._vna_mode = backup_mode | (1 << VNA_MODE_BACKUP); // restore backed up mode flags
-      } else {
-        // Keep default values but ensure BACKUP flag remains enabled
-        config._vna_mode |= (1 << VNA_MODE_BACKUP);
-      }
-      set_bandwidth(bk.bw);
-    } else
-      caldata_recall(0); // Try load 0 slot
-  } else
-    caldata_recall(0); // Try load 0 slot
-  app_measurement_update_frequencies();
-#ifdef __VNA_MEASURE_MODULE__
-  plot_set_measure_mode(current_props._measure);
-#endif
-}
-#else
-static void load_settings(void) {
-  load_default_properties();
-  config_recall();
-  load_properties(0);
-}
-#endif
 
 int load_properties(uint32_t id) {
   int r = caldata_recall(id);
@@ -671,7 +484,7 @@ VNA_SHELL_FUNCTION(cmd_saveconfig) {
   (void)argc;
   (void)argv;
   config_save();
-  persist_user_settings_to_flash();
+  state_manager_force_save();
   shell_printf("Config saved" VNA_SHELL_NEWLINE_STR);
 }
 
@@ -903,7 +716,7 @@ void set_sweep_points(uint16_t points) {
   sweep_points = points;
   app_measurement_update_frequencies();
   update_backup_data();
-  schedule_sweep_state_autosave();
+  state_manager_mark_dirty();
 }
 
 /*
@@ -1187,7 +1000,7 @@ static void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforc
   }
   app_measurement_update_frequencies();
   update_backup_data();
-  schedule_sweep_state_autosave();
+  state_manager_mark_dirty();
 }
 
 void set_sweep_frequency(uint16_t type, freq_t freq) {
@@ -1200,7 +1013,7 @@ void reset_sweep_frequency(void) {
   sweep_points = cal_sweep_points;
   app_measurement_update_frequencies();
   update_backup_data();
-  schedule_sweep_state_autosave();
+  state_manager_mark_dirty();
 }
 
 VNA_SHELL_FUNCTION(cmd_sweep) {
@@ -2676,7 +2489,7 @@ int app_main(void) {
   /*
    * restore config and calibration 0 slot from flash memory, also if need use backup data
    */
-  load_settings();
+  state_manager_init();
 
 #ifdef USE_VARIABLE_OFFSET
   si5351_set_frequency_offset(IF_OFFSET);

@@ -30,6 +30,7 @@
 #include "hal.h"
 #include "chprintf.h"
 #include "nanovna.h"
+#include "system/state_manager.h"
 
 // Icons bitmap resources
 #include "../resources/icons/icons_marker.c"

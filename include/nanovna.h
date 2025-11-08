@@ -341,7 +341,6 @@ void toggle_sweep(void);
 int  load_properties(uint32_t id);
 
 #ifdef __USE_BACKUP__
-void update_backup_data(void);
 #endif
 
 void set_sweep_points(uint16_t points);
