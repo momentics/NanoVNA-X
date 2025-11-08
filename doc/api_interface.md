@@ -9,7 +9,7 @@ NanoVNA-X exposes a USB CDC ACM interface implemented by the ChibiOS serial-over
 | 0x81     | IN        | Bulk      | 64 bytes   | Device-to-host replies and data |
 | 0x82     | IN        | Interrupt | 8 bytes    | CDC notification endpoint |
 
-The device strings identify the manufacturer, the product as the configured NanoVNA model, and the serial number is derived from the MCU unique ID by default (it can be disabled from Config → Mode → *USB DEVICE UID* for legacy workflows).
+The device strings identify the manufacturer, the product as the configured NanoVNA model, and the serial number is derived from the MCU unique ID by default (it can be disabled from System -> Device -> MORE -> *USB DEVICE UID* for legacy workflows).
 
 ## 2. Session framing
 The USB CDC link presents itself as a virtual serial port. No manual baud-rate configuration is required, but ASCII commands and responses are framed by carriage return + line feed (`\r\n`). The firmware echoes user input and displays the prompt `ch> ` when it is ready to accept a command. Upon connection the initial bytes are `\r\nch> \r\nNanoVNA Shell\r\nch> ` so that host auto-detection logic can key off the prompt before reading the banner text.
@@ -32,7 +32,7 @@ When a command modifies sweep settings it typically pauses generation, performs 
 
 The `system/state_manager` layer owns sweep/GUI persistence:
 
-* When `REMEMBER STATE` (Config → Expert Settings) is on, edits to sweep points, start/stop limits, brightness, lever mode, and the active calibration slot are staged in RAM and automatically written back to flash a short time after the last change.
+* When `REMEMBER STATE` (System -> Device) is on, edits to sweep points, start/stop limits, brightness, lever mode, and the active calibration slot are staged in RAM and automatically written back to flash a short time after the last change.
 * Issuing `saveconfig` or selecting **SAVE CONFIG** in the UI forces both the configuration block and any pending autosave data to be committed immediately. Hosts that modify sweep settings via USB should either wait for the prompt plus ~1 second or explicitly call `saveconfig` to guarantee persistence.
 * Autosaves target the currently-selected calibration slot (`lastsaveid`, default slot 0). This mirrors the on-device workflow: changing the active slot with `recall` also changes where subsequent autosaves land.
 

@@ -41,7 +41,7 @@ similar.
 
 - **Predictable, event-driven architecture.** The sweep engine, UI, USB CDC shell, and measurement DSP cooperate through the ChibiOS event bus and watchdog-guarded timeouts. A hung codec, synthesiser, or PC host can no longer freeze the instrument mid-calibration.
 - **Measurement-focused DMA budget.** SPI LCD transfers and TLV320 I²S captures use DMA, while the UART console was intentionally moved to an IRQ driver so that DMA channels are always available for RF data paths.
-- **Unique USB identity by default.** Every unit now enumerates with a serial number derived from its MCU unique ID (Config → Mode → *USB DEVICE UID* still allows opting out for legacy workflows).
+- **Unique USB identity by default.** Every unit now enumerates with a serial number derived from its MCU unique ID (System -> Device -> MORE -> *USB DEVICE UID* still allows opting out for legacy workflows).
 
 ## Improvements
 The firmware has undergone significant re-architecture and stabilization since the [@DiSlord](https://github.com/DiSlord/) release, focusing on responsiveness, standalone usability, and performance on memory-constrained hardware.
@@ -216,7 +216,7 @@ for a breakdown of which artefact to use with DFU, SWD, or debugging tools.
 Place the device into DFU mode using one of the following methods:
 
 * Open the device and jumper `BOOT0` pin to `Vdd` when powering the device.
-* Select menu Config → DFU (requires recent firmware).
+* Select menu System -> Device -> DFU (requires recent firmware).
 * Press the jog switch on your H4 while powering the device.
 
 Then flash the binary generated in the previous step:
@@ -242,6 +242,7 @@ There are several numbers of great companion PC tools from third-party.
 
 ## Documentation
 
+* [NanoVNA-X menu structure](doc/menu_structure.md)
 * [NanoVNA-X menu & user workflow reference](doc/menu_and_user_guide.md)
 * [NanoVNA User Guide(ja)](https://cho45.github.io/NanoVNA-manual/) by cho45. [(en:google translate)](https://translate.google.com/translate?sl=ja&tl=en&u=https%3A%2F%2Fcho45.github.io%2FNanoVNA-manual%2F)
 * [NanoVNA user group](https://groups.io/g/nanovna-users/topics) on groups.io.
