@@ -225,7 +225,7 @@ There are several numbers of great companion PC tools from third-party.
 
 * [GoVNA](https://github.com/momentics/GoVNA): A robust and secure Go library for controlling NanoVNA vector network analyzers. Features multi-protocol support (V1, V2/LiteVNA), automatic device detection, and optimized for high-performance server-side applications.
 * [PyVNA](https://github.com/momentics/PyVNA): Multi-protocol Python library for NanoVNA V1/V2/LiteVNA, derived from GoVNA for high performance & secure server-side applications. Supports auto-detection, robust device pooling, and comprehensive data handling.
-* [NanoVNA-App software](https://github.com/OneOfEleven/NanoVNA-H/blob/master/Release/NanoVNA-App.rar) by OneOfEleven
+* [NanoVNA-App software](https://github.com/OneOfEleven/NanoVNA-App) by OneOfEleven
 
 ## Documentation
 

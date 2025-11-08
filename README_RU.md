@@ -173,7 +173,7 @@ make flash
 
 * [GoVNA](https://github.com/momentics/GoVNA): Надёжная и безопасная библиотека Go для управления векторными анализаторами цепей NanoVNA. Поддерживаются несколько протоколов (V1, V2/LiteVNA), автоматическое определение устройств и оптимизирована для высокопроизводительных серверных приложений.
 * [PyVNA](https://github.com/momentics/PyVNA): Многопротокольная библиотека Python для NanoVNA V1/V2/LiteVNA, созданная на основе GoVNA для высокопроизводительных и безопасных серверных приложений. Поддерживает автоматическое определение, надёжное объединение устройств в пул и комплексную обработку данных.
-* [NanoVNA-App software](https://github.com/OneOfEleven/NanoVNA-H/blob/master/Release/NanoVNA-App.rar) от OneOfEleven
+* [NanoVNA-App software](https://github.com/OneOfEleven/NanoVNA-App) от OneOfEleven
 
 ## Документация
 
