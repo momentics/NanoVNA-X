@@ -59,6 +59,10 @@ static uint8_t sweep_bar_pending = 0;
 static uint8_t smooth_factor = 0;
 static void (*sample_func)(float* gamma) = calculate_gamma;
 
+static inline bool sweep_ui_input_pending(void) {
+  return (operation_requested & (OP_TOUCH | OP_LEVER)) != 0;
+}
+
 #ifdef __USE_FREQ_TABLE__
 static freq_t frequencies[SWEEP_POINTS_MAX];
 #else
@@ -154,6 +158,9 @@ static void sweep_progress_end(void) {
 static inline uint16_t sweep_points_budget(bool break_on_operation) {
   if (!break_on_operation) {
     return UINT16_MAX;
+  }
+  if (sweep_ui_input_pending()) {
+    return 1U;
   }
   if (config._bandwidth <= BANDWIDTH_100) {
     return 4U;
@@ -506,6 +513,9 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
 
   for (; p_sweep < sweep_points; p_sweep++) {
     if (processed >= batch_budget) {
+      break;
+    }
+    if (break_on_operation && sweep_ui_input_pending()) {
       break;
     }
     freq_t frequency = get_frequency(p_sweep);
