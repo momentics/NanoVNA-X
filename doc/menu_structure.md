@@ -75,5 +75,14 @@
     - CLEAR CONFIG -> CLEAR ALL AND RESET
 - CONNECTION `[__USE_SERIAL_CONSOLE__]` -> toggle USB/UART, set serial speed
 
+## SD CARD
+- LOAD `[__SD_FILE_BROWSER__]` -> open browser filtered by extension (SCREENSHOT, S1P, S2P, CAL)
+- SAVE S1P -> dump CH0 data to an S1P file
+- SAVE S2P -> dump both channels to an S2P file
+- SCREENSHOT -> capture the active LCD image (BMP or TIFF depending on the IMAGE FORMAT toggle)
+- SAVE CALIBRATION -> write the current calibration set to the card
+- IMAGE FORMAT `[__SD_CARD_DUMP_TIFF__]` -> toggles between `BMP` and `TIF`
+- FORMAT SD `[FF_USE_MKFS]` -> unmount, run FatFs mkfs (`FM_FAT`), remount, and report the outcome
+
 ## Sweep control
 - `%s SWEEP` button reflects the sweep state (`PAUSE SWEEP` or `RESUME SWEEP`) and immediately toggles the background sweep engine.

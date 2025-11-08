@@ -35,13 +35,14 @@ similar.
 
 - Profound thanks to [@DiSlord](https://github.com/DiSlord/) for the original firmware text and the foundations that significantly inspired and enabled the start of this new firmware project.
 - This firmware evolves rapidly and, with each daily change, diverges further from the original implementation.
-- The original codebase was exceptionally feature‑rich; to make ongoing development feasible, the SD subsystem has been temporarily removed to reduce complexity and unblock core refactoring. The SD subsystem will return once the key features are implemented as originally envisioned and the architecture is ready to support it cleanly.
+- The original codebase was exceptionally feature‑rich; NanoVNA‑X keeps the proven UX while modernising the architecture, and the SD subsystem is now fully integrated again (S‑parameter capture, screenshots, firmware dumps, command scripts, and on-device formatting).
 
 ## What Makes NanoVNA-X Different
 
 - **Predictable, event-driven architecture.** The sweep engine, UI, USB CDC shell, and measurement DSP cooperate through the ChibiOS event bus and watchdog-guarded timeouts. A hung codec, synthesiser, or PC host can no longer freeze the instrument mid-calibration.
 - **Measurement-focused DMA budget.** SPI LCD transfers and TLV320 I²S captures use DMA, while the UART console was intentionally moved to an IRQ driver so that DMA channels are always available for RF data paths.
 - **Unique USB identity by default.** Every unit now enumerates with a serial number derived from its MCU unique ID (System -> Device -> MORE -> *USB DEVICE UID* still allows opting out for legacy workflows).
+- **Integrated SD workflow.** The internal micro-SD slot supports calibration slots, S1P/S2P exports, BMP or compact RLE-TIFF screenshots, firmware dumps, scripted command playback, and a deterministic `FORMAT SD` routine that uses FatFs mkfs parameters aligned with Keysight/R&S service practices.
 
 ## Improvements
 The firmware has undergone significant re-architecture and stabilization since the [@DiSlord](https://github.com/DiSlord/) release, focusing on responsiveness, standalone usability, and performance on memory-constrained hardware.
@@ -60,6 +61,16 @@ The core of the firmware was reworked from blocking calls to a fully asynchronou
     *   **LCD Interface (SPI):** Ensures smooth, high-speed UI and graph rendering.
     *   **Measurement Pipeline (I²S):** Guarantees sample delivery from the codec without dropping data.
     *   To free up DMA channels for these critical tasks, the **UART console was intentionally moved to a non-DMA, interrupt-driven driver.** This prevents resource conflicts and prioritizes measurement integrity.
+
+### Sweep Throughput (STM32F072 reference)
+Measured on production NanoVNA-H hardware with a 401-point sweep:
+
+| Scenario | Effective throughput |
+| --- | --- |
+| 50 kHz–900 MHz span without harmonic retune breaks | 138–142 points per second (variance stems from Si5351 PLL settling time). |
+| 50 kHz–2.7 GHz full span with harmonic retunes (50–300 / 300–600 / 600–900 MHz fundamental bands plus harmonic hops) | 165–172 points per second thanks to the pipelined sweep engine and optimised IF bandwidth scheduling. |
+
+STM32F303-based NanoVNA-H4 units benefit from the larger SRAM pool and typically exceed these numbers, but the F072 figures above define the guaranteed baseline for field deployments.
 
 ### New Features and Capabilities
 * **PLL Stabilization:** The Si5351 synthesizer programming sequence was optimized to reduce frequency overshoot and drift, improving measurement repeatability, especially at the start of a sweep.

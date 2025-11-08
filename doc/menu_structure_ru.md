@@ -73,5 +73,14 @@
     - CLEAR CONFIG -> CLEAR ALL AND RESET
 - CONNECTION `[__USE_SERIAL_CONSOLE__]` -> выбор интерфейса (USB/UART) и скорости
 
+## SD CARD
+- LOAD `[__SD_FILE_BROWSER__]` -> файловый браузер с фильтрацией по расширению (SCREENSHOT, S1P, S2P, CAL)
+- SAVE S1P -> запись S-параметров CH0 в файл S1P
+- SAVE S2P -> запись обоих каналов в S2P
+- SCREENSHOT -> снимок экрана (BMP или TIFF в зависимости от переключателя IMAGE FORMAT)
+- SAVE CALIBRATION -> сохранение активного набора калибровки на карту
+- IMAGE FORMAT `[__SD_CARD_DUMP_TIFF__]` -> переключение между `BMP` и `TIF`
+- FORMAT SD `[FF_USE_MKFS]` -> размонтирование, запуск FatFs mkfs (`FM_FAT`), повторное монтирование и отчет о результате
+
 ## Управление свипом
 - Кнопка `%s SWEEP` отображает текущее состояние («PAUSE SWEEP»/«RESUME SWEEP») и немедленно переключает движок свипа.

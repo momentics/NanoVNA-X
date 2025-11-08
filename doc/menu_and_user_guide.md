@@ -17,6 +17,7 @@ This guide documents the on-device menu tree implemented in the current NanoVNA-
 | **DISPLAY** | Trace visibility, formats, scaling, and marker operations. |
 | **MEASURE** | DSP helpers (transform, smoothing), IF bandwidth, measurement assistants. |
 | **SYSTEM** | Touch utilities, configuration persistence, RTC, and hardware settings. |
+| **SD CARD** | Removable-media workflows: save/load, screenshots, firmware dumps, and card maintenance. |
 | **PAUSE/RESUME SWEEP** | Toggles the continuous sweep engine (`PAUSE` while running, `RESUME` once halted). |
 
 ---
@@ -100,6 +101,15 @@ This menu consolidates DSP helpers and measurement assistants.
     * `USB DEVICE UID` *(with `__USB_UID__`)* — toggle use of the MCU unique ID for USB enumeration.
     * `CLEAR CONFIG` -> contains `CLEAR ALL AND RESET`, which wipes flash-stored configuration.
 * `CONNECTION` *(with `__USE_SERIAL_CONSOLE__`)* — switch the shell transport between USB CDC and the UART bridge; select the UART bit rate.
+
+## SD CARD menu
+
+* `LOAD` *(with `__SD_FILE_BROWSER__`)* — opens the browser filtered by extension (`SCREENSHOT`, `S1P`, `S2P`, `CAL`) so you can load screenshots, Touchstone files, or calibration sets directly on the instrument.
+* `SAVE S1P` / `SAVE S2P` — capture the current sweep into S1P or S2P using calibrated data.
+* `SCREENSHOT` — dumps the LCD as BMP or (when `IMAGE FORMAT` is set to `TIF`) as a compact PackBits-compressed TIFF.
+* `SAVE CALIBRATION` — copies the active calibration to the SD card for archival or transfer.
+* `IMAGE FORMAT` *(with `__SD_CARD_DUMP_TIFF__`)* — toggles the screenshot container between BMP and TIF.
+* `FORMAT SD` *(with `FF_USE_MKFS`)* — unmounts the card, runs FatFs `f_mkfs` with `FM_FAT`, remounts, and reports success/failure. Use this when a card was re-partitioned externally or you need a clean Keysight-style single-volume layout.
 
 ## Sweep control button
 
