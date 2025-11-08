@@ -852,6 +852,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_traces_acb) {
 
 extern const menuitem_t menu_marker_s11smith[];
 extern const menuitem_t menu_marker_s21smith[];
+extern const menuitem_t menu_marker[];
 static uint8_t get_smith_format(void) {
   return (current_trace != TRACE_INVALID) ? trace[current_trace].smith_format : 0;
 }
@@ -1562,18 +1563,31 @@ const menuitem_t menu_power[] = {
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
-const menuitem_t menu_cal[] = {
-    {MT_SUBMENU, 0, "CALIBRATE", menu_calop},
-    {MT_ADV_CALLBACK, 0, "POWER  AUTO", menu_power_sel_acb},
-    {MT_SUBMENU, 0, "SAVE", menu_save},
-    {MT_ADV_CALLBACK, 0, "RANGE", menu_cal_range_acb},
-    {MT_CALLBACK, 0, "RESET", menu_cal_reset_cb},
-    {MT_ADV_CALLBACK, 0, "APPLY", menu_cal_apply_acb},
+const menuitem_t menu_cal_flow[] = {
+    {MT_SUBMENU, 0, "MECH CAL", menu_calop},
+    {MT_ADV_CALLBACK, 0, "CAL RANGE", menu_cal_range_acb},
+    {MT_ADV_CALLBACK, 0, "CAL POWER", menu_power_sel_acb},
+    {MT_SUBMENU, 0, "SAVE CAL", menu_save},
+    {MT_ADV_CALLBACK, 0, "CAL APPLY", menu_cal_apply_acb},
     {MT_ADV_CALLBACK, 0, "ENHANCED\nRESPONSE", menu_cal_enh_acb},
 #ifdef __VNA_Z_RENORMALIZATION__
-    {MT_ADV_CALLBACK, KM_CAL_LOAD_R, "STANDARD\nLOAD R " R_LINK_COLOR "%bF" S_OHM,
-     menu_keyboard_acb},
+    {MT_ADV_CALLBACK, KM_CAL_LOAD_R, "LOAD STD\n " R_LINK_COLOR "%bF" S_OHM, menu_keyboard_acb},
 #endif
+    {MT_CALLBACK, 0, "CAL RESET", menu_cal_reset_cb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+
+const menuitem_t menu_state_io[] = {
+    {MT_SUBMENU, 0, "SAVE CAL", menu_save},
+    {MT_SUBMENU, 0, "RECALL CAL", menu_recall},
+    {MT_ADV_CALLBACK, 0, "CAL APPLY", menu_cal_apply_acb},
+    {MT_CALLBACK, 0, "CAL RESET", menu_cal_reset_cb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+
+const menuitem_t menu_cal_menu[] = {
+    {MT_SUBMENU, 0, "MECH CAL", menu_cal_flow},
+    {MT_SUBMENU, 0, "SAVE/RECALL", menu_state_io},
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
@@ -1723,16 +1737,24 @@ const menuitem_t menu_smooth_count[] = {
 #endif
 
 const menuitem_t menu_display[] = {
-    {MT_ADV_CALLBACK, 0, "TRACE", menu_traces_acb},
-    {MT_SUBMENU, 0, "FORMAT\n S11 (REFL)", menu_formatS11},
-    {MT_SUBMENU, 0, "FORMAT\n S21 (THRU)", menu_formatS21},
+    {MT_ADV_CALLBACK, 0, "TRACES", menu_traces_acb},
+    {MT_SUBMENU, 0, "FORMAT\nS11", menu_formatS11},
+    {MT_SUBMENU, 0, "FORMAT\nS21", menu_formatS21},
     {MT_ADV_CALLBACK, 0, "CHANNEL\n " R_LINK_COLOR "%s", menu_channel_acb},
     {MT_SUBMENU, 0, "SCALE", menu_scale},
+    {MT_SUBMENU, 0, "MARKERS", menu_marker},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+
+const menuitem_t menu_measure_tools[] = {
     {MT_SUBMENU, 0, "TRANSFORM", menu_transform},
-    {MT_ADV_CALLBACK, 0, "IF BANDWIDTH\n " R_LINK_COLOR "%u" S_Hz, menu_bandwidth_sel_acb},
 #ifdef __USE_SMOOTH__
-    {MT_SUBMENU, 0, "DATA SMOOTH", menu_smooth_count},
+    {MT_SUBMENU, 0, "DATA\nSMOOTH", menu_smooth_count},
 #endif
+#ifdef __VNA_MEASURE_MODULE__
+    {MT_CALLBACK, 0, "MEASURE", menu_measure_cb},
+#endif
+    {MT_ADV_CALLBACK, 0, "IF BANDWIDTH\n " R_LINK_COLOR "%u" S_Hz, menu_bandwidth_sel_acb},
 #ifdef __VNA_Z_RENORMALIZATION__
     {MT_ADV_CALLBACK, KM_Z_PORT, "PORT-Z\n " R_LINK_COLOR "50 " S_RARROW " %bF" S_OHM,
      menu_keyboard_acb},
@@ -1766,7 +1788,23 @@ const menuitem_t menu_stimulus[] = {
     {MT_ADV_CALLBACK, KM_CW, "CW FREQ", menu_keyboard_acb},
     {MT_ADV_CALLBACK, KM_STEP, "FREQ STEP\n " R_LINK_COLOR "%bF" S_Hz, menu_keyboard_acb},
     {MT_ADV_CALLBACK, KM_VAR, "JOG STEP\n " R_LINK_COLOR "AUTO", menu_keyboard_acb},
-    {MT_ADV_CALLBACK, 0, "SWEEP POINTS\n " R_LINK_COLOR "%u", menu_points_sel_acb},
+    {MT_ADV_CALLBACK, KM_POINTS, "SET POINTS\n " R_LINK_COLOR "%d", menu_keyboard_acb},
+#if POINTS_SET_COUNT > 0
+    {MT_ADV_CALLBACK, 0, "%d PTS", menu_points_acb},
+#endif
+#if POINTS_SET_COUNT > 1
+    {MT_ADV_CALLBACK, 1, "%d PTS", menu_points_acb},
+#endif
+#if POINTS_SET_COUNT > 2
+    {MT_ADV_CALLBACK, 2, "%d PTS", menu_points_acb},
+#endif
+#if POINTS_SET_COUNT > 3
+    {MT_ADV_CALLBACK, 3, "%d PTS", menu_points_acb},
+#endif
+#if POINTS_SET_COUNT > 4
+    {MT_ADV_CALLBACK, 4, "%d PTS", menu_points_acb},
+#endif
+    {MT_ADV_CALLBACK, 0, "MORE PTS\n " R_LINK_COLOR "%u", menu_points_sel_acb},
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
@@ -1795,15 +1833,6 @@ const menuitem_t menu_marker_sel[] = {
 #endif
     {MT_CALLBACK, 0, "ALL OFF", menu_marker_disable_all_cb},
     {MT_ADV_CALLBACK, 0, "DELTA", menu_marker_delta_acb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
-
-const menuitem_t menu_marker_ops[] = {
-    {MT_CALLBACK, ST_START, S_RARROW " START", menu_marker_op_cb},
-    {MT_CALLBACK, ST_STOP, S_RARROW " STOP", menu_marker_op_cb},
-    {MT_CALLBACK, ST_CENTER, S_RARROW " CENTER", menu_marker_op_cb},
-    {MT_CALLBACK, ST_SPAN, S_RARROW " SPAN", menu_marker_op_cb},
-    {MT_CALLBACK, UI_MARKER_EDELAY, S_RARROW " E-DELAY", menu_marker_op_cb},
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
@@ -1920,11 +1949,16 @@ const menuitem_t* menu_measure_list[] = {
 
 const menuitem_t menu_marker[] = {
     {MT_SUBMENU, 0, "SELECT\nMARKER", menu_marker_sel},
+    {MT_ADV_CALLBACK, 0, "TRACKING", menu_marker_tracking_acb},
     {MT_ADV_CALLBACK, VNA_MODE_SEARCH, "SEARCH\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
     {MT_CALLBACK, MK_SEARCH_LEFT, "SEARCH\n " S_LARROW "LEFT", menu_marker_search_dir_cb},
     {MT_CALLBACK, MK_SEARCH_RIGHT, "SEARCH\n " S_RARROW "RIGHT", menu_marker_search_dir_cb},
-    {MT_SUBMENU, 0, "OPERATIONS", menu_marker_ops},
-    {MT_ADV_CALLBACK, 0, "TRACKING", menu_marker_tracking_acb},
+    {MT_CALLBACK, ST_START, "MOVE\nSTART", menu_marker_op_cb},
+    {MT_CALLBACK, ST_STOP, "MOVE\nSTOP", menu_marker_op_cb},
+    {MT_CALLBACK, ST_CENTER, "MOVE\nCENTER", menu_marker_op_cb},
+    {MT_CALLBACK, ST_SPAN, "MOVE\nSPAN", menu_marker_op_cb},
+    {MT_CALLBACK, UI_MARKER_EDELAY, "MARKER\nE-DELAY", menu_marker_op_cb},
+    {MT_ADV_CALLBACK, 0, "DELTA", menu_marker_delta_acb},
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
@@ -2031,34 +2065,30 @@ const menuitem_t menu_device[] = {
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
-const menuitem_t menu_config[] = {
+const menuitem_t menu_system[] = {
     {MT_CALLBACK, MENU_CONFIG_TOUCH_CAL, "TOUCH CAL", menu_config_cb},
     {MT_CALLBACK, MENU_CONFIG_TOUCH_TEST, "TOUCH TEST", menu_config_cb},
-    {MT_SUBMENU, 0, "EXPERT\nSETTINGS", menu_device},
-    {MT_CALLBACK, MENU_CONFIG_SAVE, "SAVE CONFIG", menu_config_cb},
-#ifdef __USE_SERIAL_CONSOLE__
-    {MT_SUBMENU, 0, "CONNECTION", menu_connection},
-#endif
-    {MT_CALLBACK, MENU_CONFIG_VERSION, "VERSION", menu_config_cb},
 #ifdef __LCD_BRIGHTNESS__
     {MT_ADV_CALLBACK, 0, "BRIGHTNESS\n " R_LINK_COLOR "%d%%%%", menu_brightness_acb},
 #endif
+    {MT_CALLBACK, MENU_CONFIG_SAVE, "SAVE CONFIG", menu_config_cb},
+    {MT_CALLBACK, MENU_CONFIG_VERSION, "VERSION", menu_config_cb},
 #ifdef __USE_RTC__
     {MT_SUBMENU, 0, "DATE/TIME", menu_rtc},
+#endif
+    {MT_SUBMENU, 0, "DEVICE", menu_device},
+#ifdef __USE_SERIAL_CONSOLE__
+    {MT_SUBMENU, 0, "CONNECTION", menu_connection},
 #endif
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
 const menuitem_t menu_top[] = {
-    {MT_SUBMENU, 0, "DISPLAY", menu_display},
-    {MT_SUBMENU, 0, "MARKER", menu_marker},
+    {MT_SUBMENU, 0, "CAL", menu_cal_menu},
     {MT_SUBMENU, 0, "STIMULUS", menu_stimulus},
-    {MT_SUBMENU, 0, "CALIBRATE", menu_cal},
-    {MT_SUBMENU, 0, "RECALL", menu_recall},
-#ifdef __VNA_MEASURE_MODULE__
-    {MT_CALLBACK, 0, "MEASURE", menu_measure_cb},
-#endif
-    {MT_SUBMENU, 0, "CONFIG", menu_config},
+    {MT_SUBMENU, 0, "DISPLAY", menu_display},
+    {MT_SUBMENU, 0, "MEASURE", menu_measure_tools},
+    {MT_SUBMENU, 0, "SYSTEM", menu_system},
     {MT_ADV_CALLBACK, 0, "%s\nSWEEP", menu_pause_acb},
     {MT_NEXT, 0, NULL, NULL} // sentinel
 };
