@@ -1047,6 +1047,9 @@ const vna_mode_data_t vna_mode_data[] = {
 #ifdef __DIGIT_SEPARATOR__
     [VNA_MODE_SEPARATOR] = {"DOT '.'\0COMMA ','", REDRAW_BACKUP | REDRAW_MARKER | REDRAW_FREQUENCY},
 #endif
+#ifdef __SD_CARD_DUMP_TIFF__
+    [VNA_MODE_TIFF] = {"BMP\0TIF", REDRAW_BACKUP},
+#endif
 #ifdef __USB_UID__
     [VNA_MODE_USB_UID] = {0, REDRAW_BACKUP},
 #endif
