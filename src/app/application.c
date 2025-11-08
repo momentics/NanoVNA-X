@@ -192,7 +192,7 @@ static void schedule_battery_redraw(void) {
   request_to_redraw(REDRAW_BATTERY);
 }
 
-static THD_WORKING_AREA(waThread1, 1024);
+static THD_WORKING_AREA(waThread1, 768);
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
   chRegSetThreadName("sweep");
@@ -675,11 +675,17 @@ void set_bandwidth(uint16_t bw_count) {
   update_backup_data();
 }
 
+#ifdef __LCD_BRIGHTNESS__
 void set_brightness(uint8_t brightness) {
   config._brightness = brightness;
   lcd_set_brightness(brightness);
   update_backup_data();
 }
+#else
+void set_brightness(uint8_t brightness) {
+  (void)brightness;
+}
+#endif
 
 uint32_t get_bandwidth_frequency(uint16_t bw_freq) {
   return (AUDIO_ADC_FREQ / AUDIO_SAMPLES_COUNT) / (bw_freq + 1);

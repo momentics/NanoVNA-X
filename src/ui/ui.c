@@ -1680,81 +1680,113 @@ static FILE_SAVE_CALLBACK(save_tiff) {
   (void)format;
   UINT size;
   uint16_t* buf_16 = (uint16_t*)spi_buffer;
+  char* buf_8;
   FRESULT res = f_write(f, tif_header, sizeof(tif_header), &size);
-  uint8_t bpp[] = {8, 8, 8};
-  res = f_write(f, bpp, sizeof(bpp), &size);
-  uint8_t strip[LCD_WIDTH * 3];
+  lcd_set_background(LCD_SWEEP_LINE_COLOR);
   for (int y = 0; y < LCD_HEIGHT && res == FR_OK; y++) {
+    buf_8 = (char*)buf_16 + 128;
     lcd_read_memory(0, y, LCD_WIDTH, 1, buf_16);
-    for (int x = 0; x < LCD_WIDTH * 3;) {
-      pixel_t c = buf_16[x / 3];
-      strip[x++] = (c >> 11) & 0x1F;
-      strip[x++] = (c >> 5) & 0x3F;
-      strip[x++] = c & 0x1F;
+    for (int x = LCD_WIDTH - 1; x >= 0; x--) {
+      uint16_t color = (buf_16[x] << 8) | (buf_16[x] >> 8);
+      buf_8[3 * x + 0] = (color >> 8) & 0xF8;
+      buf_8[3 * x + 1] = (color >> 3) & 0xFC;
+      buf_8[3 * x + 2] = (color << 3) & 0xF8;
     }
-    res = f_write(f, strip, sizeof(strip), &size);
+    size = packbits(buf_8, (char*)buf_16, LCD_WIDTH * 3);
+    res = f_write(f, buf_16, size, &size);
+    lcd_fill(LCD_WIDTH - 1, y, 1, 1);
   }
   return res;
 }
 
 static FILE_LOAD_CALLBACK(load_tiff) {
-  (void)f;
-  (void)fno;
   (void)format;
-  return "Unsupported";
+  UINT size;
+  uint8_t* buf_8 = (uint8_t*)spi_buffer;
+  uint16_t* buf_16 = (uint16_t*)spi_buffer;
+  FRESULT res = f_read(f, (void*)buf_16, sizeof(tif_header), &size);
+  if (res != FR_OK || buf_16[0] != 0x4949 || buf_16[9] != LCD_WIDTH || buf_16[15] != LCD_HEIGHT ||
+      buf_16[27] != TIFF_PACKBITS)
+    return "Format err";
+  for (int y = 0; y < LCD_HEIGHT && res == FR_OK; y++) {
+    for (int x = 0; x < LCD_WIDTH * 3;) {
+      int8_t data[2];
+      res = f_read(f, data, 2, &size);
+      int count = data[0];
+      buf_8[x++] = data[1];
+      if (count > 0) {
+        res = f_read(f, &buf_8[x], count, &size);
+        x += count;
+      } else
+        while (count++ < 0)
+          buf_8[x++] = data[1];
+    }
+    for (int x = 0; x < LCD_WIDTH; x++)
+      buf_16[x] = RGB565(buf_8[3 * x + 0], buf_8[3 * x + 1], buf_8[3 * x + 2]);
+    lcd_bulk(0, y, LCD_WIDTH, 1);
+  }
+  lcd_printf(0, LCD_HEIGHT - 3 * FONT_STR_HEIGHT, fno->fname);
+  return NULL;
 }
 #endif
 
 static FILE_SAVE_CALLBACK(save_cal) {
-  return caldata_save_to_file(f);
+  (void)format;
+  UINT size;
+  const char* src = (char*)&current_props;
+  const uint32_t total = sizeof(current_props);
+  return f_write(f, src, total, &size);
 }
 
 static FILE_LOAD_CALLBACK(load_cal) {
-  return caldata_recall_from_file(f, fno);
+  (void)format;
+  UINT size;
+  uint32_t magic;
+  char* src = (char*)&current_props + sizeof(magic);
+  uint32_t total = sizeof(current_props) - sizeof(magic);
+  if (fno->fsize != sizeof(current_props) || f_read(f, &magic, sizeof(magic), &size) != FR_OK ||
+      magic != PROPERTIES_MAGIC || f_read(f, src, total, &size) != FR_OK)
+    return "Format err";
+  load_properties(NO_SAVE_SLOT);
+  return NULL;
 }
 
 #ifdef __SD_CARD_DUMP_FIRMWARE__
-extern int save_range(const char* name, void* data, uint32_t length);
-
 static FILE_SAVE_CALLBACK(save_bin) {
   (void)format;
-  return save_firmware_to_sd(f);
+  UINT size;
+  const char* src = (const char*)FLASH_START_ADDRESS;
+  const uint32_t total = FLASH_TOTAL_SIZE;
+  return f_write(f, src, total, &size);
 }
 #endif
 
 #ifdef __SD_CARD_LOAD__
 static FILE_LOAD_CALLBACK(load_cmd) {
   (void)fno;
+  (void)format;
   UINT size;
-  char* buf = (char*)spi_buffer;
+  const int buffer_size = 256;
+  const int line_size = 128;
+  char* buf_8 = (char*)spi_buffer;
+  char* line = buf_8 + buffer_size;
   uint16_t j = 0, i;
-  bool last_was_cr = false;
-  while (f_read(f, buf, 512, &size) == FR_OK && size > 0) {
-    i = 0;
-    while (i < size) {
-      uint8_t c = buf[i++];
-      if (c == '\r' || c == '\n') {
-        if (c == '\n' && last_was_cr) {
-          last_was_cr = false;
-          continue;
-        }
-        shell_line[j] = 0;
-        if (j > 0)
-          vna_shell_execute_cmd_line(shell_line);
+  while (f_read(f, buf_8, buffer_size, &size) == FR_OK && size > 0) {
+    for (i = 0; i < size; i++) {
+      uint8_t c = buf_8[i];
+      if (c == '\r') {
+        line[j] = 0;
         j = 0;
-        last_was_cr = (c == '\r');
+        vna_shell_execute_cmd_line(line);
+      } else if (c < 0x20)
         continue;
-      }
-      last_was_cr = false;
-      if (c < 0x20)
-        continue;
-      if (j < VNA_SHELL_MAX_LENGTH - 1)
-        shell_line[j++] = (char)c;
+      else if (j < line_size)
+        line[j++] = (char)c;
     }
   }
   if (j > 0) {
-    shell_line[j] = 0;
-    vna_shell_execute_cmd_line(shell_line);
+    line[j] = 0;
+    vna_shell_execute_cmd_line(line);
   }
   return NULL;
 }

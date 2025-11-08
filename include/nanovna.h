@@ -940,7 +940,10 @@ enum {
 #ifdef __DIGIT_SEPARATOR__
   VNA_MODE_SEPARATOR,    // Comma or dot digit separator (0: dot, 1: comma)
 #endif
-  #ifdef __USB_UID__
+#ifdef __SD_CARD_DUMP_TIFF__
+  VNA_MODE_TIFF,         // Save screenshot format (0: bmp, 1: tiff)
+#endif
+#ifdef __USB_UID__
   VNA_MODE_USB_UID       // Use unique serial string for USB
 #endif
 };

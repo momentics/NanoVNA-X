@@ -1157,6 +1157,7 @@ void ili9341_test(int mode) {
 #define SD_OCR_35_36 ((uint32_t)0x8000000) // VDD voltage window 3.5-3.6
 #define SD_OCR_CCS ((uint32_t)0x40000000)  // card capacity status
 #define SD_OCR_POWER_UP ((uint32_t)0x80000000)
+#define SD_OCR_CAPACITY ((uint32_t)0x40000000)
 
 #define _OCR(o) ((o)&0xFFFFFFF0)
 
@@ -1530,6 +1531,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buff, DWORD sector, UINT count) {
 
 // diskio.c - Control device specific features
 DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff) {
+  (void)buff;
   DRESULT res = RES_PARERR;
   if (pdrv != 0 || !(CardStatus & CT_POWER_ON))
     return RES_NOTRDY;
