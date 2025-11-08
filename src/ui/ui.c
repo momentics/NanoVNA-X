@@ -1795,6 +1795,35 @@ static FILE_LOAD_CALLBACK(load_cmd) {
 }
 #endif
 
+#if defined(__USE_SD_CARD__) && FF_USE_MKFS
+static FRESULT sd_card_format(void) {
+  BYTE work[FF_MAX_SS];
+  f_mount(NULL, "", 0);
+  MKFS_PARM opt = {.fmt = FM_FAT, .n_fat = 1, .align = 0, .n_root = 0, .au_size = 0};
+  FRESULT res = f_mkfs("", &opt, work, sizeof(work));
+  if (res != FR_OK)
+    return res;
+  return f_mount(filesystem_volume(), "", 1);
+}
+
+static UI_FUNCTION_CALLBACK(menu_sdcard_format_cb) {
+  (void)data;
+  bool resume = (sweep_mode & SWEEP_ENABLE) != 0;
+  if (resume)
+    toggle_sweep();
+  FRESULT res = sd_card_format();
+  if (resume)
+    toggle_sweep();
+  char msg[32];
+  if (res == FR_OK)
+    strcpy(msg, "OK");
+  else
+    plot_printf(msg, sizeof(msg), "ERR %d", res);
+  ui_message_box("FORMAT SD", msg, 2000);
+  ui_mode_normal();
+}
+#endif
+
 #ifdef __SD_FILE_BROWSER__
 #define FILE_OPTIONS(e, s, l, o) {e, s, l, o}
 #else
@@ -1954,6 +1983,9 @@ static const menuitem_t menu_sdcard[] = {
     {MT_CALLBACK, FMT_S2P_FILE, "SAVE S2P", menu_sdcard_cb},
     {MT_CALLBACK, FMT_BMP_FILE, "SCREENSHOT", menu_sdcard_cb},
     {MT_CALLBACK, FMT_CAL_FILE, "SAVE\nCALIBRATION", menu_sdcard_cb},
+#if FF_USE_MKFS
+    {MT_CALLBACK, 0, "FORMAT SD", menu_sdcard_format_cb},
+#endif
     {MT_ADV_CALLBACK, VNA_MODE_AUTO_NAME, "AUTO NAME", menu_vna_mode_acb},
 #ifdef __SD_CARD_DUMP_TIFF__
     {MT_ADV_CALLBACK, VNA_MODE_TIFF, "IMAGE FORMAT\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
