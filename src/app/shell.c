@@ -23,8 +23,6 @@
 #include "app/shell.h"
 
 #include "ch.h"
-
-#include "ch.h"
 #include "hal.h"
 
 #include "nanovna.h"
@@ -54,20 +52,10 @@ static void shell_write(const void* buf, size_t size) {
   streamWrite(shell_stream, buf, size);
 }
 
-static size_t shell_read_timeout(void* buf, size_t size, systime_t timeout) {
+static size_t shell_read(void* buf, size_t size) {
   if (shell_stream == NULL) {
     return 0;
   }
-#if HAL_USE_SERIAL_USB
-  if (shell_stream == (BaseSequentialStream*)&SDU1) {
-    return ibqReadTimeout(&SDU1.ibqueue, buf, size, timeout);
-  }
-#endif
-#ifdef __USE_SERIAL_CONSOLE__
-  if (shell_stream == (BaseSequentialStream*)&SD1) {
-    return sdReadTimeout(&SD1, buf, size, timeout);
-  }
-#endif
   return streamRead(shell_stream, buf, size);
 }
 
@@ -268,19 +256,7 @@ static const char backspace[] = {0x08, 0x20, 0x08, 0x00};
 int vna_shell_read_line(char* line, int max_size) {
   uint8_t c;
   uint16_t j = 0;
-  if (shell_stream == NULL) {
-    return 0;
-  }
-  while (shell_stream != NULL) {
-    if (!shell_read_timeout(&c, 1, MS2ST(10))) {
-      if (!shell_check_connect()) {
-        return 0;
-      }
-      if (j == 0) {
-        return 0;
-      }
-      continue;
-    }
+  while (shell_read(&c, 1)) {
     if (shell_skip_linefeed) {
       shell_skip_linefeed = false;
       if (c == '\n') {
