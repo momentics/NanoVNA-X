@@ -63,7 +63,7 @@ The core of the firmware was reworked from blocking calls to a fully asynchronou
     *   To free up DMA channels for these critical tasks, the **UART console was intentionally moved to a non-DMA, interrupt-driven driver.** This prevents resource conflicts and prioritizes measurement integrity.
 
 ### Sweep Throughput (STM32F072 reference)
-Measured on production NanoVNA-H hardware with a 401-point sweep:
+Measured on production NanoVNA-H hardware with a 101-point sweep:
 
 | Scenario | Effective throughput |
 | --- | --- |
