@@ -52,6 +52,8 @@
 #define __USE_RTC__
 // Add RTC backup registers support
 #define __USE_BACKUP__
+// Add SD card support, requires RTC for timestamps
+#define __USE_SD_CARD__
 // Use unique serial string for USB
 #define __USB_UID__
 // If enabled serial in halconf.h, possible enable serial console control
@@ -88,6 +90,20 @@
 #define __VNA_MEASURE_MODULE__
 // Add Z normalization feature
 //#define __VNA_Z_RENORMALIZATION__
+
+/*
+ * Submodules defines
+ */
+#ifdef __USE_SD_CARD__
+// Allow run commands from SD card (config.ini in root)
+#define __SD_CARD_LOAD__
+// Allow screenshots in TIFF format
+#define __SD_CARD_DUMP_TIFF__
+// Allow dump firmware to SD card
+#define __SD_CARD_DUMP_FIRMWARE__
+// Enable SD card file browser, and allow load files from it
+#define __SD_FILE_BROWSER__
+#endif
 
 // If measure module enabled, add submodules
 #ifdef __VNA_MEASURE_MODULE__
@@ -1280,6 +1296,19 @@ void lcd_vector_draw(int x, int y, const vector_data *v);
 uint32_t lcd_send_register(uint8_t cmd, uint8_t len, const uint8_t *data);
 void     lcd_set_flip(bool flip);
 
+#ifdef __USE_SD_CARD__
+#include "ff.h"
+#include "diskio.h"
+
+#if SPI_BUFFER_SIZE < 2048
+#error "SPI_BUFFER_SIZE for SD card support need size >= 2048"
+#endif
+
+FATFS *filesystem_volume(void);
+FIL   *filesystem_file(void);
+void test_log(void);
+#endif
+
 /*
  * flash.c
  */
@@ -1387,6 +1416,9 @@ void ui_touch_draw_test(void);
 void ui_enter_dfu(void);
 
 void ui_message_box(const char *header, const char *text, uint32_t delay);
+#ifdef __USE_SD_CARD__
+bool sd_card_load_config(void);
+#endif
 
 // Irq operation process set
 #define OP_NONE       0x00

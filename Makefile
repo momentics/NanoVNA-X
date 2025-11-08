@@ -168,6 +168,8 @@ CSRC = $(STARTUPSRC) \
        $(PLATFORMSRC) \
        $(BOARDSRC) \
        $(STREAMSSRC) \
+       third_party/FatFs/ff.c \
+       third_party/FatFs/ffunicode.c \
        src/resources/fonts/numfont16x22.c \
        src/resources/fonts/Font5x7.c \
        src/resources/fonts/Font6x10.c \
@@ -227,7 +229,7 @@ ASMSRC = $(STARTUPASM) $(PORTASM) $(OSALASM)
 
 INCDIR = $(STARTUPINC) $(KERNINC) $(PORTINC) $(OSALINC) \
          $(HALINC) $(PLATFORMINC) $(BOARDINC)  \
-         $(STREAMSINC)
+         $(STREAMSINC) $(PROJ)/third_party/FatFs
 
 #
 # Project, sources and paths
