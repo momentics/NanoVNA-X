@@ -1521,7 +1521,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buff, DWORD sector, UINT count) {
       count--;
   } else if (sd_send_cmd(CMD25, sector) == 0) {
     while (sd_tx_data_block(buff, SD_SECTOR_SIZE, SD_TOKEN_START_M_BLOCK) &&
-           sd_wait_not_busy(MS2ST(250)) == 0xFF && --count)
+           sd_wait_not_busy(MS2ST(2000)) == 0xFF && --count)
       buff += SD_SECTOR_SIZE;
     spi_tx_byte(SD_TOKEN_STOP_M_BLOCK);
   }
@@ -1543,7 +1543,7 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff) {
   sd_select_spi(SD_SPI_RX_SPEED);
   switch (cmd) {
   case CTRL_SYNC:
-    if (sd_wait_not_busy(MS2ST(200)) == 0xFF)
+    if (sd_wait_not_busy(MS2ST(2000)) == 0xFF)
       res = RES_OK;
     break;
 #if FF_USE_TRIM == 1

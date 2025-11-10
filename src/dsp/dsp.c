@@ -21,31 +21,10 @@
  */
 
 #include "nanovna.h"
-#include <stdlib.h>
-#include <string.h>
 
 #ifdef USE_VARIABLE_OFFSET
-static int16_t (*sincos_tbl)[2];
-static bool sincos_table_allocation_failed;
-
-static bool ensure_sincos_table(void) {
-  if (sincos_tbl)
-    return true;
-  if (sincos_table_allocation_failed)
-    return false;
-  size_t count = (size_t)AUDIO_SAMPLES_COUNT * 2u;
-  sincos_tbl = (int16_t(*)[2])malloc(count * sizeof(int16_t));
-  if (sincos_tbl == NULL) {
-    sincos_table_allocation_failed = true;
-    return false;
-  }
-  memset(sincos_tbl, 0, count * sizeof(int16_t));
-  return true;
-}
-
+static int16_t sincos_tbl[AUDIO_SAMPLES_COUNT][2];
 void generate_dsp_table(int offset) {
-  if (!ensure_sincos_table())
-    return;
   float audio_freq = AUDIO_ADC_FREQ;
   // N = offset * AUDIO_SAMPLES_COUNT / audio_freq; should be integer
   // AUDIO_SAMPLES_COUNT = N * audio_freq / offset; N - minimum integer value for get integer
@@ -55,8 +34,8 @@ void generate_dsp_table(int offset) {
   for (int i = 0; i < AUDIO_SAMPLES_COUNT; i++) {
     float s, c;
     vna_sincosf(w, &s, &c);
-    sincos_tbl[i][0] = (int16_t)(s * 32700.0f);
-    sincos_tbl[i][1] = (int16_t)(c * 32700.0f);
+    sincos_tbl[i][0] = s * 32700.0f;
+    sincos_tbl[i][1] = c * 32700.0f;
     w += step;
   }
 }
@@ -172,10 +151,6 @@ acc_t acc_samp_c;
 acc_t acc_ref_s;
 acc_t acc_ref_c;
 void dsp_process(audio_sample_t* capture, size_t length) {
-#if defined(USE_VARIABLE_OFFSET)
-  if (sincos_tbl == NULL)
-    return;
-#endif
   int32_t samp_s = 0;
   int32_t samp_c = 0;
   int32_t ref_s = 0;
@@ -209,10 +184,6 @@ static acc_t acc_ref_c;
 // Cortex M4 DSP instruction use
 #include "dsp.h"
 void dsp_process(audio_sample_t* capture, size_t length) {
-#if defined(USE_VARIABLE_OFFSET)
-  if (sincos_tbl == NULL)
-    return;
-#endif
   uint32_t i = 0;
   //  int64_t samp_s = 0;
   //  int64_t samp_c = 0;
