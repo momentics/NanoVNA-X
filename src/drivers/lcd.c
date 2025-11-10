@@ -1319,6 +1319,13 @@ static uint8_t sd_wait_not_busy(uint32_t wait_time) {
   return 0;
 }
 
+static uint32_t sd_read_be32(void) {
+  uint8_t buf[4];
+  spi_rx_buffer(buf, sizeof(buf));
+  return ((uint32_t)buf[0] << 24) | ((uint32_t)buf[1] << 16) | ((uint32_t)buf[2] << 8) |
+         (uint32_t)buf[3];
+}
+
 // Receive data block from SD
 static bool sd_rx_data_block(uint8_t* buff, uint16_t len, uint8_t token) {
   if (!sd_wait_data_token(token, MS2ST(100))) {
@@ -1433,14 +1440,12 @@ DSTATUS disk_initialize(BYTE pdrv) {
   sd_select_spi(SD_INIT_SPI_SPEED);
   if (sd_send_cmd(CMD0, 0) == SD_R1_IDLE) {
     if (sd_send_cmd(CMD8, 0x00001AAU) == SD_R1_IDLE) {
-      uint32_t ocr;
-      spi_rx_buffer((uint8_t*)&ocr, 4);
-      if (ocr == _OCR(0x00001AAU)) {
+      uint32_t ocr = sd_read_be32();
+      if (_OCR(ocr) == _OCR(0x00001AAU)) {
         while (sd_send_cmd(ACMD41, SD_OCR_CAPACITY) != 0 && --cnt)
           chThdSleepMilliseconds(10);
         if (cnt && sd_send_cmd(CMD58, 0) == 0) {
-          DWORD roc;
-          spi_rx_buffer((uint8_t*)&roc, 4);
+          DWORD roc = sd_read_be32();
           type = (roc & _OCR(SD_OCR_CAPACITY)) ? CT_SD2 | CT_BLOCK : CT_SD2;
         }
       }
