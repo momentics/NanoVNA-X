@@ -278,7 +278,7 @@
  *
  * @note    The default is @p TRUE.
  */
-#define CH_CFG_USE_MEMCORE                  TRUE
+#define CH_CFG_USE_MEMCORE                  FALSE
 
 /**
  * @brief   Heap Allocator APIs.

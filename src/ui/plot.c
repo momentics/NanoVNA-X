@@ -31,7 +31,6 @@
 #include "chprintf.h"
 #include "nanovna.h"
 #include "system/state_manager.h"
-#include "chmemcore.h"
 
 // Icons bitmap resources
 #include "../resources/icons/icons_marker.c"
@@ -239,8 +238,12 @@ typedef struct {
   const trace_coord_t* y;
 } trace_index_const_table_t;
 
-static uint16_t* trace_index_x_data;
-static trace_coord_t* trace_index_y_data;
+static uint16_t trace_index_x[TRACE_INDEX_COUNT][SWEEP_POINTS_MAX];
+static trace_coord_t trace_index_y[TRACE_INDEX_COUNT][SWEEP_POINTS_MAX];
+_Static_assert(ARRAY_COUNT(trace_index_x[0]) == SWEEP_POINTS_MAX,
+               "trace index x size mismatch");
+_Static_assert(ARRAY_COUNT(trace_index_y[0]) == SWEEP_POINTS_MAX,
+               "trace index y size mismatch");
 
 // Forward declarations for helpers implemented later in the translation unit.
 static inline void cell_drawline(const RenderCellCtx* rcx, int x0, int y0, int x1, int y1,
@@ -256,23 +259,13 @@ static void cell_draw_measure(RenderCellCtx* rcx);
 static void cell_draw_grid_values(RenderCellCtx* rcx);
 static void cell_draw_marker_info(RenderCellCtx* rcx);
 
-static inline uint16_t* trace_index_x_row(int trace_id) {
-  chDbgAssert(trace_index_x_data != NULL, "trace index x not allocated");
-  return trace_index_x_data + (size_t)trace_id * SWEEP_POINTS_MAX;
-}
-
-static inline trace_coord_t* trace_index_y_row(int trace_id) {
-  chDbgAssert(trace_index_y_data != NULL, "trace index y not allocated");
-  return trace_index_y_data + (size_t)trace_id * SWEEP_POINTS_MAX;
-}
-
 static inline trace_index_table_t trace_index_table(int trace_id) {
-  trace_index_table_t table = {trace_index_x_row(trace_id), trace_index_y_row(trace_id)};
+  trace_index_table_t table = {trace_index_x[trace_id], trace_index_y[trace_id]};
   return table;
 }
 
 static inline trace_index_const_table_t trace_index_const_table(int trace_id) {
-  trace_index_const_table_t table = {trace_index_x_row(trace_id), trace_index_y_row(trace_id)};
+  trace_index_const_table_t table = {trace_index_x[trace_id], trace_index_y[trace_id]};
   return table;
 }
 
@@ -651,10 +644,8 @@ void toggle_stored_trace(int idx) {
   }
   if (current_trace == TRACE_INVALID)
     return;
-  memcpy(trace_index_x_row(TRACES_MAX + idx), trace_index_x_row(current_trace),
-         sizeof(uint16_t) * SWEEP_POINTS_MAX);
-  memcpy(trace_index_y_row(TRACES_MAX + idx), trace_index_y_row(current_trace),
-         sizeof(trace_coord_t) * SWEEP_POINTS_MAX);
+  memcpy(trace_index_x[TRACES_MAX + idx], trace_index_x[current_trace], sizeof(trace_index_x[0]));
+  memcpy(trace_index_y[TRACES_MAX + idx], trace_index_y[current_trace], sizeof(trace_index_y[0]));
   enabled_store_trace |= mask;
 }
 
@@ -2325,20 +2316,6 @@ void request_to_redraw(uint16_t mask) {
 }
 
 void plot_init(void) {
-  if (trace_index_x_data == NULL) {
-    const size_t bytes = (size_t)TRACE_INDEX_COUNT * SWEEP_POINTS_MAX * sizeof(uint16_t);
-    trace_index_x_data = (uint16_t*)chCoreAllocAligned(bytes, sizeof(uint16_t));
-    chDbgAssert(trace_index_x_data != NULL, "trace index x allocation failed");
-    if (trace_index_x_data != NULL)
-      memset(trace_index_x_data, 0, bytes);
-  }
-  if (trace_index_y_data == NULL) {
-    const size_t bytes = (size_t)TRACE_INDEX_COUNT * SWEEP_POINTS_MAX * sizeof(trace_coord_t);
-    trace_index_y_data = (trace_coord_t*)chCoreAllocAligned(bytes, sizeof(trace_coord_t));
-    chDbgAssert(trace_index_y_data != NULL, "trace index y allocation failed");
-    if (trace_index_y_data != NULL)
-      memset(trace_index_y_data, 0, bytes);
-  }
   request_to_redraw(REDRAW_PLOT | REDRAW_ALL);
   draw_all();
 }
