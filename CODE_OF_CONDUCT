@@ -1,0 +1,57 @@
+# NanoVNA‑X Code of Conduct
+
+## Our Pledge
+We, as members, contributors, and leaders of the NanoVNA‑X project, pledge to make participation in our community a harassment‑free experience for everyone, regardless of age, body size, visible or invisible disability, ethnicity, sex characteristics, gender identity and expression, level of experience, education, socio‑economic status, nationality, personal appearance, race, caste, religion, or sexual identity and orientation.
+
+## Our Standards
+Examples of behavior that contributes to a positive environment:
+- Being respectful, inclusive, and considerate.
+- Giving and gracefully accepting constructive feedback.
+- Focusing on what is best for the community and the project.
+- Showing empathy toward other community members.
+- Using welcoming and inclusive language in code, docs, and discussions.
+
+Examples of unacceptable behavior:
+- Harassment, insults, derogatory comments, or personal attacks.
+- Trolling, deliberate intimidation, or provocation.
+- Publishing others’ private information (doxing) without explicit permission.
+- Sexualized language or imagery; unwelcome sexual attention or advances.
+- Sustained disruption of discussions, reviews, or project processes.
+
+## Responsibilities and Scope
+- Maintainers are responsible for clarifying standards of acceptable behavior and are expected to take appropriate and fair corrective action in response to any behavior they deem inappropriate, threatening, offensive, or harmful.
+- This Code applies within all project spaces and when an individual is officially representing the project in public spaces (e.g., using official channels, repositories, issue trackers, forums, conferences).
+
+## Enforcement
+- Reports can be sent to the maintainers at: conduct@nanovna-x.org (or via GitHub private contact to the core maintainer if email is unavailable).
+- All complaints will be reviewed and investigated promptly and fairly.
+- The project team is obligated to respect the privacy and security of the reporter of any incident.
+
+## Enforcement Guidelines
+Community leaders will follow these Community Impact Guidelines when determining the consequences for any action they deem to violate this Code:
+
+1) Correction  
+- Community Impact: Use of inappropriate language or other behavior deemed unprofessional or unwelcome.  
+- Consequence: A private, written warning with clarity around the nature of the violation and an explanation of why the behavior was inappropriate.
+
+2) Warning  
+- Community Impact: A single incident or series of actions with moderate impact.  
+- Consequence: A warning with consequences for continued behavior. No interaction with the people involved, including unsolicited interaction with those enforcing the Code, for a specified period.
+
+3) Temporary Ban  
+- Community Impact: A serious violation or sustained inappropriate behavior.  
+- Consequence: A temporary ban from any sort of interaction or public communication with the community for a specified period.
+
+4) Permanent Ban  
+- Community Impact: Demonstrating a pattern of violation or targeted harassment, hate, or threats to someone’s safety.  
+- Consequence: A permanent ban from any sort of public interaction within the community.
+
+## Attribution
+This Code of Conduct is adapted from widely used open source community practices and aligns with the guidance in the Open Source Guides. See “Establishing a Code of Conduct” at:
+- https://opensource.guide/code-of-conduct/#establishing-a-code-of-conduct
+
+## Contact and Updates
+- Primary contact: conduct@nanovna-x.org
+- Backup contact: the project owner via GitHub
+- Changes to this Code will be proposed via pull request and discussed publicly. Material changes will be announced in the repository’s release notes or README.
+
