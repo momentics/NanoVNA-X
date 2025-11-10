@@ -492,8 +492,7 @@ static void ui_draw_button(uint16_t x, uint16_t y, uint16_t w, uint16_t h, butto
   lcd_fill(x + bw, y + bw, w - (bw * 2), h - (bw * 2));
 }
 
-// Draw message box function
-void ui_message_box(const char* header, const char* text, uint32_t delay) {
+static void ui_message_box_draw(const char* header, const char* text) {
   button_t b;
   int x, y;
   b.bg = LCD_MENU_COLOR;
@@ -516,6 +515,11 @@ void ui_message_box(const char* header, const char* text, uint32_t delay) {
     lcd_drawstring(x, y, text);
     request_to_redraw(REDRAW_AREA);
   }
+}
+
+// Draw message box function
+void ui_message_box(const char* header, const char* text, uint32_t delay) {
+  ui_message_box_draw(header, text);
 
   do {
     chThdSleepMilliseconds(delay == 0 ? 50 : delay);
@@ -1806,19 +1810,54 @@ static FRESULT sd_card_format(void) {
   return f_mount(filesystem_volume(), "", 1);
 }
 
+typedef struct {
+  volatile bool done;
+  FRESULT result;
+} sd_card_format_state_t;
+
+static THD_WORKING_AREA(sd_card_format_wa, 1536);
+
+static THD_FUNCTION(sd_card_format_worker, arg) {
+  sd_card_format_state_t* state = (sd_card_format_state_t*)arg;
+  state->result = sd_card_format();
+  state->done = true;
+}
+
 static UI_FUNCTION_CALLBACK(menu_sdcard_format_cb) {
   (void)data;
   bool resume = (sweep_mode & SWEEP_ENABLE) != 0;
   if (resume)
     toggle_sweep();
-  FRESULT res = sd_card_format();
+  sd_card_format_state_t state = {.done = false, .result = FR_OK};
+  thread_t* tp = chThdCreateStatic(sd_card_format_wa, sizeof(sd_card_format_wa), NORMALPRIO - 1,
+                                  sd_card_format_worker, &state);
+  systime_t start = chVTGetSystemTimeX();
+  if (tp != NULL) {
+    ui_message_box_draw("FORMAT SD", "Formatting...");
+    chThdSleepMilliseconds(120);
+    static const char spinner[] = "|/-\\";
+    size_t spinner_idx = 0;
+    while (!state.done) {
+      char busy[32];
+      plot_printf(busy, sizeof(busy), "Formatting %c", spinner[spinner_idx++ & 0x3]);
+      ui_message_box_draw("FORMAT SD", busy);
+      chThdSleepMilliseconds(120);
+    }
+    chThdWait(tp);
+  } else {
+    state.result = sd_card_format();
+    state.done = true;
+  }
   if (resume)
     toggle_sweep();
   char msg[32];
-  if (res == FR_OK)
-    strcpy(msg, "OK");
-  else
+  FRESULT res = state.result;
+  if (res == FR_OK) {
+    uint32_t elapsed_ms = TIME_I2MS(chVTTimeElapsedSinceX(start));
+    plot_printf(msg, sizeof(msg), "OK %lums", (unsigned long)elapsed_ms);
+  } else {
     plot_printf(msg, sizeof(msg), "ERR %d", res);
+  }
   ui_message_box("FORMAT SD", msg, 2000);
   ui_mode_normal();
 }
