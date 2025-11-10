@@ -24,8 +24,17 @@
 #pragma GCC push_options
 #pragma GCC optimize("Os")
 
+#include <stdlib.h>
+#include <string.h>
+
 // Memory for measure cache data
-static char measure_memory[128];
+static char* measure_memory;
+static bool measure_memory_allocation_failed;
+
+static bool ensure_measure_memory(void);
+static inline bool measure_memory_ready(void) {
+  return measure_memory != NULL;
+}
 
 // Measure math functions
 // quadratic function solver
@@ -237,7 +246,7 @@ typedef struct {
 } lc_match_array_t;
 
 // Size = 60 bytes
-static lc_match_array_t* lc_match_array = (lc_match_array_t*)measure_memory;
+static lc_match_array_t* lc_match_array;
 
 // Calculate two solutions for ZL where (R + X * X / R) > R0
 static void lc_match_calc_hi(float R0, float RL, float XL, t_lc_match* matches) {
@@ -324,6 +333,8 @@ static int16_t lc_match_calc(int index) {
 static void prepare_lc_match(uint8_t mode, uint8_t update_mask) {
   (void)mode;
   (void)update_mask;
+  if (!ensure_measure_memory())
+    return;
   // Made calculation only one time for current sweep and frequency
   freq_t freq = get_marker_frequency(active_marker);
   if (freq == 0) // || lc_match_array->Hz == freq)
@@ -363,6 +374,8 @@ static void lc_match_x_str(uint32_t FHz, float X, int xp, int yp) {
 
 // Render L/C match to cell
 static void draw_lc_match(int xp, int yp) {
+  if (!measure_memory_ready())
+    return;
   cell_printf(xp, yp, "L/C match for source Z0 = %0.1f" S_OHM, lc_match_array->R0);
 #if 0
   yp += STR_MEASURE_HEIGHT;
@@ -407,7 +420,7 @@ typedef struct {
   //  freq_t f2;
   //  float tan45;
 } s21_analysis_t;
-static s21_analysis_t* s21_measure = (s21_analysis_t*)measure_memory;
+static s21_analysis_t* s21_measure;
 
 static float s21pow2(uint16_t i) {
   const float re = measured[1][i][0]; // S21 real
@@ -524,6 +537,8 @@ static void analysis_xtalseries(void) {
 }
 
 static void draw_serial_result(int xp, int yp) {
+  if (!measure_memory_ready())
+    return;
   cell_printf(xp, yp, s21_measure->header);
   yp += STR_MEASURE_HEIGHT;
   if (s21_measure->freq == 0 && s21_measure->freq1 == 0) {
@@ -548,6 +563,8 @@ static void draw_serial_result(int xp, int yp) {
 
 static void prepare_series(uint8_t type, uint8_t update_mask) {
   (void)update_mask;
+  if (!ensure_measure_memory())
+    return;
   uint16_t n;
   // for detect completion
   s21_measure->freq = 0;
@@ -593,7 +610,7 @@ typedef struct {
   float bw_6dB;
   float q;
 } s21_filter_measure_t;
-static s21_filter_measure_t* s21_filter = (s21_filter_measure_t*)measure_memory;
+static s21_filter_measure_t* s21_filter;
 
 static void draw_s21_pass(int xp, int yp, s21_pass* p, const char* name) {
   cell_printf(xp, yp, name);
@@ -610,6 +627,8 @@ static void draw_s21_pass(int xp, int yp, s21_pass* p, const char* name) {
 
 #define S21_MEASURE_FILTER_THRESHOLD -50.0f
 static void draw_filter_result(int xp, int yp) {
+  if (!measure_memory_ready())
+    return;
   cell_printf(xp, yp, "S21 FILTER");
   if (s21_filter->vmax < S21_MEASURE_FILTER_THRESHOLD)
     return;
@@ -671,6 +690,8 @@ static void find_filter_pass(float max, s21_pass* p, uint16_t idx, int16_t mode)
 static void prepare_filter(uint8_t type, uint8_t update_mask) {
   (void)type;
   (void)update_mask;
+  if (!ensure_measure_memory())
+    return;
   uint16_t xp = 0;
   s21_filter->vmax = search_peak_value(&xp, s21logmag, MEASURE_SEARCH_MAX); // Maximum search
   // If maximum < 50dB, no filter detected
@@ -711,7 +732,7 @@ typedef struct {
   float C0;
   float a, b, c;
 } s11_cable_measure_t;
-static s11_cable_measure_t* s11_cable = (s11_cable_measure_t*)measure_memory;
+static s11_cable_measure_t* s11_cable;
 float real_cable_len = 0.0f;
 
 static float s11imag(uint16_t i) {
@@ -727,6 +748,8 @@ static float s11index(uint16_t i) {
 }
 
 static void draw_s11_cable(int xp, int yp) {
+  if (!measure_memory_ready())
+    return;
   cell_printf(xp, yp, "S11 CABLE");
   if (s11_cable->R) {
     cell_printf(xp, yp += STR_MEASURE_HEIGHT, "Z0 = %F" S_OHM, s11_cable->R);
@@ -754,6 +777,8 @@ static void draw_s11_cable(int xp, int yp) {
 
 static void prepare_s11_cable(uint8_t type, uint8_t update_mask) {
   (void)type;
+  if (!ensure_measure_memory())
+    return;
   freq_t f1;
   if (update_mask & MEASURE_UPD_SWEEP) {
     s11_cable->R = 0.0f;
@@ -800,7 +825,7 @@ typedef struct {
   } data[MEASURE_RESONANCE_COUNT];
   uint8_t count;
 } s11_resonance_measure_t;
-static s11_resonance_measure_t* s11_resonance = (s11_resonance_measure_t*)measure_memory;
+static s11_resonance_measure_t* s11_resonance;
 
 static float s11_resonance_value(uint16_t i) {
   return measured[0][i][1];
@@ -811,6 +836,8 @@ static float s11_resonance_min(uint16_t i) {
 }
 
 static void draw_s11_resonance(int xp, int yp) {
+  if (!measure_memory_ready())
+    return;
   cell_printf(xp, yp, "S11 RESONANCE");
   if (s11_resonance->count == 0) {
     cell_printf(xp, yp += STR_MEASURE_HEIGHT, "Not found");
@@ -835,6 +862,8 @@ static bool add_resonance_value(int i, uint16_t x, freq_t f) {
 
 static void prepare_s11_resonance(uint8_t type, uint8_t update_mask) {
   (void)type;
+  if (!ensure_measure_memory())
+    return;
   if (update_mask & MEASURE_UPD_SWEEP) {
     int i;
     freq_t f;
@@ -861,5 +890,33 @@ static void prepare_s11_resonance(uint8_t type, uint8_t update_mask) {
                   STR_MEASURE_Y + (MEASURE_RESONANCE_COUNT + 1) * STR_MEASURE_HEIGHT);
 }
 #endif //__S11_RESONANCE_MEASURE__
+
+static bool ensure_measure_memory(void) {
+  if (measure_memory)
+    return true;
+  if (measure_memory_allocation_failed)
+    return false;
+  measure_memory = (char*)malloc(128);
+  if (measure_memory == NULL) {
+    measure_memory_allocation_failed = true;
+    return false;
+  }
+  memset(measure_memory, 0, 128);
+#ifdef __USE_LC_MATCHING__
+  lc_match_array = (lc_match_array_t*)measure_memory;
+#endif
+#ifdef __S21_MEASURE__
+  s21_measure = (s21_analysis_t*)measure_memory;
+  s21_filter = (s21_filter_measure_t*)measure_memory;
+#endif
+#ifdef __S11_CABLE_MEASURE__
+  s11_cable = (s11_cable_measure_t*)measure_memory;
+#endif
+#ifdef __S11_RESONANCE_MEASURE__
+  s11_resonance = (s11_resonance_measure_t*)measure_memory;
+#endif
+  return true;
+}
+
 #pragma GCC pop_options
 #endif // __VNA_MEASURE_MODULE__

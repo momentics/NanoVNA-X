@@ -1843,7 +1843,11 @@ static UI_FUNCTION_CALLBACK(menu_sdcard_format_cb) {
       ui_message_box_draw("FORMAT SD", busy);
       chThdSleepMilliseconds(120);
     }
+#if CH_CFG_USE_WAITEXIT
     chThdWait(tp);
+#else
+    (void)tp;
+#endif
   } else {
     state.result = sd_card_format();
     state.done = true;
@@ -1853,7 +1857,7 @@ static UI_FUNCTION_CALLBACK(menu_sdcard_format_cb) {
   char msg[32];
   FRESULT res = state.result;
   if (res == FR_OK) {
-    uint32_t elapsed_ms = TIME_I2MS(chVTTimeElapsedSinceX(start));
+    uint32_t elapsed_ms = (uint32_t)ST2MS(chVTTimeElapsedSinceX(start));
     plot_printf(msg, sizeof(msg), "OK %lums", (unsigned long)elapsed_ms);
   } else {
     plot_printf(msg, sizeof(msg), "ERR %d", res);

@@ -25,6 +25,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 #include "ch.h"
 #include "hal.h"
@@ -238,12 +239,48 @@ typedef struct {
   const trace_coord_t* y;
 } trace_index_const_table_t;
 
-static uint16_t trace_index_x[TRACE_INDEX_COUNT][SWEEP_POINTS_MAX];
-static trace_coord_t trace_index_y[TRACE_INDEX_COUNT][SWEEP_POINTS_MAX];
-_Static_assert(ARRAY_COUNT(trace_index_x[0]) == SWEEP_POINTS_MAX,
-               "trace index x size mismatch");
-_Static_assert(ARRAY_COUNT(trace_index_y[0]) == SWEEP_POINTS_MAX,
-               "trace index y size mismatch");
+static trace_index_table_t* trace_index_tables;
+static void* trace_index_storage;
+static bool trace_index_allocation_failed;
+
+static bool allocate_trace_index_tables(void) {
+  if (trace_index_storage)
+    return true;
+  if (trace_index_allocation_failed)
+    return false;
+
+  if (trace_index_tables == NULL) {
+    trace_index_tables =
+        (trace_index_table_t*)malloc(TRACE_INDEX_COUNT * sizeof(trace_index_table_t));
+    if (trace_index_tables == NULL) {
+      trace_index_allocation_failed = true;
+      return false;
+    }
+    memset(trace_index_tables, 0, TRACE_INDEX_COUNT * sizeof(trace_index_table_t));
+  }
+
+  const size_t per_table = (size_t)SWEEP_POINTS_MAX;
+  const size_t x_bytes = TRACE_INDEX_COUNT * per_table * sizeof(uint16_t);
+  const size_t y_bytes = TRACE_INDEX_COUNT * per_table * sizeof(trace_coord_t);
+  uint8_t* buffer = (uint8_t*)malloc(x_bytes + y_bytes);
+  if (buffer == NULL) {
+    trace_index_allocation_failed = true;
+    return false;
+  }
+
+  memset(buffer, 0, x_bytes + y_bytes);
+  trace_index_storage = buffer;
+
+  uint16_t* x_base = (uint16_t*)buffer;
+  trace_coord_t* y_base = (trace_coord_t*)(buffer + x_bytes);
+
+  for (int i = 0; i < TRACE_INDEX_COUNT; ++i) {
+    trace_index_tables[i].x = x_base + (size_t)i * per_table;
+    trace_index_tables[i].y = y_base + (size_t)i * per_table;
+  }
+
+  return true;
+}
 
 // Forward declarations for helpers implemented later in the translation unit.
 static inline void cell_drawline(const RenderCellCtx* rcx, int x0, int y0, int x1, int y1,
@@ -260,12 +297,18 @@ static void cell_draw_grid_values(RenderCellCtx* rcx);
 static void cell_draw_marker_info(RenderCellCtx* rcx);
 
 static inline trace_index_table_t trace_index_table(int trace_id) {
-  trace_index_table_t table = {trace_index_x[trace_id], trace_index_y[trace_id]};
-  return table;
+  trace_index_table_t table = {NULL, NULL};
+  if (!allocate_trace_index_tables())
+    return table;
+  return trace_index_tables[trace_id];
 }
 
 static inline trace_index_const_table_t trace_index_const_table(int trace_id) {
-  trace_index_const_table_t table = {trace_index_x[trace_id], trace_index_y[trace_id]};
+  trace_index_const_table_t table = {NULL, NULL};
+  if (!allocate_trace_index_tables())
+    return table;
+  table.x = trace_index_tables[trace_id].x;
+  table.y = trace_index_tables[trace_id].y;
   return table;
 }
 
@@ -644,8 +687,12 @@ void toggle_stored_trace(int idx) {
   }
   if (current_trace == TRACE_INVALID)
     return;
-  memcpy(trace_index_x[TRACES_MAX + idx], trace_index_x[current_trace], sizeof(trace_index_x[0]));
-  memcpy(trace_index_y[TRACES_MAX + idx], trace_index_y[current_trace], sizeof(trace_index_y[0]));
+  if (!allocate_trace_index_tables())
+    return;
+  memcpy(trace_index_tables[TRACES_MAX + idx].x, trace_index_tables[current_trace].x,
+         SWEEP_POINTS_MAX * sizeof(uint16_t));
+  memcpy(trace_index_tables[TRACES_MAX + idx].y, trace_index_tables[current_trace].y,
+         SWEEP_POINTS_MAX * sizeof(trace_coord_t));
   enabled_store_trace |= mask;
 }
 
@@ -683,6 +730,8 @@ static void render_traces_in_cell(RenderCellCtx* rcx) {
       continue;
     pixel_t color = GET_PALTETTE_COLOR(LCD_TRACE_1_COLOR + t);
     trace_index_const_table_t index = trace_index_const_table(t);
+    if (index.x == NULL || index.y == NULL)
+      continue;
     bool rectangular = false;
     if (t < TRACES_MAX)
       rectangular = ((uint32_t)1u << trace[t].type) & RECTANGULAR_GRID_MASK;
@@ -719,6 +768,8 @@ static void render_markers_in_cell(RenderCellCtx* rcx) {
       if (!trace[t].enabled)
         continue;
       trace_index_const_table_t index = trace_index_const_table(t);
+      if (index.x == NULL || index.y == NULL)
+        continue;
       const uint8_t* plate;
       const uint8_t* marker;
       int x = TRACE_X(index, mk_idx) - rcx->x0 - X_MARKER_OFFSET;
@@ -1557,6 +1608,8 @@ void request_to_draw_marker(uint16_t mk_idx) {
     if (!trace[t].enabled)
       continue;
     trace_index_const_table_t index = trace_index_const_table(t);
+    if (index.x == NULL || index.y == NULL)
+      continue;
     int x = TRACE_X(index, mk_idx) - X_MARKER_OFFSET;
     int y = TRACE_Y(index, mk_idx) +
             ((TRACE_Y(index, mk_idx) < MARKER_HEIGHT * 2) ? 1 : -Y_MARKER_OFFSET);
@@ -1621,6 +1674,8 @@ void marker_search(void) {
     return;
   // Select search index table
   trace_index_const_table_t index = trace_index_const_table(current_trace);
+  if (index.x == NULL || index.y == NULL)
+    return;
   // Select compare function (depend from config settings)
   bool (*compare)(int x, int y) = VNA_MODE(VNA_MODE_SEARCH) ? _lesser : _greater;
   for (i = 1, value = TRACE_Y(index, 0); i < sweep_points; i++) {
@@ -1639,6 +1694,8 @@ void marker_search_dir(int16_t from, int16_t dir) {
     return;
   // Select search index table
   trace_index_const_table_t index = trace_index_const_table(current_trace);
+  if (index.x == NULL || index.y == NULL)
+    return;
   // Select compare function (depend from config settings)
   bool (*compare)(int x, int y) = VNA_MODE(VNA_MODE_SEARCH) ? _lesser : _greater;
   // Search next
@@ -1661,6 +1718,8 @@ void marker_search_dir(int16_t from, int16_t dir) {
 
 int distance_to_index(int8_t t, uint16_t idx, int16_t x, int16_t y) {
   trace_index_const_table_t index = trace_index_const_table(t);
+  if (index.x == NULL || index.y == NULL)
+    return INT_MAX;
   x -= (int16_t)TRACE_X(index, idx);
   y -= (int16_t)TRACE_Y(index, idx);
   return x * x + y * y;
@@ -1812,6 +1871,10 @@ static void trace_into_index(int t) {
   uint16_t start = 0, stop = sweep_points - 1, i;
   float (*array)[2] = measured[trace[t].channel];
   trace_index_table_t index = trace_index_table(t);
+  if (index.x == NULL || index.y == NULL) {
+    force_set_markmap();
+    return;
+  }
   uint32_t type = 1 << trace[t].type;
   get_value_cb_t c =
       trace_info_list[trace[t].type].get_value_cb; // Get callback for value calculation
@@ -2316,6 +2379,7 @@ void request_to_redraw(uint16_t mask) {
 }
 
 void plot_init(void) {
+  (void)allocate_trace_index_tables();
   request_to_redraw(REDRAW_PLOT | REDRAW_ALL);
   draw_all();
 }
