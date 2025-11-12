@@ -1155,11 +1155,13 @@ void ili9341_test(int mode) {
 #define SD_OCR_33_34 ((uint32_t)0x2000000)
 #define SD_OCR_34_35 ((uint32_t)0x4000000)
 #define SD_OCR_35_36 ((uint32_t)0x8000000) // VDD voltage window 3.5-3.6
-#define SD_OCR_CCS ((uint32_t)0x40000000)  // card capacity status
-#define SD_OCR_POWER_UP ((uint32_t)0x80000000)
+#define SD_OCR_CCS ((uint32_t)0x40000000)      // card capacity status
+#define SD_OCR_POWER_UP ((uint32_t)0x80000000) // card power up status bit
 #define SD_OCR_CAPACITY ((uint32_t)0x40000000)
-
-#define _OCR(o) ((o)&0xFFFFFFF0)
+#define SD_OCR_VDD_27_36                                                                               \
+  (SD_OCR_27_28 | SD_OCR_28_29 | SD_OCR_29_30 | SD_OCR_30_31 | SD_OCR_31_32 | SD_OCR_32_33 |           \
+   SD_OCR_33_34 | SD_OCR_34_35 | SD_OCR_35_36)
+#define SD_OCR_VDD_MASK SD_OCR_VDD_27_36
 
 // Use DMA on sector data Tx to SD card (only if enabled Tx DMA for LCD)
 #ifdef __USE_DISPLAY_DMA__
@@ -1321,17 +1323,11 @@ static uint8_t sd_wait_not_busy(systime_t wait_time) {
   return 0;
 }
 
-/*
- * Read a 32-bit register value returned by the card while keeping the byte order
- * expected by the host.  In SPI mode the SD card shifts the least significant
- * byte first, so build the result in little-endian order to match the layout the
- * legacy driver relied on when it read directly into a uint32_t buffer.
- */
-static uint32_t sd_read_reg32(void) {
+static uint32_t sd_read_be32(void) {
   uint8_t buf[4];
   spi_rx_buffer(buf, sizeof(buf));
-  return ((uint32_t)buf[0] << 0) | ((uint32_t)buf[1] << 8) | ((uint32_t)buf[2] << 16) |
-         ((uint32_t)buf[3] << 24);
+  return ((uint32_t)buf[0] << 24) | ((uint32_t)buf[1] << 16) | ((uint32_t)buf[2] << 8) |
+         (uint32_t)buf[3];
 }
 
 // Receive data block from SD
@@ -1453,28 +1449,48 @@ DSTATUS disk_initialize(BYTE pdrv) {
   for (int n = 0; n < 10; n++)
     spi_rx_byte();
   uint8_t type = 0;
-  uint32_t cnt = 100;
+  const uint32_t host_ocr = SD_OCR_VDD_27_36;
   sd_select_spi(SD_INIT_SPI_SPEED);
   if (sd_send_cmd(CMD0, 0) == SD_R1_IDLE) {
-    if (sd_send_cmd(CMD8, 0x00001AAU) == SD_R1_IDLE) {
-      uint32_t ocr = sd_read_reg32();
-      if (_OCR(ocr) == _OCR(0x00001AAU)) {
-        while (sd_send_cmd(ACMD41, SD_OCR_CAPACITY) != 0 && --cnt)
+    if (sd_send_cmd(CMD8, 0x000001AAU) == SD_R1_IDLE) {
+      uint8_t r7[4];
+      spi_rx_buffer(r7, sizeof(r7));
+      if (r7[2] == 0x01 && r7[3] == 0xAA) {
+        uint32_t cnt = 100;
+        uint8_t r1;
+        do {
+          r1 = sd_send_cmd(ACMD41, host_ocr | SD_OCR_CAPACITY);
+          if (r1 == 0)
+            break;
           chThdSleepMilliseconds(10);
-        if (cnt && sd_send_cmd(CMD58, 0) == 0) {
-          DWORD roc = sd_read_reg32();
-          type = (roc & _OCR(SD_OCR_CAPACITY)) ? CT_SD2 | CT_BLOCK : CT_SD2;
+        } while (--cnt);
+        if (r1 == 0 && cnt && sd_send_cmd(CMD58, 0) == 0) {
+          uint32_t ocr = sd_read_be32();
+          if ((ocr & SD_OCR_POWER_UP) && (ocr & SD_OCR_VDD_MASK)) {
+            type = CT_SD2;
+            if (ocr & SD_OCR_CCS)
+              type |= CT_BLOCK;
+          }
         }
       }
 #if defined(SD_USE_COMMAND_CRC) && defined(SD_USE_DATA_CRC)
       sd_send_cmd(CMD59, 1);
 #endif
     } else {
-      uint8_t cmd = (sd_send_cmd(ACMD41, 0) <= 1) ? ACMD41 : CMD1;
-      while (sd_send_cmd(cmd, 0) && --cnt)
+      uint8_t r1 = sd_send_cmd(ACMD41, host_ocr);
+      uint8_t cmd = (r1 <= 1) ? ACMD41 : CMD1;
+      uint32_t cnt = 100;
+      do {
+        if (cmd == ACMD41)
+          r1 = sd_send_cmd(ACMD41, host_ocr);
+        else
+          r1 = sd_send_cmd(CMD1, 0);
+        if (r1 == 0)
+          break;
         chThdSleepMilliseconds(10);
-      if (cnt && sd_send_cmd(CMD16, SD_SECTOR_SIZE) == 0)
-        type = cmd == ACMD41 ? CT_SD1 : CT_MMC;
+      } while (--cnt);
+      if (r1 == 0 && cnt && sd_send_cmd(CMD16, SD_SECTOR_SIZE) == 0)
+        type = (cmd == ACMD41) ? CT_SD1 : CT_MMC;
     }
   }
   sd_unselect_spi();
