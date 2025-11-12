@@ -1581,17 +1581,30 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff) {
   case GET_SECTOR_COUNT: {
     uint8_t csd[16];
     if ((sd_send_cmd(CMD9, 0) == 0) && sd_rx_data_block(csd, 16, SD_TOKEN_START_BLOCK)) {
-      uint32_t n, csize;
+      uint32_t sectors = 0;
       if ((csd[0] >> 6) == 1) {
-        csize = ((uint32_t)csd[7] << 16) | ((uint32_t)csd[8] << 8) | ((uint32_t)csd[9] << 0);
-        n = 10;
+        /* CSD version 2.0 (SDHC/SDXC): memory capacity = (C_SIZE + 1) * 512K */
+        uint32_t csize = ((uint32_t)(csd[7] & 0x3F) << 16) | ((uint32_t)csd[8] << 8) |
+                         ((uint32_t)csd[9] << 0);
+        sectors = (csize + 1U) << 10; /* 512 byte sectors */
       } else {
-        csize =
-            ((uint32_t)csd[8] >> 6) + ((uint32_t)csd[7] << 2) + ((uint32_t)(csd[6] & 0x03) << 10);
-        n = (csd[5] & 0x0F) + ((csd[10] & 0x80) >> 7) + ((csd[9] & 0x03) << 1) + 2 - 9;
+        /* CSD version 1.0 (SDSC) and MMC */
+        uint32_t csize = ((uint32_t)(csd[6] & 0x03) << 10) | ((uint32_t)csd[7] << 2) |
+                         ((uint32_t)csd[8] >> 6);
+        uint32_t csize_mult = ((uint32_t)(csd[9] & 0x03) << 1) |
+                              ((uint32_t)(csd[10] & 0x80) >> 7);
+        uint32_t read_bl_len = csd[5] & 0x0F;
+        if (read_bl_len <= 31U) {
+          uint32_t blocknr = (csize + 1U) << (csize_mult + 2U);
+          uint32_t block_len = 1U << read_bl_len;
+          uint64_t capacity = (uint64_t)blocknr * block_len;
+          sectors = (uint32_t)(capacity / SD_SECTOR_SIZE);
+        }
       }
-      *(uint32_t*)buff = (csize + 1) << n;
-      res = RES_OK;
+      if (sectors != 0U) {
+        *(uint32_t*)buff = sectors;
+        res = RES_OK;
+      }
     }
   } break;
 #endif
