@@ -1800,11 +1800,13 @@ static FILE_LOAD_CALLBACK(load_cmd) {
 #endif
 
 #if defined(__USE_SD_CARD__) && FF_USE_MKFS
+// f_mkfs() requires a FF_MAX_SS-byte work buffer; keep it out of the UI thread stack.
+static BYTE sd_format_work[FF_MAX_SS];
+
 static FRESULT sd_card_format(void) {
-  BYTE work[FF_MAX_SS];
   f_mount(NULL, "", 0);
   MKFS_PARM opt = {.fmt = FM_FAT, .n_fat = 1, .align = 0, .n_root = 0, .au_size = 0};
-  FRESULT res = f_mkfs("", &opt, work, sizeof(work));
+  FRESULT res = f_mkfs("", &opt, sd_format_work, sizeof(sd_format_work));
   if (res != FR_OK)
     return res;
   return f_mount(filesystem_volume(), "", 1);

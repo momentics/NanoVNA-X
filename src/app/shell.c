@@ -33,35 +33,8 @@
 
 static const VNAShellCommand* command_table = NULL;
 
-typedef struct {
-  BaseSequentialStream stream;
-  BaseSequentialStream* target;
-} shell_stream_wrapper_t;
-
-#define SHELL_IO_TIMEOUT_MS 20U
-
-static size_t shell_stream_proxy_write(void* instance, const uint8_t* bp, size_t n);
-static size_t shell_stream_proxy_read(void* instance, uint8_t* bp, size_t n);
-static msg_t shell_stream_proxy_put(void* instance, uint8_t b);
-static msg_t shell_stream_proxy_get(void* instance);
-
-static const struct BaseSequentialStreamVMT shell_stream_proxy_vmt = {
-    shell_stream_proxy_write,
-    shell_stream_proxy_read,
-    shell_stream_proxy_put,
-    shell_stream_proxy_get,
-};
-
-static shell_stream_wrapper_t shell_stream_proxy = {
-    .stream =
-        {
-            .vmt = &shell_stream_proxy_vmt,
-        },
-    .target = NULL,
-};
-
 static BaseSequentialStream* shell_stream = NULL;
-static BaseSequentialStream* shell_backend = NULL;
+static threads_queue_t shell_thread;
 static char* shell_args[VNA_SHELL_MAX_ARGUMENTS + 1];
 static uint16_t shell_nargs;
 static volatile const VNAShellCommand* pending_command = NULL;
@@ -69,70 +42,6 @@ static uint16_t pending_argc = 0;
 static char** pending_argv = NULL;
 static bool shell_skip_linefeed = false;
 static event_bus_t* shell_event_bus = NULL;
-
-static BaseAsynchronousChannel* shell_backend_channel(void) {
-  return (BaseAsynchronousChannel*)shell_backend;
-}
-
-static size_t shell_stream_proxy_write(void* instance, const uint8_t* bp, size_t n) {
-  (void)instance;
-  BaseAsynchronousChannel* channel = shell_backend_channel();
-  if (channel == NULL || bp == NULL || n == 0U)
-    return 0;
-  size_t total = 0;
-  const systime_t timeout = MS2ST(SHELL_IO_TIMEOUT_MS);
-  while (total < n) {
-    size_t sent = chnWriteTimeout(channel, bp + total, n - total, timeout);
-    if (sent == 0)
-      break;
-    total += sent;
-  }
-  return total;
-}
-
-static size_t shell_stream_proxy_read(void* instance, uint8_t* bp, size_t n) {
-  (void)instance;
-  if (shell_backend == NULL || bp == NULL || n == 0U)
-    return 0;
-  return shell_backend->vmt->read(shell_backend, bp, n);
-}
-
-static msg_t shell_stream_proxy_put(void* instance, uint8_t b) {
-  (void)instance;
-  BaseAsynchronousChannel* channel = shell_backend_channel();
-  if (channel == NULL)
-    return STM_RESET;
-  return chnPutTimeout(channel, b, MS2ST(SHELL_IO_TIMEOUT_MS));
-}
-
-static msg_t shell_stream_proxy_get(void* instance) {
-  (void)instance;
-  if (shell_backend == NULL)
-    return STM_RESET;
-  return shell_backend->vmt->get(shell_backend);
-}
-
-static void shell_set_backend(BaseSequentialStream* backend) {
-  shell_backend = backend;
-  if (backend == NULL) {
-    shell_stream_proxy.target = NULL;
-    shell_stream = NULL;
-  } else {
-    shell_stream_proxy.target = backend;
-    shell_stream = &shell_stream_proxy.stream;
-  }
-}
-
-static void shell_wait_for_deferred_completion(const VNAShellCommand* command) {
-  while (true) {
-    osalSysLock();
-    bool done = (pending_command != command);
-    osalSysUnlock();
-    if (done)
-      break;
-    chThdSleepMilliseconds(5);
-  }
-}
 
 static void shell_on_event(const event_bus_message_t* message, void* user_data);
 
@@ -180,14 +89,13 @@ void shell_stream_write(const void* buffer, size_t size) {
 #ifdef __USE_SERIAL_CONSOLE__
 #define PREPARE_STREAM                                                                             \
   do {                                                                                             \
-    BaseSequentialStream* selected =                                                               \
-        VNA_MODE(VNA_MODE_CONNECTION) ? (BaseSequentialStream*)&SD1 : (BaseSequentialStream*)&SDU1;\
-    shell_set_backend(selected);                                                                   \
+    shell_stream = VNA_MODE(VNA_MODE_CONNECTION) ? (BaseSequentialStream*)&SD1                     \
+                                                 : (BaseSequentialStream*)&SDU1;                   \
   } while (false)
 #else
 #define PREPARE_STREAM                                                                             \
   do {                                                                                             \
-    shell_set_backend((BaseSequentialStream*)&SDU1);                                               \
+    shell_stream = (BaseSequentialStream*)&SDU1;                                                   \
   } while (false)
 #endif
 
@@ -236,6 +144,7 @@ bool shell_check_connect(void) {
 }
 
 void shell_init_connection(void) {
+  osalThreadQueueObjectInit(&shell_thread);
   sduObjectInit(&SDU1);
   sduStart(&SDU1, &serusbcfg);
 #ifdef __USE_SERIAL_CONSOLE__
@@ -299,37 +208,25 @@ const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** a
 }
 
 void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t argc, char** argv) {
-  if (command == NULL)
-    return;
-  osalSysLock();
-  if (pending_command != NULL) {
-    osalSysUnlock();
-    command->sc_function((int)argc, argv);
-    return;
-  }
   pending_command = command;
   pending_argc = argc;
   pending_argv = argv;
+  osalSysLock();
+  osalThreadEnqueueTimeoutS(&shell_thread, TIME_INFINITE);
   osalSysUnlock();
-  if (shell_event_bus != NULL)
+  if (shell_event_bus != NULL) {
     event_bus_publish(shell_event_bus, EVENT_SHELL_COMMAND_PENDING, NULL);
-  shell_wait_for_deferred_completion(command);
+  }
 }
 
 void shell_service_pending_commands(void) {
-  while (true) {
-    const VNAShellCommand* command;
-    uint16_t argc;
-    char** argv;
+  while (pending_command != NULL) {
+    const VNAShellCommand* command = pending_command;
+    command->sc_function(pending_argc, pending_argv);
     osalSysLock();
-    command = (const VNAShellCommand*)pending_command;
-    argc = pending_argc;
-    argv = pending_argv;
     pending_command = NULL;
+    osalThreadDequeueNextI(&shell_thread, MSG_OK);
     osalSysUnlock();
-    if (command == NULL)
-      break;
-    command->sc_function((int)argc, argv);
   }
 }
 
@@ -390,17 +287,15 @@ int vna_shell_read_line(char* line, int max_size) {
 
 void vna_shell_execute_cmd_line(char* line) {
   BaseSequentialStream* previous = shell_stream;
-  BaseSequentialStream* previous_backend = shell_backend;
-  shell_set_backend(NULL);
+  shell_stream = NULL;
   uint16_t argc = 0;
   char** argv = NULL;
   const VNAShellCommand* cmd = shell_parse_command(line, &argc, &argv, NULL);
   if (cmd != NULL && (cmd->flags & CMD_RUN_IN_LOAD)) {
     cmd->sc_function(argc, argv);
   }
-  if (previous != NULL) {
-    shell_set_backend(previous_backend);
-  } else {
+  shell_stream = previous;
+  if (shell_stream == NULL) {
     shell_restore_stream();
   }
 }
