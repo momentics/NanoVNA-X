@@ -90,9 +90,10 @@ uint8_t si5351_take_settling_cycles(void) {
 
 #ifdef USE_VARIABLE_OFFSET
 void si5351_set_frequency_offset(int32_t offset) {
+  int32_t sanitized = clamp_if_offset(offset);
   si5351_reset_cache();
-  generate_dsp_table(offset);
-  IF_OFFSET = offset;
+  generate_dsp_table(sanitized);
+  IF_OFFSET = sanitized;
 }
 #endif
 
@@ -988,10 +989,13 @@ void si5351_set_band_mode(uint16_t t) {
 
 uint32_t si5351_get_harmonic_lvl(uint32_t freq) {
   uint16_t i;
+  const uint32_t threshold = clamp_harmonic_threshold(config._harmonic_freq_threshold);
   for (i = 0;; i++) {
     uint32_t f = band_s[i].freq;
-    if (f < 20)
-      f *= config._harmonic_freq_threshold;
+    if (f < 20) {
+      uint64_t scaled = (uint64_t)f * threshold;
+      f = (scaled > UINT32_MAX) ? UINT32_MAX : (uint32_t)scaled;
+    }
     if (freq <= f)
       return i;
   }

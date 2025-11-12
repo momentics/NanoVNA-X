@@ -143,13 +143,43 @@ static const int16_t sincos_tbl[48][2] = {
 #endif
 
 #ifndef __USE_DSP__
-// Define DSP accumulator value type
 typedef float acc_t;
+#else
+typedef int64_t acc_t;
+#endif
 typedef float measure_t;
-acc_t acc_samp_s;
-acc_t acc_samp_c;
-acc_t acc_ref_s;
-acc_t acc_ref_c;
+
+static volatile acc_t acc_samp_s;
+static volatile acc_t acc_samp_c;
+static volatile acc_t acc_ref_s;
+static volatile acc_t acc_ref_c;
+
+static inline uint32_t dsp_enter_critical(void) {
+  uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+  return primask;
+}
+
+static inline void dsp_exit_critical(uint32_t primask) {
+  if ((primask & 1U) == 0U) {
+    __enable_irq();
+  }
+}
+
+static inline void dsp_snapshot(acc_t* samp_s, acc_t* samp_c, acc_t* ref_s, acc_t* ref_c) {
+  uint32_t primask = dsp_enter_critical();
+  if (samp_s != NULL)
+    *samp_s = acc_samp_s;
+  if (samp_c != NULL)
+    *samp_c = acc_samp_c;
+  if (ref_s != NULL)
+    *ref_s = acc_ref_s;
+  if (ref_c != NULL)
+    *ref_c = acc_ref_c;
+  dsp_exit_critical(primask);
+}
+
+#ifndef __USE_DSP__
 void dsp_process(audio_sample_t* capture, size_t length) {
   int32_t samp_s = 0;
   int32_t samp_c = 0;
@@ -174,15 +204,16 @@ void dsp_process(audio_sample_t* capture, size_t length) {
 }
 
 #else
-// Define DSP accumulator value type
-typedef int64_t acc_t;
-typedef float measure_t;
-static acc_t acc_samp_s;
-static acc_t acc_samp_c;
-static acc_t acc_ref_s;
-static acc_t acc_ref_c;
 // Cortex M4 DSP instruction use
 #include "dsp.h"
+
+static inline int32_t pack_sincos_pair(size_t index) {
+  const int16_t* pair = &sincos_tbl[index][0];
+  uint32_t low = (uint32_t)(uint16_t)pair[0];
+  uint32_t high = ((uint32_t)(uint16_t)pair[1]) << 16;
+  return (int32_t)(high | low);
+}
+
 void dsp_process(audio_sample_t* capture, size_t length) {
   uint32_t i = 0;
   //  int64_t samp_s = 0;
@@ -191,7 +222,7 @@ void dsp_process(audio_sample_t* capture, size_t length) {
   //  int64_t ref_c = 0;
 
   do {
-    int32_t sc = ((int32_t*)sincos_tbl)[i];
+    int32_t sc = pack_sincos_pair(i);
     int32_t sr = ((int32_t*)capture)[i];
     // int32_t acc DSP functions, but int32 can overflow
     //    samp_s = __smlatb(sr, sc, samp_s); // samp_s+= smp * sin
@@ -215,19 +246,29 @@ void dsp_process(audio_sample_t* capture, size_t length) {
 #endif
 
 void calculate_gamma(float* gamma) {
+  acc_t ss_acc = 0;
+  acc_t sc_acc = 0;
+  acc_t rs_acc = 0;
+  acc_t rc_acc = 0;
+  dsp_snapshot(&ss_acc, &sc_acc, &rs_acc, &rc_acc);
   // calculate reflection coeff. by samp divide by ref
 #if 1
-  measure_t rs = acc_ref_s;
-  measure_t rc = acc_ref_c;
+  measure_t rs = (measure_t)rs_acc;
+  measure_t rc = (measure_t)rc_acc;
   measure_t rr = rs * rs + rc * rc;
-  measure_t ss = acc_samp_s;
-  measure_t sc = acc_samp_c;
-  gamma[0] =  (sc * rc + ss * rs) / rr;
-  gamma[1] =  (ss * rc - sc * rs) / rr;
+  if (rr < 1e-12f) {
+    gamma[0] = 0.0f;
+    gamma[1] = 0.0f;
+    return;
+  }
+  measure_t ss = (measure_t)ss_acc;
+  measure_t sc = (measure_t)sc_acc;
+  gamma[0] = (sc * rc + ss * rs) / rr;
+  gamma[1] = (ss * rc - sc * rs) / rr;
 #else
-  measure_t rs_rc = (measure_t)acc_ref_s / acc_ref_c;
-  measure_t sc_rc = (measure_t)acc_samp_c / acc_ref_c;
-  measure_t ss_rc = (measure_t)acc_samp_s / acc_ref_c;
+  measure_t rs_rc = (measure_t)rs_acc / rc_acc;
+  measure_t sc_rc = (measure_t)sc_acc / rc_acc;
+  measure_t ss_rc = (measure_t)ss_acc / rc_acc;
   measure_t rr = rs_rc * rs_rc + 1.0f;
   gamma[0] = (sc_rc + ss_rc * rs_rc) / rr;
   gamma[1] = (ss_rc - sc_rc * rs_rc) / rr;
@@ -235,18 +276,26 @@ void calculate_gamma(float* gamma) {
 }
 
 void fetch_amplitude(float* gamma) {
-  gamma[0] = acc_samp_s * 1e-9;
-  gamma[1] = acc_samp_c * 1e-9;
+  acc_t ss_acc = 0;
+  acc_t sc_acc = 0;
+  dsp_snapshot(&ss_acc, &sc_acc, NULL, NULL);
+  gamma[0] = (measure_t)ss_acc * 1e-9f;
+  gamma[1] = (measure_t)sc_acc * 1e-9f;
 }
 
 void fetch_amplitude_ref(float* gamma) {
-  gamma[0] = acc_ref_s * 1e-9;
-  gamma[1] = acc_ref_c * 1e-9;
+  acc_t rs_acc = 0;
+  acc_t rc_acc = 0;
+  dsp_snapshot(NULL, NULL, &rs_acc, &rc_acc);
+  gamma[0] = (measure_t)rs_acc * 1e-9f;
+  gamma[1] = (measure_t)rc_acc * 1e-9f;
 }
 
 void reset_dsp_accumerator(void) {
+  uint32_t primask = dsp_enter_critical();
   acc_ref_s = 0;
   acc_ref_c = 0;
   acc_samp_s = 0;
   acc_samp_c = 0;
+  dsp_exit_critical(primask);
 }

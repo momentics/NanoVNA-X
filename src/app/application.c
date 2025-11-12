@@ -393,7 +393,13 @@ VNA_SHELL_FUNCTION(cmd_offset) {
                  "offset {frequency offset(Hz)}", IF_OFFSET);
     return;
   }
-  si5351_set_frequency_offset(my_atoi(argv[0]));
+  int32_t requested = my_atoi(argv[0]);
+  int32_t clamped = clamp_if_offset(requested);
+  if (clamped != requested) {
+    shell_printf("offset clamped to %ld Hz" VNA_SHELL_NEWLINE_STR, (long)clamped);
+  }
+  si5351_set_frequency_offset(clamped);
+  config_service_notify_configuration_changed();
 }
 #endif
 
@@ -490,8 +496,13 @@ VNA_SHELL_FUNCTION(cmd_threshold) {
                  "threshold {frequency in harmonic mode}", config._harmonic_freq_threshold);
     return;
   }
-  value = my_atoui(argv[0]);
+  uint32_t requested = my_atoui(argv[0]);
+  value = clamp_harmonic_threshold(requested);
+  if (value != requested) {
+    shell_printf("threshold clamped to %u Hz" VNA_SHELL_NEWLINE_STR, value);
+  }
   config._harmonic_freq_threshold = value;
+  config_service_notify_configuration_changed();
 }
 
 VNA_SHELL_FUNCTION(cmd_saveconfig) {
@@ -644,8 +655,8 @@ VNA_SHELL_FUNCTION(cmd_gamma)
 }
 #endif
 
-static void (*sample_func)(float* gamma) = calculate_gamma;
 #ifdef ENABLE_SAMPLE_COMMAND
+static void (*sample_func)(float* gamma) = calculate_gamma;
 VNA_SHELL_FUNCTION(cmd_sample) {
   if (argc != 1)
     goto usage;
@@ -1258,37 +1269,6 @@ static void apply_error_term_at(int i)
 }
 #endif
 
-static void apply_ch0_error_term(float data[4], float c_data[CAL_TYPE_COUNT][2]) {
-  // S11m' = S11m - Ed
-  // S11a = S11m' / (Er + Es S11m')
-  float s11mr = data[0] - c_data[ETERM_ED][0];
-  float s11mi = data[1] - c_data[ETERM_ED][1];
-  float err = c_data[ETERM_ER][0] + s11mr * c_data[ETERM_ES][0] - s11mi * c_data[ETERM_ES][1];
-  float eri = c_data[ETERM_ER][1] + s11mr * c_data[ETERM_ES][1] + s11mi * c_data[ETERM_ES][0];
-  float sq = err * err + eri * eri;
-  data[0] = (s11mr * err + s11mi * eri) / sq;
-  data[1] = (s11mi * err - s11mr * eri) / sq;
-}
-
-static void apply_ch1_error_term(float data[4], float c_data[CAL_TYPE_COUNT][2]) {
-  // CAUTION: Et is inversed for efficiency
-  // S21a = (S21m - Ex) * Et`
-  float s21mr = data[2] - c_data[ETERM_EX][0];
-  float s21mi = data[3] - c_data[ETERM_EX][1];
-  // Not made CH1 correction by CH0 data
-  data[2] = s21mr * c_data[ETERM_ET][0] - s21mi * c_data[ETERM_ET][1];
-  data[3] = s21mi * c_data[ETERM_ET][0] + s21mr * c_data[ETERM_ET][1];
-  if (cal_status & CALSTAT_ENHANCED_RESPONSE) {
-    // S21a*= 1 - Es * S11a
-    float esr = 1.0f - (c_data[ETERM_ES][0] * data[0] - c_data[ETERM_ES][1] * data[1]);
-    float esi = 0.0f - (c_data[ETERM_ES][1] * data[0] + c_data[ETERM_ES][0] * data[1]);
-    float re = data[2];
-    float im = data[3];
-    data[2] = esr * re - esi * im;
-    data[3] = esi * re + esr * im;
-  }
-}
-
 void cal_collect(uint16_t type) {
   uint16_t dst, src;
 
@@ -1400,67 +1380,6 @@ void cal_done(void) {
   cal_status |= CALSTAT_APPLY;
   lastsaveid = NO_SAVE_SLOT;
   request_to_redraw(REDRAW_BACKUP | REDRAW_CAL_STATUS);
-}
-
-static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
-  int eterm;
-  uint16_t src_points = cal_sweep_points - 1;
-  if (idx >= 0)
-    goto copy_point;
-  if (f <= cal_frequency0) {
-    idx = 0;
-    goto copy_point;
-  }
-  if (f >= cal_frequency1) {
-    idx = src_points;
-    goto copy_point;
-  }
-  // Calculate k for linear interpolation
-  freq_t span = cal_frequency1 - cal_frequency0;
-  idx = (uint64_t)(f - cal_frequency0) * (uint64_t)src_points / span;
-  uint64_t v = (uint64_t)span * idx + src_points / 2;
-  freq_t src_f0 = cal_frequency0 + (v) / src_points;
-  freq_t src_f1 = cal_frequency0 + (v + span) / src_points;
-
-  freq_t delta = src_f1 - src_f0;
-  // Not need interpolate
-  if (f == src_f0)
-    goto copy_point;
-
-  float k = (delta == 0) ? 0.0f : (float)(f - src_f0) / delta;
-  // avoid glitch between freqs in different harmonics mode
-  uint32_t hf0 = si5351_get_harmonic_lvl(src_f0);
-  if (hf0 != si5351_get_harmonic_lvl(src_f1)) {
-    // f in prev harmonic, need extrapolate from prev 2 points
-    if (hf0 == si5351_get_harmonic_lvl(f)) {
-      if (idx < 1)
-        goto copy_point; // point limit
-      idx--;
-      k += 1.0f;
-    }
-    // f in next harmonic, need extrapolate from next 2 points
-    else {
-      if (idx >= src_points)
-        goto copy_point; // point limit
-      idx++;
-      k -= 1.0f;
-    }
-  }
-  // Interpolate by k
-  for (eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
-    data[eterm][0] =
-        cal_data[eterm][idx][0] + k * (cal_data[eterm][idx + 1][0] - cal_data[eterm][idx][0]);
-    data[eterm][1] =
-        cal_data[eterm][idx][1] + k * (cal_data[eterm][idx + 1][1] - cal_data[eterm][idx][1]);
-  }
-  return;
-  // Direct point copy
-copy_point:
-  for (eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
-    data[eterm][0] = cal_data[eterm][idx][0];
-    data[eterm][1] = cal_data[eterm][idx][1];
-  }
-  return;
 }
 
 VNA_SHELL_FUNCTION(cmd_cal) {

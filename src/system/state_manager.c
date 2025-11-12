@@ -38,6 +38,13 @@ static bool sweep_state_dirty = false;
 static systime_t sweep_state_deadline = 0;
 static systime_t sweep_state_last_save = 0;
 
+static void sanitize_rf_preferences(void) {
+#ifdef USE_VARIABLE_OFFSET
+  config._IF_freq = clamp_if_offset(config._IF_freq);
+#endif
+  config._harmonic_freq_threshold = clamp_harmonic_threshold(config._harmonic_freq_threshold);
+}
+
 static const trace_t def_trace[TRACES_MAX] = {
     {TRUE, TRC_LOGMAG, 0, MS_RX, 10.0, NGRIDY - 1},
     {TRUE, TRC_LOGMAG, 1, MS_REIM, 10.0, NGRIDY - 1},
@@ -135,6 +142,7 @@ void update_backup_data(void) {
 static void load_settings(void) {
   load_default_properties();
   if (config_recall() == 0 && VNA_MODE(VNA_MODE_BACKUP)) {
+    sanitize_rf_preferences();
     backup_0 bk = {.v = get_backup_data32(0)};
     if (bk.v != 0U) {
       if (bk.id < SAVEAREA_MAX && caldata_recall(bk.id) == 0) {
@@ -159,6 +167,7 @@ static void load_settings(void) {
     }
   } else {
     caldata_recall(0);
+    sanitize_rf_preferences();
   }
   app_measurement_update_frequencies();
 #ifdef __VNA_MEASURE_MODULE__
@@ -173,6 +182,7 @@ void update_backup_data(void) {}
 static void load_settings(void) {
   load_default_properties();
   config_recall();
+  sanitize_rf_preferences();
   load_properties(0);
 }
 

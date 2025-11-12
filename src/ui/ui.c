@@ -1468,7 +1468,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_offset_sel_acb) {
 
 #ifdef __LCD_BRIGHTNESS__
 // Brightness control range 0 - 100
-static void lcd_set_brightness(uint16_t b) {
+void lcd_set_brightness(uint16_t b) {
   dac_setvalue_ch2(700 + b * (4000 - 700) / 100);
 }
 
@@ -3142,7 +3142,8 @@ UI_KEYBOARD_CALLBACK(input_harmonic) {
     b->p1.u = config._harmonic_freq_threshold;
     return;
   }
-  config._harmonic_freq_threshold = keyboard_get_uint();
+  uint32_t value = keyboard_get_uint();
+  config._harmonic_freq_threshold = clamp_harmonic_threshold(value);
   config_service_notify_configuration_changed();
 }
 

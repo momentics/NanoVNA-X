@@ -220,11 +220,21 @@ void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t a
 }
 
 void shell_service_pending_commands(void) {
-  while (pending_command != NULL) {
-    const VNAShellCommand* command = pending_command;
-    command->sc_function(pending_argc, pending_argv);
+  while (true) {
     osalSysLock();
+    const VNAShellCommand* command = (const VNAShellCommand*)pending_command;
+    uint16_t argc = pending_argc;
+    char** argv = pending_argv;
+    if (command == NULL) {
+      osalSysUnlock();
+      break;
+    }
     pending_command = NULL;
+    osalSysUnlock();
+
+    command->sc_function(argc, argv);
+
+    osalSysLock();
     osalThreadDequeueNextI(&shell_thread, MSG_OK);
     osalSysUnlock();
   }

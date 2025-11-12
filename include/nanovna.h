@@ -1362,6 +1362,33 @@ extern uint16_t lastsaveid;
 #define VNA_MODE(idx)        (config._vna_mode&(1<<idx))
 #define lever_mode           config._lever_mode
 #define IF_OFFSET            config._IF_freq
+
+#ifdef USE_VARIABLE_OFFSET
+#define IF_OFFSET_MIN        ((int32_t)FREQUENCY_OFFSET_STEP)
+#define IF_OFFSET_MAX        ((int32_t)(AUDIO_ADC_FREQ / 2))
+static inline int32_t clamp_if_offset(int32_t offset) {
+  if (offset < IF_OFFSET_MIN) {
+    offset = IF_OFFSET_MIN;
+  } else if (offset > IF_OFFSET_MAX) {
+    offset = IF_OFFSET_MAX;
+  }
+  return offset;
+}
+#else
+static inline int32_t clamp_if_offset(int32_t offset) {
+  (void)offset;
+  return FREQUENCY_OFFSET;
+}
+#endif
+
+static inline uint32_t clamp_harmonic_threshold(uint32_t value) {
+  if (value < FREQUENCY_MIN) {
+    value = FREQUENCY_MIN;
+  } else if (value > FREQUENCY_MAX) {
+    value = FREQUENCY_MAX;
+  }
+  return value;
+}
 #ifdef __DIGIT_SEPARATOR__
 #define DIGIT_SEPARATOR      (VNA_MODE(VNA_MODE_SEPARATOR) ? ',' : '.')
 #else
