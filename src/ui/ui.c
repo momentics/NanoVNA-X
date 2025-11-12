@@ -1805,7 +1805,8 @@ _Static_assert(sizeof(spi_buffer) >= FF_MAX_SS, "spi_buffer is too small for mkf
 static FRESULT sd_card_format(void) {
   BYTE* work = (BYTE*)spi_buffer;
   f_mount(NULL, "", 0);
-  MKFS_PARM opt = {.fmt = FM_FAT, .n_fat = 1, .align = 0, .n_root = 0, .au_size = 0};
+  /* Allow mkfs to pick FAT12/16 for small cards and FAT32 for larger media. */
+  MKFS_PARM opt = {.fmt = FM_FAT | FM_FAT32, .n_fat = 1, .align = 0, .n_root = 0, .au_size = 0};
   FRESULT res = f_mkfs("", &opt, work, FF_MAX_SS);
   if (res != FR_OK)
     return res;
