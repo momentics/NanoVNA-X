@@ -267,7 +267,6 @@ SECTIONS
     {
         . = ALIGN(8);
         __heap_base__ = .;
-        . = ORIGIN(HEAP_RAM) + LENGTH(HEAP_RAM);
-        __heap_end__ = .;
+        __heap_end__ = MAX(__heap_base__, ORIGIN(HEAP_RAM) + LENGTH(HEAP_RAM));
     } > HEAP_RAM
 }
