@@ -42,6 +42,7 @@
 void lcd_set_brightness(uint16_t brightness);
 #endif
 
+#include <stdalign.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -2734,7 +2735,7 @@ __attribute__((used)) void hard_fault_handler_c(uint32_t* sp, const hard_fault_e
 #if ENABLED_DUMP_COMMAND
 VNA_SHELL_FUNCTION(cmd_dump) {
   int i, j;
-  audio_sample_t dump[96 * 2];
+  alignas(4) audio_sample_t dump[96 * 2];
   int selection = 0;
   if (argc == 1) {
     selection = (my_atoui(argv[0]) == 1) ? 0 : 1;

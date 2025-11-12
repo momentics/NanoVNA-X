@@ -613,18 +613,28 @@ void measurement_data_smooth(uint16_t ch_mask) {
   if (smooth_factor == 0U) {
     return;
   }
+  if (sweep_points <= 2U) {
+    return;
+  }
   float (*smooth_func)(float, float, float) =
       VNA_MODE(VNA_MODE_SMOOTH) ? arifmetic_mean : geometry_mean;
   for (int ch = 0; ch < 2; ch++, ch_mask >>= 1) {
     if ((ch_mask & 1U) == 0U) {
       continue;
     }
-    int count = 1 << (smooth_factor - 1);
+    uint32_t max_passes = (sweep_points > 2U) ? (sweep_points - 2U) : 0U;
+    uint32_t count = 1U << (smooth_factor - 1U);
+    if (count == 0U)
+      count = 1U;
+    if (count > max_passes)
+      count = max_passes;
+    if (count == 0U)
+      continue;
     float* data = measured[ch][0];
-    for (int n = 0; n < count; n++) {
+    for (uint32_t n = 0; n < count; n++) {
       float prev_re = data[0];
       float prev_im = data[1];
-      for (int j = 1; j < sweep_points - 1; j++) {
+      for (uint32_t j = 1; j < sweep_points - 1U; j++) {
         float old_re = data[2 * j];
         float old_im = data[2 * j + 1];
         data[2 * j] = smooth_func(prev_re, data[2 * j], data[2 * j + 2]);
