@@ -1585,13 +1585,13 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff) {
         /* CSD version 1.0 (SDSC) and MMC */
         uint32_t csize = ((uint32_t)(csd[6] & 0x03) << 10) | ((uint32_t)csd[7] << 2) |
                          ((uint32_t)csd[8] >> 6);
-        uint32_t csize_mult = ((uint32_t)(csd[9] & 0x03) << 1) |
-                              ((uint32_t)(csd[10] & 0x80) >> 7);
+        uint32_t csize_mult = (((uint32_t)(csd[10] & 0x80) >> 7) << 2) |
+                              ((uint32_t)(csd[9] & 0x03));
         uint32_t read_bl_len = csd[5] & 0x0F;
         if (read_bl_len <= 31U) {
-          uint32_t blocknr = (csize + 1U) << (csize_mult + 2U);
           uint32_t block_len = 1U << read_bl_len;
-          uint64_t capacity = (uint64_t)blocknr * block_len;
+          uint64_t blocknr = (uint64_t)(csize + 1U) << (csize_mult + 2U);
+          uint64_t capacity = blocknr * block_len;
           sectors = (uint32_t)(capacity / SD_SECTOR_SIZE);
         }
       }
