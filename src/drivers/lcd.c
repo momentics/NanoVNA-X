@@ -1352,6 +1352,13 @@ static bool sd_rx_data_block(uint8_t* buff, uint16_t len, uint8_t token) {
 // Transmit data block to SD
 static bool sd_tx_data_block(const uint8_t* buff, uint16_t len, uint8_t token) {
   uint8_t r1;
+  /*
+   * SD cards keep the DO line low while programming the previous block.  Make
+   * sure the device has released the bus before we transmit a new token and do
+   * not report success until it finishes programming the block we just sent.
+   */
+  if (sd_wait_not_busy(MS2ST(2000)) != 0xFF)
+    return FALSE;
   spi_tx_byte(token);
 #ifdef __USE_SDCARD_DMA__
   spi_dma_tx_buffer(buff, len, false);
@@ -1372,6 +1379,8 @@ static bool sd_tx_data_block(const uint8_t* buff, uint16_t len, uint8_t token) {
     DEBUG_PRINT(" Tx accept error = %04x\n", (uint32_t)r1);
     return FALSE;
   }
+  if (sd_wait_not_busy(MS2ST(2000)) != 0xFF)
+    return FALSE;
   return TRUE;
 }
 
@@ -1520,10 +1529,18 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buff, DWORD sector, UINT count) {
         sd_tx_data_block(buff, SD_SECTOR_SIZE, SD_TOKEN_START_BLOCK))
       count--;
   } else if (sd_send_cmd(CMD25, sector) == 0) {
-    while (sd_tx_data_block(buff, SD_SECTOR_SIZE, SD_TOKEN_START_M_BLOCK) &&
-           sd_wait_not_busy(MS2ST(2000)) == 0xFF && --count)
+    bool success = true;
+    do {
+      if (!sd_tx_data_block(buff, SD_SECTOR_SIZE, SD_TOKEN_START_M_BLOCK)) {
+        success = false;
+        break;
+      }
       buff += SD_SECTOR_SIZE;
+    } while (--count);
     spi_tx_byte(SD_TOKEN_STOP_M_BLOCK);
+    if (sd_wait_not_busy(MS2ST(2000)) != 0xFF)
+      success = false;
+    count = (success && count == 0) ? 0 : 1;
   }
   sd_unselect_spi();
 #if DEBUG == 1
