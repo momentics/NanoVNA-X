@@ -1290,13 +1290,15 @@ static uint8_t sd_read_r1(uint32_t cnt) {
 }
 
 // Wait SD ready token answer (wait time in systick)
-static bool sd_wait_data_token(uint8_t token, uint32_t wait_time) {
-  uint8_t res;
-  uint32_t time = chVTGetSystemTimeX();
+static bool sd_wait_data_token(uint8_t token, systime_t wait_time) {
+  systime_t start = chVTGetSystemTimeX();
   spi_drop_rx();
-  while ((res = spi_rx_byte()) != token && chVTGetSystemTimeX() - time < wait_time)
-    ;
-  return res == token;
+  do {
+    uint8_t res = spi_rx_byte();
+    if (res == token)
+      return true;
+  } while (chVTTimeElapsedSinceX(start) < wait_time);
+  return false;
 }
 
 static uint8_t sd_wait_data_accept(uint32_t cnt) {
@@ -1308,14 +1310,14 @@ static uint8_t sd_wait_data_accept(uint32_t cnt) {
 }
 
 // Wait no Busy answer from SD (wait time in systick)
-static uint8_t sd_wait_not_busy(uint32_t wait_time) {
-  uint8_t res;
-  uint32_t time = chVTGetSystemTimeX();
+static uint8_t sd_wait_not_busy(systime_t wait_time) {
+  systime_t start = chVTGetSystemTimeX();
   spi_drop_rx();
   do {
-    if ((res = spi_rx_byte()) == 0xFF)
+    uint8_t res = spi_rx_byte();
+    if (res == 0xFF)
       return res;
-  } while (chVTGetSystemTimeX() - time < wait_time);
+  } while (chVTTimeElapsedSinceX(start) < wait_time);
   return 0;
 }
 
@@ -1533,6 +1535,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buff, DWORD sector, UINT count) {
     sector++;
     count--;
   }
+  sd_wait_not_busy(MS2ST(2000));
   sd_unselect_spi();
 #if DEBUG == 1
   w_time += chVTGetSystemTimeX();
