@@ -1321,11 +1321,17 @@ static uint8_t sd_wait_not_busy(systime_t wait_time) {
   return 0;
 }
 
-static uint32_t sd_read_be32(void) {
+/*
+ * Read a 32-bit register value returned by the card while keeping the byte order
+ * expected by the host.  In SPI mode the SD card shifts the least significant
+ * byte first, so build the result in little-endian order to match the layout the
+ * legacy driver relied on when it read directly into a uint32_t buffer.
+ */
+static uint32_t sd_read_reg32(void) {
   uint8_t buf[4];
   spi_rx_buffer(buf, sizeof(buf));
-  return ((uint32_t)buf[0] << 24) | ((uint32_t)buf[1] << 16) | ((uint32_t)buf[2] << 8) |
-         (uint32_t)buf[3];
+  return ((uint32_t)buf[0] << 0) | ((uint32_t)buf[1] << 8) | ((uint32_t)buf[2] << 16) |
+         ((uint32_t)buf[3] << 24);
 }
 
 // Receive data block from SD
@@ -1451,12 +1457,12 @@ DSTATUS disk_initialize(BYTE pdrv) {
   sd_select_spi(SD_INIT_SPI_SPEED);
   if (sd_send_cmd(CMD0, 0) == SD_R1_IDLE) {
     if (sd_send_cmd(CMD8, 0x00001AAU) == SD_R1_IDLE) {
-      uint32_t ocr = sd_read_be32();
+      uint32_t ocr = sd_read_reg32();
       if (_OCR(ocr) == _OCR(0x00001AAU)) {
         while (sd_send_cmd(ACMD41, SD_OCR_CAPACITY) != 0 && --cnt)
           chThdSleepMilliseconds(10);
         if (cnt && sd_send_cmd(CMD58, 0) == 0) {
-          DWORD roc = sd_read_be32();
+          DWORD roc = sd_read_reg32();
           type = (roc & _OCR(SD_OCR_CAPACITY)) ? CT_SD2 | CT_BLOCK : CT_SD2;
         }
       }
