@@ -27,6 +27,7 @@
 
 #include <math.h>
 #include <stdalign.h>
+#include <stdint.h>
 #include <string.h>
 
 #ifdef __VNA_Z_RENORMALIZATION__
@@ -58,7 +59,7 @@ static uint16_t sweep_bar_drawn_pixels = 0;
 static uint8_t sweep_bar_pending = 0;
 
 static uint8_t smooth_factor = 0;
-static void (*sample_func)(float* gamma) = calculate_gamma;
+static void (*volatile sample_func)(float* gamma) = calculate_gamma;
 
 void sweep_service_set_sample_function(void (*func)(float*)) {
   if (func == NULL) {
@@ -372,6 +373,7 @@ const audio_sample_t* sweep_service_rx_buffer(void) {
 
 #if ENABLED_DUMP_COMMAND
 void sweep_service_prepare_dump(audio_sample_t* buffer, size_t count, int selection) {
+  chDbgAssert(((uintptr_t)buffer & 0x3U) == 0U, "audio sample buffer must be 4-byte aligned");
   dump_buffer = buffer;
   dump_len = (int16_t)count;
   dump_selection = (int16_t)selection;
@@ -550,7 +552,8 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
         if (!sweep_service_wait_for_capture()) {
           goto capture_failure;
         }
-        (*sample_func)(&data[0]);
+        void (*sample_cb)(float*) = sample_func;
+        sample_cb(&data[0]);
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
           apply_ch0_error_term(data, c_data);
         }
@@ -570,7 +573,8 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
         if (!sweep_service_wait_for_capture()) {
           goto capture_failure;
         }
-        (*sample_func)(&data[2]);
+        void (*sample_cb)(float*) = sample_func;
+        sample_cb(&data[2]);
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
           apply_ch1_error_term(data, c_data);
         }

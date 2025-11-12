@@ -467,7 +467,7 @@ extern const char *info_about[];
 #define BANDWIDTH_10              (100 - 1)
 #endif
 
-typedef int16_t  audio_sample_t;
+typedef int16_t audio_sample_t;
 void dsp_process(audio_sample_t *src, size_t len);
 void reset_dsp_accumerator(void);
 void calculate_gamma(float *gamma);
