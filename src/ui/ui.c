@@ -1800,18 +1800,51 @@ static FILE_LOAD_CALLBACK(load_cmd) {
 #endif
 
 #if defined(__USE_SD_CARD__) && FF_USE_MKFS
+#define SD_CARD_FORMAT_THREAD_STACK 192U
+
+typedef struct {
+  volatile bool done;
+  FRESULT result;
+} sd_card_format_state_t;
+
+static stkalign_t* sd_card_format_thread_wa = NULL;
+static size_t sd_card_format_thread_wa_size = 0;
+static BYTE* sd_card_format_work_buffer = NULL;
+
+static bool sd_card_format_ensure_resources(void) {
+  if (sd_card_format_work_buffer == NULL) {
+    BYTE* work = (BYTE*)chCoreAllocAligned(FF_MAX_SS, sizeof(stkalign_t));
+    if (work == NULL)
+      return false;
+    sd_card_format_work_buffer = work;
+  }
+  if (sd_card_format_thread_wa == NULL) {
+    size_t size = THD_WORKING_AREA_SIZE(SD_CARD_FORMAT_THREAD_STACK);
+    stkalign_t* wa = (stkalign_t*)chCoreAllocAligned(size, sizeof(stkalign_t));
+    if (wa == NULL)
+      return false;
+    sd_card_format_thread_wa = wa;
+    sd_card_format_thread_wa_size = size;
+  }
+  return true;
+}
+
 static FRESULT sd_card_format(void) {
-  f_mount(NULL, "", 0);
-  // Allocate the FatFs work buffer from the system heap to keep it off the UI stack.
-  BYTE* work = chHeapAlloc(NULL, FF_MAX_SS);
+  BYTE* work = sd_card_format_work_buffer;
   if (work == NULL)
     return FR_NOT_ENOUGH_CORE;
+  f_mount(NULL, "", 0);
   MKFS_PARM opt = {.fmt = FM_FAT, .n_fat = 1, .align = 0, .n_root = 0, .au_size = 0};
   FRESULT res = f_mkfs("", &opt, work, FF_MAX_SS);
-  chHeapFree(work);
   if (res != FR_OK)
     return res;
   return f_mount(filesystem_volume(), "", 1);
+}
+
+static THD_FUNCTION(sd_card_format_worker, arg) {
+  sd_card_format_state_t* state = (sd_card_format_state_t*)arg;
+  state->result = sd_card_format();
+  state->done = true;
 }
 
 static UI_FUNCTION_CALLBACK(menu_sdcard_format_cb) {
@@ -1819,15 +1852,43 @@ static UI_FUNCTION_CALLBACK(menu_sdcard_format_cb) {
   bool resume = (sweep_mode & SWEEP_ENABLE) != 0;
   if (resume)
     toggle_sweep();
+  sd_card_format_state_t state = {.done = false, .result = FR_OK};
+  thread_t* tp = NULL;
+  if (sd_card_format_ensure_resources()) {
+    tp = chThdCreateStatic(sd_card_format_thread_wa, sd_card_format_thread_wa_size,
+                           NORMALPRIO - 1, sd_card_format_worker, &state);
+  }
+  systime_t start = chVTGetSystemTimeX();
   ui_message_box_draw("FORMAT SD", "Formatting...");
-  chThdSleepMilliseconds(120);
-  FRESULT res = sd_card_format();
+  if (tp != NULL) {
+    chThdSleepMilliseconds(120);
+    static const char spinner[] = "|/-\\";
+    size_t spinner_idx = 0;
+    while (!state.done) {
+      char busy[32];
+      plot_printf(busy, sizeof(busy), "Formatting %c", spinner[spinner_idx++ & 0x3]);
+      ui_message_box_draw("FORMAT SD", busy);
+      chThdSleepMilliseconds(120);
+    }
+#if CH_CFG_USE_WAITEXIT
+    chThdWait(tp);
+#else
+    while (!chThdTerminatedX(tp))
+      chThdSleepMilliseconds(5);
+#endif
+  } else {
+    chThdSleepMilliseconds(120);
+    state.result = sd_card_format();
+    state.done = true;
+  }
   if (resume)
     toggle_sweep();
   char msg[32];
-  if (res == FR_OK)
-    strcpy(msg, "OK");
-  else
+  FRESULT res = state.result;
+  if (res == FR_OK) {
+    uint32_t elapsed_ms = (uint32_t)ST2MS(chVTTimeElapsedSinceX(start));
+    plot_printf(msg, sizeof(msg), "OK %lums", (unsigned long)elapsed_ms);
+  } else
     plot_printf(msg, sizeof(msg), "ERR %d", res);
   ui_message_box("FORMAT SD", msg, 2000);
   ui_mode_normal();
