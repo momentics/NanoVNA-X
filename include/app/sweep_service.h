@@ -80,6 +80,8 @@ void measurement_data_smooth(uint16_t ch_mask);
 void set_smooth_factor(uint8_t factor);
 uint8_t get_smooth_factor(void);
 
+void sweep_service_set_sample_function(void (*func)(float*));
+
 void i2s_lld_serve_rx_interrupt(uint32_t flags);
 
 #ifdef __cplusplus

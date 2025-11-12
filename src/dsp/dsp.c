@@ -214,6 +214,13 @@ static inline int32_t pack_sincos_pair(size_t index) {
   return (int32_t)(high | low);
 }
 
+static inline int32_t pack_capture_pair(const audio_sample_t* capture, size_t pair_index) {
+  size_t base = pair_index * 2U;
+  uint32_t low = (uint32_t)(uint16_t)capture[base];
+  uint32_t high = ((uint32_t)(uint16_t)capture[base + 1U]) << 16;
+  return (int32_t)(high | low);
+}
+
 void dsp_process(audio_sample_t* capture, size_t length) {
   uint32_t i = 0;
   //  int64_t samp_s = 0;
@@ -223,7 +230,7 @@ void dsp_process(audio_sample_t* capture, size_t length) {
 
   do {
     int32_t sc = pack_sincos_pair(i);
-    int32_t sr = ((int32_t*)capture)[i];
+    int32_t sr = pack_capture_pair(capture, i);
     // int32_t acc DSP functions, but int32 can overflow
     //    samp_s = __smlatb(sr, sc, samp_s); // samp_s+= smp * sin
     //    samp_c = __smlatt(sr, sc, samp_c); // samp_c+= smp * cos

@@ -38,6 +38,10 @@
 #include "platform/boards/stm32_peripherals.h"
 #include "system/state_manager.h"
 
+#ifdef __LCD_BRIGHTNESS__
+void lcd_set_brightness(uint16_t brightness);
+#endif
+
 #include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -656,7 +660,6 @@ VNA_SHELL_FUNCTION(cmd_gamma)
 #endif
 
 #ifdef ENABLE_SAMPLE_COMMAND
-static void (*sample_func)(float* gamma) = calculate_gamma;
 VNA_SHELL_FUNCTION(cmd_sample) {
   if (argc != 1)
     goto usage;
@@ -664,13 +667,13 @@ VNA_SHELL_FUNCTION(cmd_sample) {
   static const char cmd_sample_list[] = "gamma|ampl|ref";
   switch (get_str_index(argv[0], cmd_sample_list)) {
   case 0:
-    sample_func = calculate_gamma;
+    sweep_service_set_sample_function(calculate_gamma);
     return;
   case 1:
-    sample_func = fetch_amplitude;
+    sweep_service_set_sample_function(fetch_amplitude);
     return;
   case 2:
-    sample_func = fetch_amplitude_ref;
+    sweep_service_set_sample_function(fetch_amplitude_ref);
     return;
   default:
     break;

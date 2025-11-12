@@ -26,6 +26,7 @@
 #include "si5351.h"
 
 #include <math.h>
+#include <stdalign.h>
 #include <string.h>
 
 #ifdef __VNA_Z_RENORMALIZATION__
@@ -37,7 +38,7 @@
  */
 static systime_t ready_time = 0;
 static volatile uint16_t wait_count = 0;
-static audio_sample_t rx_buffer[AUDIO_BUFFER_LEN * 2];
+static alignas(4) audio_sample_t rx_buffer[AUDIO_BUFFER_LEN * 2];
 
 #if ENABLED_DUMP_COMMAND
 static audio_sample_t* dump_buffer = NULL;
@@ -58,6 +59,15 @@ static uint8_t sweep_bar_pending = 0;
 
 static uint8_t smooth_factor = 0;
 static void (*sample_func)(float* gamma) = calculate_gamma;
+
+void sweep_service_set_sample_function(void (*func)(float*)) {
+  if (func == NULL) {
+    func = calculate_gamma;
+  }
+  osalSysLock();
+  sample_func = func;
+  osalSysUnlock();
+}
 
 static inline bool sweep_ui_input_pending(void) {
   return (operation_requested & (OP_TOUCH | OP_LEVER)) != 0;
