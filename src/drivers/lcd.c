@@ -1491,16 +1491,16 @@ DRESULT disk_read(BYTE pdrv, BYTE* buff, DWORD sector, UINT count) {
   r_time -= chVTGetSystemTimeX();
 #endif
   sd_select_spi(SD_SPI_RX_SPEED);
-  if (!(CardStatus & CT_BLOCK))
-    sector *= SD_SECTOR_SIZE;
-  if (count == 1) {
-    if (sd_send_cmd(CMD17, sector) == 0 &&
-        sd_rx_data_block(buff, SD_SECTOR_SIZE, SD_TOKEN_START_BLOCK))
-      count--;
-  } else if (sd_send_cmd(CMD18, sector) == 0) {
-    while (sd_rx_data_block(buff, SD_SECTOR_SIZE, SD_TOKEN_START_BLOCK) && --count)
-      buff += SD_SECTOR_SIZE;
-    sd_send_cmd(CMD12, 0);
+  while (count) {
+    DWORD addr = sector;
+    if (!(CardStatus & CT_BLOCK))
+      addr *= SD_SECTOR_SIZE;
+    if (sd_send_cmd(CMD17, addr) != 0 ||
+        !sd_rx_data_block(buff, SD_SECTOR_SIZE, SD_TOKEN_START_BLOCK))
+      break;
+    buff += SD_SECTOR_SIZE;
+    sector++;
+    count--;
   }
   sd_unselect_spi();
 #if DEBUG == 1
@@ -1522,25 +1522,16 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buff, DWORD sector, UINT count) {
   w_time -= chVTGetSystemTimeX();
 #endif
   sd_select_spi(SD_SPI_SPEED);
-  if (!(CardStatus & CT_BLOCK))
-    sector *= SD_SECTOR_SIZE;
-  if (count == 1) {
-    if (sd_send_cmd(CMD24, sector) == 0 &&
-        sd_tx_data_block(buff, SD_SECTOR_SIZE, SD_TOKEN_START_BLOCK))
-      count--;
-  } else if (sd_send_cmd(CMD25, sector) == 0) {
-    bool success = true;
-    do {
-      if (!sd_tx_data_block(buff, SD_SECTOR_SIZE, SD_TOKEN_START_M_BLOCK)) {
-        success = false;
-        break;
-      }
-      buff += SD_SECTOR_SIZE;
-    } while (--count);
-    spi_tx_byte(SD_TOKEN_STOP_M_BLOCK);
-    if (sd_wait_not_busy(MS2ST(2000)) != 0xFF)
-      success = false;
-    count = (success && count == 0) ? 0 : 1;
+  while (count) {
+    DWORD addr = sector;
+    if (!(CardStatus & CT_BLOCK))
+      addr *= SD_SECTOR_SIZE;
+    if (sd_send_cmd(CMD24, addr) != 0 ||
+        !sd_tx_data_block(buff, SD_SECTOR_SIZE, SD_TOKEN_START_BLOCK))
+      break;
+    buff += SD_SECTOR_SIZE;
+    sector++;
+    count--;
   }
   sd_unselect_spi();
 #if DEBUG == 1
