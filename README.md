@@ -26,16 +26,13 @@ from the original firmware created by [@edy555](https://github.com/edy555). The 
 continues to be distributed under the terms of the GNU GPL so that the original authors
 retain their rights to their work.
 
+- Profound thanks to [@DiSlord](https://github.com/DiSlord/) for the original firmware text and the foundations that significantly inspired and enabled the start of this new firmware project.
+- This firmware evolves rapidly and, with each daily change, diverges further from the original implementation.
+
 This repository contains the source code of the improved NanoVNA-H and NanoVNA-H4 firmware
 used in the NanoVNA-X project. The documentation describes the build and flash process on a
 macOS or a Linux (Debian or Ubuntu) system, other Linux (or even BSD) systems may behave
 similar.
-
-## Acknowledgment and Disclaimer
-
-- Profound thanks to [@DiSlord](https://github.com/DiSlord/) for the original firmware text and the foundations that significantly inspired and enabled the start of this new firmware project.
-- This firmware evolves rapidly and, with each daily change, diverges further from the original implementation.
-- The original codebase was exceptionally feature‑rich; NanoVNA‑X keeps the proven UX while modernising the architecture, and the SD subsystem is now fully integrated again (S‑parameter capture, screenshots, firmware dumps, command scripts, and on-device formatting).
 
 ## What Makes NanoVNA-X Different
 
