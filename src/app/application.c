@@ -49,13 +49,6 @@ void lcd_set_brightness(uint16_t brightness);
 #include <stdint.h>
 #include <string.h>
 
-/*
- *  Shell settings
- */
-// If need run shell as thread (use more amount of memory for stack), after
-// enable this need reduce spi_buffer size, by default shell runs in main thread
-// #define VNA_SHELL_THREAD
-
 static event_bus_t app_event_bus;
 static event_bus_subscription_t app_event_slots[8];
 
@@ -67,19 +60,21 @@ static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
 #else
 #define EVENT_WA_SECTION
 #endif
-static EVENT_WA_SECTION THD_WORKING_AREA(waEventDispatchWorker, 128);
+static EVENT_WA_SECTION THD_WORKING_AREA(waEventDispatchWorker, 24);
+static THD_WORKING_AREA(waShellThread, 176);
 
 static measurement_pipeline_t measurement_pipeline;
 
 static msg_t event_dispatch_worker(void* user_data) {
   event_bus_t* bus = (event_bus_t*)user_data;
+  chRegSetThreadName("evt-dispatch");
   while (true) {
-    if (bus == NULL) {
-      chThdSleepMilliseconds(10);
+    if (bus == NULL || !bus->mailbox_ready || !bus->semaphore_ready) {
+      chThdSleepMilliseconds(20);
       continue;
     }
-    if (!event_bus_dispatch(bus, TIME_INFINITE)) {
-      chThdSleepMilliseconds(1);
+    chBSemWait(&bus->semaphore);
+    while (event_bus_dispatch(bus, TIME_IMMEDIATE)) {
     }
   }
   return MSG_OK;
@@ -218,7 +213,7 @@ static void schedule_battery_redraw(void) {
   request_to_redraw(REDRAW_BATTERY);
 }
 
-static THD_WORKING_AREA(waThread1, 640);
+static THD_WORKING_AREA(waThread1, 544);
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
   chRegSetThreadName("sweep");
@@ -2540,20 +2535,30 @@ bool sd_card_load_config(void) {
 }
 #endif
 
-#ifdef VNA_SHELL_THREAD
-static THD_WORKING_AREA(waThread2, /* cmd_* max stack size + alpha */ 442);
-THD_FUNCTION(myshellThread, p) {
-  (void)p;
-  chRegSetThreadName("shell");
+static THD_FUNCTION(ShellServiceThread, arg) {
+  (void)arg;
+  chRegSetThreadName("usb-shell");
+  bool session_active = false;
+  const systime_t poll_interval = MS2ST(100);
   while (true) {
-    shell_printf(VNA_SHELL_PROMPT_STR);
-    if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH))
-      vna_shell_execute_line(shell_line);
-    else // Putting a delay in order to avoid an endless loop trying to read an unavailable stream.
-      chThdSleepMilliseconds(100);
+    if (!shell_check_connect()) {
+      session_active = false;
+      chThdSleepMilliseconds(poll_interval * 2);
+      continue;
+    }
+    if (!session_active) {
+      shell_write_text(VNA_SHELL_NEWLINE_STR);
+      shell_write_line("NanoVNA Shell");
+      session_active = true;
+    }
+    shell_write_text(VNA_SHELL_PROMPT_STR);
+    if (!vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH)) {
+      chThdSleepMilliseconds(poll_interval);
+      continue;
+    }
+    vna_shell_execute_line(shell_line);
   }
 }
-#endif
 
 // Main thread stack size defined in makefile USE_PROCESS_STACKSIZE = 0x200
 // Profile stack usage (enable threads command by def ENABLE_THREADS_COMMAND) show:
@@ -2641,30 +2646,12 @@ int app_main(void) {
   i2c_set_timings(STM32_I2C_TIMINGR);
 
   /*
-   * Startup sweep thread
+   * Startup sweep and shell threads
    */
   chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO - 1, Thread1, NULL);
+  chThdCreateStatic(waShellThread, sizeof(waShellThread), NORMALPRIO, ShellServiceThread, NULL);
 
-  while (1) {
-    if (shell_check_connect()) {
-      shell_printf(VNA_SHELL_NEWLINE_STR "NanoVNA Shell" VNA_SHELL_NEWLINE_STR);
-#ifdef VNA_SHELL_THREAD
-#if CH_CFG_USE_WAITEXIT == FALSE
-#error "VNA_SHELL_THREAD use chThdWait, need enable CH_CFG_USE_WAITEXIT in chconf.h"
-#endif
-      thread_t* shelltp =
-          chThdCreateStatic(waThread2, sizeof(waThread2), NORMALPRIO + 1, myshellThread, NULL);
-      chThdWait(shelltp);
-#else
-      do {
-        shell_printf(VNA_SHELL_PROMPT_STR);
-        if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH))
-          vna_shell_execute_line(shell_line);
-        else
-          chThdSleepMilliseconds(200);
-      } while (shell_check_connect());
-#endif
-    }
+  while (true) {
     chThdSleepMilliseconds(1000);
   }
 }

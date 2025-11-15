@@ -30,6 +30,7 @@
 
 #include <chprintf.h>
 #include <stdarg.h>
+#include <string.h>
 
 static const VNAShellCommand* command_table = NULL;
 
@@ -84,6 +85,22 @@ int serial_shell_printf(const char* fmt, ...) {
 
 void shell_stream_write(const void* buffer, size_t size) {
   shell_write(buffer, size);
+}
+
+void shell_write_text(const char* text) {
+  if (shell_stream == NULL || text == NULL) {
+    return;
+  }
+  const size_t len = strlen(text);
+  if (len > 0U) {
+    shell_stream_write(text, len);
+  }
+}
+
+void shell_write_line(const char* text) {
+  shell_write_text(text);
+  static const char newline[] = VNA_SHELL_NEWLINE_STR;
+  shell_stream_write(newline, sizeof(newline) - 1U);
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
