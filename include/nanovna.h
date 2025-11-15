@@ -97,14 +97,12 @@
 #ifdef __USE_SD_CARD__
 // Minimal SD support is enabled for all targets; advanced features stay on the H4.
 #define __SD_CARD_LOAD__
-#if defined(NANOVNA_F303)
 // Allow screenshots in TIFF format
 #define __SD_CARD_DUMP_TIFF__
 // Allow dump firmware to SD card
 #define __SD_CARD_DUMP_FIRMWARE__
 // Enable SD card file browser, and allow load files from it
 #define __SD_FILE_BROWSER__
-#endif
 #endif
 
 // If measure module enabled, add submodules
