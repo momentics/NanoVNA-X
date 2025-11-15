@@ -59,10 +59,10 @@ void lcd_set_brightness(uint16_t brightness);
 static event_bus_t app_event_bus;
 static event_bus_subscription_t app_event_slots[8];
 
-#define APP_EVENT_QUEUE_DEPTH 8U
+#define APP_EVENT_QUEUE_DEPTH 4U
 static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
 static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
-static THD_WORKING_AREA(waEventDispatchWorker, 256);
+static THD_WORKING_AREA(waEventDispatchWorker, 128);
 
 static measurement_pipeline_t measurement_pipeline;
 
@@ -81,32 +81,15 @@ static msg_t event_dispatch_worker(void* user_data) {
 }
 
 #ifdef __USE_SD_CARD__
-static FATFS* fs_volume_instance = NULL;
-static FIL* fs_file_instance = NULL;
-
-static void sd_workspace_ensure(void) {
-  if (fs_volume_instance == NULL) {
-    FATFS* instance = (FATFS*)chCoreAlloc(sizeof(FATFS));
-    chDbgAssert(instance != NULL, "sd volume alloc failed");
-    memset(instance, 0, sizeof(*instance));
-    fs_volume_instance = instance;
-  }
-  if (fs_file_instance == NULL) {
-    FIL* instance = (FIL*)chCoreAlloc(sizeof(FIL));
-    chDbgAssert(instance != NULL, "sd file alloc failed");
-    memset(instance, 0, sizeof(*instance));
-    fs_file_instance = instance;
-  }
-}
+static FATFS fs_volume_instance;
+static FIL fs_file_instance;
 
 FATFS* filesystem_volume(void) {
-  sd_workspace_ensure();
-  return fs_volume_instance;
+  return &fs_volume_instance;
 }
 
 FIL* filesystem_file(void) {
-  sd_workspace_ensure();
-  return fs_file_instance;
+  return &fs_file_instance;
 }
 #endif
 
@@ -230,7 +213,7 @@ static void schedule_battery_redraw(void) {
   request_to_redraw(REDRAW_BATTERY);
 }
 
-static THD_WORKING_AREA(waThread1, 768);
+static THD_WORKING_AREA(waThread1, 640);
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
   chRegSetThreadName("sweep");

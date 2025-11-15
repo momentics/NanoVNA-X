@@ -977,7 +977,11 @@ enum {
 };
 #endif
 
+#if defined(NANOVNA_F303)
 #define STORED_TRACES  1
+#else
+#define STORED_TRACES  0
+#endif
 #define TRACES_MAX     4
 
 typedef struct trace {
