@@ -186,6 +186,7 @@ CSRC = $(STARTUPSRC) \
        src/dsp/dsp.c \
        src/dsp/vna_math.c \
        src/ui/plot.c \
+       src/ui/sd_browser.c \
        src/ui/ui.c \
        src/drivers/lcd.c \
        src/services/config_service.c \

@@ -18,12 +18,190 @@
  * the Free Software Foundation, Inc., 51 Franklin Street,
  * Boston, MA 02110-1301, USA.
  */
-#include "nanovna.h"
+#include "ui/sd_browser.h"
+#include "app/shell.h"
+
+#if SD_BROWSER_ENABLED
+
 #include "ui/input_adapters/hardware_input.h"
+
+#include <string.h>
+
 static uint16_t file_count;
 static uint16_t page_count;
 static uint16_t current_page;
 static uint16_t browser_mode;
+static uint16_t browser_format;
+static int8_t browser_selection = -1;
+
+FILE_LOAD_CALLBACK(load_snp) {
+  (void)fno;
+  UINT size;
+  const int buffer_size = 256;
+  const int line_size = 128;
+  char* buf_8 = (char*)spi_buffer;
+  char* line = buf_8 + buffer_size;
+  uint16_t j = 0, i, count = 0;
+  freq_t start = 0, stop = 0, freq;
+  while (f_read(f, buf_8, buffer_size, &size) == FR_OK && size > 0) {
+    for (i = 0; i < size; i++) {
+      uint8_t c = buf_8[i];
+      if (c == '\r') {
+        line[j] = 0;
+        j = 0;
+        char* args[16];
+        int nargs = parse_line(line, args, 16);
+        if (nargs < 2 || args[0][0] == '#' || args[0][0] == '!')
+          continue;
+        freq = my_atoui(args[0]);
+        if (count >= SWEEP_POINTS_MAX || freq > FREQUENCY_MAX)
+          return "Format err";
+        if (count == 0)
+          start = freq;
+        stop = freq;
+        measured[0][count][0] = my_atof(args[1]);
+        measured[0][count][1] = my_atof(args[2]);
+        if (format == FMT_S2P_FILE && nargs >= 4) {
+          measured[1][count][0] = my_atof(args[3]);
+          measured[1][count][1] = my_atof(args[4]);
+        } else {
+          measured[1][count][0] = 0.0f;
+          measured[1][count][1] = 0.0f;
+        }
+        count++;
+      } else if (c < 0x20)
+        continue;
+      else if (j < line_size)
+        line[j++] = (char)c;
+    }
+  }
+  if (count != 0) {
+    pause_sweep();
+    current_props._electrical_delay[0] = 0.0f;
+    current_props._electrical_delay[1] = 0.0f;
+    current_props._sweep_points = count;
+    set_sweep_frequency(ST_START, start);
+    set_sweep_frequency(ST_STOP, stop);
+    request_to_redraw(REDRAW_PLOT);
+  }
+  return NULL;
+}
+
+FILE_LOAD_CALLBACK(load_bmp) {
+  (void)format;
+  UINT size;
+  sd_temp_buffer_t workspace;
+  size_t required = LCD_WIDTH * sizeof(uint16_t);
+  if (!sd_temp_buffer_acquire(required, &workspace)) {
+    return "No workspace";
+  }
+  uint16_t* buf_16 = (uint16_t*)workspace.data;
+  FRESULT res = f_read(f, (void*)buf_16, BMP_HEAD_SIZE, &size);
+  if (res != FR_OK || buf_16[9] != LCD_WIDTH || buf_16[11] != LCD_HEIGHT || buf_16[14] != 16) {
+    sd_temp_buffer_release(&workspace);
+    return "Format err";
+  }
+  for (int y = LCD_HEIGHT - 1; y >= 0 && res == FR_OK; y--) {
+    res = f_read(f, (void*)buf_16, LCD_WIDTH * sizeof(uint16_t), &size);
+    swap_bytes(buf_16, LCD_WIDTH);
+    lcd_bulk(0, y, LCD_WIDTH, 1);
+  }
+  lcd_printf(0, LCD_HEIGHT - 3 * FONT_STR_HEIGHT, fno->fname);
+  sd_temp_buffer_release(&workspace);
+  return NULL;
+}
+
+#ifdef __SD_CARD_DUMP_TIFF__
+FILE_LOAD_CALLBACK(load_tiff) {
+  (void)format;
+  UINT size;
+  size_t raw_required = LCD_WIDTH * sizeof(uint16_t);
+  size_t packed_required = LCD_WIDTH * 3;
+  size_t required = raw_required > packed_required ? raw_required : packed_required;
+  sd_temp_buffer_t workspace;
+  if (!sd_temp_buffer_acquire(required, &workspace)) {
+    return "No workspace";
+  }
+  uint8_t* buf_8 = workspace.data;
+  uint16_t* buf_16 = (uint16_t*)workspace.data;
+  FRESULT res = f_read(f, (void*)buf_16, TIFF_HEADER_SIZE, &size);
+  if (res != FR_OK || buf_16[0] != 0x4949 || buf_16[9] != LCD_WIDTH || buf_16[15] != LCD_HEIGHT ||
+      buf_16[27] != TIFF_PACKBITS) {
+    sd_temp_buffer_release(&workspace);
+    return "Format err";
+  }
+  for (int y = 0; y < LCD_HEIGHT && res == FR_OK; y++) {
+    for (int x = 0; x < LCD_WIDTH * 3;) {
+      int8_t data[2];
+      res = f_read(f, data, 2, &size);
+      int count = data[0];
+      buf_8[x++] = data[1];
+      if (count > 0) {
+        res = f_read(f, &buf_8[x], count, &size);
+        x += count;
+      } else {
+        while (count++ < 0)
+          buf_8[x++] = data[1];
+      }
+    }
+    for (int x = 0; x < LCD_WIDTH; x++)
+      buf_16[x] = RGB565(buf_8[3 * x + 0], buf_8[3 * x + 1], buf_8[3 * x + 2]);
+    lcd_bulk(0, y, LCD_WIDTH, 1);
+  }
+  lcd_printf(0, LCD_HEIGHT - 3 * FONT_STR_HEIGHT, fno->fname);
+  sd_temp_buffer_release(&workspace);
+  return NULL;
+}
+#endif
+
+FILE_LOAD_CALLBACK(load_cal) {
+  (void)format;
+  UINT size;
+  uint32_t magic;
+  char* src = (char*)&current_props + sizeof(magic);
+  uint32_t total = sizeof(current_props) - sizeof(magic);
+  if (fno->fsize != sizeof(current_props) || f_read(f, &magic, sizeof(magic), &size) != FR_OK ||
+      magic != PROPERTIES_MAGIC || f_read(f, src, total, &size) != FR_OK)
+    return "Format err";
+  load_properties(NO_SAVE_SLOT);
+  return NULL;
+}
+
+#ifdef __SD_CARD_LOAD__
+FILE_LOAD_CALLBACK(load_cmd) {
+  (void)fno;
+  (void)format;
+  UINT size;
+  const int buffer_size = 256;
+  const int line_size = 128;
+  char* buf_8 = (char*)spi_buffer;
+  char* line = buf_8 + buffer_size;
+  uint16_t j = 0, i;
+  while (f_read(f, buf_8, buffer_size, &size) == FR_OK && size > 0) {
+    for (i = 0; i < size; i++) {
+      uint8_t c = buf_8[i];
+      if (c == '\r') {
+        line[j] = 0;
+        j = 0;
+        vna_shell_execute_cmd_line(line);
+      } else if (c < 0x20)
+        continue;
+      else if (j < line_size)
+        line[j++] = (char)c;
+    }
+  }
+  if (j > 0) {
+    line[j] = 0;
+    vna_shell_execute_cmd_line(line);
+  }
+  return NULL;
+}
+#endif
+
+UI_FUNCTION_CALLBACK(menu_sdcard_browse_cb) {
+  data = fix_screenshot_format(data);
+  ui_mode_browser(data);
+}
 
 #define BROWSER_DELETE 1
 
@@ -89,8 +267,8 @@ static void browser_draw_button(int idx, const char* txt) {
   b.bg = (idx == FILE_BUTTON_DEL && (browser_mode & BROWSER_DELETE)) ? LCD_LOW_BAT_COLOR
                                                                      : LCD_MENU_COLOR;
   b.fg = LCD_MENU_TEXT_COLOR;
-  b.border = (idx == selection) ? BROWSER_BUTTON_BORDER | BUTTON_BORDER_FALLING
-                                : BROWSER_BUTTON_BORDER | BUTTON_BORDER_RISE;
+  b.border = (idx == browser_selection) ? BROWSER_BUTTON_BORDER | BUTTON_BORDER_FALLING
+                                        : BROWSER_BUTTON_BORDER | BUTTON_BORDER_RISE;
   if (txt == NULL)
     b.border |= BUTTON_BORDER_NO_FILL;
   ui_draw_button(btn.x, btn.y, btn.w, btn.h, &b);
@@ -134,7 +312,7 @@ static void browser_open_file(int sel) {
     return;
 repeat:
   cnt = sel;
-  if (sd_open_dir(&dj, "", file_opt[keypad_mode].ext) != FR_OK)
+  if (sd_open_dir(&dj, "", file_opt[browser_format].ext) != FR_OK)
     return; // open dir
   while (sd_findnext(&dj, &fno) == FR_OK && cnt != 0)
     cnt--; // skip cnt files
@@ -149,7 +327,7 @@ repeat:
   }
 
   // Load file, get load function
-  file_load_cb_t load = file_opt[keypad_mode].load;
+  file_load_cb_t load = file_opt[browser_format].load;
   if (load == NULL)
     return;
   //
@@ -159,11 +337,11 @@ repeat:
   if (f_open(file, fno.fname, FA_READ) != FR_OK)
     return;
   //  START_PROFILE;
-  const char* error = load(file, &fno, keypad_mode);
+  const char* error = load(file, &fno, browser_format);
   f_close(file);
   //  STOP_PROFILE;
   // Check, need continue load next or previous file
-  bool need_continue = file_opt[keypad_mode].opt & FILE_OPT_CONTINUE;
+  bool need_continue = file_opt[browser_format].opt & FILE_OPT_CONTINUE;
   if (error) {
     lcd_clear_screen();
     ui_message_box(error, fno.fname, need_continue ? 100 : 2000);
@@ -222,7 +400,7 @@ static void browser_draw_page(int page) {
   DIR dj;
   // Mount SD card and open directory
   if (f_mount(filesystem_volume(), "", 1) != FR_OK ||
-      sd_open_dir(&dj, "", file_opt[keypad_mode].ext) != FR_OK) {
+      sd_open_dir(&dj, "", file_opt[browser_format].ext) != FR_OK) {
     ui_message_box("ERROR", "NO CARD", 2000);
     ui_mode_normal();
     return;
@@ -295,8 +473,8 @@ static void browser_key_press(int key) {
   default:
     browser_open_file(key - FILE_BUTTON_FILE + (current_page - 1) * FILES_PER_PAGE);
     if (browser_mode & BROWSER_DELETE) {
-      file_count = 0;                  // Reeset file count (recalculate on draw page)
-      selection = -1;                  // Reset delection
+      file_count = 0;                  // Reset file count (recalculate on draw page)
+      browser_selection = -1;          // Reset selection
       browser_mode &= ~BROWSER_DELETE; // Exit file delete mode
       browser_draw_page(current_page);
       return;
@@ -314,56 +492,54 @@ static int browser_get_max(void) {
   return max + FILE_BUTTON_FILE - 1;
 }
 
-void ui_mode_browser(int mode) {
-  if (ui_mode == UI_BROWSER)
-    return;
-  set_area_size(0, 0);
-  ui_mode = UI_BROWSER;
-  keypad_mode = mode;
+void sd_browser_enter(uint16_t format) {
+  browser_format = format;
   current_page = 1;
   file_count = 0;
-  selection = -1;
+  browser_selection = -1;
   browser_mode = 0;
   browser_draw_page(current_page);
 }
 
 // Process UI input for browser
-static void ui_browser_touch(int touch_x, int touch_y) {
+void ui_browser_touch(int touch_x, int touch_y) {
   browser_btn_t btn;
-  int old = selection;
+  int old = browser_selection;
   int max = browser_get_max();
   for (int idx = 0; idx <= max; idx++) {
     browser_get_button_pos(idx, &btn);
     if (touch_x < btn.x || touch_x >= btn.x + btn.w || touch_y < btn.y || touch_y >= btn.y + btn.h)
       continue;
     // Found button under touch
-    browser_draw_button(selection = idx, NULL); // draw new selection
-    browser_draw_button(old, NULL);             // clear old
+    browser_draw_button(browser_selection = idx, NULL); // draw new selection
+    browser_draw_button(old, NULL);                     // clear old
     touch_wait_release();
-    selection = -1;
+    browser_selection = -1;
     browser_draw_button(idx, NULL); // clear selection
     browser_key_press(idx);
     return;
   }
 }
 
-static void ui_browser_lever(uint16_t status) {
+void ui_browser_lever(uint16_t status) {
   if (status == EVT_BUTTON_SINGLE_CLICK) {
-    if (selection >= 0)
-      browser_key_press(selection); // Process click
+    if (browser_selection >= 0)
+      browser_key_press(browser_selection); // Process click
     return;
   }
   int max = browser_get_max();
   do {
-    int old = selection;
-    if ((status & EVT_DOWN) && --selection < 0)
-      selection = max;
-    if ((status & EVT_UP) && ++selection > max)
-      selection = 0;
-    if (old != selection) {
-      browser_draw_button(old, NULL);       // clear old selection
-      browser_draw_button(selection, NULL); // draw new selection
+    int old = browser_selection;
+    if ((status & EVT_DOWN) && --browser_selection < 0)
+      browser_selection = max;
+    if ((status & EVT_UP) && ++browser_selection > max)
+      browser_selection = 0;
+    if (old != browser_selection) {
+      browser_draw_button(old, NULL);            // clear old selection
+    browser_draw_button(browser_selection, NULL); // draw new selection
     }
     chThdSleepMilliseconds(100);
   } while ((status = ui_input_wait_release()) != 0);
 }
+
+#endif

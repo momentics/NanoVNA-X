@@ -104,7 +104,7 @@ This menu consolidates DSP helpers and measurement assistants.
 
 ## SD CARD menu
 
-* `LOAD` *(with `__SD_FILE_BROWSER__`)* — opens the browser filtered by extension (`SCREENSHOT`, `S1P`, `S2P`, `CAL`) so you can load screenshots, Touchstone files, or calibration sets directly on the instrument.
+* `LOAD` *(with `SD_BROWSER_ENABLED`)* — opens the browser filtered by extension (`SCREENSHOT`, `S1P`, `S2P`, `CAL`) so you can load screenshots, Touchstone files, or calibration sets directly on the instrument.
 * `SAVE S1P` / `SAVE S2P` — capture the current sweep into S1P or S2P using calibrated data.
 * `SCREENSHOT` — dumps the LCD as BMP or (when `IMAGE FORMAT` is set to `TIF`) as a compact PackBits-compressed TIFF.
 * `SAVE CALIBRATION` — copies the active calibration to the SD card for archival or transfer.

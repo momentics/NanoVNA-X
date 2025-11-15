@@ -31,15 +31,11 @@
 #include <string.h>
 #include "si5351.h"
 #include "ui/input_adapters/hardware_input.h"
+#include "ui/ui_internal.h"
+#include "ui/sd_browser.h"
 
 // Use size optimization (UI not need fast speed, better have smallest size)
 #pragma GCC optimize("Os")
-
-// Touch screen
-#define EVT_TOUCH_NONE 0
-#define EVT_TOUCH_DOWN 1
-#define EVT_TOUCH_PRESSED 2
-#define EVT_TOUCH_RELEASED 3
 
 #define TOUCH_INTERRUPT_ENABLED 1
 
@@ -98,42 +94,13 @@ enum {
   UI_NORMAL,
   UI_MENU,
   UI_KEYPAD,
-#ifdef __SD_FILE_BROWSER__
+#if SD_BROWSER_ENABLED
   UI_BROWSER,
 #endif
 };
 
-typedef struct {
-  uint8_t bg;
-  uint8_t fg;
-  uint8_t border;
-  int8_t icon;
-  union {
-    int32_t i;
-    uint32_t u;
-    float f;
-    const char* text;
-  } p1; // void data for label printf
-  char label[32];
-} button_t;
-
 #ifdef __USE_SD_CARD__
 static uint8_t keyboard_temp; // Used for SD card keyboard workflows
-enum {
-  FMT_S1P_FILE = 0,
-  FMT_S2P_FILE,
-  FMT_BMP_FILE,
-#ifdef __SD_CARD_DUMP_TIFF__
-  FMT_TIF_FILE,
-#endif
-  FMT_CAL_FILE,
-#ifdef __SD_CARD_DUMP_FIRMWARE__
-  FMT_BIN_FILE,
-#endif
-#ifdef __SD_CARD_LOAD__
-  FMT_CMD_FILE,
-#endif
-};
 #endif
 
 // Keypad structures
@@ -236,51 +203,9 @@ static int8_t selection = -1;
 
 // UI menu structure
 // Type of menu item:
-enum {
-  MT_NEXT = 0,    // reference is next menu or 0 if end
-  MT_SUBMENU,     // reference is submenu button
-  MT_CALLBACK,    // reference is pointer to: void ui_function_name(uint16_t data)
-  MT_ADV_CALLBACK // reference is pointer to: void ui_function_name(uint16_t data, button_t *b)
-};
 
 // Button definition (used in MT_ADV_CALLBACK for custom)
-#define BUTTON_ICON_NONE -1
-#define BUTTON_ICON_NOCHECK 0
-#define BUTTON_ICON_CHECK 1
-#define BUTTON_ICON_GROUP 2
-#define BUTTON_ICON_GROUP_CHECKED 3
-#define BUTTON_ICON_CHECK_AUTO 4
-#define BUTTON_ICON_CHECK_MANUAL 5
-
-#define BUTTON_BORDER_WIDTH_MASK 0x07
-
-// Define mask for draw border (if 1 use light color, if 0 dark)
-#define BUTTON_BORDER_NO_FILL 0x08
-#define BUTTON_BORDER_TOP 0x10
-#define BUTTON_BORDER_BOTTOM 0x20
-#define BUTTON_BORDER_LEFT 0x40
-#define BUTTON_BORDER_RIGHT 0x80
-
-#define BUTTON_BORDER_FLAT 0x00
-#define BUTTON_BORDER_RISE (BUTTON_BORDER_TOP | BUTTON_BORDER_RIGHT)
-#define BUTTON_BORDER_FALLING (BUTTON_BORDER_BOTTOM | BUTTON_BORDER_LEFT)
-
-// Call back functions for MT_CALLBACK type
-typedef void (*menuaction_cb_t)(uint16_t data);
-#define UI_FUNCTION_CALLBACK(ui_function_name) void ui_function_name(uint16_t data)
-
-typedef void (*menuaction_acb_t)(uint16_t data, button_t* b);
-#define UI_FUNCTION_ADV_CALLBACK(ui_function_name) void ui_function_name(uint16_t data, button_t* b)
-
-// Set structure align as WORD (save flash memory)
-typedef struct {
-  uint8_t type;
-  uint8_t data;
-  const char* label;
-  const void* reference;
-} __attribute__((packed)) menuitem_t;
-
-static void ui_mode_normal(void);
+void ui_mode_normal(void);
 static void ui_mode_menu(void);
 static void ui_mode_keypad(int _keypad_mode);
 
@@ -429,7 +354,7 @@ static void touch_init(void) {
 // Main software touch function, should:
 // set last_touch_x and last_touch_x
 // return touch status
-static int touch_check(void) {
+int touch_check(void) {
   touch_stop_watchdog();
 
   int stat = touch_status();
@@ -462,14 +387,14 @@ static int touch_check(void) {
 //*******************************************************************************
 //                           UI functions
 //*******************************************************************************
-static inline void touch_wait_release(void) {
+void touch_wait_release(void) {
   while (touch_check() != EVT_TOUCH_RELEASED) {
     chThdSleepMilliseconds(TOUCH_RELEASE_POLL_INTERVAL_MS);
   }
 }
 
 // Draw button function
-static void ui_draw_button(uint16_t x, uint16_t y, uint16_t w, uint16_t h, button_t* b) {
+void ui_draw_button(uint16_t x, uint16_t y, uint16_t w, uint16_t h, button_t* b) {
   uint16_t type = b->border;
   uint16_t bw = type & BUTTON_BORDER_WIDTH_MASK;
   // Draw border if width > 0
@@ -556,7 +481,7 @@ void ui_touch_cal_exec(void) {
   config_service_notify_configuration_changed();
 }
 
-static void touch_position(int* x, int* y) {
+void touch_position(int* x, int* y) {
 #ifdef __REMOTE_DESKTOP__
   if (touch_remote != REMOTE_NONE) {
     *x = last_touch_x;
@@ -805,7 +730,7 @@ enum {
   MENU_CONFIG_VERSION,
   MENU_CONFIG_SAVE,
   MENU_CONFIG_RESET,
-#if defined(__SD_CARD_LOAD__) && !defined(__SD_FILE_BROWSER__)
+#if defined(__SD_CARD_LOAD__) && !SD_BROWSER_ENABLED
   MENU_CONFIG_LOAD,
 #endif
 };
@@ -830,7 +755,7 @@ static UI_FUNCTION_CALLBACK(menu_config_cb) {
     clear_all_config_prop_data();
     NVIC_SystemReset();
     break;
-#if defined(__SD_CARD_LOAD__) && !defined(__SD_FILE_BROWSER__)
+#if defined(__SD_CARD_LOAD__) && !SD_BROWSER_ENABLED
   case MENU_CONFIG_LOAD:
     if (!sd_card_load_config())
       ui_message_box("Error", "No config.ini", 2000);
@@ -1516,21 +1441,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_brightness_acb) {
 //                                 SD card save / load functions
 //=====================================================================================================
 #ifdef __USE_SD_CARD__
-// Save file callback
-typedef FRESULT (*file_save_cb_t)(FIL* f, uint8_t format);
-#define FILE_SAVE_CALLBACK(save_function_name) FRESULT save_function_name(FIL* f, uint8_t format)
-// Load file callback
-typedef const char* (*file_load_cb_t)(FIL* f, FILINFO* fno, uint8_t format);
-#define FILE_LOAD_CALLBACK(load_function_name)                                                     \
-  const char* load_function_name(FIL* f, FILINFO* fno, uint8_t format)
-
-typedef struct {
-  uint8_t* data;
-  size_t size;
-  bool using_measurement;
-} sd_temp_buffer_t;
-
-static bool sd_temp_buffer_acquire(size_t required_bytes, sd_temp_buffer_t* handle) {
+bool sd_temp_buffer_acquire(size_t required_bytes, sd_temp_buffer_t* handle) {
   if (handle == NULL) {
     return false;
   }
@@ -1554,7 +1465,7 @@ static bool sd_temp_buffer_acquire(size_t required_bytes, sd_temp_buffer_t* hand
   return true;
 }
 
-static void sd_temp_buffer_release(sd_temp_buffer_t* handle) {
+void sd_temp_buffer_release(sd_temp_buffer_t* handle) {
   if (handle != NULL && handle->using_measurement) {
     sweep_service_workspace_release();
     handle->using_measurement = false;
@@ -1594,72 +1505,7 @@ static FILE_SAVE_CALLBACK(save_snp) {
   return res;
 }
 
-#ifdef __SD_FILE_BROWSER__
-static FILE_LOAD_CALLBACK(load_snp) {
-  (void)fno;
-  UINT size;
-  const int buffer_size = 256;
-  const int line_size = 128;
-  char* buf_8 = (char*)spi_buffer;
-  char* line = buf_8 + buffer_size;
-  uint16_t j = 0, i, count = 0;
-  freq_t start = 0, stop = 0, freq;
-  while (f_read(f, buf_8, buffer_size, &size) == FR_OK && size > 0) {
-    for (i = 0; i < size; i++) {
-      uint8_t c = buf_8[i];
-      if (c == '\r') {
-        line[j] = 0;
-        j = 0;
-        char* args[16];
-        int nargs = parse_line(line, args, 16);
-        if (nargs < 2 || args[0][0] == '#' || args[0][0] == '!')
-          continue;
-        freq = my_atoui(args[0]);
-        if (count >= SWEEP_POINTS_MAX || freq > FREQUENCY_MAX)
-          return "Format err";
-        if (count == 0)
-          start = freq;
-        stop = freq;
-        measured[0][count][0] = my_atof(args[1]);
-        measured[0][count][1] = my_atof(args[2]);
-        if (format == FMT_S2P_FILE && nargs >= 4) {
-          measured[1][count][0] = my_atof(args[3]);
-          measured[1][count][1] = my_atof(args[4]);
-        } else {
-          measured[1][count][0] = 0.0f;
-          measured[1][count][1] = 0.0f;
-        }
-        count++;
-      } else if (c < 0x20)
-        continue;
-      else if (j < line_size)
-        line[j++] = (char)c;
-    }
-  }
-  if (count != 0) {
-    pause_sweep();
-    current_props._electrical_delay[0] = 0.0f;
-    current_props._electrical_delay[1] = 0.0f;
-    current_props._sweep_points = count;
-    set_sweep_frequency(ST_START, start);
-    set_sweep_frequency(ST_STOP, stop);
-    request_to_redraw(REDRAW_PLOT);
-  }
-  return NULL;
-}
-#endif
 
-//=====================================================================================================
-// Bitmap file header for LCD_WIDTH x LCD_HEIGHT image 16bpp (v4 format allow set RGB mask)
-//=====================================================================================================
-#define BMP_UINT32(val)                                                                            \
-  ((val) >> 0) & 0xFF, ((val) >> 8) & 0xFF, ((val) >> 16) & 0xFF, ((val) >> 24) & 0xFF
-#define BMP_UINT16(val) ((val) >> 0) & 0xFF, ((val) >> 8) & 0xFF
-#define BMP_H1_SIZE (14)
-#define BMP_V4_SIZE (108)
-#define BMP_HEAD_SIZE (BMP_H1_SIZE + BMP_V4_SIZE)
-#define BMP_SIZE (2 * LCD_WIDTH * LCD_HEIGHT)
-#define BMP_FILE_SIZE (BMP_SIZE + BMP_HEAD_SIZE)
 static const uint8_t bmp_header_v4[BMP_H1_SIZE + BMP_V4_SIZE] = {
     0x42, 0x4D, BMP_UINT32(BMP_FILE_SIZE), BMP_UINT16(0), BMP_UINT16(0), BMP_UINT32(BMP_HEAD_SIZE),
     BMP_UINT32(BMP_V4_SIZE), BMP_UINT32(LCD_WIDTH), BMP_UINT32(LCD_HEIGHT), BMP_UINT16(1),
@@ -1690,46 +1536,7 @@ static FILE_SAVE_CALLBACK(save_bmp) {
   return res;
 }
 
-#ifdef __SD_FILE_BROWSER__
-static FILE_LOAD_CALLBACK(load_bmp) {
-  (void)format;
-  UINT size;
-  sd_temp_buffer_t workspace;
-  size_t required = LCD_WIDTH * sizeof(uint16_t);
-  if (!sd_temp_buffer_acquire(required, &workspace)) {
-    return "No workspace";
-  }
-  uint16_t* buf_16 = (uint16_t*)workspace.data;
-  FRESULT res = f_read(f, (void*)buf_16, sizeof(bmp_header_v4), &size);
-  if (res != FR_OK || buf_16[9] != LCD_WIDTH || buf_16[11] != LCD_HEIGHT || buf_16[14] != 16) {
-    sd_temp_buffer_release(&workspace);
-    return "Format err";
-  }
-  for (int y = LCD_HEIGHT - 1; y >= 0 && res == FR_OK; y--) {
-    res = f_read(f, (void*)buf_16, LCD_WIDTH * sizeof(uint16_t), &size);
-    swap_bytes(buf_16, LCD_WIDTH);
-    lcd_bulk(0, y, LCD_WIDTH, 1);
-  }
-  lcd_printf(0, LCD_HEIGHT - 3 * FONT_STR_HEIGHT, fno->fname);
-  sd_temp_buffer_release(&workspace);
-  return NULL;
-}
-
 #ifdef __SD_CARD_DUMP_TIFF__
-#define IFD_ENTRY(type, val_t, count, value)                                                       \
-  BMP_UINT16(type), BMP_UINT16(val_t), BMP_UINT32(count), BMP_UINT32(value)
-#define IFD_BYTE 1
-#define IFD_SHORT 3
-#define IFD_LONG 4
-#define IFD_RATIONAL 5
-#define TIFF_PACKBITS 0x8005
-#define TIFF_PHOTOMETRIC_RGB 2
-#define TIFF_RESUNIT_NONE 1
-#define IFD_ENTRIES_COUNT 7
-#define IFD_DATA_OFFSET (10 + 12 * IFD_ENTRIES_COUNT + 4)
-#define IFD_BPS_OFFSET IFD_DATA_OFFSET
-#define IFD_STRIP_OFFSET IFD_DATA_OFFSET + 6
-
 static const uint8_t tif_header[] = {
     0x49, 0x49, BMP_UINT16(0x002A), BMP_UINT32(0x0008), BMP_UINT16(IFD_ENTRIES_COUNT),
     IFD_ENTRY(256, IFD_LONG, 1, LCD_WIDTH), IFD_ENTRY(257, IFD_LONG, 1, LCD_HEIGHT),
@@ -1768,49 +1575,8 @@ static FILE_SAVE_CALLBACK(save_tiff) {
   return res;
 }
 
-#ifdef __SD_FILE_BROWSER__
-static FILE_LOAD_CALLBACK(load_tiff) {
-  (void)format;
-  UINT size;
-  size_t raw_required = LCD_WIDTH * sizeof(uint16_t);
-  size_t packed_required = LCD_WIDTH * 3;
-  size_t required = raw_required > packed_required ? raw_required : packed_required;
-  sd_temp_buffer_t workspace;
-  if (!sd_temp_buffer_acquire(required, &workspace)) {
-    return "No workspace";
-  }
-  uint8_t* buf_8 = workspace.data;
-  uint16_t* buf_16 = (uint16_t*)workspace.data;
-  FRESULT res = f_read(f, (void*)buf_16, sizeof(tif_header), &size);
-  if (res != FR_OK || buf_16[0] != 0x4949 || buf_16[9] != LCD_WIDTH || buf_16[15] != LCD_HEIGHT ||
-      buf_16[27] != TIFF_PACKBITS) {
-    sd_temp_buffer_release(&workspace);
-    return "Format err";
-  }
-  for (int y = 0; y < LCD_HEIGHT && res == FR_OK; y++) {
-    for (int x = 0; x < LCD_WIDTH * 3;) {
-      int8_t data[2];
-      res = f_read(f, data, 2, &size);
-      int count = data[0];
-      buf_8[x++] = data[1];
-      if (count > 0) {
-        res = f_read(f, &buf_8[x], count, &size);
-        x += count;
-      } else
-        while (count++ < 0)
-          buf_8[x++] = data[1];
-    }
-    for (int x = 0; x < LCD_WIDTH; x++)
-      buf_16[x] = RGB565(buf_8[3 * x + 0], buf_8[3 * x + 1], buf_8[3 * x + 2]);
-    lcd_bulk(0, y, LCD_WIDTH, 1);
-  }
-  lcd_printf(0, LCD_HEIGHT - 3 * FONT_STR_HEIGHT, fno->fname);
-  sd_temp_buffer_release(&workspace);
-  return NULL;
-}
-#endif /* __SD_FILE_BROWSER__ */
 #endif
-#endif /* __SD_FILE_BROWSER__ */
+
 
 static FILE_SAVE_CALLBACK(save_cal) {
   (void)format;
@@ -1820,20 +1586,6 @@ static FILE_SAVE_CALLBACK(save_cal) {
   return f_write(f, src, total, &size);
 }
 
-#ifdef __SD_FILE_BROWSER__
-static FILE_LOAD_CALLBACK(load_cal) {
-  (void)format;
-  UINT size;
-  uint32_t magic;
-  char* src = (char*)&current_props + sizeof(magic);
-  uint32_t total = sizeof(current_props) - sizeof(magic);
-  if (fno->fsize != sizeof(current_props) || f_read(f, &magic, sizeof(magic), &size) != FR_OK ||
-      magic != PROPERTIES_MAGIC || f_read(f, src, total, &size) != FR_OK)
-    return "Format err";
-  load_properties(NO_SAVE_SLOT);
-  return NULL;
-}
-#endif
 
 #ifdef __SD_CARD_DUMP_FIRMWARE__
 static FILE_SAVE_CALLBACK(save_bin) {
@@ -1845,38 +1597,6 @@ static FILE_SAVE_CALLBACK(save_bin) {
 }
 #endif
 
-#ifdef __SD_FILE_BROWSER__
-#ifdef __SD_CARD_LOAD__
-static FILE_LOAD_CALLBACK(load_cmd) {
-  (void)fno;
-  (void)format;
-  UINT size;
-  const int buffer_size = 256;
-  const int line_size = 128;
-  char* buf_8 = (char*)spi_buffer;
-  char* line = buf_8 + buffer_size;
-  uint16_t j = 0, i;
-  while (f_read(f, buf_8, buffer_size, &size) == FR_OK && size > 0) {
-    for (i = 0; i < size; i++) {
-      uint8_t c = buf_8[i];
-      if (c == '\r') {
-        line[j] = 0;
-        j = 0;
-        vna_shell_execute_cmd_line(line);
-      } else if (c < 0x20)
-        continue;
-      else if (j < line_size)
-        line[j++] = (char)c;
-    }
-  }
-  if (j > 0) {
-    line[j] = 0;
-    vna_shell_execute_cmd_line(line);
-  }
-  return NULL;
-}
-#endif /* __SD_CARD_LOAD__ */
-#endif /* __SD_FILE_BROWSER__ */
 #endif
 
 #if defined(__USE_SD_CARD__) && FF_USE_MKFS
@@ -1932,23 +1652,16 @@ static UI_FUNCTION_CALLBACK(menu_sdcard_format_cb) {
 }
 #endif
 
-#ifdef __SD_FILE_BROWSER__
-#define FILE_OPTIONS(e, s, l, o) {e, s, l, o}
+#if SD_BROWSER_ENABLED
+#define FILE_LOAD_ENTRY(handler) (handler)
 #else
-#define FILE_OPTIONS(e, s, l, o) {e, s, o}
+#define FILE_LOAD_ENTRY(handler) NULL
 #endif
 
-#define FILE_OPT_REDRAW (1 << 0)
-#define FILE_OPT_CONTINUE (1 << 1)
+#define FILE_OPTIONS(ext, save_cb, load_cb, options)                                                    \
+  { ext, save_cb, FILE_LOAD_ENTRY(load_cb), options }
 
-const struct {
-  const char* ext;
-  file_save_cb_t save;
-#ifdef __SD_FILE_BROWSER__
-  file_load_cb_t load;
-#endif
-  uint32_t opt;
-} file_opt[] = {
+const sd_file_format_t file_opt[] = {
     [FMT_S1P_FILE] = FILE_OPTIONS("s1p", save_snp, load_snp, 0),
     [FMT_S2P_FILE] = FILE_OPTIONS("s2p", save_snp, load_snp, 0),
     [FMT_BMP_FILE] = FILE_OPTIONS("bmp", save_bmp, load_bmp, FILE_OPT_REDRAW | FILE_OPT_CONTINUE),
@@ -2007,7 +1720,7 @@ static void ui_save_file(char* name, uint8_t format) {
   ui_mode_normal();
 }
 
-static uint16_t fix_screenshot_format(uint16_t data) {
+uint16_t fix_screenshot_format(uint16_t data) {
 #ifdef __SD_CARD_DUMP_TIFF__
   if (data == FMT_BMP_FILE && VNA_MODE(VNA_MODE_TIFF))
     return FMT_TIF_FILE;
@@ -2015,14 +1728,6 @@ static uint16_t fix_screenshot_format(uint16_t data) {
   return data;
 }
 
-#ifdef __SD_FILE_BROWSER__
-#include "../modules/vna_browser.c"
-
-static UI_FUNCTION_CALLBACK(menu_sdcard_browse_cb) {
-  data = fix_screenshot_format(data);
-  ui_mode_browser(data);
-}
-#endif
 
 static UI_FUNCTION_CALLBACK(menu_sdcard_cb) {
   keyboard_temp = (sweep_mode & SWEEP_ENABLE) ? 1 : 0;
@@ -2071,8 +1776,8 @@ static const menuitem_t menu_back[] = {
     {MT_CALLBACK, 0, S_LARROW " BACK", menu_back_cb}, {MT_NEXT, 0, NULL, NULL} // sentinel
 };
 
-#ifdef __SD_FILE_BROWSER__
-static const menuitem_t menu_sdcard_browse[] = {
+#if SD_BROWSER_ENABLED
+const menuitem_t menu_sdcard_browse[] = {
     {MT_CALLBACK, FMT_BMP_FILE, "LOAD\nSCREENSHOT", menu_sdcard_browse_cb},
     {MT_CALLBACK, FMT_S1P_FILE, "LOAD S1P", menu_sdcard_browse_cb},
     {MT_CALLBACK, FMT_S2P_FILE, "LOAD S2P", menu_sdcard_browse_cb},
@@ -2081,8 +1786,9 @@ static const menuitem_t menu_sdcard_browse[] = {
 };
 #endif
 
+
 static const menuitem_t menu_sdcard[] = {
-#ifdef __SD_FILE_BROWSER__
+#if SD_BROWSER_ENABLED
     {MT_SUBMENU, 0, "LOAD", menu_sdcard_browse},
 #endif
     {MT_CALLBACK, FMT_S1P_FILE, "SAVE S1P", menu_sdcard_cb},
@@ -2112,7 +1818,7 @@ static const menuitem_t menu_calop[] = {
 };
 
 const menuitem_t menu_save[] = {
-#ifdef __SD_FILE_BROWSER__
+#if SD_BROWSER_ENABLED
     {MT_CALLBACK, FMT_CAL_FILE, "SAVE TO\n SD CARD", menu_sdcard_cb},
 #endif
     {MT_ADV_CALLBACK, 0, "Empty %d", menu_save_acb},
@@ -2134,7 +1840,7 @@ const menuitem_t menu_save[] = {
 };
 
 const menuitem_t menu_recall[] = {
-#ifdef __SD_FILE_BROWSER__
+#if SD_BROWSER_ENABLED
     {MT_CALLBACK, FMT_CAL_FILE, "LOAD FROM\n SD CARD", menu_sdcard_browse_cb},
 #endif
     {MT_ADV_CALLBACK, 0, "Empty %d", menu_recall_acb},
@@ -2673,7 +2379,7 @@ const menuitem_t menu_system[] = {
     {MT_ADV_CALLBACK, 0, "BRIGHTNESS\n " R_LINK_COLOR "%d%%%%", menu_brightness_acb},
 #endif
     {MT_CALLBACK, MENU_CONFIG_SAVE, "SAVE CONFIG", menu_config_cb},
-#if defined(__SD_CARD_LOAD__) && !defined(__SD_FILE_BROWSER__)
+#if defined(__SD_CARD_LOAD__) && !SD_BROWSER_ENABLED
     {MT_CALLBACK, MENU_CONFIG_LOAD, "LOAD CONFIG", menu_config_cb},
 #endif
     {MT_CALLBACK, MENU_CONFIG_VERSION, "VERSION", menu_config_cb},
@@ -3601,6 +3307,17 @@ static void ui_mode_keypad(int mode) {
   draw_numeric_area_frame();
 }
 
+#if SD_BROWSER_ENABLED
+void ui_mode_browser(int mode) {
+  if (ui_mode == UI_BROWSER)
+    return;
+  ui_mode = UI_BROWSER;
+  set_area_size(0, 0);
+  selection = -1;
+  sd_browser_enter(mode);
+}
+#endif
+
 static void keypad_click(int key) {
   int c = keypads->buttons[key].c; // !!! Use key + 1 (zero key index used or size define)
   int index = strlen(kp_buf);
@@ -3666,14 +3383,14 @@ static void ui_keypad_lever(uint16_t status) {
 //=====================================================================================================
 //                                 Normal plot functions
 //=====================================================================================================
-static void ui_mode_normal(void) {
+void ui_mode_normal(void) {
   if (ui_mode == UI_NORMAL)
     return;
 
   set_area_size(AREA_WIDTH_NORMAL, AREA_HEIGHT_NORMAL);
   if (ui_mode == UI_MENU)
     request_to_draw_cells_behind_menu();
-#ifdef __SD_FILE_BROWSER__
+#if SD_BROWSER_ENABLED
   if (ui_mode == UI_KEYPAD || ui_mode == UI_BROWSER)
     request_to_redraw(REDRAW_ALL);
 #else
@@ -3943,7 +3660,7 @@ static const struct {
     [UI_NORMAL] = {ui_normal_lever, ui_normal_touch},
     [UI_MENU] = {ui_menu_lever, ui_menu_touch},
     [UI_KEYPAD] = {ui_keypad_lever, ui_keypad_touch},
-#ifdef __SD_FILE_BROWSER__
+#if SD_BROWSER_ENABLED
     [UI_BROWSER] = {ui_browser_lever, ui_browser_touch},
 #endif
 };

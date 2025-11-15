@@ -76,7 +76,7 @@
 - CONNECTION `[__USE_SERIAL_CONSOLE__]` -> toggle USB/UART, set serial speed
 
 ## SD CARD
-- LOAD `[__SD_FILE_BROWSER__]` -> open browser filtered by extension (SCREENSHOT, S1P, S2P, CAL)
+- LOAD `[SD_BROWSER_ENABLED]` -> open browser filtered by extension (SCREENSHOT, S1P, S2P, CAL)
 - SAVE S1P -> dump CH0 data to an S1P file
 - SAVE S2P -> dump both channels to an S2P file
 - SCREENSHOT -> capture the active LCD image (BMP or TIFF depending on the IMAGE FORMAT toggle)

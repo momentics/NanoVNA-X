@@ -331,13 +331,13 @@ VNA_SHELL_FUNCTION(cmd_reset) {
 #ifdef __DFU_SOFTWARE_MODE__
   if (argc == 1) {
     if (get_str_index(argv[0], "dfu") == 0) {
-      shell_printf("Performing reset to DFU mode" VNA_SHELL_NEWLINE_STR);
+      shell_write_line("Performing reset to DFU mode");
       ui_enter_dfu();
       return;
     }
   }
 #endif
-  shell_printf("Performing reset" VNA_SHELL_NEWLINE_STR);
+  shell_write_line("Performing reset");
   NVIC_SystemReset();
 }
 
@@ -428,7 +428,7 @@ VNA_SHELL_FUNCTION(cmd_offset) {
 
 VNA_SHELL_FUNCTION(cmd_freq) {
   if (argc != 1) {
-    shell_printf("usage: freq {frequency(Hz)}" VNA_SHELL_NEWLINE_STR);
+    shell_write_line("usage: freq {frequency(Hz)}");
     return;
   }
   uint32_t freq = my_atoui(argv[0]);
@@ -533,17 +533,17 @@ VNA_SHELL_FUNCTION(cmd_saveconfig) {
   (void)argv;
   config_save();
   state_manager_force_save();
-  shell_printf("Config saved" VNA_SHELL_NEWLINE_STR);
+  shell_write_line("Config saved");
 }
 
 VNA_SHELL_FUNCTION(cmd_clearconfig) {
   if (argc != 1) {
-    shell_printf("usage: clearconfig {protection key}" VNA_SHELL_NEWLINE_STR);
+    shell_write_line("usage: clearconfig {protection key}");
     return;
   }
 
   if (get_str_index(argv[0], "1234") != 0) {
-    shell_printf("Key unmatched." VNA_SHELL_NEWLINE_STR);
+    shell_write_line("Key unmatched.");
     return;
   }
 
@@ -605,7 +605,7 @@ VNA_SHELL_FUNCTION(cmd_data) {
   return;
 
 usage:
-  shell_printf("usage: data [array]" VNA_SHELL_NEWLINE_STR);
+  shell_write_line("usage: data [array]");
 }
 
 #ifdef __CAPTURE_RLE8__
@@ -750,7 +750,7 @@ result:
 #ifdef ENABLE_GAIN_COMMAND
 VNA_SHELL_FUNCTION(cmd_gain) {
   if (argc == 0 || argc > 2) {
-    shell_printf("usage: gain {lgain(0-95)} [rgain(0-95)]" VNA_SHELL_NEWLINE_STR);
+    shell_write_line("usage: gain {lgain(0-95)} [rgain(0-95)]");
     return;
   }
   int lvalue = my_atoui(argv[0]);
@@ -796,7 +796,7 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   bool restore_config = false;
 
   if (argc < 2 || argc > 4) {
-    shell_printf("usage: scan {start(Hz)} {stop(Hz)} [points] [outmask]" VNA_SHELL_NEWLINE_STR);
+    shell_write_line("usage: scan {start(Hz)} {stop(Hz)} [points] [outmask]");
     return;
   }
 
@@ -809,7 +809,7 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     } else if (stop < 50000 || stop > 2700000000U) {
       shell_printf("stop frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, stop);
     } else {
-      shell_printf("frequency range is invalid" VNA_SHELL_NEWLINE_STR);
+      shell_write_line("frequency range is invalid");
     }
     return;
   }
@@ -884,7 +884,7 @@ VNA_SHELL_FUNCTION(cmd_scan) {
           shell_printf("%f %f ", measured[0][i][0], measured[0][i][1]);
         if (mask & SCAN_MASK_OUT_DATA1)
           shell_printf("%f %f ", measured[1][i][0], measured[1][i][1]);
-        shell_printf(VNA_SHELL_NEWLINE_STR);
+        shell_write_line("");
       }
     }
   }
@@ -1414,7 +1414,7 @@ VNA_SHELL_FUNCTION(cmd_cal) {
       if (cal_status & (1 << i))
         shell_printf("%s ", items[i]);
     }
-    shell_printf(VNA_SHELL_NEWLINE_STR);
+    shell_write_line("");
     return;
   }
   request_to_redraw(REDRAW_CAL_STATUS);
@@ -1902,7 +1902,7 @@ VNA_SHELL_FUNCTION(cmd_test) {
 VNA_SHELL_FUNCTION(cmd_port) {
   int port;
   if (argc != 1) {
-    shell_printf("usage: port {0:TX 1:RX}" VNA_SHELL_NEWLINE_STR);
+    shell_write_line("usage: port {0:TX 1:RX}");
     return;
   }
   port = my_atoi(argv[0]);
@@ -2011,7 +2011,7 @@ VNA_SHELL_FUNCTION(cmd_vbat_offset) {
 #ifdef ENABLE_SI5351_TIMINGS
 VNA_SHELL_FUNCTION(cmd_si5351time) {
   if (argc != 2) {
-    shell_printf("usage: si5351time {idx(0-7)} {value}" VNA_SHELL_NEWLINE_STR);
+    shell_write_line("usage: si5351time {idx(0-7)} {value}");
     return;
   }
   int idx = my_atoui(argv[0]);
@@ -2035,7 +2035,7 @@ VNA_SHELL_FUNCTION(cmd_si5351reg) {
     shell_printf("si reg[%d] = 0x%02x" VNA_SHELL_NEWLINE_STR, reg, buf[0]);
 #else
   if (argc != 2) {
-    shell_printf("usage: si reg data" VNA_SHELL_NEWLINE_STR);
+    shell_write_line("usage: si reg data");
     return;
   }
   uint8_t reg = my_atoui(argv[0]);
@@ -2071,7 +2071,7 @@ VNA_SHELL_FUNCTION(cmd_color) {
   uint32_t color;
   uint16_t i;
   if (argc != 2) {
-    shell_printf("usage: color {id} {rgb24}" VNA_SHELL_NEWLINE_STR);
+    shell_write_line("usage: color {id} {rgb24}");
     for (i = 0; i < MAX_PALETTE; i++) {
       color = GET_PALTETTE_COLOR(i);
       color = HEXRGB(color);
@@ -2092,7 +2092,7 @@ VNA_SHELL_FUNCTION(cmd_color) {
 #ifdef ENABLE_I2C_COMMAND
 VNA_SHELL_FUNCTION(cmd_i2c) {
   if (argc != 3) {
-    shell_printf("usage: i2c page reg data" VNA_SHELL_NEWLINE_STR);
+    shell_write_line("usage: i2c page reg data");
     return;
   }
   uint8_t page = my_atoui(argv[0]);
@@ -2106,7 +2106,7 @@ VNA_SHELL_FUNCTION(cmd_i2c) {
 VNA_SHELL_FUNCTION(cmd_band) {
   static const char cmd_sweep_list[] = "mode|freq|div|mul|omul|pow|opow|l|r|lr|adj";
   if (argc != 3) {
-    shell_printf("cmd error" VNA_SHELL_NEWLINE_STR);
+    shell_write_line("cmd error");
     return;
   }
   int idx = my_atoui(argv[0]);
@@ -2238,7 +2238,7 @@ VNA_SHELL_FUNCTION(cmd_release) {
 static FRESULT cmd_sd_card_mount(void) {
   const FRESULT res = f_mount(filesystem_volume(), "", 1);
   if (res != FR_OK)
-    shell_printf("err: no card" VNA_SHELL_NEWLINE_STR);
+    shell_write_line("err: no card");
   return res;
 }
 
@@ -2255,7 +2255,7 @@ VNA_SHELL_FUNCTION(cmd_sd_list) {
     dj.pat = argv[0];
     break;
   default:
-    shell_printf("usage: sd_list {pattern}" VNA_SHELL_NEWLINE_STR);
+    shell_write_line("usage: sd_list {pattern}");
     return;
   }
   if (f_opendir(&dj, "") == FR_OK) {
@@ -2268,7 +2268,7 @@ VNA_SHELL_FUNCTION(cmd_sd_list) {
 VNA_SHELL_FUNCTION(cmd_sd_read) {
   char* buf = (char*)spi_buffer;
   if (argc != 1) {
-    shell_printf("usage: sd_read {filename}" VNA_SHELL_NEWLINE_STR);
+    shell_write_line("usage: sd_read {filename}");
     return;
   }
   const char* filename = argv[0];
@@ -2277,7 +2277,7 @@ VNA_SHELL_FUNCTION(cmd_sd_read) {
 
   FIL* const file = filesystem_file();
   if (f_open(file, filename, FA_OPEN_EXISTING | FA_READ) != FR_OK) {
-    shell_printf("err: no file" VNA_SHELL_NEWLINE_STR);
+    shell_write_line("err: no file");
     return;
   }
   uint32_t filesize = f_size(file);
@@ -2291,7 +2291,7 @@ VNA_SHELL_FUNCTION(cmd_sd_read) {
 
 VNA_SHELL_FUNCTION(cmd_sd_delete) {
   if (argc != 1) {
-    shell_printf("usage: sd_delete {filename}" VNA_SHELL_NEWLINE_STR);
+    shell_write_line("usage: sd_delete {filename}");
     return;
   }
   if (cmd_sd_card_mount() != FR_OK)
@@ -2305,7 +2305,7 @@ VNA_SHELL_FUNCTION(cmd_sd_delete) {
 #ifdef __SD_CARD_LOAD__
 VNA_SHELL_FUNCTION(cmd_msg) {
   if (argc == 0) {
-    shell_printf("usage: msg delay [text] [header]" VNA_SHELL_NEWLINE_STR);
+    shell_write_line("usage: msg delay [text] [header]");
     return;
   }
   uint32_t delay = my_atoui(argv[0]);
@@ -2447,12 +2447,12 @@ VNA_SHELL_FUNCTION(cmd_help) {
   (void)argc;
   (void)argv;
   const VNAShellCommand* scp = commands;
-  shell_printf("Commands:");
+  shell_write_line("Commands:");
   while (scp->sc_name != NULL) {
     shell_printf(" %s", scp->sc_name);
     scp++;
   }
-  shell_printf(VNA_SHELL_NEWLINE_STR);
+  shell_write_line("");
   return;
 }
 
@@ -2736,7 +2736,7 @@ __attribute__((used)) void hard_fault_handler_c(uint32_t* sp, const hard_fault_e
   lcd_printf(x, y += FONT_STR_HEIGHT, "PSR 0x%08x", psr);
   lcd_printf(x, y += FONT_STR_HEIGHT, "EXC 0x%08x", exc_return);
 
-  shell_printf("===================================" VNA_SHELL_NEWLINE_STR);
+  shell_write_line("===================================");
 #else
   (void)sp;
   (void)extra;
@@ -2767,7 +2767,7 @@ VNA_SHELL_FUNCTION(cmd_dump) {
   for (i = 0, j = 0; i < (int)ARRAY_COUNT(dump); i++) {
     shell_printf("%6d ", dump[i]);
     if (++j == 12) {
-      shell_printf(VNA_SHELL_NEWLINE_STR);
+      shell_write_line("");
       j = 0;
     }
   }
