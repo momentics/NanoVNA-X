@@ -62,8 +62,8 @@ static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
 #define EVENT_WA_SECTION
 #define SHELL_WA_SECTION
 #endif
-static EVENT_WA_SECTION THD_WORKING_AREA(waEventDispatchWorker, 24);
-static SHELL_WA_SECTION THD_WORKING_AREA(waShellThread, 176);
+static EVENT_WA_SECTION THD_WORKING_AREA(waEventDispatchWorker, 64);
+static SHELL_WA_SECTION THD_WORKING_AREA(waShellThread, 96);
 
 static measurement_pipeline_t measurement_pipeline;
 
@@ -215,7 +215,7 @@ static void schedule_battery_redraw(void) {
   request_to_redraw(REDRAW_BATTERY);
 }
 
-#define SWEEP_THREAD_STACK_SIZE 448
+#define SWEEP_THREAD_STACK_SIZE 512
 static THD_WORKING_AREA(waSweepThread, SWEEP_THREAD_STACK_SIZE);
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
@@ -290,8 +290,8 @@ config_t config = {
     ._harmonic_freq_threshold = FREQUENCY_THRESHOLD,
     ._IF_freq = FREQUENCY_OFFSET,
     ._touch_cal = DEFAULT_TOUCH_CONFIG,
-    ._vna_mode =
-        (1 << VNA_MODE_BACKUP) | (1 << VNA_MODE_USB_UID), // Enable backup + unique USB serial by default
+    ._vna_mode = (1 << VNA_MODE_BACKUP) |
+                 (1 << VNA_MODE_USB_UID), // Enable backup + unique USB serial by default
     ._brightness = DEFAULT_BRIGHTNESS,
     ._dac_value = 1922,
     ._vbat_offset = 420,
@@ -439,7 +439,8 @@ VNA_SHELL_FUNCTION(cmd_freq) {
   uint32_t freq = my_atoui(argv[0]);
   // Validate frequency range: 50kHz to 2.7GHz (2700000000 Hz)
   if (freq < 50000 || freq > 2700000000U) {
-    shell_printf("error: frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, freq);
+    shell_printf("error: frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR,
+                 freq);
     return;
   }
   pause_sweep();
@@ -810,9 +811,11 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   // Validate frequency range: 50kHz to 2.7GHz
   if (start == 0 || stop == 0 || start > stop || start < 50000 || stop > 2700000000U) {
     if (start < 50000 || start > 2700000000U) {
-      shell_printf("start frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, start);
+      shell_printf("start frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR,
+                   start);
     } else if (stop < 50000 || stop > 2700000000U) {
-      shell_printf("stop frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, stop);
+      shell_printf("stop frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR,
+                   stop);
     } else {
       shell_write_line("frequency range is invalid");
     }
@@ -1103,10 +1106,11 @@ VNA_SHELL_FUNCTION(cmd_sweep) {
       goto usage;
     bool enforce = !(type == ST_START || type == ST_STOP);
     // Validate frequency range when setting specific frequency types
-    if ((type == ST_START || type == ST_STOP || type == ST_CENTER || 
-         type == ST_SPAN || type == ST_CW || type == ST_STEP || type == ST_VAR) && 
+    if ((type == ST_START || type == ST_STOP || type == ST_CENTER || type == ST_SPAN ||
+         type == ST_CW || type == ST_STEP || type == ST_VAR) &&
         (value1 < 50000 || value1 > 2700000000U)) {
-      shell_printf("error: frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, value1);
+      shell_printf("error: frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR,
+                   value1);
       return;
     }
     set_sweep_frequency_internal(type, value1, enforce);
@@ -1115,11 +1119,13 @@ VNA_SHELL_FUNCTION(cmd_sweep) {
   //  Parse sweep {start(Hz)} [stop(Hz)]
   // Validate frequency ranges for start and stop frequencies
   if (value0 && (value0 < 50000 || value0 > 2700000000U)) {
-    shell_printf("error: start frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, value0);
+    shell_printf("error: start frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR,
+                 value0);
     return;
   }
   if (value1 && (value1 < 50000 || value1 > 2700000000U)) {
-    shell_printf("error: stop frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, value1);
+    shell_printf("error: stop frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR,
+                 value1);
     return;
   }
   if (value0)
@@ -1465,14 +1471,14 @@ VNA_SHELL_FUNCTION(cmd_save) {
     shell_printf("usage: save 0..%d" VNA_SHELL_NEWLINE_STR, SAVEAREA_MAX - 1);
     return;
   }
-  
+
   id = my_atoui(argv[0]);
   if (id >= SAVEAREA_MAX) {
-    shell_printf("error: save slot index out of range (0-%d): %lu" VNA_SHELL_NEWLINE_STR, 
+    shell_printf("error: save slot index out of range (0-%d): %lu" VNA_SHELL_NEWLINE_STR,
                  SAVEAREA_MAX - 1, id);
     return;
   }
-  
+
   caldata_save(id);
   request_to_redraw(REDRAW_CAL_STATUS);
   return;
@@ -1484,14 +1490,14 @@ VNA_SHELL_FUNCTION(cmd_recall) {
     shell_printf("usage: recall 0..%d" VNA_SHELL_NEWLINE_STR, SAVEAREA_MAX - 1);
     return;
   }
-  
+
   id = my_atoui(argv[0]);
   if (id >= SAVEAREA_MAX) {
-    shell_printf("error: recall slot index out of range (0-%d): %lu" VNA_SHELL_NEWLINE_STR, 
+    shell_printf("error: recall slot index out of range (0-%d): %lu" VNA_SHELL_NEWLINE_STR,
                  SAVEAREA_MAX - 1, id);
     return;
   }
-  
+
   if (load_properties(id)) // Check for success
     shell_printf("Err, default load" VNA_SHELL_NEWLINE_STR);
   return;
@@ -2603,11 +2609,11 @@ int app_main(void) {
 
   config_service_init();
   event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
-                 app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage),
-                 app_event_nodes, ARRAY_COUNT(app_event_nodes));
-  scheduler_task_t dispatcher = scheduler_start("evt_dispatch", NORMALPRIO, waEventDispatchWorker,
-                                                sizeof(waEventDispatchWorker),
-                                                event_dispatch_worker, &app_event_bus);
+                 app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage), app_event_nodes,
+                 ARRAY_COUNT(app_event_nodes));
+  scheduler_task_t dispatcher =
+      scheduler_start("evt_dispatch", NORMALPRIO, waEventDispatchWorker,
+                      sizeof(waEventDispatchWorker), event_dispatch_worker, &app_event_bus);
   chDbgAssert(dispatcher.slot != NULL, "event dispatcher start failed");
 
   config_service_attach_event_bus(&app_event_bus);
@@ -2655,8 +2661,8 @@ int app_main(void) {
   /*
    * Startup sweep and shell threads
    */
-  chThdCreateStatic(waSweepThread, sizeof(waSweepThread), NORMALPRIO - 1, Thread1, NULL);
-  chThdCreateStatic(waShellThread, sizeof(waShellThread), NORMALPRIO, ShellServiceThread, NULL);
+  chThdCreateStatic(waSweepThread, sizeof(waSweepThread), NORMALPRIO, Thread1, NULL);
+  chThdCreateStatic(waShellThread, sizeof(waShellThread), NORMALPRIO - 1, ShellServiceThread, NULL);
 
   while (true) {
     chThdSleepMilliseconds(1000);
@@ -2708,8 +2714,8 @@ __attribute__((naked)) void HardFault_Handler(void) {
                  "b .\n");
 }
 
-__attribute__((used)) void hard_fault_handler_c(uint32_t* sp, const hard_fault_extra_registers_t* extra,
-                          uint32_t exc_return) {
+__attribute__((used)) void
+hard_fault_handler_c(uint32_t* sp, const hard_fault_extra_registers_t* extra, uint32_t exc_return) {
 #ifdef ENABLE_HARD_FAULT_HANDLER_DEBUG
   uint32_t r0 = sp[0];
   uint32_t r1 = sp[1];

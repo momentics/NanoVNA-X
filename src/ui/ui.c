@@ -1662,13 +1662,14 @@ static UI_FUNCTION_CALLBACK(menu_sdcard_format_cb) {
   FRESULT result = sd_card_format();
   if (resume)
     toggle_sweep();
-  char msg[32];
+  char* msg = (char*)spi_buffer;
   FRESULT res = result;
   if (res == FR_OK) {
     uint32_t elapsed_ms = (uint32_t)ST2MS(chVTTimeElapsedSinceX(start));
-    plot_printf(msg, sizeof(msg), "OK %lums", (unsigned long)elapsed_ms);
-  } else
-    plot_printf(msg, sizeof(msg), "ERR %d", res);
+    plot_printf(msg, 32, "OK %lums", (unsigned long)elapsed_ms);
+  } else {
+    plot_printf(msg, 32, "ERR %d", res);
+  }
   ui_message_box("FORMAT SD", msg, 2000);
   ui_mode_normal();
 }
@@ -1708,8 +1709,27 @@ static FRESULT ui_create_file(char* fs_filename) {
   return res;
 }
 
+static char* ui_format_filename(char* buffer, size_t length, const char* name, uint8_t format) {
+#if FF_USE_LFN >= 1
+  if (name == NULL) {
+    uint32_t tr = rtc_get_tr_bcd();
+    uint32_t dr = rtc_get_dr_bcd();
+    plot_printf(buffer, length, "VNA_%06x_%06x.%s", dr, tr, file_opt[format].ext);
+  } else {
+    plot_printf(buffer, length, "%s.%s", name, file_opt[format].ext);
+  }
+#else
+  if (name == NULL) {
+    plot_printf(buffer, length, "%08x.%s", rtc_get_fat(), file_opt[format].ext);
+  } else {
+    plot_printf(buffer, length, "%s.%s", name, file_opt[format].ext);
+  }
+#endif
+  return buffer;
+}
+
 static void ui_save_file(char* name, uint8_t format) {
-  char fs_filename[FF_LFN_BUF];
+  char* fs_filename = (char*)spi_buffer;
   file_save_cb_t save = file_opt[format].save;
   if (save == NULL)
     return;
@@ -1718,16 +1738,7 @@ static void ui_save_file(char* name, uint8_t format) {
     draw_all();
   }
 
-  if (name == NULL) {
-#if FF_USE_LFN >= 1
-    uint32_t tr = rtc_get_tr_bcd();
-    uint32_t dr = rtc_get_dr_bcd();
-    plot_printf(fs_filename, FF_LFN_BUF, "VNA_%06x_%06x.%s", dr, tr, file_opt[format].ext);
-#else
-    plot_printf(fs_filename, FF_LFN_BUF, "%08x.%s", rtc_get_fat(), file_opt[format].ext);
-#endif
-  } else
-    plot_printf(fs_filename, FF_LFN_BUF, "%s.%s", name, file_opt[format].ext);
+  ui_format_filename(fs_filename, FF_LFN_BUF, name, format);
 
   FRESULT res = ui_create_file(fs_filename);
   if (res == FR_OK) {
@@ -1737,6 +1748,9 @@ static void ui_save_file(char* name, uint8_t format) {
   }
   if (keyboard_temp == 1)
     toggle_sweep();
+  if (res == FR_OK) {
+    ui_format_filename(fs_filename, FF_LFN_BUF, name, format);
+  }
   ui_message_box("SD CARD SAVE", res == FR_OK ? fs_filename : "  Fail write  ", 2000);
   request_to_redraw(REDRAW_AREA | REDRAW_FREQUENCY);
   ui_mode_normal();

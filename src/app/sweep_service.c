@@ -646,37 +646,44 @@ capture_failure:
 }
 
 void measurement_data_smooth(uint16_t ch_mask) {
-  if (smooth_factor == 0U) {
-    return;
-  }
-  if (sweep_points <= 2U) {
+  if (smooth_factor == 0U || sweep_points <= 2U) {
     return;
   }
   float (*smooth_func)(float, float, float) =
       VNA_MODE(VNA_MODE_SMOOTH) ? arifmetic_mean : geometry_mean;
-  for (int ch = 0; ch < 2; ch++, ch_mask >>= 1) {
+  const uint32_t max_passes = sweep_points > 2U ? (uint32_t)(sweep_points - 2U) : 0U;
+  uint32_t passes = 1U << (smooth_factor - 1U);
+  if (passes == 0U) {
+    passes = 1U;
+  }
+  if (passes > max_passes) {
+    passes = max_passes;
+  }
+  if (passes == 0U) {
+    return;
+  }
+  const uint32_t limit = (uint32_t)(sweep_points - 1U);
+  for (uint8_t ch = 0; ch < 2U; ch++, ch_mask >>= 1) {
     if ((ch_mask & 1U) == 0U) {
       continue;
     }
-    uint32_t max_passes = (sweep_points > 2U) ? (sweep_points - 2U) : 0U;
-    uint32_t count = 1U << (smooth_factor - 1U);
-    if (count == 0U)
-      count = 1U;
-    if (count > max_passes)
-      count = max_passes;
-    if (count == 0U)
-      continue;
-    float* data = measured[ch][0];
-    for (uint32_t n = 0; n < count; n++) {
-      float prev_re = data[0];
-      float prev_im = data[1];
-      for (uint32_t j = 1; j < sweep_points - 1U; j++) {
-        float old_re = data[2 * j];
-        float old_im = data[2 * j + 1];
-        data[2 * j] = smooth_func(prev_re, data[2 * j], data[2 * j + 2]);
-        data[2 * j + 1] = smooth_func(prev_im, data[2 * j + 1], data[2 * j + 3]);
-        prev_re = old_re;
-        prev_im = old_im;
+    float* samples = measured[ch][0];
+    for (uint32_t pass = 0; pass < passes; pass++) {
+      float prev_real = samples[0];
+      float prev_imag = samples[1];
+      uint32_t index = 1U;
+      float* current = samples + 2;
+      while (index < limit) {
+        float next_real = current[2];
+        float next_imag = current[3];
+        float current_real = current[0];
+        float current_imag = current[1];
+        current[0] = smooth_func(prev_real, current_real, next_real);
+        current[1] = smooth_func(prev_imag, current_imag, next_imag);
+        prev_real = current_real;
+        prev_imag = current_imag;
+        current += 2;
+        ++index;
       }
     }
   }
