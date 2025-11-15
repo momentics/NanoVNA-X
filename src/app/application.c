@@ -836,6 +836,7 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   }
   uint16_t mask = 0;
   uint16_t sweep_ch = SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE;
+  const bool was_sweeping = (sweep_mode & SWEEP_ENABLE) != 0U;
 
 #if ENABLE_SCANBIN_COMMAND
   if (argc == 4) {
@@ -864,11 +865,14 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   if (need_interpolate(start, stop, sweep_points))
     sweep_ch |= SWEEP_USE_INTERPOLATION;
 
+  if (was_sweeping) {
+    pause_sweep();
+  }
+
   sweep_points = points;
   app_measurement_set_frequencies(start, stop, points);
   if (sweep_ch & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE))
     app_measurement_sweep(false, sweep_ch);
-  pause_sweep();
   // Output data after if set (faster data receive)
   if (mask) {
     if (mask & SCAN_MASK_BINARY) {
@@ -900,6 +904,10 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   if (restore_config) {
     sweep_points = original_points;
     app_measurement_update_frequencies();
+  }
+
+  if (was_sweeping) {
+    resume_sweep();
   }
 }
 
