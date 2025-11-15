@@ -73,6 +73,10 @@ static inline uint16_t buttons_to_event_mask(uint16_t buttons) {
   return mask;
 }
 
+bool ui_lever_repeat_pending(void) {
+  return lever_repeat_state.mask != 0U;
+}
+
 void ui_attach_event_bus(event_bus_t* bus) {
   if (ui_event_bus == bus) {
     return;

@@ -1457,6 +1457,9 @@ void ui_message_box(const char *header, const char *text, uint32_t delay);
 #ifdef __USE_SD_CARD__
 bool sd_card_load_config(void);
 #endif
+void ui_request_refresh(void);
+void ui_request_refresh_from_isr(void);
+bool ui_lever_repeat_pending(void);
 
 // Irq operation process set
 #define OP_NONE       0x00

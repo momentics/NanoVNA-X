@@ -241,7 +241,11 @@ static THD_FUNCTION(Thread1, arg) {
       sweep_service_end_measurement();
     } else {
       sweep_service_end_measurement();
-      __WFI();
+      if (ui_lever_repeat_pending()) {
+        chThdSleepMilliseconds(5);
+      } else {
+        __WFI();
+      }
     }
     shell_service_pending_commands();
     // Process UI inputs
