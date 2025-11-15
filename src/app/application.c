@@ -215,7 +215,7 @@ static void schedule_battery_redraw(void) {
   request_to_redraw(REDRAW_BATTERY);
 }
 
-static THD_WORKING_AREA(waThread1, 544);
+static THD_WORKING_AREA(waThread1, 512);
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
   chRegSetThreadName("sweep");

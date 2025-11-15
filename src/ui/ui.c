@@ -55,6 +55,24 @@ static event_bus_t* ui_event_bus = NULL;
 
 static void ui_on_event(const event_bus_message_t* message, void* user_data);
 
+typedef struct {
+  uint16_t mask;
+  systime_t next_tick;
+} lever_repeat_state_t;
+
+static lever_repeat_state_t lever_repeat_state = {0, 0};
+
+static inline uint16_t buttons_to_event_mask(uint16_t buttons) {
+  uint16_t mask = 0;
+  if (buttons & BUTTON_DOWN) {
+    mask |= EVT_DOWN;
+  }
+  if (buttons & BUTTON_UP) {
+    mask |= EVT_UP;
+  }
+  return mask;
+}
+
 void ui_attach_event_bus(event_bus_t* bus) {
   if (ui_event_bus == bus) {
     return;
@@ -2615,21 +2633,19 @@ static void ui_menu_lever(uint16_t status) {
       menu_invoke(selection);
     return;
   }
-
-  do {
-    uint32_t mask = 1 << selection;
-    if (status & EVT_UP)
-      selection++;
-    if (status & EVT_DOWN)
-      selection--;
-    // close menu if no menu item
-    if ((uint16_t)selection >= count) {
-      ui_mode_normal();
-      return;
-    }
-    menu_draw(mask | (1 << selection));
-    chThdSleepMilliseconds(100);
-  } while ((status = ui_input_wait_release()) & (EVT_DOWN | EVT_UP));
+  if ((status & (EVT_DOWN | EVT_UP)) == 0) {
+    return;
+  }
+  uint32_t mask = 1U << selection;
+  if (status & EVT_UP)
+    selection++;
+  if (status & EVT_DOWN)
+    selection--;
+  if ((uint16_t)selection >= count) {
+    ui_mode_normal();
+    return;
+  }
+  menu_draw(mask | (1U << selection));
 }
 
 static void ui_menu_touch(int touch_x, int touch_y) {
@@ -3363,19 +3379,18 @@ static void ui_keypad_lever(uint16_t status) {
       keypad_click(selection);
     return;
   }
+  if ((status & (EVT_DOWN | EVT_UP)) == 0)
+    return;
   int keypads_last_index = keypads->size - 1;
+  int old = selection;
   do {
-    int old = selection;
-    do {
-      if ((status & EVT_DOWN) && --selection < 0)
-        selection = keypads_last_index;
-      if ((status & EVT_UP) && ++selection > keypads_last_index)
-        selection = 0;
-    } while (keypads->buttons[selection].c == KP_EMPTY); // Skip empty
-    keypad_draw_button(old);
-    keypad_draw_button(selection);
-    chThdSleepMilliseconds(100);
-  } while ((status = ui_input_wait_release()) & (EVT_DOWN | EVT_UP));
+    if ((status & EVT_DOWN) && --selection < 0)
+      selection = keypads_last_index;
+    if ((status & EVT_UP) && ++selection > keypads_last_index)
+      selection = 0;
+  } while (keypads->buttons[selection].c == KP_EMPTY);
+  keypad_draw_button(old);
+  keypad_draw_button(selection);
 }
 //==================================== end keyboard input
 //=============================================
@@ -3401,20 +3416,32 @@ void ui_mode_normal(void) {
 }
 
 #define MARKER_SPEEDUP 3
+static uint16_t marker_repeat_dir = 0;
+static uint16_t marker_repeat_step = 1 << MARKER_SPEEDUP;
+
 static void lever_move_marker(uint16_t status) {
   if (active_marker == MARKER_INVALID || !markers[active_marker].enabled)
     return;
-  uint16_t step = 1 << MARKER_SPEEDUP;
-  do {
-    int idx = (int)markers[active_marker].index;
-    if ((status & EVT_DOWN) && (idx -= step >> MARKER_SPEEDUP) < 0)
-      idx = 0;
-    if ((status & EVT_UP) && (idx += step >> MARKER_SPEEDUP) > sweep_points - 1)
-      idx = sweep_points - 1;
-    set_marker_index(active_marker, idx);
-    redraw_marker(active_marker);
-    step++;
-  } while ((status = ui_input_wait_release()) & (EVT_DOWN | EVT_UP));
+  if ((status & (EVT_DOWN | EVT_UP)) == 0) {
+    return;
+  }
+  uint16_t dir = status & (EVT_DOWN | EVT_UP);
+  if ((status & EVT_REPEAT) == 0 || dir != marker_repeat_dir) {
+    marker_repeat_step = 1 << MARKER_SPEEDUP;
+    marker_repeat_dir = dir;
+  } else if (marker_repeat_step < 0xFFFF) {
+    marker_repeat_step++;
+  }
+  uint16_t step = marker_repeat_step >> MARKER_SPEEDUP;
+  if (step == 0)
+    step = 1;
+  int idx = (int)markers[active_marker].index;
+  if ((status & EVT_DOWN) && (idx -= step) < 0)
+    idx = 0;
+  if ((status & EVT_UP) && (idx += step) > sweep_points - 1)
+    idx = sweep_points - 1;
+  set_marker_index(active_marker, idx);
+  redraw_marker(active_marker);
 }
 
 #ifdef UI_USE_LEVELER_SEARCH_MODE
@@ -3447,6 +3474,8 @@ static freq_t step_round(freq_t v) {
 static void lever_frequency(uint16_t status) {
   uint16_t mode;
   freq_t freq;
+  if ((status & (EVT_DOWN | EVT_UP)) == 0)
+    return;
   if (lever_mode == LM_FREQ_0) {
     if (FREQ_IS_STARTSTOP()) {
       mode = ST_START;
@@ -3476,8 +3505,6 @@ static void lever_frequency(uint16_t status) {
     if (status & EVT_DOWN)
       freq -= step;
   }
-  while ((ui_input_wait_release() & (EVT_DOWN | EVT_UP)) != 0)
-    ;
   if (freq > FREQUENCY_MAX || freq < FREQUENCY_MIN)
     return;
   set_sweep_frequency(mode, freq);
@@ -3485,6 +3512,8 @@ static void lever_frequency(uint16_t status) {
 
 #define STEPRATIO 0.2f
 static void lever_edelay(uint16_t status) {
+  if ((status & (EVT_DOWN | EVT_UP)) == 0)
+    return;
   int ch = current_trace != TRACE_INVALID ? trace[current_trace].channel : 0;
   float value = current_props._electrical_delay[ch];
   if (current_props._var_delay == 0.0f) {
@@ -3500,8 +3529,6 @@ static void lever_edelay(uint16_t status) {
       value -= current_props._var_delay;
   }
   set_electrical_delay(ch, value);
-  while ((ui_input_wait_release() & (EVT_DOWN | EVT_UP)) != 0)
-    ;
 }
 
 static bool touch_pickup_marker(int touch_x, int touch_y) {
@@ -3666,9 +3693,38 @@ static const struct {
 };
 
 static void ui_process_lever(void) {
-  uint16_t status = ui_input_check();
-  if (status)
-    ui_handler[ui_mode].button(status);
+  const bool lever_event_requested = (operation_requested & OP_LEVER) != 0U;
+  const systime_t now = chVTGetSystemTimeX();
+  if (lever_event_requested) {
+    uint16_t status = ui_input_check();
+    operation_requested &= (uint8_t)~OP_LEVER;
+    if (status != 0U) {
+      const uint16_t buttons = ui_input_get_buttons();
+      lever_repeat_state.mask = buttons_to_event_mask(buttons);
+      if (lever_repeat_state.mask != 0U) {
+        lever_repeat_state.next_tick = now + BUTTON_REPEAT_TICKS;
+      } else {
+        lever_repeat_state.next_tick = 0;
+        marker_repeat_dir = 0;
+        marker_repeat_step = 1 << MARKER_SPEEDUP;
+      }
+      ui_handler[ui_mode].button(status);
+      return;
+    }
+  }
+  if (lever_repeat_state.mask != 0U &&
+      (int32_t)(now - lever_repeat_state.next_tick) >= 0) {
+    const uint16_t buttons = ui_input_get_buttons();
+    lever_repeat_state.mask = buttons_to_event_mask(buttons);
+    if (lever_repeat_state.mask == 0U) {
+      lever_repeat_state.next_tick = 0;
+      marker_repeat_dir = 0;
+      marker_repeat_step = 1 << MARKER_SPEEDUP;
+      return;
+    }
+    lever_repeat_state.next_tick = now + BUTTON_REPEAT_TICKS;
+    ui_handler[ui_mode].button(lever_repeat_state.mask | EVT_REPEAT);
+  }
 }
 
 static void ui_process_touch(void) {
@@ -3682,13 +3738,12 @@ static void ui_process_touch(void) {
 
 void ui_process(void) {
   // if (ui_mode >= UI_END) return; // for safe
-  if (operation_requested & OP_LEVER)
-    ui_process_lever();
+  ui_process_lever();
   if (operation_requested & OP_TOUCH)
     ui_process_touch();
 
   touch_start_watchdog();
-  operation_requested = OP_NONE;
+  operation_requested &= (uint8_t)~(OP_LEVER | OP_TOUCH);
 }
 
 void handle_button_interrupt(uint16_t channel) {

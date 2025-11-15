@@ -527,19 +527,18 @@ void ui_browser_lever(uint16_t status) {
       browser_key_press(browser_selection); // Process click
     return;
   }
+  if ((status & (EVT_DOWN | EVT_UP)) == 0)
+    return;
   int max = browser_get_max();
-  do {
-    int old = browser_selection;
-    if ((status & EVT_DOWN) && --browser_selection < 0)
-      browser_selection = max;
-    if ((status & EVT_UP) && ++browser_selection > max)
-      browser_selection = 0;
-    if (old != browser_selection) {
-      browser_draw_button(old, NULL);            // clear old selection
-      browser_draw_button(browser_selection, NULL); // draw new selection
-    }
-    chThdSleepMilliseconds(100);
-  } while ((status = ui_input_wait_release()) & (EVT_DOWN | EVT_UP));
+  int old = browser_selection;
+  if ((status & EVT_DOWN) && --browser_selection < 0)
+    browser_selection = max;
+  if ((status & EVT_UP) && ++browser_selection > max)
+    browser_selection = 0;
+  if (old != browser_selection) {
+    browser_draw_button(old, NULL);
+    browser_draw_button(browser_selection, NULL);
+  }
 }
 
 #endif
