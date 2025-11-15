@@ -116,9 +116,8 @@ typedef struct {
   char label[32];
 } button_t;
 
-static uint8_t keyboard_temp; // Used for SD card keyboard workflows
-
 #ifdef __USE_SD_CARD__
+static uint8_t keyboard_temp; // Used for SD card keyboard workflows
 enum {
   FMT_S1P_FILE = 0,
   FMT_S2P_FILE,
@@ -1557,6 +1556,7 @@ static FILE_SAVE_CALLBACK(save_snp) {
   return res;
 }
 
+#ifdef __SD_FILE_BROWSER__
 static FILE_LOAD_CALLBACK(load_snp) {
   (void)fno;
   UINT size;
@@ -1609,6 +1609,7 @@ static FILE_LOAD_CALLBACK(load_snp) {
   }
   return NULL;
 }
+#endif
 
 //=====================================================================================================
 // Bitmap file header for LCD_WIDTH x LCD_HEIGHT image 16bpp (v4 format allow set RGB mask)
@@ -1645,6 +1646,7 @@ static FILE_SAVE_CALLBACK(save_bmp) {
   return res;
 }
 
+#ifdef __SD_FILE_BROWSER__
 static FILE_LOAD_CALLBACK(load_bmp) {
   (void)format;
   UINT size;
@@ -1706,6 +1708,7 @@ static FILE_SAVE_CALLBACK(save_tiff) {
   return res;
 }
 
+#ifdef __SD_FILE_BROWSER__
 static FILE_LOAD_CALLBACK(load_tiff) {
   (void)format;
   UINT size;
@@ -1735,7 +1738,9 @@ static FILE_LOAD_CALLBACK(load_tiff) {
   lcd_printf(0, LCD_HEIGHT - 3 * FONT_STR_HEIGHT, fno->fname);
   return NULL;
 }
+#endif /* __SD_FILE_BROWSER__ */
 #endif
+#endif /* __SD_FILE_BROWSER__ */
 
 static FILE_SAVE_CALLBACK(save_cal) {
   (void)format;
@@ -1745,6 +1750,7 @@ static FILE_SAVE_CALLBACK(save_cal) {
   return f_write(f, src, total, &size);
 }
 
+#ifdef __SD_FILE_BROWSER__
 static FILE_LOAD_CALLBACK(load_cal) {
   (void)format;
   UINT size;
@@ -1757,6 +1763,7 @@ static FILE_LOAD_CALLBACK(load_cal) {
   load_properties(NO_SAVE_SLOT);
   return NULL;
 }
+#endif
 
 #ifdef __SD_CARD_DUMP_FIRMWARE__
 static FILE_SAVE_CALLBACK(save_bin) {
@@ -1768,6 +1775,7 @@ static FILE_SAVE_CALLBACK(save_bin) {
 }
 #endif
 
+#ifdef __SD_FILE_BROWSER__
 #ifdef __SD_CARD_LOAD__
 static FILE_LOAD_CALLBACK(load_cmd) {
   (void)fno;
@@ -1797,6 +1805,8 @@ static FILE_LOAD_CALLBACK(load_cmd) {
   }
   return NULL;
 }
+#endif /* __SD_CARD_LOAD__ */
+#endif /* __SD_FILE_BROWSER__ */
 #endif
 
 #if defined(__USE_SD_CARD__) && FF_USE_MKFS
@@ -1944,7 +1954,6 @@ static UI_FUNCTION_CALLBACK(menu_sdcard_cb) {
   else
     ui_mode_keypad(data + KM_S1P_NAME);
 }
-#endif // __USE_SD_CARD__
 
 static UI_FUNCTION_ADV_CALLBACK(menu_band_sel_acb) {
   (void)data;
@@ -1982,7 +1991,6 @@ static const menuitem_t menu_back[] = {
     {MT_CALLBACK, 0, S_LARROW " BACK", menu_back_cb}, {MT_NEXT, 0, NULL, NULL} // sentinel
 };
 
-#ifdef __USE_SD_CARD__
 #ifdef __SD_FILE_BROWSER__
 static const menuitem_t menu_sdcard_browse[] = {
     {MT_CALLBACK, FMT_BMP_FILE, "LOAD\nSCREENSHOT", menu_sdcard_browse_cb},
@@ -2010,7 +2018,6 @@ static const menuitem_t menu_sdcard[] = {
 #endif
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
-#endif
 
 static const menuitem_t menu_calop[] = {
     {MT_ADV_CALLBACK, CAL_OPEN, "OPEN", menu_calop_acb},

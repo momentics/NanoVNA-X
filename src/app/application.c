@@ -33,6 +33,7 @@
 #include "platform/hal.h"
 #include "services/config_service.h"
 #include "services/event_bus.h"
+#include "services/scheduler.h"
 #include "version_info.h"
 #include "measurement/pipeline.h"
 #include "platform/boards/stm32_peripherals.h"
@@ -61,19 +62,51 @@ static event_bus_subscription_t app_event_slots[8];
 #define APP_EVENT_QUEUE_DEPTH 8U
 static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
 static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
+static THD_WORKING_AREA(waEventDispatchWorker, 256);
 
 static measurement_pipeline_t measurement_pipeline;
 
+static msg_t event_dispatch_worker(void* user_data) {
+  event_bus_t* bus = (event_bus_t*)user_data;
+  while (true) {
+    if (bus == NULL) {
+      chThdSleepMilliseconds(10);
+      continue;
+    }
+    if (!event_bus_dispatch(bus, TIME_INFINITE)) {
+      chThdSleepMilliseconds(1);
+    }
+  }
+  return MSG_OK;
+}
+
 #ifdef __USE_SD_CARD__
-static FATFS fs_volume_instance;
-static FIL fs_file_instance;
+static FATFS* fs_volume_instance = NULL;
+static FIL* fs_file_instance = NULL;
+
+static void sd_workspace_ensure(void) {
+  if (fs_volume_instance == NULL) {
+    FATFS* instance = (FATFS*)chCoreAlloc(sizeof(FATFS));
+    chDbgAssert(instance != NULL, "sd volume alloc failed");
+    memset(instance, 0, sizeof(*instance));
+    fs_volume_instance = instance;
+  }
+  if (fs_file_instance == NULL) {
+    FIL* instance = (FIL*)chCoreAlloc(sizeof(FIL));
+    chDbgAssert(instance != NULL, "sd file alloc failed");
+    memset(instance, 0, sizeof(*instance));
+    fs_file_instance = instance;
+  }
+}
 
 FATFS* filesystem_volume(void) {
-  return &fs_volume_instance;
+  sd_workspace_ensure();
+  return fs_volume_instance;
 }
 
 FIL* filesystem_file(void) {
-  return &fs_file_instance;
+  sd_workspace_ensure();
+  return fs_file_instance;
 }
 #endif
 
@@ -2572,6 +2605,14 @@ int app_main(void) {
   event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
                  app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage),
                  app_event_nodes, ARRAY_COUNT(app_event_nodes));
+  scheduler_task_t dispatcher = scheduler_start("evt_dispatch", NORMALPRIO, waEventDispatchWorker,
+                                                sizeof(waEventDispatchWorker),
+                                                event_dispatch_worker, &app_event_bus);
+  chDbgAssert(dispatcher.slot != NULL, "event dispatcher start failed");
+
+  config_service_attach_event_bus(&app_event_bus);
+  shell_attach_event_bus(&app_event_bus);
+  ui_attach_event_bus(&app_event_bus);
 
   /*
    * restore config and calibration 0 slot from flash memory, also if need use backup data
