@@ -57,6 +57,7 @@ static uint16_t p_sweep = 0;
 static uint8_t sweep_state_flags = 0;
 static uint16_t sweep_bar_drawn_pixels = 0;
 static uint8_t sweep_bar_pending = 0;
+static bool sweep_workspace_locked = false;
 
 static uint8_t smooth_factor = 0;
 static void (*volatile sample_func)(float* gamma) = calculate_gamma;
@@ -343,6 +344,31 @@ bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
   sweep_copy_in_progress = false;
   osalSysUnlock();
   return stable;
+}
+
+bool sweep_service_workspace_acquire(sweep_workspace_t* workspace) {
+  if (workspace == NULL) {
+    return false;
+  }
+  bool acquired = false;
+  osalSysLock();
+  if (!sweep_workspace_locked && !sweep_in_progress && !sweep_copy_in_progress) {
+    sweep_workspace_locked = true;
+    workspace->buffer = (uint8_t*)measured[1];
+    workspace->size = sizeof(measured[1]);
+    acquired = true;
+  } else {
+    workspace->buffer = NULL;
+    workspace->size = 0;
+  }
+  osalSysUnlock();
+  return acquired;
+}
+
+void sweep_service_workspace_release(void) {
+  osalSysLock();
+  sweep_workspace_locked = false;
+  osalSysUnlock();
 }
 
 void sweep_service_start_capture(systime_t delay_ticks) {

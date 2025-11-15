@@ -21,6 +21,7 @@
  */
 
 #include "nanovna.h"
+#include "app/sweep_service.h"
 #include "app/shell.h"
 #include "system/state_manager.h"
 #include "hal.h"
@@ -1523,6 +1524,43 @@ typedef const char* (*file_load_cb_t)(FIL* f, FILINFO* fno, uint8_t format);
 #define FILE_LOAD_CALLBACK(load_function_name)                                                     \
   const char* load_function_name(FIL* f, FILINFO* fno, uint8_t format)
 
+typedef struct {
+  uint8_t* data;
+  size_t size;
+  bool using_measurement;
+} sd_temp_buffer_t;
+
+static bool sd_temp_buffer_acquire(size_t required_bytes, sd_temp_buffer_t* handle) {
+  if (handle == NULL) {
+    return false;
+  }
+  handle->data = NULL;
+  handle->size = 0;
+  handle->using_measurement = false;
+  sweep_workspace_t workspace;
+  if (required_bytes <= sizeof measured[1] &&
+      sweep_service_workspace_acquire(&workspace) && workspace.size >= required_bytes) {
+    handle->data = workspace.buffer;
+    handle->size = workspace.size;
+    handle->using_measurement = true;
+    return true;
+  }
+  if (sizeof(spi_buffer) < required_bytes) {
+    return false;
+  }
+  handle->data = (uint8_t*)spi_buffer;
+  handle->size = sizeof(spi_buffer);
+  handle->using_measurement = false;
+  return true;
+}
+
+static void sd_temp_buffer_release(sd_temp_buffer_t* handle) {
+  if (handle != NULL && handle->using_measurement) {
+    sweep_service_workspace_release();
+    handle->using_measurement = false;
+  }
+}
+
 //=====================================================================================================
 // S1P and S2P file headers, and data structures
 //=====================================================================================================
@@ -1634,7 +1672,12 @@ static const uint8_t bmp_header_v4[BMP_H1_SIZE + BMP_V4_SIZE] = {
 static FILE_SAVE_CALLBACK(save_bmp) {
   (void)format;
   UINT size;
-  uint16_t* buf_16 = (uint16_t*)spi_buffer;
+  sd_temp_buffer_t workspace;
+  size_t required = LCD_WIDTH * sizeof(uint16_t);
+  if (!sd_temp_buffer_acquire(required, &workspace)) {
+    return FR_NOT_ENOUGH_CORE;
+  }
+  uint16_t* buf_16 = (uint16_t*)workspace.data;
   FRESULT res = f_write(f, bmp_header_v4, sizeof(bmp_header_v4), &size);
   lcd_set_background(LCD_SWEEP_LINE_COLOR);
   for (int y = LCD_HEIGHT - 1; y >= 0 && res == FR_OK; y--) {
@@ -1643,6 +1686,7 @@ static FILE_SAVE_CALLBACK(save_bmp) {
     res = f_write(f, buf_16, LCD_WIDTH * sizeof(uint16_t), &size);
     lcd_fill(LCD_WIDTH - 1, y, 1, 1);
   }
+  sd_temp_buffer_release(&workspace);
   return res;
 }
 
@@ -1650,16 +1694,24 @@ static FILE_SAVE_CALLBACK(save_bmp) {
 static FILE_LOAD_CALLBACK(load_bmp) {
   (void)format;
   UINT size;
-  uint16_t* buf_16 = (uint16_t*)spi_buffer;
+  sd_temp_buffer_t workspace;
+  size_t required = LCD_WIDTH * sizeof(uint16_t);
+  if (!sd_temp_buffer_acquire(required, &workspace)) {
+    return "No workspace";
+  }
+  uint16_t* buf_16 = (uint16_t*)workspace.data;
   FRESULT res = f_read(f, (void*)buf_16, sizeof(bmp_header_v4), &size);
-  if (res != FR_OK || buf_16[9] != LCD_WIDTH || buf_16[11] != LCD_HEIGHT || buf_16[14] != 16)
+  if (res != FR_OK || buf_16[9] != LCD_WIDTH || buf_16[11] != LCD_HEIGHT || buf_16[14] != 16) {
+    sd_temp_buffer_release(&workspace);
     return "Format err";
+  }
   for (int y = LCD_HEIGHT - 1; y >= 0 && res == FR_OK; y--) {
     res = f_read(f, (void*)buf_16, LCD_WIDTH * sizeof(uint16_t), &size);
     swap_bytes(buf_16, LCD_WIDTH);
     lcd_bulk(0, y, LCD_WIDTH, 1);
   }
   lcd_printf(0, LCD_HEIGHT - 3 * FONT_STR_HEIGHT, fno->fname);
+  sd_temp_buffer_release(&workspace);
   return NULL;
 }
 
@@ -1688,7 +1740,14 @@ static const uint8_t tif_header[] = {
 static FILE_SAVE_CALLBACK(save_tiff) {
   (void)format;
   UINT size;
-  uint16_t* buf_16 = (uint16_t*)spi_buffer;
+  size_t raw_required = LCD_WIDTH * sizeof(uint16_t);
+  size_t packed_required = 128 + LCD_WIDTH * 3;
+  size_t required = raw_required > packed_required ? raw_required : packed_required;
+  sd_temp_buffer_t workspace;
+  if (!sd_temp_buffer_acquire(required, &workspace)) {
+    return FR_NOT_ENOUGH_CORE;
+  }
+  uint16_t* buf_16 = (uint16_t*)workspace.data;
   char* buf_8;
   FRESULT res = f_write(f, tif_header, sizeof(tif_header), &size);
   lcd_set_background(LCD_SWEEP_LINE_COLOR);
@@ -1705,6 +1764,7 @@ static FILE_SAVE_CALLBACK(save_tiff) {
     res = f_write(f, buf_16, size, &size);
     lcd_fill(LCD_WIDTH - 1, y, 1, 1);
   }
+  sd_temp_buffer_release(&workspace);
   return res;
 }
 
@@ -1712,12 +1772,21 @@ static FILE_SAVE_CALLBACK(save_tiff) {
 static FILE_LOAD_CALLBACK(load_tiff) {
   (void)format;
   UINT size;
-  uint8_t* buf_8 = (uint8_t*)spi_buffer;
-  uint16_t* buf_16 = (uint16_t*)spi_buffer;
+  size_t raw_required = LCD_WIDTH * sizeof(uint16_t);
+  size_t packed_required = LCD_WIDTH * 3;
+  size_t required = raw_required > packed_required ? raw_required : packed_required;
+  sd_temp_buffer_t workspace;
+  if (!sd_temp_buffer_acquire(required, &workspace)) {
+    return "No workspace";
+  }
+  uint8_t* buf_8 = workspace.data;
+  uint16_t* buf_16 = (uint16_t*)workspace.data;
   FRESULT res = f_read(f, (void*)buf_16, sizeof(tif_header), &size);
   if (res != FR_OK || buf_16[0] != 0x4949 || buf_16[9] != LCD_WIDTH || buf_16[15] != LCD_HEIGHT ||
-      buf_16[27] != TIFF_PACKBITS)
+      buf_16[27] != TIFF_PACKBITS) {
+    sd_temp_buffer_release(&workspace);
     return "Format err";
+  }
   for (int y = 0; y < LCD_HEIGHT && res == FR_OK; y++) {
     for (int x = 0; x < LCD_WIDTH * 3;) {
       int8_t data[2];
@@ -1736,6 +1805,7 @@ static FILE_LOAD_CALLBACK(load_tiff) {
     lcd_bulk(0, y, LCD_WIDTH, 1);
   }
   lcd_printf(0, LCD_HEIGHT - 3 * FONT_STR_HEIGHT, fno->fname);
+  sd_temp_buffer_release(&workspace);
   return NULL;
 }
 #endif /* __SD_FILE_BROWSER__ */
@@ -1813,20 +1883,30 @@ static FILE_LOAD_CALLBACK(load_cmd) {
 _Static_assert(sizeof(spi_buffer) >= FF_MAX_SS, "spi_buffer is too small for mkfs work buffer");
 
 static FRESULT sd_card_format(void) {
-  BYTE* work = (BYTE*)spi_buffer;
+  sd_temp_buffer_t workspace;
+  if (!sd_temp_buffer_acquire(FF_MAX_SS, &workspace)) {
+    return FR_NOT_ENOUGH_CORE;
+  }
+  BYTE* work = workspace.data;
   FATFS* fs = filesystem_volume();
   f_mount(NULL, "", 0);
   DSTATUS status = disk_initialize(0);
-  if (status & STA_NOINIT)
+  if (status & STA_NOINIT) {
+    sd_temp_buffer_release(&workspace);
     return FR_NOT_READY;
+  }
   /* Allow mkfs to pick FAT12/16 for small cards and FAT32 for larger media. */
   MKFS_PARM opt = {.fmt = FM_FAT | FM_FAT32, .n_fat = 1, .align = 0, .n_root = 0, .au_size = 0};
   FRESULT res = f_mkfs("", &opt, work, FF_MAX_SS);
-  if (res != FR_OK)
+  if (res != FR_OK) {
+    sd_temp_buffer_release(&workspace);
     return res;
+  }
   disk_ioctl(0, CTRL_SYNC, NULL);
   memset(fs, 0, sizeof(*fs));
-  return f_mount(fs, "", 1);
+  FRESULT mount_status = f_mount(fs, "", 1);
+  sd_temp_buffer_release(&workspace);
+  return mount_status;
 }
 
 static UI_FUNCTION_CALLBACK(menu_sdcard_format_cb) {
