@@ -26,7 +26,11 @@ typedef struct scheduler_slot {
   void* user_data;
 } scheduler_slot_t;
 
+#if defined(NANOVNA_F303)
 #define SCHEDULER_MAX_TASKS 4U
+#else
+#define SCHEDULER_MAX_TASKS 2U
+#endif
 
 static scheduler_slot_t scheduler_slots[SCHEDULER_MAX_TASKS];
 

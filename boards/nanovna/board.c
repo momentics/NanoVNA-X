@@ -62,9 +62,37 @@ const PALConfig pal_default_config = {
 };
 #endif
 
+#if !defined(NANOVNA_F303)
+static bool needDFU(void) {
+  // Magick data in memory before reset
+  if (*((unsigned long *)BOOT_FROM_SYTEM_MEMORY_MAGIC_ADDRESS) == BOOT_FROM_SYTEM_MEMORY_MAGIC)
+    return true;
+  // init PortA (leveler port) and check press
+  rccEnableAHB(STM32_GPIO_EN_MASK, FALSE);
+  GPIOA->OTYPER  = VAL_GPIOA_OTYPER;
+//  GPIOA->OSPEEDR = VAL_GPIOA_OSPEEDR;
+  GPIOA->PUPDR   = VAL_GPIOA_PUPDR;
+  GPIOA->ODR     = VAL_GPIOA_ODR;
+//  GPIOA->AFR[0]  = VAL_GPIOA_AFRL;
+//  GPIOA->AFR[1]  = VAL_GPIOA_AFRH;
+  GPIOA->MODER   = VAL_GPIOA_MODER;
+  if (GPIOA->IDR & (1<<GPIOA_PUSH)) {
+    while(GPIOA->IDR & (1<<GPIOA_PUSH)) {}; // Wait press
+    return true;
+  }
+  return false;
+}
+#endif
+
 void boardDFUEnter(void) {
+#if defined(NANOVNA_F303)
+  // Jump directly into the ROM-based DFU loader.
   __set_MSP(*((uint32_t *)(STM32F303xC_SYSTEM_MEMORY)));
-  ((void (*)(void))(*((uint32_t *)(STM32F303xC_SYSTEM_MEMORY + 4))))(); // jump to DFU
+  ((void (*)(void))(*((uint32_t *)(STM32F303xC_SYSTEM_MEMORY + 4))))();
+#else
+  *((unsigned long *)BOOT_FROM_SYTEM_MEMORY_MAGIC_ADDRESS) = BOOT_FROM_SYTEM_MEMORY_MAGIC;
+  NVIC_SystemReset();
+#endif
 }
 
 /*
@@ -73,13 +101,26 @@ void boardDFUEnter(void) {
  * any other initialization.
  */
 void __early_init(void) {
+#if defined(NANOVNA_F303)
   stm32_clock_init();
+#else
+  if (needDFU()) {
+    __enable_irq();
+    *((unsigned long *)BOOT_FROM_SYTEM_MEMORY_MAGIC_ADDRESS) = 0;
+    __set_MSP(SYSTEM_BOOT_MSP);
+    ((void (*)(void))(*((uint32_t *)(STM32F072xB_SYSTEM_MEMORY + 4))))();
+    while (1) {
+    }
+  }
+  stm32_clock_init();
+#endif
 }
 
 /*
  * Board-specific initialization code.
  */
 void boardInit(void) {
-  // Speedup flash latency
-  FLASH->ACR= FLASH_ACR_PRFTBE | FLASH_ACR_LATENCY_0;
+#if defined(NANOVNA_F303)
+  FLASH->ACR = FLASH_ACR_PRFTBE | FLASH_ACR_LATENCY_0;
+#endif
 }

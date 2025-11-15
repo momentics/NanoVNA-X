@@ -14,8 +14,4 @@
     limitations under the License.
 */
 
-#ifdef NANOVNA_F303
-#include "boards/STM32F303/mcuconf.h"
-#else
-#include "boards/STM32F072/mcuconf.h"
-#endif
+#include "boards/nanovna/mcuconf.h"

@@ -128,8 +128,9 @@ through the mailbox so a dedicated worker can call `event_bus_dispatch()` and fa
 listeners. Without a mailbox the bus falls back to immediate, synchronous dispatch. Interrupt
 handlers should invoke `event_bus_publish_from_isr()`, which acquires queue slots in a
 lock-aware fashion. The predefined topics (`EVENT_SWEEP_STARTED`, `EVENT_SWEEP_COMPLETED`,
-`EVENT_TOUCH_INPUT`, `EVENT_STORAGE_UPDATED`, `EVENT_CONFIGURATION_CHANGED`, and
-`EVENT_SHELL_COMMAND_PENDING`) cover the current coordination needs; adding new topics
+`EVENT_TOUCH_INPUT`, `EVENT_STORAGE_UPDATED`, `EVENT_CONFIGURATION_CHANGED`,
+`EVENT_SHELL_COMMAND_PENDING`, plus the low-level `EVENT_DRIVER_TOUCH_INTERRUPT` and
+`EVENT_DRIVER_BUTTON_INTERRUPT`) cover the current coordination needs; adding new topics
 requires extending the `event_bus_topic_t` enum.
 
 The scheduler helper (`services/scheduler.[ch]`) keeps a fixed pool of four slots that wrap
@@ -158,7 +159,7 @@ The source tree has been reorganised so it is no longer a line-for-line fork of 
 | `include/app`, `src/app` | Application-facing APIs: the sweep service, shell, measurement pipeline, and UI glue. |
 | `include/services`, `src/services` | Cross-cutting infrastructure (config service, scheduler, event bus). |
 | `include/system`, `src/system` | Platform-level building blocks such as the new `state_manager` that owns persistence, backup registers, and autosave scheduling. |
-| `src/platform`, `boards/STM32F0/STM32F3` | Low-level board support code shared with ChibiOS. |
+| `src/platform`, `boards/nanovna` | Low-level board support code shared with ChibiOS, unified for the STM32F072/STM32F303 targets. |
 
 This separation lets you trace dependencies easily (e.g. `ui/` depends on `system/state_manager.h` but not vice versa) and removes duplicated helper tables from multiple files. When porting patches from older firmware trees, map the functionality onto the closest module instead of copying entire source files.
 

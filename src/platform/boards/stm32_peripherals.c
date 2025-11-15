@@ -27,84 +27,48 @@
 #if HAL_USE_ADC == TRUE
 #error "Error VNA use self ADC lib, define HAL_USE_ADC = FALSE in halconf.h"
 #endif
-#ifdef NANOVNA_F303
-#include "boards/STM32F303/adc_v3.c"
-#else
-#include "boards/STM32F072/adc_v1.c"
-#endif
+#include "boards/nanovna/peripherals/adc.c"
 
 // Compact STM32 I2C library
 #if HAL_USE_I2C == TRUE
 #error "Error VNA use self I2C lib, define HAL_USE_I2C = FALSE in halconf.h"
 #endif
-#ifdef NANOVNA_F303
-#include "boards/STM32F303/i2c_v2.c"
-#else
-#include "boards/STM32F072/i2c_v2.c"
-#endif
+#include "boards/nanovna/peripherals/i2c.c"
 
 #ifdef __USE_RTC__
 // Compact STM32 RTC time library
 #if HAL_USE_RTC == TRUE
 #error "Error VNA use self RTC lib, define HAL_USE_RTC = FALSE in halconf.h"
 #endif
-#ifdef NANOVNA_F303
-#include "boards/STM32F303/rtc_v2.c"
-#else
-#include "boards/STM32F072/rtc_v2.c"
-#endif
+#include "boards/nanovna/peripherals/rtc.c"
 #endif
 
 // Compact STM32 DAC library
 #if HAL_USE_DAC == TRUE
 #error "Need disable HAL_USE_DAC in halconf.h for use VNA_DAC"
 #endif
-#ifdef NANOVNA_F303
-#include "boards/STM32F303/dac_v1.c"
-#else
-#include "boards/STM32F072/dac_v1.c"
-#endif
+#include "boards/nanovna/peripherals/dac.c"
 
 // Compact STM32 I2S library
 #if HAL_USE_I2S == TRUE
 #error "Need disable HAL_USE_DAC in halconf.h for use VNA_DAC"
 #endif
-#ifdef NANOVNA_F303
-#include "boards/STM32F303/i2s.c"
-#else
-#include "boards/STM32F072/i2s.c"
-#endif
+#include "boards/nanovna/peripherals/i2s.c"
 
 // Compact STM32 flash library
-#ifdef NANOVNA_F303
-#include "boards/STM32F303/flash.c"
-#else
-#include "boards/STM32F072/flash.c"
-#endif
+#include "boards/nanovna/peripherals/flash.c"
 
 // Compact STM32 GPIO library
 #if HAL_USE_PAL == FALSE
-#ifdef NANOVNA_F303
-#include "boards/STM32F303/gpio_v2.c"
-#else
-#include "boards/STM32F072/gpio_v2.c"
-#endif
+#include "boards/nanovna/peripherals/gpio.c"
 #endif
 
 // Compact STM32 DMA library
-#ifdef NANOVNA_F303
-#include "boards/STM32F303/dma_v1.c"
-#else
-#include "boards/STM32F072/dma_v1.c"
-#endif
+#include "boards/nanovna/peripherals/dma.c"
 
 // Compact STM32 EXT library
 #if HAL_USE_EXT == FALSE
-#ifdef NANOVNA_F303
-#include "boards/STM32F303/exti_v1.c"
-#else
-#include "boards/STM32F072/exti_v1.c"
-#endif
+#include "boards/nanovna/peripherals/exti.c"
 #endif
 
 #if HAL_USE_GPT == FALSE

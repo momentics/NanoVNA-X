@@ -69,7 +69,7 @@ static measurement_pipeline_t measurement_pipeline;
 
 static msg_t event_dispatch_worker(void* user_data) {
   event_bus_t* bus = (event_bus_t*)user_data;
-  chRegSetThreadName("evt-dispatch");
+  chRegSetThreadName("evt");
   while (true) {
     if (bus == NULL || !bus->mailbox_ready || !bus->semaphore_ready) {
       chThdSleepMilliseconds(20);
@@ -219,7 +219,7 @@ static void schedule_battery_redraw(void) {
 static THD_WORKING_AREA(waSweepThread, SWEEP_THREAD_STACK_SIZE);
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
-  chRegSetThreadName("sweep");
+  chRegSetThreadName("swp");
 #ifdef __FLIP_DISPLAY__
   if (VNA_MODE(VNA_MODE_FLIP_DISPLAY))
     lcd_set_flip(true);
@@ -2550,7 +2550,7 @@ bool sd_card_load_config(void) {
 
 static THD_FUNCTION(ShellServiceThread, arg) {
   (void)arg;
-  chRegSetThreadName("usb-shell");
+  chRegSetThreadName("usb");
   bool session_active = false;
   const systime_t poll_interval = MS2ST(100);
   while (true) {

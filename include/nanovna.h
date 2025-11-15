@@ -1447,8 +1447,6 @@ void ui_init(void);
 void ui_process(void);
 void ui_attach_event_bus(event_bus_t* bus);
 
-void handle_touch_interrupt(void);
-
 void ui_touch_cal_exec(void);
 void ui_touch_draw_test(void);
 void ui_enter_dfu(void);

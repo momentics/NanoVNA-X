@@ -27,6 +27,7 @@
 #include "hal.h"
 #include "services/event_bus.h"
 #include "services/config_service.h"
+#include "platform/boards/board_events.h"
 #include "chprintf.h"
 #include <string.h>
 #include "si5351.h"
@@ -103,6 +104,23 @@ static void ui_on_event(const event_bus_message_t* message, void* user_data) {
     break;
   case EVENT_STORAGE_UPDATED:
     request_to_redraw(REDRAW_CAL_STATUS);
+    break;
+  default:
+    break;
+  }
+}
+
+static void ui_on_board_event(const event_bus_message_t* message, void* user_data) {
+  (void)user_data;
+  if (message == NULL) {
+    return;
+  }
+  switch (message->topic) {
+  case EVENT_DRIVER_TOUCH_INTERRUPT:
+    operation_requested |= OP_TOUCH;
+    break;
+  case EVENT_DRIVER_BUTTON_INTERRUPT:
+    operation_requested |= OP_LEVER;
     break;
   default:
     break;
@@ -322,7 +340,7 @@ void remote_touch_set(uint16_t state, int16_t x, int16_t y) {
     last_touch_x = x;
   if (y != -1)
     last_touch_y = y;
-  handle_touch_interrupt();
+  operation_requested |= OP_TOUCH;
 }
 #endif
 
@@ -3764,25 +3782,11 @@ void ui_process(void) {
   operation_requested &= (uint8_t)~(OP_LEVER | OP_TOUCH);
 }
 
-void handle_button_interrupt(uint16_t channel) {
-  (void)channel;
-  operation_requested |= OP_LEVER;
-  // cur_button = READ_PORT() & BUTTON_MASK;
-}
-
-// static systime_t t_time = 0;
-//  Triggered touch interrupt call
-void handle_touch_interrupt(void) {
-  operation_requested |= OP_TOUCH;
-  //  systime_t n_time = chVTGetSystemTimeX();
-  //  shell_printf("%d\r\n", n_time - t_time);
-  //  t_time = n_time;
-}
-
 #if HAL_USE_EXT == TRUE // Use ChibiOS EXT code (need lot of flash ~1.5k)
 static void handle_button_ext(EXTDriver* extp, expchannel_t channel) {
   (void)extp;
-  handle_button_interrupt((uint16_t)channel);
+  (void)channel;
+  operation_requested |= OP_LEVER;
 }
 
 static const EXTConfig extcfg = {
@@ -3829,6 +3833,8 @@ void ui_init() {
   ui_init_ext();
   // Init touch subsystem
   touch_init();
+  board_event_subscribe(BOARD_EVENT_TOUCH, ui_on_board_event, NULL);
+  board_event_subscribe(BOARD_EVENT_BUTTON, ui_on_board_event, NULL);
   // Set LCD display brightness
 #ifdef __LCD_BRIGHTNESS__
   lcd_set_brightness(config._brightness);
