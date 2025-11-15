@@ -57,11 +57,13 @@ static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
 static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
 #if defined(NANOVNA_F303)
 #define EVENT_WA_SECTION __attribute__((section(".ram4")))
+#define SHELL_WA_SECTION __attribute__((section(".ram4")))
 #else
 #define EVENT_WA_SECTION
+#define SHELL_WA_SECTION
 #endif
 static EVENT_WA_SECTION THD_WORKING_AREA(waEventDispatchWorker, 24);
-static THD_WORKING_AREA(waShellThread, 176);
+static SHELL_WA_SECTION THD_WORKING_AREA(waShellThread, 176);
 
 static measurement_pipeline_t measurement_pipeline;
 
