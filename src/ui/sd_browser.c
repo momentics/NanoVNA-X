@@ -536,10 +536,10 @@ void ui_browser_lever(uint16_t status) {
       browser_selection = 0;
     if (old != browser_selection) {
       browser_draw_button(old, NULL);            // clear old selection
-    browser_draw_button(browser_selection, NULL); // draw new selection
+      browser_draw_button(browser_selection, NULL); // draw new selection
     }
     chThdSleepMilliseconds(100);
-  } while ((status = ui_input_wait_release()) != 0);
+  } while ((status = ui_input_wait_release()) & (EVT_DOWN | EVT_UP));
 }
 
 #endif

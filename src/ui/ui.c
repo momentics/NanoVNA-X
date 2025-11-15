@@ -1425,7 +1425,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_brightness_acb) {
                    value);
         lcd_set_brightness(value);
         chThdSleepMilliseconds(200);
-      } while ((status = ui_input_wait_release()) != 0);
+      } while ((status = ui_input_wait_release()) & (EVT_DOWN | EVT_UP));
     }
     if (status == EVT_BUTTON_SINGLE_CLICK)
       break;
@@ -2629,7 +2629,7 @@ static void ui_menu_lever(uint16_t status) {
     }
     menu_draw(mask | (1 << selection));
     chThdSleepMilliseconds(100);
-  } while ((status = ui_input_wait_release()) != 0);
+  } while ((status = ui_input_wait_release()) & (EVT_DOWN | EVT_UP));
 }
 
 static void ui_menu_touch(int touch_x, int touch_y) {
@@ -3375,7 +3375,7 @@ static void ui_keypad_lever(uint16_t status) {
     keypad_draw_button(old);
     keypad_draw_button(selection);
     chThdSleepMilliseconds(100);
-  } while ((status = ui_input_wait_release()) != 0);
+  } while ((status = ui_input_wait_release()) & (EVT_DOWN | EVT_UP));
 }
 //==================================== end keyboard input
 //=============================================
@@ -3414,7 +3414,7 @@ static void lever_move_marker(uint16_t status) {
     set_marker_index(active_marker, idx);
     redraw_marker(active_marker);
     step++;
-  } while ((status = ui_input_wait_release()) != 0);
+  } while ((status = ui_input_wait_release()) & (EVT_DOWN | EVT_UP));
 }
 
 #ifdef UI_USE_LEVELER_SEARCH_MODE
@@ -3476,7 +3476,7 @@ static void lever_frequency(uint16_t status) {
     if (status & EVT_DOWN)
       freq -= step;
   }
-  while (ui_input_wait_release() != 0)
+  while ((ui_input_wait_release() & (EVT_DOWN | EVT_UP)) != 0)
     ;
   if (freq > FREQUENCY_MAX || freq < FREQUENCY_MIN)
     return;
@@ -3500,7 +3500,7 @@ static void lever_edelay(uint16_t status) {
       value -= current_props._var_delay;
   }
   set_electrical_delay(ch, value);
-  while (ui_input_wait_release() != 0)
+  while ((ui_input_wait_release() & (EVT_DOWN | EVT_UP)) != 0)
     ;
 }
 

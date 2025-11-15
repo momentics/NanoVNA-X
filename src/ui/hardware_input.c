@@ -82,9 +82,15 @@ uint16_t ui_input_wait_release(void) {
     uint16_t cur_button = ui_input_get_buttons();
     uint16_t changed = last_button ^ cur_button;
     if (dt >= BUTTON_DOWN_LONG_TICKS && (cur_button & BUTTON_PUSH)) {
+      last_button = cur_button;
+      last_button_down_ticks = ticks;
+      last_button_repeat_ticks = ticks + BUTTON_REPEAT_TICKS;
       return EVT_BUTTON_DOWN_LONG;
     }
     if (changed & BUTTON_PUSH) {
+      last_button = cur_button;
+      last_button_down_ticks = ticks;
+      last_button_repeat_ticks = ticks + BUTTON_REPEAT_TICKS;
       return EVT_BUTTON_SINGLE_CLICK;
     }
     if (changed) {
