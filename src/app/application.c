@@ -215,8 +215,8 @@ static void schedule_battery_redraw(void) {
   request_to_redraw(REDRAW_BATTERY);
 }
 
-#define SWEEP_THREAD_STACK_SIZE 768
-static thread_t* sweep_thread = NULL;
+#define SWEEP_THREAD_STACK_SIZE 448
+static THD_WORKING_AREA(waSweepThread, SWEEP_THREAD_STACK_SIZE);
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
   chRegSetThreadName("sweep");
@@ -2655,11 +2655,7 @@ int app_main(void) {
   /*
    * Startup sweep and shell threads
    */
-  sweep_thread = chThdCreateFromHeap(NULL, THD_WORKING_AREA_SIZE(SWEEP_THREAD_STACK_SIZE),
-                                     "sweep", NORMALPRIO - 1, Thread1, NULL);
-  if (sweep_thread == NULL) {
-    chSysHalt("no sweep wa");
-  }
+  chThdCreateStatic(waSweepThread, sizeof(waSweepThread), NORMALPRIO - 1, Thread1, NULL);
   chThdCreateStatic(waShellThread, sizeof(waShellThread), NORMALPRIO, ShellServiceThread, NULL);
 
   while (true) {

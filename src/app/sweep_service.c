@@ -62,6 +62,13 @@ static bool sweep_workspace_locked = false;
 static uint8_t smooth_factor = 0;
 static void (*volatile sample_func)(float* gamma) = calculate_gamma;
 
+typedef struct {
+  float samples[4];
+  float calibration[CAL_TYPE_COUNT][2];
+} sweep_measurement_buffers_t;
+
+static sweep_measurement_buffers_t sweep_buffers;
+
 void sweep_service_set_sample_function(void (*func)(float*)) {
   if (func == NULL) {
     func = calculate_gamma;
@@ -521,6 +528,9 @@ static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
 }
 
 bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
+  static const uint16_t channel_measure_mask[2] = {SWEEP_CH0_MEASURE, SWEEP_CH1_MEASURE};
+  static const uint16_t channel_edelay_mask[2] = {SWEEP_APPLY_EDELAY_S11, SWEEP_APPLY_EDELAY_S21};
+  static const uint8_t channel_sample_offset[2] = {0U, 2U};
   if (p_sweep >= sweep_points || !break_on_operation) {
     sweep_reset_progress();
     sweep_progress_end();
@@ -531,8 +541,9 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
     sweep_led_end();
     return false;
   }
-  float data[4];
-  float c_data[CAL_TYPE_COUNT][2];
+  sweep_measurement_buffers_t* buffers = &sweep_buffers;
+  float* data = buffers->samples;
+  float (*calibration_data)[2] = buffers->calibration;
   bool completed = false;
   int delay = 0;
   int st_delay = DELAY_SWEEP_START;
@@ -540,10 +551,16 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
   bool show_progress = config._bandwidth >= BANDWIDTH_100;
   uint16_t batch_budget = sweep_points_budget(break_on_operation);
   uint16_t processed = 0;
-  float offset = 1.0f;
-  if (mask & SWEEP_APPLY_S21_OFFSET) {
-    offset = vna_expf(s21_offset * (logf(10.0f) / 20.0f));
-  }
+  const bool apply_offset_s21 = (mask & SWEEP_APPLY_S21_OFFSET) != 0U;
+  const bool apply_calibration = (mask & SWEEP_APPLY_CALIBRATION) != 0U;
+  const bool measurement_required = (mask & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE)) != 0U;
+#ifdef __VNA_Z_RENORMALIZATION__
+  const bool apply_renorm = (mask & SWEEP_USE_RENORMALIZATION) != 0U;
+#endif
+  const bool apply_s21_offset = apply_offset_s21 && (mask & SWEEP_CH1_MEASURE);
+  const float offset_scale =
+      apply_offset_s21 ? vna_expf(s21_offset * (logf(10.0f) / 20.0f)) : 1.0f;
+  void (*sample_cb)(float*) = sample_func;
 
   if (p_sweep == 0U) {
     sweep_prepare_led_and_progress(show_progress);
@@ -558,7 +575,7 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
     }
     freq_t frequency = get_frequency(p_sweep);
     uint8_t extra_cycles = 0U;
-    if (mask & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE)) {
+    if (measurement_required) {
       delay = app_measurement_set_frequency(frequency);
       interpolation_idx = (mask & SWEEP_USE_INTERPOLATION) ? -1 : (int)p_sweep;
       extra_cycles = si5351_take_settling_cycles();
@@ -568,54 +585,43 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
       bool final_cycle = (cycle == total_cycles - 1U);
       int cycle_delay = delay;
       int cycle_st_delay = (cycle == 0U) ? st_delay : 0;
-      if (mask & SWEEP_CH0_MEASURE) {
-        tlv320aic3204_select(0);
+      bool calibration_ready = false;
+      for (uint8_t channel = 0; channel < 2; channel++) {
+        if ((mask & channel_measure_mask[channel]) == 0U) {
+          continue;
+        }
+        tlv320aic3204_select(channel);
         sweep_service_start_capture(cycle_delay + cycle_st_delay);
         cycle_delay = DELAY_CHANNEL_CHANGE;
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-          cal_interpolate(interpolation_idx, frequency, c_data);
+        if (final_cycle && apply_calibration && (!calibration_ready || channel == 0U)) {
+          cal_interpolate(interpolation_idx, frequency, calibration_data);
+          calibration_ready = true;
         }
         if (!sweep_service_wait_for_capture()) {
           goto capture_failure;
         }
-        void (*sample_cb)(float*) = sample_func;
-        sample_cb(&data[0]);
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-          apply_ch0_error_term(data, c_data);
+        float* sample_store = &data[channel_sample_offset[channel]];
+        sample_cb(sample_store);
+        if (final_cycle && apply_calibration) {
+          if (channel == 0U) {
+            apply_ch0_error_term(sample_store, calibration_data);
+          } else {
+            apply_ch1_error_term(sample_store, calibration_data);
+          }
         }
-        if (mask & SWEEP_APPLY_EDELAY_S11) {
-          apply_edelay(electrical_delayS11 * frequency, &data[0]);
+        if (mask & channel_edelay_mask[channel]) {
+          const float edelay = current_props._electrical_delay[channel] * frequency;
+          apply_edelay(edelay, sample_store);
         }
-        measured[0][p_sweep][0] = data[0];
-        measured[0][p_sweep][1] = data[1];
-      }
-      if (mask & SWEEP_CH1_MEASURE) {
-        tlv320aic3204_select(1);
-        sweep_service_start_capture(cycle_delay + cycle_st_delay);
-        cycle_delay = DELAY_CHANNEL_CHANGE;
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION) && (mask & SWEEP_CH0_MEASURE) == 0U) {
-          cal_interpolate(interpolation_idx, frequency, c_data);
+        if (channel == 1U && apply_s21_offset) {
+          apply_offset(sample_store, offset_scale);
         }
-        if (!sweep_service_wait_for_capture()) {
-          goto capture_failure;
-        }
-        void (*sample_cb)(float*) = sample_func;
-        sample_cb(&data[2]);
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-          apply_ch1_error_term(data, c_data);
-        }
-        if (mask & SWEEP_APPLY_EDELAY_S21) {
-          apply_edelay(electrical_delayS21 * frequency, &data[2]);
-        }
-        if (mask & SWEEP_APPLY_S21_OFFSET) {
-          apply_offset(&data[2], offset);
-        }
-        measured[1][p_sweep][0] = data[2];
-        measured[1][p_sweep][1] = data[3];
+        measured[channel][p_sweep][0] = sample_store[0];
+        measured[channel][p_sweep][1] = sample_store[1];
       }
     }
 #ifdef __VNA_Z_RENORMALIZATION__
-    if (mask & SWEEP_USE_RENORMALIZATION) {
+    if (apply_renorm) {
       apply_renormalization(data, mask);
     }
 #endif
