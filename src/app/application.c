@@ -23,7 +23,10 @@
 #include "app/app_features.h"
 #include "app/application.h"
 #include "app/sweep_service.h"
-#include "app/subsystems.h"
+#include "app/modules/display_presenter.h"
+#include "app/modules/measurement_engine.h"
+#include "app/modules/menu_controller.h"
+#include "app/modules/usb_command_server.h"
 
 #include "ch.h"
 #include "hal.h"
@@ -62,6 +65,20 @@ static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
 #define EVENT_WA_SECTION
 #endif
 static EVENT_WA_SECTION THD_WORKING_AREA(waEventDispatchWorker, 64);
+
+static measurement_engine_t measurement_engine;
+static display_presenter_t display_presenter;
+static menu_controller_t menu_controller;
+static usb_command_server_t usb_server;
+
+typedef struct {
+  measurement_engine_t* measurement;
+  menu_controller_t* menu;
+  display_presenter_t* display;
+  usb_command_server_t* usb;
+} runtime_loop_context_t;
+
+static runtime_loop_context_t runtime_loop_ctx;
 
 static msg_t event_dispatch_worker(void* user_data) {
   event_bus_t* bus = (event_bus_t*)user_data;
@@ -141,6 +158,8 @@ static void cmd_dump(int argc, char* argv[]);
 #define ENABLE_SD_CARD_COMMAND
 #endif
 
+static void console_command_handler(char* line);
+
 uint8_t sweep_mode = SWEEP_ENABLE;
 // Sweep measured data
 float measured[2][SWEEP_POINTS_MAX][2];
@@ -188,14 +207,14 @@ void my_debug_log(int offs, char* log) {
 #define SWEEP_THREAD_STACK_SIZE 512
 static THD_WORKING_AREA(waSweepThread, SWEEP_THREAD_STACK_SIZE);
 static THD_FUNCTION(Thread1, arg) {
-  (void)arg;
-  chRegSetThreadName("swp");
-  while (1) {
-    usb_server_subsystem_service();
-    const sweep_subsystem_status_t* status = sweep_subsystem_cycle();
-    usb_server_subsystem_service();
-    menu_subsystem_process();
-    display_subsystem_render(status);
+  runtime_loop_context_t* ctx = (runtime_loop_context_t*)arg;
+  chRegSetThreadName("runtime");
+  while (true) {
+    usb_command_server_service(ctx->usb);
+    const measurement_cycle_result_t* cycle = measurement_engine_execute(ctx->measurement);
+    usb_command_server_service(ctx->usb);
+    menu_controller_process(ctx->menu);
+    display_presenter_render(ctx->display, cycle);
     state_manager_service();
   }
 }
@@ -2487,7 +2506,7 @@ VNA_SHELL_FUNCTION(cmd_help) {
 //
 // Parse and run command line
 //
-void usb_server_handle_line(char* line) {
+static void console_command_handler(char* line) {
   DEBUG_LOG(0, line); // debug console log
   uint16_t argc = 0;
   char** argv = NULL;
@@ -2546,7 +2565,7 @@ bool sd_card_load_config(void) {
         }
         line[j] = 0;
         if (j > 0) {
-          vna_shell_execute_cmd_line(line);
+          usb_command_server_dispatch_line(&usb_server, line);
         }
         j = 0;
         last_was_cr = (c == '\r');
@@ -2562,7 +2581,7 @@ bool sd_card_load_config(void) {
   }
   if (j > 0) {
     line[j] = 0;
-    vna_shell_execute_cmd_line(line);
+    usb_command_server_dispatch_line(&usb_server, line);
   }
   f_close(config_file);
   return TRUE;
@@ -2611,10 +2630,14 @@ int app_main(void) {
 
   config_service_attach_event_bus(&app_event_bus);
   ui_attach_event_bus(&app_event_bus);
-  menu_subsystem_init();
-  display_subsystem_init();
-  sweep_subsystem_init(drivers, &app_event_bus);
-  usb_server_subsystem_init(commands, &app_event_bus);
+  menu_controller_init(&menu_controller);
+  display_presenter_init(&display_presenter);
+  measurement_engine_init(&measurement_engine, drivers, &app_event_bus);
+  usb_command_server_init(&usb_server, commands, &app_event_bus, console_command_handler);
+  runtime_loop_ctx.measurement = &measurement_engine;
+  runtime_loop_ctx.menu = &menu_controller;
+  runtime_loop_ctx.display = &display_presenter;
+  runtime_loop_ctx.usb = &usb_server;
 
   /*
    * restore config and calibration 0 slot from flash memory, also if need use backup data
@@ -2651,8 +2674,8 @@ int app_main(void) {
   /*
    * Startup sweep and shell threads
    */
-  usb_server_subsystem_start();
-  chThdCreateStatic(waSweepThread, sizeof(waSweepThread), NORMALPRIO, Thread1, NULL);
+  usb_command_server_start(&usb_server);
+  chThdCreateStatic(waSweepThread, sizeof(waSweepThread), NORMALPRIO, Thread1, &runtime_loop_ctx);
 
   while (true) {
     chThdSleepMilliseconds(1000);

@@ -180,10 +180,10 @@ CSRC = $(STARTUPSRC) \
        src/app/application.c \
        src/app/sweep_service.c \
        src/app/shell.c \
-       src/app/subsystems/sweep_subsystem.c \
-       src/app/subsystems/display_subsystem.c \
-       src/app/subsystems/menu_subsystem.c \
-       src/app/subsystems/usb_server_subsystem.c \
+       src/app/modules/measurement_engine.c \
+       src/app/modules/display_presenter.c \
+       src/app/modules/menu_controller.c \
+       src/app/modules/usb_command_server.c \
        src/core/common.c \
        src/drivers/si5351.c \
        src/drivers/tlv320aic3204.c \

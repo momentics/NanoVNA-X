@@ -1,0 +1,29 @@
+/*
+ * Display presenter: translates measurement state into LCD updates.
+ */
+
+#pragma once
+
+#include <stdint.h>
+
+#include "app/modules/measurement_engine.h"
+#include "ch.h"
+
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct display_presenter {
+  systime_t next_refresh;
+  int16_t last_battery_mv;
+} display_presenter_t;
+
+void display_presenter_init(display_presenter_t* presenter);
+void display_presenter_render(display_presenter_t* presenter,
+                              const measurement_cycle_result_t* last_cycle);
+
+#ifdef __cplusplus
+}
+#endif
