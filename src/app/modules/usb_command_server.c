@@ -5,14 +5,10 @@
 #include "ch.h"
 
 /*
- * Keep the USB shell worker lightweight on the F072 variant where SRAM is tight,
- * all heavy lifting now happens via deferred handlers on the runtime thread.
+ * Shell commands often invoke chprintf-heavy handlers, so guarantee enough stack
+ * on every target. 512 bytes matches the legacy myshell thread footprint.
  */
-#if defined(NANOVNA_F303)
 #define USB_SHELL_THREAD_STACK_SIZE 512
-#else
-#define USB_SHELL_THREAD_STACK_SIZE 128
-#endif
 static THD_WORKING_AREA(usb_shell_thread_wa, USB_SHELL_THREAD_STACK_SIZE);
 
 static void default_write_prompt(void* context, const char* prompt) {
