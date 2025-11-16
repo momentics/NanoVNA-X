@@ -61,7 +61,11 @@ void lcd_set_brightness(uint16_t brightness);
 // #define VNA_SHELL_THREAD
 
 static event_bus_t app_event_bus;
-static event_bus_subscription_t app_event_slots[6];
+static event_bus_subscription_t app_event_slots[8];
+
+#define APP_EVENT_QUEUE_DEPTH 8U
+static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
+static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
 
 static measurement_engine_t measurement_engine;
 static display_presenter_t display_presenter;
@@ -261,11 +265,15 @@ static void runtime_set_flip(void* context, bool enable) {
 
 static void runtime_service_cycle(void) {
   usb_command_server_service(&usb_server);
-  const measurement_cycle_result_t* runtime_cycle = measurement_engine_execute(&measurement_engine, true);
+  const measurement_cycle_result_t* runtime_cycle =
+      measurement_engine_execute(&measurement_engine, true);
   menu_controller_process(&menu_controller);
   display_presenter_render(&display_presenter, runtime_cycle);
   state_manager_service();
+  while (event_bus_dispatch(&app_event_bus, TIME_IMMEDIATE)) {
+  }
 }
+
 
 void pause_sweep(void) {
   sweep_mode &= ~SWEEP_ENABLE;
@@ -2561,7 +2569,9 @@ int app_main(void) {
   }
 
   config_service_init();
-  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots), NULL, 0, NULL, 0);
+  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
+                 app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage),
+                 app_event_nodes, ARRAY_COUNT(app_event_nodes));
   config_service_attach_event_bus(&app_event_bus);
   ui_attach_event_bus(&app_event_bus);
 
