@@ -42,10 +42,6 @@ static volatile const VNAShellCommand* pending_command = NULL;
 static uint16_t pending_argc = 0;
 static char** pending_argv = NULL;
 static bool shell_skip_linefeed = false;
-static event_bus_t* shell_event_bus = NULL;
-
-static void shell_on_event(const event_bus_message_t* message, void* user_data);
-
 static void shell_write(const void* buf, size_t size) {
   if (shell_stream == NULL) {
     return;
@@ -228,9 +224,6 @@ void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t a
   osalSysLock();
   osalThreadEnqueueTimeoutS(&shell_thread, TIME_INFINITE);
   osalSysUnlock();
-  if (shell_event_bus != NULL) {
-    event_bus_publish(shell_event_bus, EVENT_SHELL_COMMAND_PENDING, NULL);
-  }
 }
 
 void shell_service_pending_commands(void) {
@@ -258,27 +251,6 @@ void shell_service_pending_commands(void) {
     osalThreadDequeueNextI(&shell_thread, MSG_OK);
     osalSysUnlock();
   }
-}
-
-void shell_attach_event_bus(event_bus_t* bus) {
-  if (shell_event_bus == bus) {
-    return;
-  }
-  shell_event_bus = bus;
-  if (bus != NULL) {
-    event_bus_subscribe(bus, EVENT_SHELL_COMMAND_PENDING, shell_on_event, NULL);
-  }
-}
-
-static void shell_on_event(const event_bus_message_t* message, void* user_data) {
-  (void)user_data;
-  if (message == NULL) {
-    return;
-  }
-  if (message->topic != EVENT_SHELL_COMMAND_PENDING) {
-    return;
-  }
-  shell_service_pending_commands();
 }
 
 static const char backspace[] = {0x08, 0x20, 0x08, 0x00};

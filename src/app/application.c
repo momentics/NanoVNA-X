@@ -2517,21 +2517,7 @@ static void console_command_handler(char* line) {
   const char* command_name = NULL;
   const VNAShellCommand* cmd = shell_parse_command(line, &argc, &argv, &command_name);
   if (cmd) {
-    uint16_t cmd_flag = cmd->flags;
-    if ((cmd_flag & CMD_RUN_IN_UI) && (sweep_mode & SWEEP_UI_MODE)) {
-      cmd_flag &= (uint16_t)~CMD_WAIT_MUTEX;
-    }
-    if (cmd_flag & CMD_WAIT_MUTEX) {
-      shell_request_deferred_execution(cmd, argc, argv);
-    } else {
-      if (cmd_flag & CMD_BREAK_SWEEP) {
-        operation_request_set(OP_CONSOLE);
-      }
-      cmd->sc_function((int)argc, argv);
-      if (cmd_flag & CMD_BREAK_SWEEP) {
-        operation_request_clear(OP_CONSOLE);
-      }
-    }
+    shell_request_deferred_execution(cmd, argc, argv);
   } else if (command_name && *command_name) {
     shell_printf("%s?" VNA_SHELL_NEWLINE_STR, command_name);
   }
@@ -2664,7 +2650,6 @@ int app_main(void) {
 
   usb_command_server_config_t usb_cfg = {.context = NULL,
                                          .command_table = commands,
-                                         .event_bus = &app_event_bus,
                                          .handler = console_command_handler,
                                          .check_connect = runtime_usb_check_connect,
                                          .read_line = runtime_usb_read_line,

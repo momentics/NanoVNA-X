@@ -5,12 +5,14 @@
 #include "ch.h"
 
 /*
- * CDC shell traffic routinely formats long responses (info, sweep dumps, etc.)
- * through chprintf().  Those formatters pull in a deep stack frame on top of
- * the line buffer below, so keep the worker stack comfortably above the 400+
- * byte footprint of the legacy implementation.
+ * Keep the USB shell worker lightweight on the F072 variant where SRAM is tight,
+ * all heavy lifting now happens via deferred handlers on the runtime thread.
  */
+#if defined(NANOVNA_F303)
 #define USB_SHELL_THREAD_STACK_SIZE 512
+#else
+#define USB_SHELL_THREAD_STACK_SIZE 128
+#endif
 static THD_WORKING_AREA(usb_shell_thread_wa, USB_SHELL_THREAD_STACK_SIZE);
 
 static void default_write_prompt(void* context, const char* prompt) {
@@ -87,9 +89,6 @@ void usb_command_server_init(usb_command_server_t* server,
   }
   shell_register_commands(server->config.command_table);
   shell_init_connection();
-  if (server->config.event_bus != NULL) {
-    shell_attach_event_bus(server->config.event_bus);
-  }
 }
 
 void usb_command_server_start(usb_command_server_t* server) {
