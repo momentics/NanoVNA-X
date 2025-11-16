@@ -89,6 +89,9 @@ void usb_command_server_init(usb_command_server_t* server,
   }
   shell_register_commands(server->config.command_table);
   shell_init_connection();
+  if (server->config.event_bus != NULL) {
+    shell_attach_event_bus(server->config.event_bus);
+  }
 }
 
 void usb_command_server_start(usb_command_server_t* server) {

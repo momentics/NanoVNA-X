@@ -5,6 +5,7 @@
 #pragma once
 
 #include "app/shell.h"
+#include "services/event_bus.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,6 +16,7 @@ typedef void (*usb_command_handler_t)(char* line);
 typedef struct {
   void* context;
   const VNAShellCommand* command_table;
+  event_bus_t* event_bus;
   usb_command_handler_t handler;
   bool (*check_connect)(void* context);
   int (*read_line)(void* context, char* buffer, int length);
