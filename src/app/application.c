@@ -63,10 +63,6 @@ void lcd_set_brightness(uint16_t brightness);
 static event_bus_t app_event_bus;
 static event_bus_subscription_t app_event_slots[8];
 
-#define APP_EVENT_QUEUE_DEPTH 8U
-static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
-static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
-
 static measurement_engine_t measurement_engine;
 static display_presenter_t display_presenter;
 static menu_controller_t menu_controller;
@@ -271,6 +267,16 @@ static void runtime_service_cycle(void) {
   display_presenter_render(&display_presenter, runtime_cycle);
   state_manager_service();
   while (event_bus_dispatch(&app_event_bus, TIME_IMMEDIATE)) {
+  }
+}
+
+#define RUNTIME_THREAD_STACK_SIZE 544
+static THD_WORKING_AREA(waRuntimeThread, RUNTIME_THREAD_STACK_SIZE);
+static THD_FUNCTION(RuntimeThread, arg) {
+  (void)arg;
+  chRegSetThreadName("runtime");
+  while (true) {
+    runtime_service_cycle();
   }
 }
 
@@ -2569,9 +2575,7 @@ int app_main(void) {
   }
 
   config_service_init();
-  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
-                 app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage),
-                 app_event_nodes, ARRAY_COUNT(app_event_nodes));
+  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots), NULL, 0, NULL, 0);
   config_service_attach_event_bus(&app_event_bus);
   ui_attach_event_bus(&app_event_bus);
 
@@ -2648,9 +2652,11 @@ int app_main(void) {
   i2c_set_timings(STM32_I2C_TIMINGR);
 
   usb_command_server_start(&usb_server);
+  chThdCreateStatic(waRuntimeThread, sizeof(waRuntimeThread), NORMALPRIO - 1, RuntimeThread,
+                    NULL);
 
   while (true) {
-    runtime_service_cycle();
+    chThdSleepMilliseconds(1000);
   }
 }
 
