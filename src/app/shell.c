@@ -41,18 +41,40 @@ static volatile const VNAShellCommand* pending_command = NULL;
 static uint16_t pending_argc = 0;
 static char** pending_argv = NULL;
 static bool shell_skip_linefeed = false;
+
+#define SHELL_IO_TIMEOUT MS2ST(2000)
+
+typedef struct {
+  const struct BaseSequentialStreamVMT* vmt;
+  BaseSequentialStream* target;
+  bool failed;
+} ShellStreamAdapter;
+
+static size_t shell_adapter_write(void* instance, const uint8_t* bp, size_t n);
+static size_t shell_adapter_read(void* instance, uint8_t* bp, size_t n);
+static msg_t shell_adapter_put(void* instance, uint8_t b);
+static msg_t shell_adapter_get(void* instance);
+
+static const struct BaseSequentialStreamVMT shell_adapter_vmt = {
+    shell_adapter_write, shell_adapter_read, shell_adapter_put, shell_adapter_get};
+
+static void shell_handle_io_fault(void);
+static bool shell_channel_write(BaseSequentialStream* stream, const uint8_t* buffer, size_t size);
+static size_t shell_channel_read(BaseSequentialStream* stream, uint8_t* buffer, size_t size);
 static void shell_write(const void* buf, size_t size) {
-  if (shell_stream == NULL) {
+  if (shell_stream == NULL || buf == NULL || size == 0U) {
     return;
   }
-  streamWrite(shell_stream, buf, size);
+  if (!shell_channel_write(shell_stream, buf, size)) {
+    shell_handle_io_fault();
+  }
 }
 
 static size_t shell_read(void* buf, size_t size) {
-  if (shell_stream == NULL) {
+  if (shell_stream == NULL || buf == NULL || size == 0U) {
     return 0;
   }
-  return streamRead(shell_stream, buf, size);
+  return shell_channel_read(shell_stream, buf, size);
 }
 
 
@@ -61,20 +83,27 @@ int shell_printf(const char* fmt, ...) {
   if (shell_stream == NULL) {
     return 0;
   }
+  ShellStreamAdapter adapter = {.vmt = &shell_adapter_vmt, .target = shell_stream, .failed = false};
   va_list ap;
   va_start(ap, fmt);
-  const int written = chvprintf(shell_stream, fmt, ap);
+  const int written = chvprintf((BaseSequentialStream*)&adapter, fmt, ap);
   va_end(ap);
+  if (adapter.failed) {
+    shell_handle_io_fault();
+    return 0;
+  }
   return written;
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
 int serial_shell_printf(const char* fmt, ...) {
+  ShellStreamAdapter adapter = {.vmt = &shell_adapter_vmt, .target = (BaseSequentialStream*)&SD1,
+                                .failed = false};
   va_list ap;
   va_start(ap, fmt);
-  const int written = chvprintf((BaseSequentialStream*)&SD1, fmt, ap);
+  const int written = chvprintf((BaseSequentialStream*)&adapter, fmt, ap);
   va_end(ap);
-  return written;
+  return adapter.failed ? 0 : written;
 }
 #endif
 
@@ -86,9 +115,10 @@ void shell_write_text(const char* text) {
   if (shell_stream == NULL || text == NULL) {
     return;
   }
-  while (*text != '\0') {
-    shell_stream_write(text, 1);
-    text++;
+  const uint8_t* ptr = (const uint8_t*)text;
+  while (*ptr != '\0') {
+    shell_stream_write(ptr, 1);
+    ptr++;
   }
 }
 
@@ -96,6 +126,73 @@ void shell_write_line(const char* text) {
   shell_write_text(text);
   static const char newline[] = VNA_SHELL_NEWLINE_STR;
   shell_stream_write(newline, sizeof newline - 1U);
+}
+
+static void shell_handle_io_fault(void) {
+  shell_drop_stream();
+}
+
+static bool shell_channel_write(BaseSequentialStream* stream, const uint8_t* buffer, size_t size) {
+  if (stream == NULL || buffer == NULL || size == 0U) {
+    return false;
+  }
+  BaseChannel* channel = (BaseChannel*)stream;
+  size_t offset = 0;
+  while (offset < size) {
+    size_t chunk = size - offset;
+    if (chunk > SERIAL_USB_TX_BUFFERS_SIZE) {
+      chunk = SERIAL_USB_TX_BUFFERS_SIZE;
+    }
+    size_t written = chnWriteTimeout(channel, buffer + offset, chunk, SHELL_IO_TIMEOUT);
+    if (written == 0U) {
+      return false;
+    }
+    offset += written;
+    chThdYield();
+  }
+  return true;
+}
+
+static size_t shell_channel_read(BaseSequentialStream* stream, uint8_t* buffer, size_t size) {
+  if (stream == NULL || buffer == NULL || size == 0U) {
+    return 0;
+  }
+  BaseChannel* channel = (BaseChannel*)stream;
+  return chnReadTimeout(channel, buffer, size, SHELL_IO_TIMEOUT);
+}
+
+static size_t shell_adapter_write(void* instance, const uint8_t* bp, size_t n) {
+  ShellStreamAdapter* adapter = instance;
+  if (!shell_channel_write(adapter->target, bp, n)) {
+    adapter->failed = true;
+    return 0;
+  }
+  return n;
+}
+
+static size_t shell_adapter_read(void* instance, uint8_t* bp, size_t n) {
+  ShellStreamAdapter* adapter = instance;
+  return shell_channel_read(adapter->target, bp, n);
+}
+
+static msg_t shell_adapter_put(void* instance, uint8_t b) {
+  ShellStreamAdapter* adapter = instance;
+  BaseChannel* channel = (BaseChannel*)adapter->target;
+  msg_t result = chnPutTimeout(channel, b, SHELL_IO_TIMEOUT);
+  if (result != MSG_OK) {
+    adapter->failed = true;
+  }
+  return result;
+}
+
+static msg_t shell_adapter_get(void* instance) {
+  ShellStreamAdapter* adapter = instance;
+  BaseChannel* channel = (BaseChannel*)adapter->target;
+  msg_t result = chnGetTimeout(channel, SHELL_IO_TIMEOUT);
+  if (result < MSG_OK) {
+    adapter->failed = true;
+  }
+  return result;
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
