@@ -53,31 +53,31 @@ static int16_t last_touch_x;
 static int16_t last_touch_y;
 static volatile uint8_t operation_requested = OP_NONE;
 
-static inline syssts_t operation_request_lock(void) {
-  return chSysGetStatusAndLockX();
-}
-
-static inline void operation_request_unlock(syssts_t sts) {
-  chSysRestoreStatusX(sts);
+static inline void operation_request_write(uint8_t set_mask, uint8_t clear_mask) {
+  operation_requested |= set_mask;
+  operation_requested &= (uint8_t)~clear_mask;
 }
 
 void operation_request_set(uint8_t flags) {
-  syssts_t sts = operation_request_lock();
-  operation_requested |= flags;
-  operation_request_unlock(sts);
+  osalSysLock();
+  operation_request_write(flags, 0U);
+  osalSysUnlock();
+}
+
+void operation_request_set_isr(uint8_t flags) {
+  osalSysLockFromISR();
+  operation_request_write(flags, 0U);
+  osalSysUnlockFromISR();
 }
 
 void operation_request_clear(uint8_t flags) {
-  syssts_t sts = operation_request_lock();
-  operation_requested &= (uint8_t)~flags;
-  operation_request_unlock(sts);
+  osalSysLock();
+  operation_request_write(0U, flags);
+  osalSysUnlock();
 }
 
 uint8_t operation_request_peek(void) {
-  syssts_t sts = operation_request_lock();
-  uint8_t value = operation_requested;
-  operation_request_unlock(sts);
-  return value;
+  return operation_requested;
 }
 
 bool operation_request_pending(uint8_t mask) {
@@ -3818,7 +3818,7 @@ void ui_process(void) {
 static void handle_button_ext(EXTDriver* extp, expchannel_t channel) {
   (void)extp;
   (void)channel;
-  operation_request_set(OP_LEVER);
+  operation_request_set_isr(OP_LEVER);
 }
 
 static const EXTConfig extcfg = {
