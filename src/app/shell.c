@@ -264,9 +264,9 @@ bool shell_check_connect(void) {
 }
 
 bool shell_port_open(void) {
-  osalSysLock();
+  syssts_t sts = chSysGetStatusAndLockX();
   bool open = shell_port_open_flag;
-  osalSysUnlock();
+  chSysRestoreStatusX(sts);
 #ifdef __USE_SERIAL_CONSOLE__
   if (VNA_MODE(VNA_MODE_CONNECTION)) {
     open = true;
@@ -276,9 +276,9 @@ bool shell_port_open(void) {
 }
 
 void shell_set_port_open(bool open) {
-  osalSysLock();
+  syssts_t sts = chSysGetStatusAndLockX();
   shell_port_open_flag = open;
-  osalSysUnlock();
+  chSysRestoreStatusX(sts);
 }
 
 void shell_init_connection(void) {
