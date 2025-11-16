@@ -68,6 +68,10 @@ void shell_reset_console(void);
 bool shell_check_connect(void);
 void shell_init_connection(void);
 void shell_restore_stream(void);
+bool shell_stream_ready(void);
+bool shell_try_restore_stream(void);
+void shell_drop_stream(void);
+bool shell_consume_fault(void);
 
 const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** argv,
                                            const char** name_out);
