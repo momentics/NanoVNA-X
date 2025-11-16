@@ -24,6 +24,7 @@
 #include "app/sweep_service.h"
 #include "app/shell.h"
 #include "system/state_manager.h"
+#include "ch.h"
 #include "hal.h"
 #include "services/event_bus.h"
 #include "services/config_service.h"
@@ -52,10 +53,20 @@ static int16_t last_touch_x;
 static int16_t last_touch_y;
 static volatile uint8_t operation_requested = OP_NONE;
 
+static uint8_t operation_request_peek_unlocked(void) {
+  return operation_requested;
+}
+
 void operation_request_set(uint8_t flags) {
   osalSysLock();
   operation_requested |= flags;
   osalSysUnlock();
+}
+
+void operation_request_set_isr(uint8_t flags) {
+  osalSysLockFromISR();
+  operation_requested |= flags;
+  osalSysUnlockFromISR();
 }
 
 void operation_request_clear(uint8_t flags) {
@@ -65,7 +76,10 @@ void operation_request_clear(uint8_t flags) {
 }
 
 uint8_t operation_request_peek(void) {
-  return operation_requested;
+  osalSysLock();
+  uint8_t value = operation_request_peek_unlocked();
+  osalSysUnlock();
+  return value;
 }
 
 bool operation_request_pending(uint8_t mask) {
@@ -3806,7 +3820,7 @@ void ui_process(void) {
 static void handle_button_ext(EXTDriver* extp, expchannel_t channel) {
   (void)extp;
   (void)channel;
-  operation_request_set(OP_LEVER);
+  operation_request_set_isr(OP_LEVER);
 }
 
 static const EXTConfig extcfg = {
