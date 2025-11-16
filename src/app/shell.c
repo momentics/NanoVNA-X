@@ -41,42 +41,22 @@ static volatile const VNAShellCommand* pending_command = NULL;
 static uint16_t pending_argc = 0;
 static char** pending_argv = NULL;
 static bool shell_skip_linefeed = false;
-static bool shell_port_open_flag = false;
-static bool shell_control_lines_seen = false;
+static event_bus_t* shell_event_bus = NULL;
 
-#define SHELL_IO_TIMEOUT MS2ST(50)
+static void shell_on_event(const event_bus_message_t* message, void* user_data);
 
-typedef struct {
-  const struct BaseSequentialStreamVMT* vmt;
-  BaseSequentialStream* target;
-  bool failed;
-} ShellStreamAdapter;
-
-static size_t shell_adapter_write(void* instance, const uint8_t* bp, size_t n);
-static size_t shell_adapter_read(void* instance, uint8_t* bp, size_t n);
-static msg_t shell_adapter_put(void* instance, uint8_t b);
-static msg_t shell_adapter_get(void* instance);
-
-static const struct BaseSequentialStreamVMT shell_adapter_vmt = {
-    shell_adapter_write, shell_adapter_read, shell_adapter_put, shell_adapter_get};
-
-static void shell_handle_io_fault(void);
-static bool shell_channel_write(BaseSequentialStream* stream, const uint8_t* buffer, size_t size);
-static size_t shell_channel_read(BaseSequentialStream* stream, uint8_t* buffer, size_t size);
 static void shell_write(const void* buf, size_t size) {
-  if (shell_stream == NULL || buf == NULL || size == 0U) {
+  if (shell_stream == NULL) {
     return;
   }
-  if (!shell_channel_write(shell_stream, buf, size)) {
-    shell_handle_io_fault();
-  }
+  streamWrite(shell_stream, buf, size);
 }
 
 static size_t shell_read(void* buf, size_t size) {
-  if (shell_stream == NULL || buf == NULL || size == 0U) {
+  if (shell_stream == NULL) {
     return 0;
   }
-  return shell_channel_read(shell_stream, buf, size);
+  return streamRead(shell_stream, buf, size);
 }
 
 
@@ -85,138 +65,25 @@ int shell_printf(const char* fmt, ...) {
   if (shell_stream == NULL) {
     return 0;
   }
-  ShellStreamAdapter adapter = {.vmt = &shell_adapter_vmt, .target = shell_stream, .failed = false};
   va_list ap;
   va_start(ap, fmt);
-  const int written = chvprintf((BaseSequentialStream*)&adapter, fmt, ap);
+  const int written = chvprintf(shell_stream, fmt, ap);
   va_end(ap);
-  if (adapter.failed) {
-    shell_handle_io_fault();
-    return 0;
-  }
   return written;
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
 int serial_shell_printf(const char* fmt, ...) {
-  ShellStreamAdapter adapter = {.vmt = &shell_adapter_vmt, .target = (BaseSequentialStream*)&SD1,
-                                .failed = false};
   va_list ap;
   va_start(ap, fmt);
-  const int written = chvprintf((BaseSequentialStream*)&adapter, fmt, ap);
+  const int written = chvprintf((BaseSequentialStream*)&SD1, fmt, ap);
   va_end(ap);
-  return adapter.failed ? 0 : written;
+  return written;
 }
 #endif
 
 void shell_stream_write(const void* buffer, size_t size) {
   shell_write(buffer, size);
-}
-
-void shell_write_text(const char* text) {
-  if (shell_stream == NULL || text == NULL) {
-    return;
-  }
-  const uint8_t* ptr = (const uint8_t*)text;
-  while (*ptr != '\0') {
-    shell_stream_write(ptr, 1);
-    ptr++;
-  }
-}
-
-void shell_write_line(const char* text) {
-  shell_write_text(text);
-  static const char newline[] = VNA_SHELL_NEWLINE_STR;
-  shell_stream_write(newline, sizeof newline - 1U);
-}
-
-static void shell_handle_io_fault(void) {
-  shell_drop_stream();
-}
-
-static bool shell_channel_write(BaseSequentialStream* stream, const uint8_t* buffer, size_t size) {
-  if (stream == NULL || buffer == NULL || size == 0U) {
-    return false;
-  }
-#ifdef __USE_SERIAL_CONSOLE__
-  const bool is_uart_stream = (stream == (BaseSequentialStream*)&SD1);
-#else
-  const bool is_uart_stream = false;
-#endif
-  if (!is_uart_stream && !shell_port_open()) {
-    return false;
-  }
-  BaseChannel* channel = (BaseChannel*)stream;
-  size_t offset = 0;
-  const systime_t write_start = chVTGetSystemTimeX();
-  const systime_t max_write_time = MS2ST(2000);
-  while (offset < size) {
-    size_t chunk = size - offset;
-    if (chunk > SERIAL_USB_TX_BUFFERS_SIZE) {
-      chunk = SERIAL_USB_TX_BUFFERS_SIZE;
-    }
-    size_t written = chnWriteTimeout(channel, buffer + offset, chunk, SHELL_IO_TIMEOUT);
-    if (written == 0U) {
-      if (!is_uart_stream) {
-        if (!shell_port_open() || !shell_check_connect()) {
-          return false;
-        }
-      }
-      if (chVTTimeElapsedSinceX(write_start) >= max_write_time) {
-        return false;
-      }
-      chThdSleepMilliseconds(1);
-      continue;
-    }
-    offset += written;
-    chThdYield();
-  }
-  return true;
-}
-
-static size_t shell_channel_read(BaseSequentialStream* stream, uint8_t* buffer, size_t size) {
-  if (stream == NULL || buffer == NULL || size == 0U) {
-    return 0;
-  }
-  BaseChannel* channel = (BaseChannel*)stream;
-  return chnReadTimeout(channel, buffer, size, SHELL_IO_TIMEOUT);
-}
-
-static size_t shell_adapter_write(void* instance, const uint8_t* bp, size_t n) {
-  ShellStreamAdapter* adapter = instance;
-  if (adapter->target == NULL || n == 0U) {
-    return 0;
-  }
-  if (!shell_channel_write(adapter->target, bp, n)) {
-    adapter->failed = true;
-    return 0;
-  }
-  return n;
-}
-
-static size_t shell_adapter_read(void* instance, uint8_t* bp, size_t n) {
-  ShellStreamAdapter* adapter = instance;
-  return shell_channel_read(adapter->target, bp, n);
-}
-
-static msg_t shell_adapter_put(void* instance, uint8_t b) {
-  ShellStreamAdapter* adapter = instance;
-  BaseChannel* channel = (BaseChannel*)adapter->target;
-  msg_t result = chnPutTimeout(channel, b, SHELL_IO_TIMEOUT);
-  if (result != MSG_OK) {
-    adapter->failed = true;
-  }
-  return result;
-}
-
-static msg_t shell_adapter_get(void* instance) {
-  ShellStreamAdapter* adapter = instance;
-  BaseChannel* channel = (BaseChannel*)adapter->target;
-  msg_t result = chnGetTimeout(channel, SHELL_IO_TIMEOUT);
-  if (result < MSG_OK) {
-    adapter->failed = true;
-  }
-  return result;
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
@@ -272,41 +139,8 @@ bool shell_check_connect(void) {
   osalSysUnlock();
   return active;
 #else
-  osalSysLock();
-  const bool active = (SDU1.config->usbp->state == USB_ACTIVE) && (SDU1.state == SDU_READY);
-  osalSysUnlock();
-  return active;
+  return SDU1.config->usbp->state == USB_ACTIVE;
 #endif
-}
-
-bool shell_port_open(void) {
-  syssts_t sts = chSysGetStatusAndLockX();
-  bool open = shell_port_open_flag;
-  const bool control_lines_seen = shell_control_lines_seen;
-  chSysRestoreStatusX(sts);
-#ifdef __USE_SERIAL_CONSOLE__
-  if (VNA_MODE(VNA_MODE_CONNECTION)) {
-    open = true;
-  }
-#endif
-  if (!control_lines_seen && !open && shell_check_connect()) {
-    open = true;
-  }
-  return open;
-}
-
-void shell_set_port_open(bool open) {
-  syssts_t sts = chSysGetStatusAndLockX();
-  shell_port_open_flag = open;
-  shell_control_lines_seen = true;
-  chSysRestoreStatusX(sts);
-}
-
-void shell_reset_port_state(void) {
-  syssts_t sts = chSysGetStatusAndLockX();
-  shell_port_open_flag = false;
-  shell_control_lines_seen = false;
-  chSysRestoreStatusX(sts);
 }
 
 void shell_init_connection(void) {
@@ -327,22 +161,6 @@ void shell_init_connection(void) {
 
 void shell_restore_stream(void) {
   PREPARE_STREAM;
-}
-
-bool shell_stream_ready(void) {
-  return shell_stream != NULL;
-}
-
-bool shell_try_restore_stream(void) {
-  if (shell_stream != NULL) {
-    return true;
-  }
-  shell_restore_stream();
-  return shell_stream != NULL;
-}
-
-void shell_drop_stream(void) {
-  shell_stream = NULL;
 }
 
 void shell_register_commands(const VNAShellCommand* table) {
@@ -396,6 +214,9 @@ void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t a
   osalSysLock();
   osalThreadEnqueueTimeoutS(&shell_thread, TIME_INFINITE);
   osalSysUnlock();
+  if (shell_event_bus != NULL) {
+    event_bus_publish(shell_event_bus, EVENT_SHELL_COMMAND_PENDING, NULL);
+  }
 }
 
 void shell_service_pending_commands(void) {
@@ -420,7 +241,24 @@ void shell_service_pending_commands(void) {
 }
 
 void shell_attach_event_bus(event_bus_t* bus) {
-  (void)bus;
+  if (shell_event_bus == bus) {
+    return;
+  }
+  shell_event_bus = bus;
+  if (bus != NULL) {
+    event_bus_subscribe(bus, EVENT_SHELL_COMMAND_PENDING, shell_on_event, NULL);
+  }
+}
+
+static void shell_on_event(const event_bus_message_t* message, void* user_data) {
+  (void)user_data;
+  if (message == NULL) {
+    return;
+  }
+  if (message->topic != EVENT_SHELL_COMMAND_PENDING) {
+    return;
+  }
+  shell_service_pending_commands();
 }
 
 static const char backspace[] = {0x08, 0x20, 0x08, 0x00};
