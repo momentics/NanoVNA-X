@@ -376,10 +376,16 @@ static void sof_handler(USBDriver* usbp) {
   osalSysUnlockFromISR();
 }
 
+#ifndef CDC_CONTROL_LINE_STATE_DTR
+#define CDC_CONTROL_LINE_STATE_DTR 0x01U
+#define CDC_CONTROL_LINE_STATE_RTS 0x02U
+#endif
+
 static bool usb_requests_hook(USBDriver* usbp) {
   if ((usbp->setup.bmRequestType & USB_RTYPE_TYPE_MASK) == USB_RTYPE_TYPE_CLASS &&
       usbp->setup.bRequest == CDC_SET_CONTROL_LINE_STATE) {
-    shell_set_port_open((usbp->setup.wValue & 1U) != 0U);
+    const uint16_t mask = CDC_CONTROL_LINE_STATE_DTR | CDC_CONTROL_LINE_STATE_RTS;
+    shell_set_port_open((usbp->setup.wValue & mask) != 0U);
   }
   return sduRequestsHook(usbp);
 }
