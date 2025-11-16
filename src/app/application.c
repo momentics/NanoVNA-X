@@ -2484,11 +2484,10 @@ static void vna_shell_execute_line(char* line) {
     if ((cmd_flag & CMD_RUN_IN_UI) && (sweep_mode & SWEEP_UI_MODE)) {
       cmd_flag &= (uint16_t)~CMD_WAIT_MUTEX;
     }
-    if (cmd_flag & CMD_BREAK_SWEEP) {
-      operation_request_set(OP_CONSOLE);
-    }
+    operation_request_set(OP_CONSOLE);
     if (cmd_flag & CMD_WAIT_MUTEX) {
       shell_request_deferred_execution(cmd, argc, argv);
+      operation_request_clear(OP_CONSOLE);
     } else {
       cmd->sc_function((int)argc, argv);
       operation_request_clear(OP_CONSOLE);
