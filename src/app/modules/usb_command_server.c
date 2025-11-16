@@ -5,20 +5,20 @@
 #include "ch.h"
 
 /*
- * Shell commands often invoke chprintf-heavy handlers, so guarantee enough stack
- * on every target. 512 bytes matches the legacy myshell thread footprint.
+ * The USB worker only manages prompts and input; command bodies run on the
+ * runtime thread, so a modest stack keeps RAM usage low on F072 targets.
  */
-#define USB_SHELL_THREAD_STACK_SIZE 512
+#define USB_SHELL_THREAD_STACK_SIZE 192
 static THD_WORKING_AREA(usb_shell_thread_wa, USB_SHELL_THREAD_STACK_SIZE);
 
 static void default_write_prompt(void* context, const char* prompt) {
   (void)context;
-  shell_printf("%s", prompt);
+  shell_write_text(prompt);
 }
 
 static void default_write_banner(void* context, const char* banner) {
   (void)context;
-  shell_printf("%s", banner);
+  shell_write_text(banner);
 }
 
 static bool default_check_connect(void* context) {

@@ -297,6 +297,7 @@ void my_debug_log(int offs, char* log) {
 
 #define SWEEP_THREAD_STACK_SIZE 512
 static THD_WORKING_AREA(waSweepThread, SWEEP_THREAD_STACK_SIZE);
+static thread_t* runtime_thread_ref = NULL;
 static THD_FUNCTION(Thread1, arg) {
   runtime_loop_context_t* ctx = (runtime_loop_context_t*)arg;
   chRegSetThreadName("runtime");
@@ -2517,20 +2518,19 @@ static void console_command_handler(char* line) {
   const char* command_name = NULL;
   const VNAShellCommand* cmd = shell_parse_command(line, &argc, &argv, &command_name);
   if (cmd) {
-    uint16_t cmd_flag = cmd->flags;
-    if ((cmd_flag & CMD_RUN_IN_UI) && (sweep_mode & SWEEP_UI_MODE)) {
-      cmd_flag &= (uint16_t)~CMD_WAIT_MUTEX;
-    }
-    if (cmd_flag & CMD_WAIT_MUTEX) {
+    thread_t* self = chThdGetSelfX();
+    const bool running_on_runtime = (self == runtime_thread_ref);
+    if (!running_on_runtime) {
       shell_request_deferred_execution(cmd, argc, argv);
-    } else {
-      if (cmd_flag & CMD_BREAK_SWEEP) {
-        operation_request_set(OP_CONSOLE);
-      }
-      cmd->sc_function((int)argc, argv);
-      if (cmd_flag & CMD_BREAK_SWEEP) {
-        operation_request_clear(OP_CONSOLE);
-      }
+      return;
+    }
+    uint16_t cmd_flag = cmd->flags;
+    if (cmd_flag & CMD_BREAK_SWEEP) {
+      operation_request_set(OP_CONSOLE);
+    }
+    cmd->sc_function((int)argc, argv);
+    if (cmd_flag & CMD_BREAK_SWEEP) {
+      operation_request_clear(OP_CONSOLE);
     }
   } else if (command_name && *command_name) {
     shell_printf("%s?" VNA_SHELL_NEWLINE_STR, command_name);
@@ -2713,8 +2713,10 @@ int app_main(void) {
   /*
    * Startup sweep and shell threads
    */
+  thread_t* runtime_thread =
+      chThdCreateStatic(waSweepThread, sizeof(waSweepThread), NORMALPRIO, Thread1, &runtime_loop_ctx);
+  runtime_thread_ref = runtime_thread;
   usb_command_server_start(&usb_server);
-  chThdCreateStatic(waSweepThread, sizeof(waSweepThread), NORMALPRIO, Thread1, &runtime_loop_ctx);
 
   while (true) {
     chThdSleepMilliseconds(1000);
