@@ -53,31 +53,29 @@ static int16_t last_touch_x;
 static int16_t last_touch_y;
 static volatile uint8_t operation_requested = OP_NONE;
 
-static inline void operation_request_write(uint8_t set_mask, uint8_t clear_mask) {
-  operation_requested |= set_mask;
-  operation_requested &= (uint8_t)~clear_mask;
-}
-
 void operation_request_set(uint8_t flags) {
   osalSysLock();
-  operation_request_write(flags, 0U);
+  operation_requested |= flags;
   osalSysUnlock();
 }
 
 void operation_request_set_isr(uint8_t flags) {
   osalSysLockFromISR();
-  operation_request_write(flags, 0U);
+  operation_requested |= flags;
   osalSysUnlockFromISR();
 }
 
 void operation_request_clear(uint8_t flags) {
   osalSysLock();
-  operation_request_write(0U, flags);
+  operation_requested &= (uint8_t)~flags;
   osalSysUnlock();
 }
 
 uint8_t operation_request_peek(void) {
-  return operation_requested;
+  osalSysLock();
+  const uint8_t value = operation_requested;
+  osalSysUnlock();
+  return value;
 }
 
 bool operation_request_pending(uint8_t mask) {
