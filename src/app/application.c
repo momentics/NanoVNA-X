@@ -80,6 +80,97 @@ typedef struct {
 
 static runtime_loop_context_t runtime_loop_ctx;
 
+static bool runtime_measurement_is_enabled(void* context) {
+  (void)context;
+  return (sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) != 0U;
+}
+
+static void runtime_measurement_cycle_started(void* context, uint16_t channel_mask) {
+  (void)context;
+  (void)channel_mask;
+  sweep_mode &= (uint8_t)~SWEEP_ONCE;
+}
+
+static void runtime_measurement_cycle_completed(void* context,
+                                                const measurement_cycle_result_t* result) {
+  (void)context;
+  (void)result;
+}
+
+static uint16_t runtime_read_battery(void* context) {
+  (void)context;
+  return adc_vbat_read();
+}
+
+static void runtime_request_redraw(void* context, uint16_t area) {
+  (void)context;
+  request_to_redraw(area);
+}
+
+static void runtime_draw_all(void* context) {
+  (void)context;
+#ifndef DEBUG_CONSOLE_SHOW
+  draw_all();
+#endif
+}
+
+static void runtime_plot_init(void* context) {
+  (void)context;
+  plot_init();
+}
+
+static void runtime_ui_init(void* context) {
+  (void)context;
+  ui_init();
+}
+
+static void runtime_ui_process(void* context) {
+  (void)context;
+  ui_process();
+}
+
+static bool runtime_should_flip(void* context) {
+  (void)context;
+#ifdef __FLIP_DISPLAY__
+  return VNA_MODE(VNA_MODE_FLIP_DISPLAY) != 0;
+#else
+  return false;
+#endif
+}
+
+static void runtime_set_flip(void* context, bool enable) {
+  (void)context;
+#ifdef __FLIP_DISPLAY__
+  lcd_set_flip(enable);
+#else
+  (void)enable;
+#endif
+}
+
+static bool runtime_usb_check_connect(void* context) {
+  (void)context;
+  return shell_check_connect();
+}
+
+static int runtime_usb_read_line(void* context, char* buffer, int length) {
+  (void)context;
+  return vna_shell_read_line(buffer, length);
+}
+
+static void runtime_usb_write_prompt(void* context, const char* prompt) {
+  (void)context;
+  shell_printf("%s", prompt);
+}
+
+static void runtime_usb_write_banner(void* context, const char* banner) {
+  (void)context;
+  shell_printf("%s", banner);
+}
+
+static void runtime_usb_session_hook(void* context) {
+  (void)context;
+}
+
 static msg_t event_dispatch_worker(void* user_data) {
   event_bus_t* bus = (event_bus_t*)user_data;
   chRegSetThreadName("evt");
@@ -211,7 +302,7 @@ static THD_FUNCTION(Thread1, arg) {
   chRegSetThreadName("runtime");
   while (true) {
     usb_command_server_service(ctx->usb);
-    const measurement_cycle_result_t* cycle = measurement_engine_execute(ctx->measurement);
+    const measurement_cycle_result_t* cycle = measurement_engine_execute(ctx->measurement, true);
     usb_command_server_service(ctx->usb);
     menu_controller_process(ctx->menu);
     display_presenter_render(ctx->display, cycle);
@@ -229,93 +320,6 @@ static inline void resume_sweep(void) {
 
 void toggle_sweep(void) {
   sweep_mode ^= SWEEP_ENABLE;
-}
-
-static bool sweep_control_lock_with_timeout(systime_t timeout) {
-  systime_t start = chVTGetSystemTimeX();
-  while (true) {
-    osalSysLock();
-    bool available = (sweep_mode & SWEEP_CONSOLE_LOCK) == 0U;
-    if (available) {
-      sweep_mode |= SWEEP_CONSOLE_LOCK;
-      osalSysUnlock();
-      return true;
-    }
-    osalSysUnlock();
-    if (timeout == TIME_IMMEDIATE) {
-      return false;
-    }
-    if (timeout != TIME_INFINITE && chVTTimeElapsedSinceX(start) >= timeout) {
-      return false;
-    }
-    chThdSleepMilliseconds(1);
-  }
-}
-
-static systime_t sweep_control_remaining_timeout(systime_t timeout, systime_t start) {
-  if (timeout == TIME_INFINITE) {
-    return TIME_INFINITE;
-  }
-  if (timeout == TIME_IMMEDIATE) {
-    return TIME_IMMEDIATE;
-  }
-  systime_t elapsed = chVTTimeElapsedSinceX(start);
-  if (elapsed >= timeout) {
-    return TIME_IMMEDIATE;
-  }
-  return timeout - elapsed;
-}
-
-static void sweep_control_set_hold(bool enable) {
-  osalSysLock();
-  if (enable) {
-    sweep_mode |= SWEEP_CONSOLE_HOLD;
-  } else {
-    sweep_mode &= (uint8_t)~SWEEP_CONSOLE_HOLD;
-  }
-  osalSysUnlock();
-}
-
-bool sweep_control_is_holding(void) {
-  return (sweep_mode & SWEEP_CONSOLE_HOLD) != 0U;
-}
-
-bool sweep_control_acquire(sweep_control_handle_t* handle, systime_t timeout) {
-  if (handle == NULL) {
-    return false;
-  }
-  handle->locked = false;
-  systime_t start = chVTGetSystemTimeX();
-  if (!sweep_control_lock_with_timeout(timeout)) {
-    return false;
-  }
-  handle->locked = true;
-  operation_request_set(OP_CONSOLE);
-  sweep_control_set_hold(true);
-  systime_t remaining = sweep_control_remaining_timeout(timeout, start);
-  if (!sweep_service_wait_for_idle(remaining)) {
-    sweep_control_set_hold(false);
-    operation_request_clear(OP_CONSOLE);
-    handle->locked = false;
-    osalSysLock();
-    sweep_mode &= (uint8_t)~SWEEP_CONSOLE_LOCK;
-    osalSysUnlock();
-    return false;
-  }
-  sweep_service_wait_for_copy_release();
-  return true;
-}
-
-void sweep_control_release(sweep_control_handle_t* handle) {
-  if (handle == NULL || !handle->locked) {
-    return;
-  }
-  sweep_control_set_hold(false);
-  operation_request_clear(OP_CONSOLE);
-  handle->locked = false;
-  osalSysLock();
-  sweep_mode &= (uint8_t)~SWEEP_CONSOLE_LOCK;
-  osalSysUnlock();
 }
 
 config_t config = {
@@ -2520,16 +2524,12 @@ static void console_command_handler(char* line) {
     if (cmd_flag & CMD_WAIT_MUTEX) {
       shell_request_deferred_execution(cmd, argc, argv);
     } else {
-      sweep_control_handle_t sweep_guard = {.locked = false};
-      if ((cmd_flag & CMD_BREAK_SWEEP) != 0U) {
-        if (!sweep_control_acquire(&sweep_guard, SWEEP_CONTROL_DEFAULT_TIMEOUT)) {
-          shell_write_line("ERR: sweep control unavailable");
-          return;
-        }
+      if (cmd_flag & CMD_BREAK_SWEEP) {
+        operation_request_set(OP_CONSOLE);
       }
       cmd->sc_function((int)argc, argv);
-      if (sweep_guard.locked) {
-        sweep_control_release(&sweep_guard);
+      if (cmd_flag & CMD_BREAK_SWEEP) {
+        operation_request_clear(OP_CONSOLE);
       }
     }
   } else if (command_name && *command_name) {
@@ -2630,10 +2630,49 @@ int app_main(void) {
 
   config_service_attach_event_bus(&app_event_bus);
   ui_attach_event_bus(&app_event_bus);
-  menu_controller_init(&menu_controller);
-  display_presenter_init(&display_presenter);
-  measurement_engine_init(&measurement_engine, drivers, &app_event_bus);
-  usb_command_server_init(&usb_server, commands, &app_event_bus, console_command_handler);
+
+  menu_controller_port_t menu_port = {
+      .context = NULL,
+      .ui_init = runtime_ui_init,
+      .ui_process = runtime_ui_process,
+      .should_flip_display = runtime_should_flip,
+      .set_display_flip = runtime_set_flip,
+  };
+  menu_controller_init(&menu_controller, &menu_port);
+
+  display_presenter_port_t display_port = {
+      .context = NULL,
+      .read_battery_mv = runtime_read_battery,
+      .request_redraw = runtime_request_redraw,
+      .draw_all = runtime_draw_all,
+      .plot_init = runtime_plot_init,
+  };
+  display_presenter_init(&display_presenter, &display_port);
+
+  measurement_engine_config_t measurement_cfg = {
+      .drivers = drivers,
+      .event_bus = &app_event_bus,
+      .port =
+          {
+              .context = NULL,
+              .is_sweep_enabled = runtime_measurement_is_enabled,
+              .on_cycle_started = runtime_measurement_cycle_started,
+              .on_cycle_completed = runtime_measurement_cycle_completed,
+          },
+  };
+  measurement_engine_init(&measurement_engine, &measurement_cfg);
+
+  usb_command_server_config_t usb_cfg = {.context = NULL,
+                                         .command_table = commands,
+                                         .event_bus = &app_event_bus,
+                                         .handler = console_command_handler,
+                                         .check_connect = runtime_usb_check_connect,
+                                         .read_line = runtime_usb_read_line,
+                                         .write_prompt = runtime_usb_write_prompt,
+                                         .write_banner = runtime_usb_write_banner,
+                                         .on_session_start = runtime_usb_session_hook,
+                                         .on_session_end = runtime_usb_session_hook};
+  usb_command_server_init(&usb_server, &usb_cfg);
   runtime_loop_ctx.measurement = &measurement_engine;
   runtime_loop_ctx.menu = &menu_controller;
   runtime_loop_ctx.display = &display_presenter;

@@ -370,13 +370,6 @@ inline void delay_milliseconds(uint32_t ms) {_delay_8t(ms*125*STM32_CORE_CLOCK);
 
 void pause_sweep(void);
 void toggle_sweep(void);
-typedef struct {
-  bool locked;
-} sweep_control_handle_t;
-#define SWEEP_CONTROL_DEFAULT_TIMEOUT MS2ST(500)
-bool sweep_control_acquire(sweep_control_handle_t* handle, systime_t timeout);
-void sweep_control_release(sweep_control_handle_t* handle);
-bool sweep_control_is_holding(void);
 int  load_properties(uint32_t id);
 
 #ifdef __USE_BACKUP__
@@ -402,9 +395,7 @@ void send_region(remote_region_t *rd, uint8_t * buf, uint16_t size);
 
 #define SWEEP_ENABLE        0x01
 #define SWEEP_ONCE          0x02
-#define SWEEP_CONSOLE_HOLD  0x04
 #define SWEEP_BINARY        0x08
-#define SWEEP_CONSOLE_LOCK  0x10
 #define SWEEP_REMOTE        0x40
 #define SWEEP_UI_MODE       0x80
 
