@@ -137,16 +137,35 @@ static bool shell_channel_write(BaseSequentialStream* stream, const uint8_t* buf
   if (stream == NULL || buffer == NULL || size == 0U) {
     return false;
   }
+#ifdef __USE_SERIAL_CONSOLE__
+  const bool is_uart_stream = (stream == (BaseSequentialStream*)&SD1);
+#else
+  const bool is_uart_stream = false;
+#endif
+  if (!is_uart_stream && !shell_port_open()) {
+    return false;
+  }
   BaseChannel* channel = (BaseChannel*)stream;
   size_t offset = 0;
+  const systime_t write_start = chVTGetSystemTimeX();
+  const systime_t max_write_time = MS2ST(2000);
   while (offset < size) {
     size_t chunk = size - offset;
     if (chunk > SERIAL_USB_TX_BUFFERS_SIZE) {
       chunk = SERIAL_USB_TX_BUFFERS_SIZE;
     }
-    size_t written = chnWriteTimeout(channel, buffer + offset, chunk, TIME_IMMEDIATE);
+    size_t written = chnWriteTimeout(channel, buffer + offset, chunk, SHELL_IO_TIMEOUT);
     if (written == 0U) {
-      return false;
+      if (!is_uart_stream) {
+        if (!shell_port_open() || !shell_check_connect()) {
+          return false;
+        }
+      }
+      if (chVTTimeElapsedSinceX(write_start) >= max_write_time) {
+        return false;
+      }
+      chThdSleepMilliseconds(1);
+      continue;
     }
     offset += written;
     chThdYield();
