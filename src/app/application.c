@@ -2560,38 +2560,19 @@ bool sd_card_load_config(void) {
 static THD_FUNCTION(ShellServiceThread, arg) {
   (void)arg;
   chRegSetThreadName("usb");
-  bool session_active = false;
-  const systime_t poll_interval = MS2ST(100);
   while (true) {
-    if (!shell_check_connect()) {
-      session_active = false;
-      shell_drop_stream();
-      chThdSleepMilliseconds(poll_interval * 2);
-      continue;
+    if (shell_check_connect()) {
+      shell_printf(VNA_SHELL_NEWLINE_STR "NanoVNA Shell" VNA_SHELL_NEWLINE_STR);
+      do {
+        shell_printf(VNA_SHELL_PROMPT_STR);
+        if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH)) {
+          vna_shell_execute_line(shell_line);
+        } else {
+          chThdSleepMilliseconds(200);
+        }
+      } while (shell_check_connect());
     }
-    if (!shell_port_open()) {
-      session_active = false;
-      chThdSleepMilliseconds(poll_interval);
-      continue;
-    }
-    if (!shell_stream_ready()) {
-      session_active = false;
-      if (!shell_try_restore_stream()) {
-        chThdSleepMilliseconds(poll_interval);
-        continue;
-      }
-    }
-    if (!session_active) {
-      shell_write_text(VNA_SHELL_NEWLINE_STR);
-      shell_write_line("NanoVNA Shell");
-      session_active = true;
-    }
-    shell_write_text(VNA_SHELL_PROMPT_STR);
-    if (!vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH)) {
-      chThdSleepMilliseconds(poll_interval);
-      continue;
-    }
-    vna_shell_execute_line(shell_line);
+    chThdSleepMilliseconds(1000);
   }
 }
 
