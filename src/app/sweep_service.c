@@ -21,6 +21,7 @@
  */
 
 #include "app/sweep_service.h"
+#include "app/shell.h"
 
 #include "hal.h"
 #include "si5351.h"
@@ -567,6 +568,7 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
   }
 
   for (; p_sweep < sweep_points; p_sweep++) {
+    shell_service_pending_commands();
     if (processed >= batch_budget) {
       break;
     }
