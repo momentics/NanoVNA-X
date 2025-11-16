@@ -60,20 +60,12 @@ int serial_shell_printf(const char* fmt, ...);
 #endif
 
 void shell_stream_write(const void* buffer, size_t size);
-void shell_write_text(const char* text);
-void shell_write_line(const char* text);
 
 void shell_update_speed(uint32_t speed);
 void shell_reset_console(void);
 bool shell_check_connect(void);
 void shell_init_connection(void);
 void shell_restore_stream(void);
-bool shell_stream_ready(void);
-bool shell_try_restore_stream(void);
-void shell_drop_stream(void);
-bool shell_port_open(void);
-void shell_set_port_open(bool open);
-void shell_reset_port_state(void);
 
 const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** argv,
                                            const char** name_out);

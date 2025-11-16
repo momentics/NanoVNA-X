@@ -21,7 +21,6 @@
  */
 
 #include "platform/hal.h"
-#include "platform/boards/board_events.h"
 
 #include "ch.h"
 #include "hal.h"
@@ -30,7 +29,6 @@
 #include "si5351.h"
 
 static void board_peripherals_init(void) {
-  board_event_loop_init();
   rccEnableDMA1(false);
 #if HAL_USE_PAL == FALSE
   init_pal();

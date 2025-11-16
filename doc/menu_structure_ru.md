@@ -74,7 +74,7 @@
 - CONNECTION `[__USE_SERIAL_CONSOLE__]` -> выбор интерфейса (USB/UART) и скорости
 
 ## SD CARD
-- LOAD `[SD_BROWSER_ENABLED]` -> файловый браузер с фильтрацией по расширению (SCREENSHOT, S1P, S2P, CAL)
+- LOAD `[__SD_FILE_BROWSER__]` -> файловый браузер с фильтрацией по расширению (SCREENSHOT, S1P, S2P, CAL)
 - SAVE S1P -> запись S-параметров CH0 в файл S1P
 - SAVE S2P -> запись обоих каналов в S2P
 - SCREENSHOT -> снимок экрана (BMP или TIFF в зависимости от переключателя IMAGE FORMAT)

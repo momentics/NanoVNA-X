@@ -49,11 +49,6 @@ typedef struct {
   uint32_t generation;
 } sweep_service_snapshot_t;
 
-typedef struct {
-  uint8_t* buffer;
-  size_t size;
-} sweep_workspace_t;
-
 void sweep_service_init(void);
 void sweep_service_wait_for_copy_release(void);
 void sweep_service_begin_measurement(void);
@@ -61,13 +56,9 @@ void sweep_service_end_measurement(void);
 uint32_t sweep_service_increment_generation(void);
 uint32_t sweep_service_current_generation(void);
 void sweep_service_wait_for_generation(void);
-bool sweep_service_wait_for_idle(systime_t timeout);
-bool sweep_service_is_in_progress(void);
 void sweep_service_reset_progress(void);
 bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* snapshot);
 bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot);
-bool sweep_service_workspace_acquire(sweep_workspace_t* workspace);
-void sweep_service_workspace_release(void);
 
 void sweep_service_start_capture(systime_t delay_ticks);
 bool sweep_service_wait_for_capture(void);

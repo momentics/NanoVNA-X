@@ -53,12 +53,9 @@ void event_bus_init(event_bus_t* bus, event_bus_subscription_t* storage, size_t 
   bus->nodes = nodes;
   bus->node_count = node_count;
   bus->mailbox_ready = false;
-  bus->semaphore_ready = false;
   if (queue_storage != NULL && queue_length > 0U) {
     chMBObjectInit(&bus->mailbox, queue_storage, queue_length);
     bus->mailbox_ready = true;
-    chBSemObjectInit(&bus->semaphore, true);
-    bus->semaphore_ready = true;
   }
   if (nodes != NULL) {
     for (size_t i = 0; i < node_count; ++i) {
@@ -164,13 +161,6 @@ static bool event_bus_publish_common(event_bus_t* bus, event_bus_topic_t topic, 
   }
 
   success = event_bus_enqueue(bus, node, from_isr);
-  if (success && bus->semaphore_ready) {
-    if (from_isr) {
-      chBSemSignalI(&bus->semaphore);
-    } else {
-      chBSemSignal(&bus->semaphore);
-    }
-  }
   if (!success && !from_isr) {
     event_bus_message_t message = {.topic = topic, .payload = payload};
     event_bus_dispatch_to_subscribers(bus, &message);

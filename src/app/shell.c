@@ -30,7 +30,6 @@
 
 #include <chprintf.h>
 #include <stdarg.h>
-#include <string.h>
 
 static const VNAShellCommand* command_table = NULL;
 
@@ -45,6 +44,7 @@ static bool shell_skip_linefeed = false;
 static event_bus_t* shell_event_bus = NULL;
 
 static void shell_on_event(const event_bus_message_t* message, void* user_data);
+
 static void shell_write(const void* buf, size_t size) {
   if (shell_stream == NULL) {
     return;
@@ -84,19 +84,6 @@ int serial_shell_printf(const char* fmt, ...) {
 
 void shell_stream_write(const void* buffer, size_t size) {
   shell_write(buffer, size);
-}
-
-void shell_write_text(const char* text) {
-  if (text == NULL) {
-    return;
-  }
-  shell_stream_write(text, strlen(text));
-}
-
-void shell_write_line(const char* text) {
-  shell_write_text(text);
-  static const char newline[] = VNA_SHELL_NEWLINE_STR;
-  shell_stream_write(newline, sizeof newline - 1U);
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
@@ -245,13 +232,7 @@ void shell_service_pending_commands(void) {
     pending_command = NULL;
     osalSysUnlock();
 
-    if ((command->flags & CMD_BREAK_SWEEP) != 0U) {
-      operation_request_set(OP_CONSOLE);
-    }
     command->sc_function(argc, argv);
-    if ((command->flags & CMD_BREAK_SWEEP) != 0U) {
-      operation_request_clear(OP_CONSOLE);
-    }
 
     osalSysLock();
     osalThreadDequeueNextI(&shell_thread, MSG_OK);
@@ -327,31 +308,4 @@ void vna_shell_execute_cmd_line(char* line) {
   if (shell_stream == NULL) {
     shell_restore_stream();
   }
-}
-
-bool shell_stream_ready(void) {
-  return shell_stream != NULL;
-}
-
-bool shell_try_restore_stream(void) {
-  if (shell_stream != NULL) {
-    return true;
-  }
-  shell_restore_stream();
-  return shell_stream != NULL;
-}
-
-void shell_drop_stream(void) {
-  shell_stream = NULL;
-}
-
-bool shell_port_open(void) {
-  return shell_check_connect();
-}
-
-void shell_set_port_open(bool open) {
-  (void)open;
-}
-
-void shell_reset_port_state(void) {
 }

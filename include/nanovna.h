@@ -52,21 +52,8 @@
 #define __USE_RTC__
 // Add RTC backup registers support
 #define __USE_BACKUP__
-// Feature toggles (set to 1 to enable specific subsystems).
-#ifndef NANOVNA_FEATURE_SD
-#define NANOVNA_FEATURE_SD 0
-#endif
-#ifndef NANOVNA_FEATURE_SD_TIFF
-#define NANOVNA_FEATURE_SD_TIFF 0
-#endif
-#ifndef NANOVNA_FEATURE_SD_BROWSER
-#define NANOVNA_FEATURE_SD_BROWSER 0
-#endif
-
 // Add SD card support, requires RTC for timestamps
-#if NANOVNA_FEATURE_SD
 #define __USE_SD_CARD__
-#endif
 // Use unique serial string for USB
 #define __USB_UID__
 // If enabled serial in halconf.h, possible enable serial console control
@@ -108,17 +95,14 @@
  * Submodules defines
  */
 #ifdef __USE_SD_CARD__
+// Allow run commands from SD card (config.ini in root)
 #define __SD_CARD_LOAD__
-#if NANOVNA_FEATURE_SD_TIFF
+// Allow screenshots in TIFF format
 #define __SD_CARD_DUMP_TIFF__
-#endif
+// Allow dump firmware to SD card
 #define __SD_CARD_DUMP_FIRMWARE__
-#endif
-
-#if defined(__USE_SD_CARD__) && NANOVNA_FEATURE_SD_BROWSER
-#define SD_BROWSER_ENABLED 1
-#else
-#define SD_BROWSER_ENABLED 0
+// Enable SD card file browser, and allow load files from it
+#define __SD_FILE_BROWSER__
 #endif
 
 // If measure module enabled, add submodules
@@ -393,11 +377,11 @@ void remote_touch_set(uint16_t state, int16_t x, int16_t y);
 void send_region(remote_region_t *rd, uint8_t * buf, uint16_t size);
 #endif
 
-#define SWEEP_ENABLE        0x01
-#define SWEEP_ONCE          0x02
-#define SWEEP_BINARY        0x08
-#define SWEEP_REMOTE        0x40
-#define SWEEP_UI_MODE       0x80
+#define SWEEP_ENABLE  0x01
+#define SWEEP_ONCE    0x02
+#define SWEEP_BINARY  0x08
+#define SWEEP_REMOTE  0x40
+#define SWEEP_UI_MODE 0x80
 
 extern  uint8_t sweep_mode;
 extern const char *info_about[];
@@ -991,11 +975,7 @@ enum {
 };
 #endif
 
-#if defined(NANOVNA_F303)
 #define STORED_TRACES  1
-#else
-#define STORED_TRACES  0
-#endif
 #define TRACES_MAX     4
 
 typedef struct trace {
@@ -1459,6 +1439,8 @@ void ui_init(void);
 void ui_process(void);
 void ui_attach_event_bus(event_bus_t* bus);
 
+void handle_touch_interrupt(void);
+
 void ui_touch_cal_exec(void);
 void ui_touch_draw_test(void);
 void ui_enter_dfu(void);
@@ -1467,19 +1449,13 @@ void ui_message_box(const char *header, const char *text, uint32_t delay);
 #ifdef __USE_SD_CARD__
 bool sd_card_load_config(void);
 #endif
-void ui_request_refresh(void);
-void ui_request_refresh_from_isr(void);
-bool ui_lever_repeat_pending(void);
 
 // Irq operation process set
 #define OP_NONE       0x00
 #define OP_LEVER      0x01
 #define OP_TOUCH      0x02
 #define OP_CONSOLE    0x04
-void operation_request_set(uint8_t flags);
-void operation_request_clear(uint8_t flags);
-uint8_t operation_request_peek(void);
-bool operation_request_pending(uint8_t mask);
+extern uint8_t operation_requested;
 
 #define TOUCH_THRESHOLD 2000
 /*

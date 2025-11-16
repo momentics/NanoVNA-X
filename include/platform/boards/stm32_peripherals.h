@@ -207,7 +207,7 @@ void init_i2s(void* buffer, uint16_t count);
 
 #define FLASH_PAGESIZE 0x800
 
-#define SAVEAREA_MAX 4
+#define SAVEAREA_MAX 5
 
 // Depend from config_t size, should be aligned by FLASH_PAGESIZE
 #define SAVE_CONFIG_SIZE 0x00000800

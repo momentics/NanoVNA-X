@@ -20,17 +20,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
-/**
- * @file sweep_service.c
- *
- * Implements the full measurement sweep lifecycle for the NanoVNA-X.
- * The module coordinates DMA capture, DSP post-processing, progress
- * visualization, and data sharing with other subsystems while ensuring
- * concurrency safety between the UI thread and measurement paths.
- */
-
 #include "app/sweep_service.h"
-#include "app/shell.h"
 
 #include "hal.h"
 #include "si5351.h"
@@ -44,30 +34,22 @@
 #include "../modules/vna_renorm.c"
 #endif
 
-/*--------------------------------------------------------------------------*
+/*
  * DMA/I2S capture state
- *
- * These fields retain the raw-sample acquisition context used by the sweep.
- * ready_time gates when a capture should finish, wait_count tracks pending
- * samples, and rx_buffer stores the audio/IQ data pulled from the codec.
- *--------------------------------------------------------------------------*/
+ */
 static systime_t ready_time = 0;
 static volatile uint16_t wait_count = 0;
 static alignas(4) audio_sample_t rx_buffer[AUDIO_BUFFER_LEN * 2];
 
 #if ENABLED_DUMP_COMMAND
-/* Dump capture state used exclusively by the developer dump command. */
 static audio_sample_t* dump_buffer = NULL;
 static volatile int16_t dump_len = 0;
 static int16_t dump_selection = 0;
 #endif
 
-/*--------------------------------------------------------------------------*
+/*
  * Sweep execution state shared across the firmware.
- *
- * The following flags keep track of in-progress sweeps, UI progress bar
- * rendering, and whether exclusive access to shared buffers has been granted.
- *--------------------------------------------------------------------------*/
+ */
 static volatile bool sweep_in_progress = false;
 static volatile bool sweep_copy_in_progress = false;
 static volatile uint32_t sweep_generation = 0;
@@ -75,32 +57,10 @@ static uint16_t p_sweep = 0;
 static uint8_t sweep_state_flags = 0;
 static uint16_t sweep_bar_drawn_pixels = 0;
 static uint8_t sweep_bar_pending = 0;
-static bool sweep_workspace_locked = false;
 
-/* Current smoothing intensity and the active DSP sampling callback. */
 static uint8_t smooth_factor = 0;
 static void (*volatile sample_func)(float* gamma) = calculate_gamma;
 
-/**
- * @brief Aggregates scratch buffers reused across the sweep stage.
- *
- * The structure holds raw sample storage and cached calibration vectors so the
- * sweep pipeline avoids per-iteration heap churn.
- */
-typedef struct {
-  float samples[4];
-  float calibration[CAL_TYPE_COUNT][2];
-} sweep_measurement_buffers_t;
-
-static sweep_measurement_buffers_t sweep_buffers;
-
-/**
- * @brief Overrides the DSP sampling callback used during sweeps.
- *
- * Allows tests or alternative measurement flows to install a custom routine
- * that transforms raw IQ samples before calibration and plotting. Passing NULL
- * restores the default gamma calculation.
- */
 void sweep_service_set_sample_function(void (*func)(float*)) {
   if (func == NULL) {
     func = calculate_gamma;
@@ -110,37 +70,23 @@ void sweep_service_set_sample_function(void (*func)(float*)) {
   osalSysUnlock();
 }
 
-/**
- * @brief Determines if any UI-originated operation request is pending.
- *
- * The sweep loop uses this helper to decide when to shorten measurement
- * batches, ensuring touch/lever/console interactions receive timely service.
- */
 static inline bool sweep_ui_input_pending(void) {
-  return operation_request_pending(OP_TOUCH | OP_LEVER | OP_CONSOLE);
+  return (operation_requested & (OP_TOUCH | OP_LEVER)) != 0;
 }
 
 #ifdef __USE_FREQ_TABLE__
-/* Precomputed frequency table when flash space allows storing every point. */
 static freq_t frequencies[SWEEP_POINTS_MAX];
 #else
-/* Procedural sweep configuration used when frequency tables are disabled. */
 static freq_t _f_start;
 static freq_t _f_delta;
 static freq_t _f_error;
 static uint16_t _f_points;
 #endif
 
-/**
- * @brief Computes a weighted arithmetic mean for smoothing adjacent samples.
- */
 static float arifmetic_mean(float v0, float v1, float v2) {
   return (v0 + 2.0f * v1 + v2) * 0.25f;
 }
 
-/**
- * @brief Computes a sign-aware geometric mean to preserve phase continuity.
- */
 static float geometry_mean(float v0, float v1, float v2) {
   float v = vna_cbrtf(vna_fabsf(v0 * v1 * v2));
   if ((v0 + v1 + v2) < 0.0f) {
@@ -149,31 +95,17 @@ static float geometry_mean(float v0, float v1, float v2) {
   return v;
 }
 
-/** Flag bit toggled when the sweep-progress bar is actively being drawn. */
 #define SWEEP_STATE_PROGRESS_ACTIVE 0x01u
-/** Flag bit indicating the front-panel LED currently reflects sweep activity. */
 #define SWEEP_STATE_LED_ACTIVE 0x02u
 
-/**
- * @brief Clears all sweep-progress counters so the next scan starts fresh.
- */
 static inline void sweep_reset_progress(void) {
   p_sweep = 0;
 }
 
-/**
- * @brief Indicates whether the visual progress bar is currently active.
- */
 static inline bool sweep_progress_enabled(void) {
   return (sweep_state_flags & SWEEP_STATE_PROGRESS_ACTIVE) != 0U;
 }
 
-/**
- * @brief Activates the measurement LED when a sweep begins.
- *
- * The LED doubles as a rough heartbeat for sweep progression, so this helper
- * ensures the pad transitions only once per sweep.
- */
 static void sweep_led_begin(void) {
   if ((sweep_state_flags & SWEEP_STATE_LED_ACTIVE) == 0U) {
     palClearPad(GPIOC, GPIOC_LED);
@@ -181,9 +113,6 @@ static void sweep_led_begin(void) {
   }
 }
 
-/**
- * @brief Turns the measurement LED off once the sweep stops.
- */
 static void sweep_led_end(void) {
   if ((sweep_state_flags & SWEEP_STATE_LED_ACTIVE) != 0U) {
     palSetPad(GPIOC, GPIOC_LED);
@@ -191,9 +120,6 @@ static void sweep_led_end(void) {
   }
 }
 
-/**
- * @brief Initializes the LCD progress indicator if the caller requested it.
- */
 static void sweep_progress_begin(bool enabled) {
   sweep_bar_drawn_pixels = 0;
   sweep_bar_pending = 0;
@@ -205,9 +131,6 @@ static void sweep_progress_begin(bool enabled) {
   lcd_set_background(LCD_SWEEP_LINE_COLOR);
 }
 
-/**
- * @brief Extends the progress bar to reflect the newly completed pixel count.
- */
 static void sweep_progress_update(uint16_t pixels) {
   if (!sweep_progress_enabled() || pixels <= sweep_bar_drawn_pixels) {
     return;
@@ -226,10 +149,6 @@ static void sweep_progress_update(uint16_t pixels) {
   }
 }
 
-/**
- * @brief Finalizes the progress bar, filling any remaining gaps and resetting
- *        the indicator to the idle background color.
- */
 static void sweep_progress_end(void) {
   if (!sweep_progress_enabled()) {
     return;
@@ -247,10 +166,6 @@ static void sweep_progress_end(void) {
   sweep_state_flags &= (uint8_t)~SWEEP_STATE_PROGRESS_ACTIVE;
 }
 
-/**
- * @brief Computes how many sweep points can be processed before rechecking the
- *        UI queues, balancing responsiveness against throughput.
- */
 static inline uint16_t sweep_points_budget(bool break_on_operation) {
   if (!break_on_operation) {
     return UINT16_MAX;
@@ -267,20 +182,11 @@ static inline uint16_t sweep_points_budget(bool break_on_operation) {
   return 8U;
 }
 
-/**
- * @brief Convenience helper to engage LED and progress UI when a sweep starts.
- */
 static inline void sweep_prepare_led_and_progress(bool show_progress) {
   sweep_led_begin();
   sweep_progress_begin(show_progress);
 }
 
-/**
- * @brief Applies electrical delay compensation to S11 samples.
- *
- * @param w     Frequency-dependent angular offset used for delay adjustment.
- * @param data  Complex reflection sample that will be phase-shifted in place.
- */
 static void apply_edelay(float w, float data[2]) {
   float s, c;
   float real = data[0];
@@ -290,18 +196,12 @@ static void apply_edelay(float w, float data[2]) {
   data[1] = imag * c + real * s;
 }
 
-/**
- * @brief Applies a scalar gain/offset to the supplied complex sample.
- */
 static void apply_offset(float data[2], float offset) {
   data[0] *= offset;
   data[1] *= offset;
 }
 
 #if ENABLED_DUMP_COMMAND
-/**
- * @brief Copies captured audio samples into the dump buffer for diagnostics.
- */
 static void duplicate_buffer_to_dump(audio_sample_t* p, size_t n) {
   p += dump_selection;
   while (n > 0U) {
@@ -316,13 +216,6 @@ static void duplicate_buffer_to_dump(audio_sample_t* p, size_t n) {
 }
 #endif
 
-/**
- * @brief DMA callback invoked whenever the codec finishes a transfer.
- *
- * The ISR either resets accumulators for the first chunk, or processes data
- * into the DSP pipeline for subsequent chunks. Optional developer dumps are
- * fed here as well before the wait counter is decremented.
- */
 void i2s_lld_serve_rx_interrupt(uint32_t flags) {
   uint16_t wait = wait_count;
   if (wait == 0U || chVTGetSystemTimeX() < ready_time) {
@@ -340,9 +233,6 @@ void i2s_lld_serve_rx_interrupt(uint32_t flags) {
   --wait_count;
 }
 
-/**
- * @brief Resets all sweep-related state so a new measurement session can start.
- */
 void sweep_service_init(void) {
   sweep_in_progress = false;
   sweep_copy_in_progress = false;
@@ -360,19 +250,10 @@ void sweep_service_init(void) {
 #endif
 }
 
-/**
- * @brief Resets only the progress bar counters without disturbing sweep state.
- */
 void sweep_service_reset_progress(void) {
   sweep_reset_progress();
 }
 
-/**
- * @brief Blocks until any outstanding snapshot copy operation completes.
- *
- * Ensures consumers do not access shared measurement buffers while another
- * thread is copying them.
- */
 void sweep_service_wait_for_copy_release(void) {
   while (true) {
     osalSysLock();
@@ -385,27 +266,18 @@ void sweep_service_wait_for_copy_release(void) {
   }
 }
 
-/**
- * @brief Marks the sweep as running so other clients can detect activity.
- */
 void sweep_service_begin_measurement(void) {
   osalSysLock();
   sweep_in_progress = true;
   osalSysUnlock();
 }
 
-/**
- * @brief Clears the in-progress flag after a measurement finishes.
- */
 void sweep_service_end_measurement(void) {
   osalSysLock();
   sweep_in_progress = false;
   osalSysUnlock();
 }
 
-/**
- * @brief Bumps the sweep generation counter and returns the new value.
- */
 uint32_t sweep_service_increment_generation(void) {
   osalSysLock();
   uint32_t generation = ++sweep_generation;
@@ -413,9 +285,6 @@ uint32_t sweep_service_increment_generation(void) {
   return generation;
 }
 
-/**
- * @brief Returns the most recent sweep generation identifier.
- */
 uint32_t sweep_service_current_generation(void) {
   osalSysLock();
   uint32_t generation = sweep_generation;
@@ -423,9 +292,6 @@ uint32_t sweep_service_current_generation(void) {
   return generation;
 }
 
-/**
- * @brief Waits for at least one sweep to complete or until a timeout expires.
- */
 void sweep_service_wait_for_generation(void) {
   systime_t start_time = chVTGetSystemTimeX();
   systime_t timeout = MS2ST(1000); // 1 second timeout to prevent infinite wait
@@ -439,45 +305,6 @@ void sweep_service_wait_for_generation(void) {
   }
 }
 
-/**
- * @brief Indicates whether a sweep is currently active.
- */
-bool sweep_service_is_in_progress(void) {
-  osalSysLock();
-  bool busy = sweep_in_progress;
-  osalSysUnlock();
-  return busy;
-}
-
-/**
- * @brief Waits until no sweep is running, respecting the supplied timeout.
- */
-bool sweep_service_wait_for_idle(systime_t timeout) {
-  systime_t start_time = chVTGetSystemTimeX();
-  while (true) {
-    osalSysLock();
-    bool busy = sweep_in_progress;
-    osalSysUnlock();
-    if (!busy) {
-      return true;
-    }
-    if (timeout != TIME_INFINITE && timeout != TIME_IMMEDIATE) {
-      if (chVTTimeElapsedSinceX(start_time) >= timeout) {
-        return false;
-      }
-    } else if (timeout == TIME_IMMEDIATE) {
-      return false;
-    }
-    chThdSleepMilliseconds(1);
-  }
-}
-
-/**
- * @brief Attempts to acquire a consistent snapshot of the requested channel.
- *
- * The function blocks until the sweep is idle, reserving the buffers so the
- * caller can safely read them until sweep_service_snapshot_release is called.
- */
 bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* snapshot) {
   if (snapshot == NULL || channel >= 2U) {
     return false;
@@ -507,9 +334,6 @@ bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* s
   }
 }
 
-/**
- * @brief Releases a previously acquired snapshot and reports if it stayed valid.
- */
 bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
   bool stable = false;
   osalSysLock();
@@ -521,48 +345,11 @@ bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
   return stable;
 }
 
-/**
- * @brief Attempts to lock the shared measurement workspace for exclusive use.
- */
-bool sweep_service_workspace_acquire(sweep_workspace_t* workspace) {
-  if (workspace == NULL) {
-    return false;
-  }
-  bool acquired = false;
-  osalSysLock();
-  if (!sweep_workspace_locked && !sweep_in_progress && !sweep_copy_in_progress) {
-    sweep_workspace_locked = true;
-    workspace->buffer = (uint8_t*)measured[1];
-    workspace->size = sizeof(measured[1]);
-    acquired = true;
-  } else {
-    workspace->buffer = NULL;
-    workspace->size = 0;
-  }
-  osalSysUnlock();
-  return acquired;
-}
-
-/**
- * @brief Releases the shared workspace lock acquired earlier.
- */
-void sweep_service_workspace_release(void) {
-  osalSysLock();
-  sweep_workspace_locked = false;
-  osalSysUnlock();
-}
-
-/**
- * @brief Arms the capture engine with a delay and initializes the wait counter.
- */
 void sweep_service_start_capture(systime_t delay_ticks) {
   ready_time = chVTGetSystemTimeX() + delay_ticks;
   wait_count = config._bandwidth + 2U;
 }
 
-/**
- * @brief Spins until the capture completes or until a timeout is reached.
- */
 bool sweep_service_wait_for_capture(void) {
   systime_t start_time = chVTGetSystemTimeX();
   systime_t timeout = MS2ST(500); // 500ms timeout - adjust as needed
@@ -580,15 +367,11 @@ bool sweep_service_wait_for_capture(void) {
   return true;
 }
 
-/**
- * @brief Returns the raw DMA buffer for low-level inspection.
- */
 const audio_sample_t* sweep_service_rx_buffer(void) {
   return rx_buffer;
 }
 
 #if ENABLED_DUMP_COMMAND
-/** @brief Prepares the developer dump buffer to receive future samples. */
 void sweep_service_prepare_dump(audio_sample_t* buffer, size_t count, int selection) {
   chDbgAssert(((uintptr_t)buffer & 0x3U) == 0U, "audio sample buffer must be 4-byte aligned");
   dump_buffer = buffer;
@@ -596,15 +379,11 @@ void sweep_service_prepare_dump(audio_sample_t* buffer, size_t count, int select
   dump_selection = (int16_t)selection;
 }
 
-/** @brief Reports whether the dump buffer has collected the requested samples. */
 bool sweep_service_dump_ready(void) {
   return dump_len <= 0;
 }
 #endif
 
-/**
- * @brief Determines which measurement features must run during the next sweep.
- */
 uint16_t app_measurement_get_sweep_mask(void) {
   uint16_t ch_mask = 0;
 #if 0
@@ -647,9 +426,6 @@ uint16_t app_measurement_get_sweep_mask(void) {
   return ch_mask;
 }
 
-/**
- * @brief Applies SOLT error correction to channel 0 reflection data.
- */
 static void apply_ch0_error_term(float data[4], float c_data[CAL_TYPE_COUNT][2]) {
   float re = data[0];
   float im = data[1];
@@ -673,9 +449,6 @@ static void apply_ch0_error_term(float data[4], float c_data[CAL_TYPE_COUNT][2])
   data[1] = (numerator_i * denom_conj_r + numerator_r * denom_conj_i) - eri;
 }
 
-/**
- * @brief Applies two-port error correction to channel 1 transmission data.
- */
 static void apply_ch1_error_term(float data[4], float c_data[CAL_TYPE_COUNT][2]) {
   float s21mr = data[2] - c_data[ETERM_EX][0];
   float s21mi = data[3] - c_data[ETERM_EX][1];
@@ -697,10 +470,6 @@ static void apply_ch1_error_term(float data[4], float c_data[CAL_TYPE_COUNT][2])
   data[3] = s21ai + isoln_i;
 }
 
-/**
- * @brief Loads calibration factors for the requested frequency, interpolating
- *        when the calibration sweep does not exactly match the measurement.
- */
 static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
   if (idx < 0) {
     freq_t start = cal_frequency0;
@@ -725,17 +494,7 @@ static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
   }
 }
 
-/**
- * @brief Executes a sweep iteration for the selected channels and options.
- *
- * @param break_on_operation Prevents long-running batches when user actions
- *                           (touch/lever/console) are pending.
- * @param mask               Bitmask describing which measurement stages to run.
- */
 bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
-  static const uint16_t channel_measure_mask[2] = {SWEEP_CH0_MEASURE, SWEEP_CH1_MEASURE};
-  static const uint16_t channel_edelay_mask[2] = {SWEEP_APPLY_EDELAY_S11, SWEEP_APPLY_EDELAY_S21};
-  static const uint8_t channel_sample_offset[2] = {0U, 2U};
   if (p_sweep >= sweep_points || !break_on_operation) {
     sweep_reset_progress();
     sweep_progress_end();
@@ -746,9 +505,8 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
     sweep_led_end();
     return false;
   }
-  sweep_measurement_buffers_t* buffers = &sweep_buffers;
-  float* data = buffers->samples;
-  float (*calibration_data)[2] = buffers->calibration;
+  float data[4];
+  float c_data[CAL_TYPE_COUNT][2];
   bool completed = false;
   int delay = 0;
   int st_delay = DELAY_SWEEP_START;
@@ -756,23 +514,16 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
   bool show_progress = config._bandwidth >= BANDWIDTH_100;
   uint16_t batch_budget = sweep_points_budget(break_on_operation);
   uint16_t processed = 0;
-  const bool apply_offset_s21 = (mask & SWEEP_APPLY_S21_OFFSET) != 0U;
-  const bool apply_calibration = (mask & SWEEP_APPLY_CALIBRATION) != 0U;
-  const bool measurement_required = (mask & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE)) != 0U;
-#ifdef __VNA_Z_RENORMALIZATION__
-  const bool apply_renorm = (mask & SWEEP_USE_RENORMALIZATION) != 0U;
-#endif
-  const bool apply_s21_offset = apply_offset_s21 && (mask & SWEEP_CH1_MEASURE);
-  const float offset_scale =
-      apply_offset_s21 ? vna_expf(s21_offset * (logf(10.0f) / 20.0f)) : 1.0f;
-  void (*sample_cb)(float*) = sample_func;
+  float offset = 1.0f;
+  if (mask & SWEEP_APPLY_S21_OFFSET) {
+    offset = vna_expf(s21_offset * (logf(10.0f) / 20.0f));
+  }
 
   if (p_sweep == 0U) {
     sweep_prepare_led_and_progress(show_progress);
   }
 
   for (; p_sweep < sweep_points; p_sweep++) {
-    shell_service_pending_commands();
     if (processed >= batch_budget) {
       break;
     }
@@ -781,7 +532,7 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
     }
     freq_t frequency = get_frequency(p_sweep);
     uint8_t extra_cycles = 0U;
-    if (measurement_required) {
+    if (mask & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE)) {
       delay = app_measurement_set_frequency(frequency);
       interpolation_idx = (mask & SWEEP_USE_INTERPOLATION) ? -1 : (int)p_sweep;
       extra_cycles = si5351_take_settling_cycles();
@@ -791,43 +542,54 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
       bool final_cycle = (cycle == total_cycles - 1U);
       int cycle_delay = delay;
       int cycle_st_delay = (cycle == 0U) ? st_delay : 0;
-      bool calibration_ready = false;
-      for (uint8_t channel = 0; channel < 2; channel++) {
-        if ((mask & channel_measure_mask[channel]) == 0U) {
-          continue;
-        }
-        tlv320aic3204_select(channel);
+      if (mask & SWEEP_CH0_MEASURE) {
+        tlv320aic3204_select(0);
         sweep_service_start_capture(cycle_delay + cycle_st_delay);
         cycle_delay = DELAY_CHANNEL_CHANGE;
-        if (final_cycle && apply_calibration && (!calibration_ready || channel == 0U)) {
-          cal_interpolate(interpolation_idx, frequency, calibration_data);
-          calibration_ready = true;
+        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
+          cal_interpolate(interpolation_idx, frequency, c_data);
         }
         if (!sweep_service_wait_for_capture()) {
           goto capture_failure;
         }
-        float* sample_store = &data[channel_sample_offset[channel]];
-        sample_cb(sample_store);
-        if (final_cycle && apply_calibration) {
-          if (channel == 0U) {
-            apply_ch0_error_term(sample_store, calibration_data);
-          } else {
-            apply_ch1_error_term(sample_store, calibration_data);
-          }
+        void (*sample_cb)(float*) = sample_func;
+        sample_cb(&data[0]);
+        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
+          apply_ch0_error_term(data, c_data);
         }
-        if (mask & channel_edelay_mask[channel]) {
-          const float edelay = current_props._electrical_delay[channel] * frequency;
-          apply_edelay(edelay, sample_store);
+        if (mask & SWEEP_APPLY_EDELAY_S11) {
+          apply_edelay(electrical_delayS11 * frequency, &data[0]);
         }
-        if (channel == 1U && apply_s21_offset) {
-          apply_offset(sample_store, offset_scale);
+        measured[0][p_sweep][0] = data[0];
+        measured[0][p_sweep][1] = data[1];
+      }
+      if (mask & SWEEP_CH1_MEASURE) {
+        tlv320aic3204_select(1);
+        sweep_service_start_capture(cycle_delay + cycle_st_delay);
+        cycle_delay = DELAY_CHANNEL_CHANGE;
+        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION) && (mask & SWEEP_CH0_MEASURE) == 0U) {
+          cal_interpolate(interpolation_idx, frequency, c_data);
         }
-        measured[channel][p_sweep][0] = sample_store[0];
-        measured[channel][p_sweep][1] = sample_store[1];
+        if (!sweep_service_wait_for_capture()) {
+          goto capture_failure;
+        }
+        void (*sample_cb)(float*) = sample_func;
+        sample_cb(&data[2]);
+        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
+          apply_ch1_error_term(data, c_data);
+        }
+        if (mask & SWEEP_APPLY_EDELAY_S21) {
+          apply_edelay(electrical_delayS21 * frequency, &data[2]);
+        }
+        if (mask & SWEEP_APPLY_S21_OFFSET) {
+          apply_offset(&data[2], offset);
+        }
+        measured[1][p_sweep][0] = data[2];
+        measured[1][p_sweep][1] = data[3];
       }
     }
 #ifdef __VNA_Z_RENORMALIZATION__
-    if (apply_renorm) {
+    if (mask & SWEEP_USE_RENORMALIZATION) {
       apply_renormalization(data, mask);
     }
 #endif
@@ -852,52 +614,42 @@ capture_failure:
 }
 
 void measurement_data_smooth(uint16_t ch_mask) {
-  if (smooth_factor == 0U || sweep_points <= 2U) {
+  if (smooth_factor == 0U) {
+    return;
+  }
+  if (sweep_points <= 2U) {
     return;
   }
   float (*smooth_func)(float, float, float) =
       VNA_MODE(VNA_MODE_SMOOTH) ? arifmetic_mean : geometry_mean;
-  const uint32_t max_passes = sweep_points > 2U ? (uint32_t)(sweep_points - 2U) : 0U;
-  uint32_t passes = 1U << (smooth_factor - 1U);
-  if (passes == 0U) {
-    passes = 1U;
-  }
-  if (passes > max_passes) {
-    passes = max_passes;
-  }
-  if (passes == 0U) {
-    return;
-  }
-  const uint32_t limit = (uint32_t)(sweep_points - 1U);
-  for (uint8_t ch = 0; ch < 2U; ch++, ch_mask >>= 1) {
+  for (int ch = 0; ch < 2; ch++, ch_mask >>= 1) {
     if ((ch_mask & 1U) == 0U) {
       continue;
     }
-    float* samples = measured[ch][0];
-    for (uint32_t pass = 0; pass < passes; pass++) {
-      float prev_real = samples[0];
-      float prev_imag = samples[1];
-      uint32_t index = 1U;
-      float* current = samples + 2;
-      while (index < limit) {
-        float next_real = current[2];
-        float next_imag = current[3];
-        float current_real = current[0];
-        float current_imag = current[1];
-        current[0] = smooth_func(prev_real, current_real, next_real);
-        current[1] = smooth_func(prev_imag, current_imag, next_imag);
-        prev_real = current_real;
-        prev_imag = current_imag;
-        current += 2;
-        ++index;
+    uint32_t max_passes = (sweep_points > 2U) ? (sweep_points - 2U) : 0U;
+    uint32_t count = 1U << (smooth_factor - 1U);
+    if (count == 0U)
+      count = 1U;
+    if (count > max_passes)
+      count = max_passes;
+    if (count == 0U)
+      continue;
+    float* data = measured[ch][0];
+    for (uint32_t n = 0; n < count; n++) {
+      float prev_re = data[0];
+      float prev_im = data[1];
+      for (uint32_t j = 1; j < sweep_points - 1U; j++) {
+        float old_re = data[2 * j];
+        float old_im = data[2 * j + 1];
+        data[2 * j] = smooth_func(prev_re, data[2 * j], data[2 * j + 2]);
+        data[2 * j + 1] = smooth_func(prev_im, data[2 * j + 1], data[2 * j + 3]);
+        prev_re = old_re;
+        prev_im = old_im;
       }
     }
   }
 }
 
-/**
- * @brief Updates the aggressive smoothing level applied to traces.
- */
 void set_smooth_factor(uint8_t factor) {
   if (factor > 8U) {
     factor = 8U;
@@ -906,24 +658,15 @@ void set_smooth_factor(uint8_t factor) {
   request_to_redraw(REDRAW_CAL_STATUS);
 }
 
-/**
- * @brief Reports the currently configured smoothing factor.
- */
 uint8_t get_smooth_factor(void) {
   return smooth_factor;
 }
 
-/**
- * @brief Programs the synthesizer for a single frequency step.
- */
 int app_measurement_set_frequency(freq_t freq) {
   return si5351_set_frequency(freq, current_props._power);
 }
 
 #ifdef __USE_FREQ_TABLE__
-/**
- * @brief Populates the precomputed frequency table used during sweeps.
- */
 void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points) {
   freq_t step = points - 1U;
   freq_t span = stop - start;
@@ -944,16 +687,10 @@ void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points)
   }
 }
 
-/**
- * @brief Returns the frequency for a sweep index when using the lookup table.
- */
 freq_t get_frequency(uint16_t idx) {
   return frequencies[idx];
 }
 
-/**
- * @brief Returns the delta between the first two table entries.
- */
 freq_t get_frequency_step(void) {
   if (sweep_points <= 1U) {
     return 0;
@@ -961,9 +698,6 @@ freq_t get_frequency_step(void) {
   return frequencies[1] - frequencies[0];
 }
 #else
-/**
- * @brief Configures the procedural frequency sweep parameters.
- */
 void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points) {
   freq_t span = stop - start;
   _f_start = start;
@@ -972,29 +706,16 @@ void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points)
   _f_error = span % _f_points;
 }
 
-/**
- * @brief Computes the absolute frequency for the given sweep index.
- */
 freq_t get_frequency(uint16_t idx) {
   return _f_start + _f_delta * idx + (_f_points / 2U + _f_error * idx) / _f_points;
 }
 
-/**
- * @brief Returns the current sweep frequency increment in Hz.
- */
 freq_t get_frequency_step(void) {
   return _f_delta;
 }
 #endif
 
-/**
- * @brief Approximates the modified Bessel function of order zero.
- *
- * Used to generate Kaiser windows for time-domain transforms without
- * heavy floating-point dependencies.
- */
 float bessel_i0_ext(float z) {
-/* Number of coefficients used in the Taylor-series approximation. */
 #define BESSEL_SIZE 12
   int i = BESSEL_SIZE - 1;
   static const float besseli0_k[BESSEL_SIZE - 1] = {
@@ -1013,9 +734,6 @@ float bessel_i0_ext(float z) {
   return ret;
 }
 
-/**
- * @brief Evaluates a Kaiser window coefficient for the provided index.
- */
 static float kaiser_window_ext(uint32_t k, uint32_t n, uint16_t beta) {
   if (beta == 0U) {
     return 1.0f;
@@ -1026,12 +744,6 @@ static float kaiser_window_ext(uint32_t k, uint32_t n, uint16_t beta) {
   return bessel_i0_ext((float)k / n);
 }
 
-/**
- * @brief Converts the currently measured data into the selected time domain.
- *
- * Applies the appropriate windowing, FFT, and domain-specific adjustments
- * depending on the active TD function (bandpass, lowpass impulse, etc.).
- */
 void app_measurement_transform_domain(uint16_t ch_mask) {
   uint16_t offset = 0;
   uint8_t is_lowpass = FALSE;

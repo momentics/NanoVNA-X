@@ -34,9 +34,7 @@ typedef enum {
   EVENT_TOUCH_INPUT,
   EVENT_STORAGE_UPDATED,
   EVENT_CONFIGURATION_CHANGED,
-  EVENT_SHELL_COMMAND_PENDING,
-  EVENT_DRIVER_TOUCH_INTERRUPT,
-  EVENT_DRIVER_BUTTON_INTERRUPT
+  EVENT_SHELL_COMMAND_PENDING
 } event_bus_topic_t;
 
 typedef struct {
@@ -67,8 +65,6 @@ typedef struct {
   size_t queue_length;
   event_bus_queue_node_t* nodes;
   size_t node_count;
-  binary_semaphore_t semaphore;
-  bool semaphore_ready;
 } event_bus_t;
 
 void event_bus_init(event_bus_t* bus, event_bus_subscription_t* storage, size_t capacity,

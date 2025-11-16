@@ -129,13 +129,13 @@ ifeq ($(TARGET),F303)
  include $(CHIBIOS)/os/common/startup/ARMCMx/compilers/GCC/mk/startup_stm32f3xx.mk
  include $(CHIBIOS)/os/hal/hal.mk
  include $(CHIBIOS)/os/hal/ports/STM32/STM32F3xx/platform.mk
+ include boards/STM32F303/board.mk
 else
  include $(CHIBIOS)/os/common/startup/ARMCMx/compilers/GCC/mk/startup_stm32f0xx.mk
  include $(CHIBIOS)/os/hal/hal.mk
  include $(CHIBIOS)/os/hal/ports/STM32/STM32F0xx/platform.mk
+ include boards/STM32F072/board.mk
 endif
-
-include boards/nanovna/board.mk
 
 include $(CHIBIOS)/os/hal/osal/rt/osal.mk
 # RTOS files (optional).
@@ -153,9 +153,9 @@ include $(CHIBIOS)/os/hal/lib/streams/streams.mk
 
 # Define linker script file here
 ifeq ($(TARGET),F303)
- LDSCRIPT= boards/nanovna/linker/STM32F303xC.ld
+ LDSCRIPT= boards/STM32F303/STM32F303xC.ld
 else
- LDSCRIPT= boards/nanovna/linker/STM32F072xB.ld
+ LDSCRIPT= boards/STM32F072/STM32F072xB.ld
 endif
 
 # C sources that can be compiled in ARM or THUMB mode depending on the global
@@ -180,17 +180,12 @@ CSRC = $(STARTUPSRC) \
        src/app/application.c \
        src/app/sweep_service.c \
        src/app/shell.c \
-       src/app/modules/measurement_engine.c \
-       src/app/modules/display_presenter.c \
-       src/app/modules/menu_controller.c \
-       src/app/modules/usb_command_server.c \
        src/core/common.c \
        src/drivers/si5351.c \
        src/drivers/tlv320aic3204.c \
        src/dsp/dsp.c \
        src/dsp/vna_math.c \
        src/ui/plot.c \
-       src/ui/sd_browser.c \
        src/ui/ui.c \
        src/drivers/lcd.c \
        src/services/config_service.c \
@@ -200,7 +195,6 @@ CSRC = $(STARTUPSRC) \
        src/platform/platform_hal.c \
        src/platform/boards/board_registry.c \
        src/platform/boards/nanovna_board.c \
-       src/platform/boards/board_events.c \
        src/platform/boards/stm32_peripherals.c \
        src/ui/hardware_input.c \
        src/system/state_manager.c \
@@ -305,7 +299,7 @@ UDEFS+= -DVNA_AUTO_SELECT_RTC_SOURCE
 UADEFS =
 
 # List all user directories here
-UINCDIR = $(PROJ) config include include/drivers boards/nanovna $(BUILDDIR)/generated
+UINCDIR = config include include/drivers boards/STM32F072 boards/STM32F303 $(BUILDDIR)/generated
 
 # List the user directory to look for the libraries here
 ULIBDIR =
@@ -342,5 +336,9 @@ print-version:
 clear: clean
 
 TAGS: Makefile
-	@etags *.[ch] boards/nanovna/**/*.[ch] $(shell find third_party/ChibiOS -name \*.\[ch\] -print)
+ifeq ($(TARGET),F303)
+	@etags *.[ch] boards/STM32F303/*.[ch] $(shell find third_party/ChibiOS -name \*.\[ch\] -print)
+else
+	@etags *.[ch] boards/STM32F072/*.[ch] $(shell find third_party/ChibiOS -name \*.\[ch\] -print)
+endif
 	@ls -l TAGS

@@ -75,30 +75,16 @@ uint16_t ui_input_check(void) {
 }
 
 uint16_t ui_input_wait_release(void) {
-  const systime_t wait_started = chVTGetSystemTimeX();
-  const systime_t release_timeout = MS2ST(500);
   while (true) {
     systime_t ticks = chVTGetSystemTimeX();
     systime_t dt = ticks - last_button_down_ticks;
     chThdSleepMilliseconds(10);
     uint16_t cur_button = ui_input_get_buttons();
     uint16_t changed = last_button ^ cur_button;
-    if (cur_button == 0 && ticks - wait_started > BUTTON_DEBOUNCE_TICKS) {
-      last_button = 0;
-      last_button_down_ticks = ticks;
-      last_button_repeat_ticks = ticks;
-      return NO_EVENT;
-    }
     if (dt >= BUTTON_DOWN_LONG_TICKS && (cur_button & BUTTON_PUSH)) {
-      last_button = cur_button;
-      last_button_down_ticks = ticks;
-      last_button_repeat_ticks = ticks + BUTTON_REPEAT_TICKS;
       return EVT_BUTTON_DOWN_LONG;
     }
     if (changed & BUTTON_PUSH) {
-      last_button = cur_button;
-      last_button_down_ticks = ticks;
-      last_button_repeat_ticks = ticks + BUTTON_REPEAT_TICKS;
       return EVT_BUTTON_SINGLE_CLICK;
     }
     if (changed) {
@@ -116,12 +102,6 @@ uint16_t ui_input_wait_release(void) {
       }
       last_button_repeat_ticks = ticks + BUTTON_REPEAT_TICKS;
       return status;
-    }
-    if (ticks - wait_started > release_timeout) {
-      last_button = cur_button;
-      last_button_down_ticks = ticks;
-      last_button_repeat_ticks = ticks;
-      return NO_EVENT;
     }
   }
 }
