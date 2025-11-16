@@ -68,14 +68,12 @@ static display_presenter_t display_presenter;
 static menu_controller_t menu_controller;
 static usb_command_server_t usb_server;
 
-typedef struct {
-  measurement_engine_t* measurement;
-  display_presenter_t* display;
-  menu_controller_t* menu;
-  usb_command_server_t* usb;
-} runtime_loop_context_t;
-
-static runtime_loop_context_t runtime_loop_ctx;
+// The runtime loop now executes on the main thread so that it shares the
+// spacious stack that ChibiOS allocates for the startup context.  The previous
+// implementation moved the loop into a dedicated thread with a very small
+// stack, which caused immediate stack overflows on hardware and resulted in a
+// frozen UI.  Keeping the runtime objects at file scope preserves the API
+// affordances without an extra thread wrapper.
 
 #ifdef __USE_SD_CARD__
 #if defined(NANOVNA_F303)
@@ -261,22 +259,12 @@ static void runtime_set_flip(void* context, bool enable) {
 #endif
 }
 
-#if defined(NANOVNA_F303)
-#define RUNTIME_THREAD_STACK_SIZE 704
-#else
-#define RUNTIME_THREAD_STACK_SIZE 576
-#endif
-static THD_WORKING_AREA(waRuntimeThread, RUNTIME_THREAD_STACK_SIZE);
-static THD_FUNCTION(RuntimeThread, arg) {
-  runtime_loop_context_t* ctx = (runtime_loop_context_t*)arg;
-  chRegSetThreadName("runtime");
-  while (true) {
-    usb_command_server_service(ctx->usb);
-    const measurement_cycle_result_t* cycle = measurement_engine_execute(ctx->measurement, true);
-    menu_controller_process(ctx->menu);
-    display_presenter_render(ctx->display, cycle);
-    state_manager_service();
-  }
+static void runtime_service_cycle(void) {
+  usb_command_server_service(&usb_server);
+  const measurement_cycle_result_t* runtime_cycle = measurement_engine_execute(&measurement_engine, true);
+  menu_controller_process(&menu_controller);
+  display_presenter_render(&display_presenter, runtime_cycle);
+  state_manager_service();
 }
 
 void pause_sweep(void) {
@@ -2649,17 +2637,10 @@ int app_main(void) {
    */
   i2c_set_timings(STM32_I2C_TIMINGR);
 
-  runtime_loop_ctx.measurement = &measurement_engine;
-  runtime_loop_ctx.display = &display_presenter;
-  runtime_loop_ctx.menu = &menu_controller;
-  runtime_loop_ctx.usb = &usb_server;
-
   usb_command_server_start(&usb_server);
-  chThdCreateStatic(waRuntimeThread, sizeof(waRuntimeThread), NORMALPRIO - 1, RuntimeThread,
-                    &runtime_loop_ctx);
 
   while (true) {
-    chThdSleepMilliseconds(1000);
+    runtime_service_cycle();
   }
 }
 
