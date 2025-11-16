@@ -27,6 +27,7 @@
 #include "app/modules/measurement_engine.h"
 #include "app/modules/menu_controller.h"
 #include "app/modules/usb_command_server.h"
+#include "ui/ui_internal.h"
 
 #include "ch.h"
 #include "hal.h"
@@ -2573,6 +2574,8 @@ int app_main(void) {
 
   config_service_init();
   event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots), NULL, 0, NULL, 0);
+  config_service_attach_event_bus(&app_event_bus);
+  ui_attach_event_bus(&app_event_bus);
 
   /*
    * restore config and calibration 0 slot from flash memory, also if need use backup data
