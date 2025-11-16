@@ -43,7 +43,7 @@ static char** pending_argv = NULL;
 static bool shell_skip_linefeed = false;
 static bool shell_port_open_flag = false;
 
-#define SHELL_IO_TIMEOUT MS2ST(2000)
+#define SHELL_IO_TIMEOUT MS2ST(50)
 
 typedef struct {
   const struct BaseSequentialStreamVMT* vmt;
@@ -140,11 +140,16 @@ static bool shell_channel_write(BaseSequentialStream* stream, const uint8_t* buf
   BaseChannel* channel = (BaseChannel*)stream;
   size_t offset = 0;
   while (offset < size) {
-    size_t written = chnWriteTimeout(channel, buffer + offset, size - offset, SHELL_IO_TIMEOUT);
+    size_t chunk = size - offset;
+    if (chunk > SERIAL_USB_TX_BUFFERS_SIZE) {
+      chunk = SERIAL_USB_TX_BUFFERS_SIZE;
+    }
+    size_t written = chnWriteTimeout(channel, buffer + offset, chunk, TIME_IMMEDIATE);
     if (written == 0U) {
       return false;
     }
     offset += written;
+    chThdYield();
   }
   return true;
 }
@@ -162,18 +167,9 @@ static size_t shell_adapter_write(void* instance, const uint8_t* bp, size_t n) {
   if (adapter->target == NULL || n == 0U) {
     return 0;
   }
-  size_t offset = 0;
-  while (offset < n) {
-    size_t chunk = n - offset;
-    if (chunk > SERIAL_USB_TX_BUFFERS_SIZE) {
-      chunk = SERIAL_USB_TX_BUFFERS_SIZE;
-    }
-    if (!shell_channel_write(adapter->target, bp + offset, chunk)) {
-      adapter->failed = true;
-      return offset;
-    }
-    offset += chunk;
-    chThdYield();
+  if (!shell_channel_write(adapter->target, bp, n)) {
+    adapter->failed = true;
+    return 0;
   }
   return n;
 }
