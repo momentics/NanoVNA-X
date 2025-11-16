@@ -240,11 +240,11 @@ void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t a
   pending_argv = argv;
   osalSysUnlock();
 
-  chBSemWait(&shell_command_sem);
-
   if (shell_event_bus != NULL) {
     event_bus_publish(shell_event_bus, EVENT_SHELL_COMMAND_PENDING, NULL);
   }
+
+  chBSemWait(&shell_command_sem);
 }
 
 void shell_service_pending_commands(void) {
