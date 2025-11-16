@@ -41,6 +41,7 @@ static volatile const VNAShellCommand* pending_command = NULL;
 static uint16_t pending_argc = 0;
 static char** pending_argv = NULL;
 static bool shell_skip_linefeed = false;
+static bool shell_port_open_flag = false;
 
 #define SHELL_IO_TIMEOUT MS2ST(2000)
 
@@ -255,8 +256,29 @@ bool shell_check_connect(void) {
   osalSysUnlock();
   return active;
 #else
-  return SDU1.config->usbp->state == USB_ACTIVE;
+  osalSysLock();
+  const bool active = (SDU1.config->usbp->state == USB_ACTIVE) && (SDU1.state == SDU_READY);
+  osalSysUnlock();
+  return active;
 #endif
+}
+
+bool shell_port_open(void) {
+  osalSysLock();
+  bool open = shell_port_open_flag;
+  osalSysUnlock();
+#ifdef __USE_SERIAL_CONSOLE__
+  if (VNA_MODE(VNA_MODE_CONNECTION)) {
+    open = true;
+  }
+#endif
+  return open;
+}
+
+void shell_set_port_open(bool open) {
+  osalSysLock();
+  shell_port_open_flag = open;
+  osalSysUnlock();
 }
 
 void shell_init_connection(void) {

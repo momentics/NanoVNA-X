@@ -2569,6 +2569,11 @@ static THD_FUNCTION(ShellServiceThread, arg) {
       chThdSleepMilliseconds(poll_interval * 2);
       continue;
     }
+    if (!shell_port_open()) {
+      session_active = false;
+      chThdSleepMilliseconds(poll_interval);
+      continue;
+    }
     if (!shell_stream_ready()) {
       session_active = false;
       if (!shell_try_restore_stream()) {
