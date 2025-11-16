@@ -46,96 +46,11 @@ static event_bus_t* shell_event_bus = NULL;
 
 static void shell_on_event(const event_bus_message_t* message, void* user_data);
 
-#define SHELL_IO_TIMEOUT MS2ST(250)
-
-typedef struct {
-  const struct BaseSequentialStreamVMT* vmt;
-  BaseSequentialStream* target;
-  bool failed;
-} ShellStreamAdapter;
-
-static size_t shell_adapter_write(void* instance, const uint8_t* bp, size_t n);
-static size_t shell_adapter_read(void* instance, uint8_t* bp, size_t n);
-static msg_t shell_adapter_put(void* instance, uint8_t b);
-static msg_t shell_adapter_get(void* instance);
-
-static const struct BaseSequentialStreamVMT shell_adapter_vmt = {
-    shell_adapter_write, shell_adapter_read, shell_adapter_put, shell_adapter_get};
-
-static bool shell_channel_write(BaseSequentialStream* stream, const uint8_t* buffer, size_t size) {
-  if (stream == NULL || buffer == NULL || size == 0U) {
-    return false;
-  }
-  BaseChannel* channel = (BaseChannel*)stream;
-  size_t offset = 0;
-  while (offset < size) {
-    size_t chunk = size - offset;
-    size_t written = chnWriteTimeout(channel, buffer + offset, chunk, SHELL_IO_TIMEOUT);
-    if (written == 0U) {
-      return false;
-    }
-    offset += written;
-  }
-  return true;
-}
-
-static size_t shell_adapter_write(void* instance, const uint8_t* bp, size_t n) {
-  ShellStreamAdapter* adapter = instance;
-  if (!shell_channel_write(adapter->target, bp, n)) {
-    adapter->failed = true;
-    return 0;
-  }
-  return n;
-}
-
-static size_t shell_adapter_read(void* instance, uint8_t* bp, size_t n) {
-  ShellStreamAdapter* adapter = instance;
-  if (adapter->target == NULL) {
-    adapter->failed = true;
-    return 0;
-  }
-  return streamRead(adapter->target, bp, n);
-}
-
-static msg_t shell_adapter_put(void* instance, uint8_t b) {
-  ShellStreamAdapter* adapter = instance;
-  if (adapter->target == NULL) {
-    adapter->failed = true;
-    return STM_RESET;
-  }
-  BaseChannel* channel = (BaseChannel*)adapter->target;
-  msg_t result = chnPutTimeout(channel, b, SHELL_IO_TIMEOUT);
-  if (result != MSG_OK) {
-    adapter->failed = true;
-  }
-  return result;
-}
-
-static msg_t shell_adapter_get(void* instance) {
-  ShellStreamAdapter* adapter = instance;
-  if (adapter->target == NULL) {
-    adapter->failed = true;
-    return STM_RESET;
-  }
-  BaseChannel* channel = (BaseChannel*)adapter->target;
-  msg_t result = chnGetTimeout(channel, SHELL_IO_TIMEOUT);
-  if (result < MSG_OK) {
-    adapter->failed = true;
-  }
-  return result;
-}
-
-static void shell_handle_io_fault(void) {
-  shell_reset_console();
-}
-
 static void shell_write(const void* buf, size_t size) {
   if (shell_stream == NULL || buf == NULL || size == 0U) {
     return;
   }
-  if (!shell_channel_write(shell_stream, buf, size)) {
-    shell_handle_io_fault();
-  }
+  streamWrite(shell_stream, buf, size);
 }
 
 static size_t shell_read(void* buf, size_t size) {
@@ -151,28 +66,19 @@ int shell_printf(const char* fmt, ...) {
   if (shell_stream == NULL) {
     return 0;
   }
-  ShellStreamAdapter adapter = {.vmt = &shell_adapter_vmt, .target = shell_stream, .failed = false};
   va_list ap;
   va_start(ap, fmt);
-  const int written = chvprintf((BaseSequentialStream*)&adapter, fmt, ap);
+  const int written = chvprintf(shell_stream, fmt, ap);
   va_end(ap);
-  if (adapter.failed) {
-    shell_handle_io_fault();
-  }
   return written;
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
 int serial_shell_printf(const char* fmt, ...) {
-  ShellStreamAdapter adapter = {.vmt = &shell_adapter_vmt, .target = (BaseSequentialStream*)&SD1,
-                                .failed = false};
   va_list ap;
   va_start(ap, fmt);
-  const int written = chvprintf((BaseSequentialStream*)&adapter, fmt, ap);
+  const int written = chvprintf((BaseSequentialStream*)&SD1, fmt, ap);
   va_end(ap);
-  if (adapter.failed) {
-    shell_handle_io_fault();
-  }
   return written;
 }
 #endif
