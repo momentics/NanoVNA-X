@@ -352,6 +352,7 @@ void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t a
     event_bus_publish(shell_event_bus, EVENT_SHELL_COMMAND_PENDING, NULL);
   }
 
+  shell_service_pending_commands();
   chBSemWait(&shell_command_sem);
 }
 

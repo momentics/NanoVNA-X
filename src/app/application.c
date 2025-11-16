@@ -231,6 +231,7 @@ static THD_FUNCTION(Thread1, arg) {
   // Initialize graph plotting
   plot_init();
   while (1) {
+    shell_service_pending_commands();
     bool completed = false;
     uint16_t mask = measurement_pipeline_active_mask(&measurement_pipeline);
     if (sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) {
