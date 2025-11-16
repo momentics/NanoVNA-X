@@ -2556,18 +2556,8 @@ static THD_FUNCTION(ShellServiceThread, arg) {
   while (true) {
     if (!shell_check_connect()) {
       session_active = false;
-      shell_drop_stream();
       chThdSleepMilliseconds(poll_interval * 2);
       continue;
-    }
-    if (shell_consume_fault()) {
-      session_active = false;
-    }
-    if (!shell_stream_ready()) {
-      if (!shell_try_restore_stream()) {
-        chThdSleepMilliseconds(poll_interval);
-        continue;
-      }
     }
     if (!session_active) {
       shell_write_text(VNA_SHELL_NEWLINE_STR);
