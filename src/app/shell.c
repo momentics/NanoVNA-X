@@ -35,7 +35,7 @@
 static const VNAShellCommand* command_table = NULL;
 
 static BaseSequentialStream* shell_stream = NULL;
-static threads_queue_t shell_thread;
+static binary_semaphore_t shell_command_sem;
 static char* shell_args[VNA_SHELL_MAX_ARGUMENTS + 1];
 static uint16_t shell_nargs;
 static volatile const VNAShellCommand* pending_command = NULL;
@@ -165,7 +165,7 @@ bool shell_check_connect(void) {
 }
 
 void shell_init_connection(void) {
-  osalThreadQueueObjectInit(&shell_thread);
+  chBSemObjectInit(&shell_command_sem, true);
   sduObjectInit(&SDU1);
   sduStart(&SDU1, &serusbcfg);
 #ifdef __USE_SERIAL_CONSOLE__
@@ -229,12 +229,19 @@ const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** a
 }
 
 void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t argc, char** argv) {
+  if (command == NULL) {
+    return;
+  }
+
+  chBSemReset(&shell_command_sem, true);
+  osalSysLock();
   pending_command = command;
   pending_argc = argc;
   pending_argv = argv;
-  osalSysLock();
-  osalThreadEnqueueTimeoutS(&shell_thread, TIME_INFINITE);
   osalSysUnlock();
+
+  chBSemWait(&shell_command_sem);
+
   if (shell_event_bus != NULL) {
     event_bus_publish(shell_event_bus, EVENT_SHELL_COMMAND_PENDING, NULL);
   }
@@ -255,10 +262,7 @@ void shell_service_pending_commands(void) {
 
     command->sc_function(argc, argv);
     operation_requested &= (uint8_t)~OP_CONSOLE;
-
-    osalSysLock();
-    osalThreadDequeueNextI(&shell_thread, MSG_OK);
-    osalSysUnlock();
+    chBSemSignal(&shell_command_sem);
   }
 }
 
