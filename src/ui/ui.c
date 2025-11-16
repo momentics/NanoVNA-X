@@ -50,7 +50,27 @@ static uint8_t touch_status_flag = 0;
 static uint8_t last_touch_status = EVT_TOUCH_NONE;
 static int16_t last_touch_x;
 static int16_t last_touch_y;
-uint8_t operation_requested = OP_NONE;
+static volatile uint8_t operation_requested = OP_NONE;
+
+void operation_request_set(uint8_t flags) {
+  osalSysLock();
+  operation_requested |= flags;
+  osalSysUnlock();
+}
+
+void operation_request_clear(uint8_t flags) {
+  osalSysLock();
+  operation_requested &= (uint8_t)~flags;
+  osalSysUnlock();
+}
+
+uint8_t operation_request_peek(void) {
+  return operation_requested;
+}
+
+bool operation_request_pending(uint8_t mask) {
+  return (operation_request_peek() & mask) != 0U;
+}
 
 static event_bus_t* ui_event_bus = NULL;
 
@@ -117,10 +137,10 @@ static void ui_on_board_event(const event_bus_message_t* message, void* user_dat
   }
   switch (message->topic) {
   case EVENT_DRIVER_TOUCH_INTERRUPT:
-    operation_requested |= OP_TOUCH;
+    operation_request_set(OP_TOUCH);
     break;
   case EVENT_DRIVER_BUTTON_INTERRUPT:
-    operation_requested |= OP_LEVER;
+    operation_request_set(OP_LEVER);
     break;
   default:
     break;
@@ -340,7 +360,7 @@ void remote_touch_set(uint16_t state, int16_t x, int16_t y) {
     last_touch_x = x;
   if (y != -1)
     last_touch_y = y;
-  operation_requested |= OP_TOUCH;
+  operation_request_set(OP_TOUCH);
 }
 #endif
 
@@ -3729,11 +3749,11 @@ static const struct {
 };
 
 static void ui_process_lever(void) {
-  const bool lever_event_requested = (operation_requested & OP_LEVER) != 0U;
+  const bool lever_event_requested = operation_request_pending(OP_LEVER);
   const systime_t now = chVTGetSystemTimeX();
   if (lever_event_requested) {
     uint16_t status = ui_input_check();
-    operation_requested &= (uint8_t)~OP_LEVER;
+    operation_request_clear(OP_LEVER);
     if (status != 0U) {
       const uint16_t buttons = ui_input_get_buttons();
       lever_repeat_state.mask = buttons_to_event_mask(buttons);
@@ -3775,18 +3795,18 @@ static void ui_process_touch(void) {
 void ui_process(void) {
   // if (ui_mode >= UI_END) return; // for safe
   ui_process_lever();
-  if (operation_requested & OP_TOUCH)
+  if (operation_request_pending(OP_TOUCH))
     ui_process_touch();
 
   touch_start_watchdog();
-  operation_requested &= (uint8_t)~(OP_LEVER | OP_TOUCH);
+  operation_request_clear(OP_LEVER | OP_TOUCH);
 }
 
 #if HAL_USE_EXT == TRUE // Use ChibiOS EXT code (need lot of flash ~1.5k)
 static void handle_button_ext(EXTDriver* extp, expchannel_t channel) {
   (void)extp;
   (void)channel;
-  operation_requested |= OP_LEVER;
+  operation_request_set(OP_LEVER);
 }
 
 static const EXTConfig extcfg = {

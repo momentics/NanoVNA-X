@@ -261,7 +261,7 @@ void shell_service_pending_commands(void) {
     osalSysUnlock();
 
     command->sc_function(argc, argv);
-    operation_requested &= (uint8_t)~OP_CONSOLE;
+    operation_request_clear(OP_CONSOLE);
     chBSemSignal(&shell_command_sem);
   }
 }

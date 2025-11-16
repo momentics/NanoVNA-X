@@ -2485,13 +2485,13 @@ static void vna_shell_execute_line(char* line) {
       cmd_flag &= (uint16_t)~CMD_WAIT_MUTEX;
     }
     if (cmd_flag & CMD_BREAK_SWEEP) {
-      operation_requested |= OP_CONSOLE;
+      operation_request_set(OP_CONSOLE);
     }
     if (cmd_flag & CMD_WAIT_MUTEX) {
       shell_request_deferred_execution(cmd, argc, argv);
     } else {
       cmd->sc_function((int)argc, argv);
-      operation_requested &= (uint8_t)~OP_CONSOLE;
+      operation_request_clear(OP_CONSOLE);
     }
   } else if (command_name && *command_name) {
     shell_printf("%s?" VNA_SHELL_NEWLINE_STR, command_name);

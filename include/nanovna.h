@@ -1464,7 +1464,10 @@ bool ui_lever_repeat_pending(void);
 #define OP_LEVER      0x01
 #define OP_TOUCH      0x02
 #define OP_CONSOLE    0x04
-extern uint8_t operation_requested;
+void operation_request_set(uint8_t flags);
+void operation_request_clear(uint8_t flags);
+uint8_t operation_request_peek(void);
+bool operation_request_pending(uint8_t mask);
 
 #define TOUCH_THRESHOLD 2000
 /*
