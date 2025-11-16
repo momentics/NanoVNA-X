@@ -3,7 +3,6 @@
 #include "app/sweep_service.h"
 #include "measurement/pipeline.h"
 #include "services/event_bus.h"
-#include "ui/ui_internal.h"
 
 #include "ch.h"
 
@@ -57,11 +56,7 @@ const measurement_cycle_result_t* measurement_engine_execute(measurement_engine_
     }
   } else {
     sweep_service_end_measurement();
-    if (ui_lever_repeat_pending()) {
-      chThdSleepMilliseconds(5);
-    } else {
-      __WFI();
-    }
+    __WFI();
   }
   return &engine->last_cycle;
 }

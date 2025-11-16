@@ -1,5 +1,6 @@
 /*
- * Menu controller: handles UI state machines and user inputs.
+ * Menu controller: owns the on-device menu state machine and routes
+ * joystick/touch events into the UI layer.
  */
 
 #pragma once

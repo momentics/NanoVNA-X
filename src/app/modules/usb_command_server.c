@@ -4,11 +4,11 @@
 
 #include "ch.h"
 
-/*
- * The USB worker only manages prompts and input; command bodies run on the
- * runtime thread, so a modest stack keeps RAM usage low on F072 targets.
- */
+#if defined(NANOVNA_F303)
 #define USB_SHELL_THREAD_STACK_SIZE 192
+#else
+#define USB_SHELL_THREAD_STACK_SIZE 128
+#endif
 static THD_WORKING_AREA(usb_shell_thread_wa, USB_SHELL_THREAD_STACK_SIZE);
 
 static void default_write_prompt(void* context, const char* prompt) {
