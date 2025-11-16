@@ -250,6 +250,7 @@ void shell_service_pending_commands(void) {
     osalSysUnlock();
 
     command->sc_function(argc, argv);
+    operation_requested &= (uint8_t)~OP_CONSOLE;
 
     osalSysLock();
     osalThreadDequeueNextI(&shell_thread, MSG_OK);
