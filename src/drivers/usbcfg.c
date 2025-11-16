@@ -339,7 +339,7 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
   chSysLockFromISR();
   switch (event) {
   case USB_EVENT_RESET:
-    shell_set_port_open(false);
+    shell_reset_port_state();
     break;
   case USB_EVENT_ADDRESS:
     break;
@@ -355,7 +355,7 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
   case USB_EVENT_SUSPEND:
     /* Disconnection event on suspend.*/
     sduDisconnectI(&SDU1);
-    shell_set_port_open(false);
+    shell_reset_port_state();
     break;
   case USB_EVENT_WAKEUP:
     break;

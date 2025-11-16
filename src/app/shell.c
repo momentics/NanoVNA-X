@@ -42,6 +42,7 @@ static uint16_t pending_argc = 0;
 static char** pending_argv = NULL;
 static bool shell_skip_linefeed = false;
 static bool shell_port_open_flag = false;
+static bool shell_control_lines_seen = false;
 
 #define SHELL_IO_TIMEOUT MS2ST(50)
 
@@ -281,18 +282,30 @@ bool shell_check_connect(void) {
 bool shell_port_open(void) {
   syssts_t sts = chSysGetStatusAndLockX();
   bool open = shell_port_open_flag;
+  const bool control_lines_seen = shell_control_lines_seen;
   chSysRestoreStatusX(sts);
 #ifdef __USE_SERIAL_CONSOLE__
   if (VNA_MODE(VNA_MODE_CONNECTION)) {
     open = true;
   }
 #endif
+  if (!control_lines_seen && !open && shell_check_connect()) {
+    open = true;
+  }
   return open;
 }
 
 void shell_set_port_open(bool open) {
   syssts_t sts = chSysGetStatusAndLockX();
   shell_port_open_flag = open;
+  shell_control_lines_seen = true;
+  chSysRestoreStatusX(sts);
+}
+
+void shell_reset_port_state(void) {
+  syssts_t sts = chSysGetStatusAndLockX();
+  shell_port_open_flag = false;
+  shell_control_lines_seen = false;
   chSysRestoreStatusX(sts);
 }
 

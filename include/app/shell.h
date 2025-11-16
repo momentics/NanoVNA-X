@@ -73,6 +73,7 @@ bool shell_try_restore_stream(void);
 void shell_drop_stream(void);
 bool shell_port_open(void);
 void shell_set_port_open(bool open);
+void shell_reset_port_state(void);
 
 const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** argv,
                                            const char** name_out);
