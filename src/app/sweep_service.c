@@ -79,7 +79,7 @@ void sweep_service_set_sample_function(void (*func)(float*)) {
 }
 
 static inline bool sweep_ui_input_pending(void) {
-  return (operation_requested & (OP_TOUCH | OP_LEVER)) != 0;
+  return (operation_requested & (OP_TOUCH | OP_LEVER | OP_CONSOLE)) != 0;
 }
 
 #ifdef __USE_FREQ_TABLE__
