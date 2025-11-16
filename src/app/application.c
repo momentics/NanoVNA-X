@@ -23,6 +23,7 @@
 #include "app/app_features.h"
 #include "app/application.h"
 #include "app/sweep_service.h"
+#include "app/subsystems.h"
 
 #include "ch.h"
 #include "hal.h"
@@ -57,15 +58,10 @@ static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
 static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
 #if defined(NANOVNA_F303)
 #define EVENT_WA_SECTION __attribute__((section(".ram4")))
-#define SHELL_WA_SECTION __attribute__((section(".ram4")))
 #else
 #define EVENT_WA_SECTION
-#define SHELL_WA_SECTION
 #endif
 static EVENT_WA_SECTION THD_WORKING_AREA(waEventDispatchWorker, 64);
-static SHELL_WA_SECTION THD_WORKING_AREA(waShellThread, 96);
-
-static measurement_pipeline_t measurement_pipeline;
 
 static msg_t event_dispatch_worker(void* user_data) {
   event_bus_t* bus = (event_bus_t*)user_data;
@@ -100,9 +96,6 @@ FIL* filesystem_file(void) {
 #define VNA_FREQ_FMT_STR "%u"
 
 #define VNA_SHELL_FUNCTION(command_name) static void command_name(int argc, char* argv[])
-
-// Shell command line buffer, args, nargs, and function ptr
-static char shell_line[VNA_SHELL_MAX_LENGTH];
 
 #if ENABLED_DUMP_COMMAND
 static void cmd_dump(int argc, char* argv[]);
@@ -152,15 +145,6 @@ uint8_t sweep_mode = SWEEP_ENABLE;
 // Sweep measured data
 float measured[2][SWEEP_POINTS_MAX][2];
 
-static int16_t battery_last_mv = INT16_MIN;
-static systime_t battery_next_sample = 0;
-
-#ifndef VBAT_MEASURE_INTERVAL
-#define BATTERY_REDRAW_INTERVAL S2ST(5)
-#else
-#define BATTERY_REDRAW_INTERVAL VBAT_MEASURE_INTERVAL
-#endif
-
 // Version text, displayed in Config->Version menu, also send by info command
 const char* info_about[] = {
     "Board: " BOARD_NAME, "NanoVNA-X maintainer: @momentics <momentics@gmail.com>",
@@ -201,75 +185,17 @@ void my_debug_log(int offs, char* log) {
 #define DEBUG_LOG(offs, text)
 #endif
 
-static void schedule_battery_redraw(void) {
-  systime_t now = chVTGetSystemTimeX();
-  if ((int32_t)(now - battery_next_sample) < 0) {
-    return;
-  }
-  battery_next_sample = now + BATTERY_REDRAW_INTERVAL;
-  int16_t vbat = adc_vbat_read();
-  if (vbat == battery_last_mv) {
-    return;
-  }
-  battery_last_mv = vbat;
-  request_to_redraw(REDRAW_BATTERY);
-}
-
 #define SWEEP_THREAD_STACK_SIZE 512
 static THD_WORKING_AREA(waSweepThread, SWEEP_THREAD_STACK_SIZE);
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
   chRegSetThreadName("swp");
-#ifdef __FLIP_DISPLAY__
-  if (VNA_MODE(VNA_MODE_FLIP_DISPLAY))
-    lcd_set_flip(true);
-#endif
-  /*
-   * UI (menu, touch, buttons) and plot initialize
-   */
-  ui_init();
-  // Initialize graph plotting
-  plot_init();
   while (1) {
-    shell_service_pending_commands();
-    bool completed = false;
-    uint16_t mask = measurement_pipeline_active_mask(&measurement_pipeline);
-    if (sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) {
-      sweep_service_wait_for_copy_release();
-      sweep_service_begin_measurement();
-      event_bus_publish(&app_event_bus, EVENT_SWEEP_STARTED, &mask);
-      completed = measurement_pipeline_execute(&measurement_pipeline, true, mask);
-      sweep_mode &= ~SWEEP_ONCE;
-      sweep_service_end_measurement();
-    } else {
-      sweep_service_end_measurement();
-      if (ui_lever_repeat_pending()) {
-        chThdSleepMilliseconds(5);
-      } else {
-        __WFI();
-      }
-    }
-    shell_service_pending_commands();
-    // Process UI inputs
-    sweep_mode |= SWEEP_UI_MODE;
-    ui_process();
-    sweep_mode &= ~SWEEP_UI_MODE;
-    // Process collected data, calculate trace coordinates and plot only if scan completed
-    if (completed) {
-      sweep_service_increment_generation();
-      event_bus_publish(&app_event_bus, EVENT_SWEEP_COMPLETED, &mask);
-      //      START_PROFILE
-      if ((props_mode & DOMAIN_MODE) == DOMAIN_TIME)
-        app_measurement_transform_domain(mask);
-      //      STOP_PROFILE;
-      // Prepare draw graphics, cache all lines, mark screen cells for redraw
-      request_to_redraw(REDRAW_PLOT);
-    }
-    schedule_battery_redraw();
-#ifndef DEBUG_CONSOLE_SHOW
-    // plot trace and other indications as raster
-    draw_all();
-#endif
+    usb_server_subsystem_service();
+    const sweep_subsystem_status_t* status = sweep_subsystem_cycle();
+    usb_server_subsystem_service();
+    menu_subsystem_process();
+    display_subsystem_render(status);
     state_manager_service();
   }
 }
@@ -284,6 +210,93 @@ static inline void resume_sweep(void) {
 
 void toggle_sweep(void) {
   sweep_mode ^= SWEEP_ENABLE;
+}
+
+static bool sweep_control_lock_with_timeout(systime_t timeout) {
+  systime_t start = chVTGetSystemTimeX();
+  while (true) {
+    osalSysLock();
+    bool available = (sweep_mode & SWEEP_CONSOLE_LOCK) == 0U;
+    if (available) {
+      sweep_mode |= SWEEP_CONSOLE_LOCK;
+      osalSysUnlock();
+      return true;
+    }
+    osalSysUnlock();
+    if (timeout == TIME_IMMEDIATE) {
+      return false;
+    }
+    if (timeout != TIME_INFINITE && chVTTimeElapsedSinceX(start) >= timeout) {
+      return false;
+    }
+    chThdSleepMilliseconds(1);
+  }
+}
+
+static systime_t sweep_control_remaining_timeout(systime_t timeout, systime_t start) {
+  if (timeout == TIME_INFINITE) {
+    return TIME_INFINITE;
+  }
+  if (timeout == TIME_IMMEDIATE) {
+    return TIME_IMMEDIATE;
+  }
+  systime_t elapsed = chVTTimeElapsedSinceX(start);
+  if (elapsed >= timeout) {
+    return TIME_IMMEDIATE;
+  }
+  return timeout - elapsed;
+}
+
+static void sweep_control_set_hold(bool enable) {
+  osalSysLock();
+  if (enable) {
+    sweep_mode |= SWEEP_CONSOLE_HOLD;
+  } else {
+    sweep_mode &= (uint8_t)~SWEEP_CONSOLE_HOLD;
+  }
+  osalSysUnlock();
+}
+
+bool sweep_control_is_holding(void) {
+  return (sweep_mode & SWEEP_CONSOLE_HOLD) != 0U;
+}
+
+bool sweep_control_acquire(sweep_control_handle_t* handle, systime_t timeout) {
+  if (handle == NULL) {
+    return false;
+  }
+  handle->locked = false;
+  systime_t start = chVTGetSystemTimeX();
+  if (!sweep_control_lock_with_timeout(timeout)) {
+    return false;
+  }
+  handle->locked = true;
+  operation_request_set(OP_CONSOLE);
+  sweep_control_set_hold(true);
+  systime_t remaining = sweep_control_remaining_timeout(timeout, start);
+  if (!sweep_service_wait_for_idle(remaining)) {
+    sweep_control_set_hold(false);
+    operation_request_clear(OP_CONSOLE);
+    handle->locked = false;
+    osalSysLock();
+    sweep_mode &= (uint8_t)~SWEEP_CONSOLE_LOCK;
+    osalSysUnlock();
+    return false;
+  }
+  sweep_service_wait_for_copy_release();
+  return true;
+}
+
+void sweep_control_release(sweep_control_handle_t* handle) {
+  if (handle == NULL || !handle->locked) {
+    return;
+  }
+  sweep_control_set_hold(false);
+  operation_request_clear(OP_CONSOLE);
+  handle->locked = false;
+  osalSysLock();
+  sweep_mode &= (uint8_t)~SWEEP_CONSOLE_LOCK;
+  osalSysUnlock();
 }
 
 config_t config = {
@@ -2474,7 +2487,7 @@ VNA_SHELL_FUNCTION(cmd_help) {
 //
 // Parse and run command line
 //
-static void vna_shell_execute_line(char* line) {
+void usb_server_handle_line(char* line) {
   DEBUG_LOG(0, line); // debug console log
   uint16_t argc = 0;
   char** argv = NULL;
@@ -2486,20 +2499,18 @@ static void vna_shell_execute_line(char* line) {
       cmd_flag &= (uint16_t)~CMD_WAIT_MUTEX;
     }
     if (cmd_flag & CMD_WAIT_MUTEX) {
-      if (cmd_flag & CMD_BREAK_SWEEP) {
-        operation_request_set(OP_CONSOLE);
-      }
       shell_request_deferred_execution(cmd, argc, argv);
-      if (cmd_flag & CMD_BREAK_SWEEP) {
-        operation_request_clear(OP_CONSOLE);
-      }
     } else {
-      if (cmd_flag & CMD_BREAK_SWEEP) {
-        operation_request_set(OP_CONSOLE);
+      sweep_control_handle_t sweep_guard = {.locked = false};
+      if ((cmd_flag & CMD_BREAK_SWEEP) != 0U) {
+        if (!sweep_control_acquire(&sweep_guard, SWEEP_CONTROL_DEFAULT_TIMEOUT)) {
+          shell_write_line("ERR: sweep control unavailable");
+          return;
+        }
       }
       cmd->sc_function((int)argc, argv);
-      if (cmd_flag & CMD_BREAK_SWEEP) {
-        operation_request_clear(OP_CONSOLE);
+      if (sweep_guard.locked) {
+        sweep_control_release(&sweep_guard);
       }
     }
   } else if (command_name && *command_name) {
@@ -2521,7 +2532,7 @@ bool sd_card_load_config(void) {
 
   char* buf = (char*)spi_buffer;
   UINT size = 0;
-
+  char line[VNA_SHELL_MAX_LENGTH];
   uint16_t j = 0, i;
   bool last_was_cr = false;
   while (f_read(config_file, buf, 512, &size) == FR_OK && size > 0) {
@@ -2533,9 +2544,9 @@ bool sd_card_load_config(void) {
           last_was_cr = false;
           continue;
         }
-        shell_line[j] = 0;
+        line[j] = 0;
         if (j > 0) {
-          vna_shell_execute_cmd_line(shell_line);
+          vna_shell_execute_cmd_line(line);
         }
         j = 0;
         last_was_cr = (c == '\r');
@@ -2544,37 +2555,19 @@ bool sd_card_load_config(void) {
       last_was_cr = false;
       if (c < 0x20)
         continue;
-      if (j < VNA_SHELL_MAX_LENGTH - 1)
-        shell_line[j++] = (char)c;
+      if (j < VNA_SHELL_MAX_LENGTH - 1) {
+        line[j++] = (char)c;
+      }
     }
   }
   if (j > 0) {
-    shell_line[j] = 0;
-    vna_shell_execute_cmd_line(shell_line);
+    line[j] = 0;
+    vna_shell_execute_cmd_line(line);
   }
   f_close(config_file);
   return TRUE;
 }
 #endif
-
-static THD_FUNCTION(ShellServiceThread, arg) {
-  (void)arg;
-  chRegSetThreadName("usb");
-  while (true) {
-    if (shell_check_connect()) {
-      shell_printf(VNA_SHELL_NEWLINE_STR "NanoVNA Shell" VNA_SHELL_NEWLINE_STR);
-      do {
-        shell_printf(VNA_SHELL_PROMPT_STR);
-        if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH)) {
-          vna_shell_execute_line(shell_line);
-        } else {
-          chThdSleepMilliseconds(200);
-        }
-      } while (shell_check_connect());
-    }
-    chThdSleepMilliseconds(1000);
-  }
-}
 
 // Main thread stack size defined in makefile USE_PROCESS_STACKSIZE = 0x200
 // Profile stack usage (enable threads command by def ENABLE_THREADS_COMMAND) show:
@@ -2607,9 +2600,6 @@ int app_main(void) {
     }
   }
 
-  measurement_pipeline_init(&measurement_pipeline, drivers);
-  sweep_service_init();
-
   config_service_init();
   event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
                  app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage), app_event_nodes,
@@ -2620,8 +2610,11 @@ int app_main(void) {
   chDbgAssert(dispatcher.slot != NULL, "event dispatcher start failed");
 
   config_service_attach_event_bus(&app_event_bus);
-  shell_attach_event_bus(&app_event_bus);
   ui_attach_event_bus(&app_event_bus);
+  menu_subsystem_init();
+  display_subsystem_init();
+  sweep_subsystem_init(drivers, &app_event_bus);
+  usb_server_subsystem_init(commands, &app_event_bus);
 
   /*
    * restore config and calibration 0 slot from flash memory, also if need use backup data
@@ -2631,12 +2624,6 @@ int app_main(void) {
 #ifdef USE_VARIABLE_OFFSET
   si5351_set_frequency_offset(IF_OFFSET);
 #endif
-  /*
-   * Init Shell console connection data
-   */
-  shell_register_commands(commands);
-  shell_init_connection();
-
   /*
    * tlv320aic Initialize (audio codec)
    */
@@ -2664,8 +2651,8 @@ int app_main(void) {
   /*
    * Startup sweep and shell threads
    */
+  usb_server_subsystem_start();
   chThdCreateStatic(waSweepThread, sizeof(waSweepThread), NORMALPRIO, Thread1, NULL);
-  chThdCreateStatic(waShellThread, sizeof(waShellThread), NORMALPRIO - 1, ShellServiceThread, NULL);
 
   while (true) {
     chThdSleepMilliseconds(1000);

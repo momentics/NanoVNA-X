@@ -314,6 +314,33 @@ void sweep_service_wait_for_generation(void) {
   }
 }
 
+bool sweep_service_is_in_progress(void) {
+  osalSysLock();
+  bool busy = sweep_in_progress;
+  osalSysUnlock();
+  return busy;
+}
+
+bool sweep_service_wait_for_idle(systime_t timeout) {
+  systime_t start_time = chVTGetSystemTimeX();
+  while (true) {
+    osalSysLock();
+    bool busy = sweep_in_progress;
+    osalSysUnlock();
+    if (!busy) {
+      return true;
+    }
+    if (timeout != TIME_INFINITE && timeout != TIME_IMMEDIATE) {
+      if (chVTTimeElapsedSinceX(start_time) >= timeout) {
+        return false;
+      }
+    } else if (timeout == TIME_IMMEDIATE) {
+      return false;
+    }
+    chThdSleepMilliseconds(1);
+  }
+}
+
 bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* snapshot) {
   if (snapshot == NULL || channel >= 2U) {
     return false;

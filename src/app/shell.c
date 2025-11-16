@@ -246,7 +246,20 @@ void shell_service_pending_commands(void) {
     pending_command = NULL;
     osalSysUnlock();
 
-    command->sc_function(argc, argv);
+    bool skip_command = false;
+    sweep_control_handle_t sweep_guard = {.locked = false};
+    if ((command->flags & CMD_BREAK_SWEEP) != 0U) {
+      if (!sweep_control_acquire(&sweep_guard, SWEEP_CONTROL_DEFAULT_TIMEOUT)) {
+        shell_write_line("ERR: sweep control unavailable");
+        skip_command = true;
+      }
+    }
+    if (!skip_command) {
+      command->sc_function(argc, argv);
+    }
+    if (sweep_guard.locked) {
+      sweep_control_release(&sweep_guard);
+    }
 
     osalSysLock();
     osalThreadDequeueNextI(&shell_thread, MSG_OK);
