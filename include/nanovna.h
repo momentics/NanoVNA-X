@@ -52,8 +52,21 @@
 #define __USE_RTC__
 // Add RTC backup registers support
 #define __USE_BACKUP__
+// Feature toggles (set to 1 to enable specific subsystems).
+#ifndef NANOVNA_FEATURE_SD
+#define NANOVNA_FEATURE_SD 0
+#endif
+#ifndef NANOVNA_FEATURE_SD_TIFF
+#define NANOVNA_FEATURE_SD_TIFF 0
+#endif
+#ifndef NANOVNA_FEATURE_SD_BROWSER
+#define NANOVNA_FEATURE_SD_BROWSER 0
+#endif
+
 // Add SD card support, requires RTC for timestamps
+#if NANOVNA_FEATURE_SD
 #define __USE_SD_CARD__
+#endif
 // Use unique serial string for USB
 #define __USB_UID__
 // If enabled serial in halconf.h, possible enable serial console control
@@ -95,17 +108,16 @@
  * Submodules defines
  */
 #ifdef __USE_SD_CARD__
-// Minimal SD support is enabled for all targets; advanced features stay on the H4.
 #define __SD_CARD_LOAD__
-// Allow screenshots in TIFF format
+#if NANOVNA_FEATURE_SD_TIFF
 #define __SD_CARD_DUMP_TIFF__
-// Allow dump firmware to SD card
+#endif
 #define __SD_CARD_DUMP_FIRMWARE__
 #endif
 
-#if defined(__USE_SD_CARD__) && !defined(SD_BROWSER_ENABLED)
+#if defined(__USE_SD_CARD__) && NANOVNA_FEATURE_SD_BROWSER
 #define SD_BROWSER_ENABLED 1
-#elif !defined(SD_BROWSER_ENABLED)
+#else
 #define SD_BROWSER_ENABLED 0
 #endif
 

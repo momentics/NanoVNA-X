@@ -1723,6 +1723,17 @@ static UI_FUNCTION_CALLBACK(menu_sdcard_format_cb) {
 }
 #endif
 
+static UI_FUNCTION_CALLBACK(menu_back_cb) {
+  (void)data;
+  menu_move_back(false);
+}
+
+static const menuitem_t menu_back[] = {
+    {MT_CALLBACK, 0, S_LARROW " BACK", menu_back_cb}, {MT_NEXT, 0, NULL, NULL} // sentinel
+};
+
+#ifdef __USE_SD_CARD__
+
 #if SD_BROWSER_ENABLED
 #define FILE_LOAD_ENTRY(handler) (handler)
 #else
@@ -1824,42 +1835,6 @@ static UI_FUNCTION_CALLBACK(menu_sdcard_cb) {
     ui_mode_keypad(data + KM_S1P_NAME);
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_band_sel_acb) {
-  (void)data;
-  static const char* gen_names[] = {"Si5351", "MS5351", "SWC5351"};
-  if (b) {
-    b->p1.text = gen_names[config._band_mode];
-    return;
-  }
-  if (++config._band_mode >= ARRAY_COUNT(gen_names))
-    config._band_mode = 0;
-  si5351_set_band_mode(config._band_mode);
-  config_service_notify_configuration_changed();
-}
-
-#if STORED_TRACES > 0
-static UI_FUNCTION_ADV_CALLBACK(menu_stored_trace_acb) {
-  if (b) {
-    b->p1.text = get_stored_traces() & (1 << data) ? "CLEAR" : "STORE";
-    return;
-  }
-  toggle_stored_trace(data);
-}
-#endif
-
-//=====================================================================================================
-//                                 UI menus
-//=====================================================================================================
-static UI_FUNCTION_CALLBACK(menu_back_cb) {
-  (void)data;
-  menu_move_back(false);
-}
-
-// Back button submenu list
-static const menuitem_t menu_back[] = {
-    {MT_CALLBACK, 0, S_LARROW " BACK", menu_back_cb}, {MT_NEXT, 0, NULL, NULL} // sentinel
-};
-
 #if SD_BROWSER_ENABLED
 const menuitem_t menu_sdcard_browse[] = {
     {MT_CALLBACK, FMT_BMP_FILE, "LOAD\nSCREENSHOT", menu_sdcard_browse_cb},
@@ -1888,6 +1863,31 @@ static const menuitem_t menu_sdcard[] = {
 #endif
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
+
+#endif /* __USE_SD_CARD__ */
+
+static UI_FUNCTION_ADV_CALLBACK(menu_band_sel_acb) {
+  (void)data;
+  static const char* gen_names[] = {"Si5351", "MS5351", "SWC5351"};
+  if (b) {
+    b->p1.text = gen_names[config._band_mode];
+    return;
+  }
+  if (++config._band_mode >= ARRAY_COUNT(gen_names))
+    config._band_mode = 0;
+  si5351_set_band_mode(config._band_mode);
+  config_service_notify_configuration_changed();
+}
+
+#if STORED_TRACES > 0
+static UI_FUNCTION_ADV_CALLBACK(menu_stored_trace_acb) {
+  if (b) {
+    b->p1.text = get_stored_traces() & (1 << data) ? "CLEAR" : "STORE";
+    return;
+  }
+  toggle_stored_trace(data);
+}
+#endif
 
 static const menuitem_t menu_calop[] = {
     {MT_ADV_CALLBACK, CAL_OPEN, "OPEN", menu_calop_acb},
