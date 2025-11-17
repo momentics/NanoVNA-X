@@ -23,11 +23,6 @@
 #include "app/app_features.h"
 #include "app/application.h"
 #include "app/sweep_service.h"
-#include "app/modules/display_presenter.h"
-#include "app/modules/measurement_engine.h"
-#include "app/modules/menu_controller.h"
-#include "app/modules/usb_command_server.h"
-#include "ui/ui_internal.h"
 
 #include "ch.h"
 #include "hal.h"
@@ -63,30 +58,15 @@ void lcd_set_brightness(uint16_t brightness);
 static event_bus_t app_event_bus;
 static event_bus_subscription_t app_event_slots[8];
 
-static measurement_engine_t measurement_engine;
-static display_presenter_t display_presenter;
-static menu_controller_t menu_controller;
-static usb_command_server_t usb_server;
+#define APP_EVENT_QUEUE_DEPTH 8U
+static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
+static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
 
-#define RUNTIME_THREAD_STACK_SIZE 768
-
-
-
-// The runtime loop now executes on the main thread so that it shares the
-// spacious stack that ChibiOS allocates for the startup context.  The previous
-// implementation moved the loop into a dedicated thread with a very small
-// stack, which caused immediate stack overflows on hardware and resulted in a
-// frozen UI.  Keeping the runtime objects at file scope preserves the API
-// affordances without an extra thread wrapper.
+static measurement_pipeline_t measurement_pipeline;
 
 #ifdef __USE_SD_CARD__
-#if defined(NANOVNA_F303)
-#define SD_BSS_ATTR __attribute__((section(".ram4_clear")))
-#else
-#define SD_BSS_ATTR
-#endif
-static SD_BSS_ATTR FATFS fs_volume_instance;
-static SD_BSS_ATTR FIL fs_file_instance;
+static FATFS fs_volume_instance;
+static FIL fs_file_instance;
 
 FATFS* filesystem_volume(void) {
   return &fs_volume_instance;
@@ -95,7 +75,6 @@ FATFS* filesystem_volume(void) {
 FIL* filesystem_file(void) {
   return &fs_file_instance;
 }
-#undef SD_BSS_ATTR
 #endif
 
 // Shell frequency printf format
@@ -106,7 +85,6 @@ FIL* filesystem_file(void) {
 
 // Shell command line buffer, args, nargs, and function ptr
 static char shell_line[VNA_SHELL_MAX_LENGTH];
-static void console_command_handler(char* line);
 
 #if ENABLED_DUMP_COMMAND
 static void cmd_dump(int argc, char* argv[]);
@@ -156,6 +134,15 @@ uint8_t sweep_mode = SWEEP_ENABLE;
 // Sweep measured data
 float measured[2][SWEEP_POINTS_MAX][2];
 
+static int16_t battery_last_mv = INT16_MIN;
+static systime_t battery_next_sample = 0;
+
+#ifndef VBAT_MEASURE_INTERVAL
+#define BATTERY_REDRAW_INTERVAL S2ST(5)
+#else
+#define BATTERY_REDRAW_INTERVAL VBAT_MEASURE_INTERVAL
+#endif
+
 // Version text, displayed in Config->Version menu, also send by info command
 const char* info_about[] = {
     "Board: " BOARD_NAME, "NanoVNA-X maintainer: @momentics <momentics@gmail.com>",
@@ -196,92 +183,72 @@ void my_debug_log(int offs, char* log) {
 #define DEBUG_LOG(offs, text)
 #endif
 
-static bool runtime_measurement_is_enabled(void* context) {
-  (void)context;
-  return (sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) != 0U;
-}
-
-static void runtime_measurement_cycle_started(void* context, uint16_t channel_mask) {
-  (void)context;
-  (void)channel_mask;
-  sweep_mode &= (uint8_t)~SWEEP_ONCE;
-}
-
-static void runtime_measurement_cycle_completed(void* context,
-                                                const measurement_cycle_result_t* result) {
-  (void)context;
-  (void)result;
-}
-
-static uint16_t runtime_read_battery(void* context) {
-  (void)context;
-  return adc_vbat_read();
-}
-
-static void runtime_request_redraw(void* context, uint16_t area) {
-  (void)context;
-  request_to_redraw(area);
-}
-
-static void runtime_draw_all(void* context) {
-  (void)context;
-#ifndef DEBUG_CONSOLE_SHOW
-  draw_all();
-#endif
-}
-
-static void runtime_plot_init(void* context) {
-  (void)context;
-  plot_init();
-}
-
-static void runtime_ui_init(void* context) {
-  (void)context;
-  ui_init();
-}
-
-static void runtime_ui_process(void* context) {
-  (void)context;
-  ui_process();
-}
-
-static bool runtime_should_flip(void* context) {
-  (void)context;
-#ifdef __FLIP_DISPLAY__
-  return VNA_MODE(VNA_MODE_FLIP_DISPLAY) != 0;
-#else
-  return false;
-#endif
-}
-
-static void runtime_set_flip(void* context, bool enable) {
-  (void)context;
-#ifdef __FLIP_DISPLAY__
-  lcd_set_flip(enable);
-#else
-  (void)enable;
-#endif
-}
-
-static void runtime_service_cycle(void) {
-  usb_command_server_service(&usb_server);
-  const measurement_cycle_result_t* runtime_cycle =
-      measurement_engine_execute(&measurement_engine, true);
-  menu_controller_process(&menu_controller);
-  display_presenter_render(&display_presenter, runtime_cycle);
-  state_manager_service();
-  while (event_bus_dispatch(&app_event_bus, TIME_IMMEDIATE)) {
+static void schedule_battery_redraw(void) {
+  systime_t now = chVTGetSystemTimeX();
+  if ((int32_t)(now - battery_next_sample) < 0) {
+    return;
   }
+  battery_next_sample = now + BATTERY_REDRAW_INTERVAL;
+  int16_t vbat = adc_vbat_read();
+  if (vbat == battery_last_mv) {
+    return;
+  }
+  battery_last_mv = vbat;
+  request_to_redraw(REDRAW_BATTERY);
 }
 
-static THD_FUNCTION(RuntimeThread, arg) {
+static THD_WORKING_AREA(waThread1, 768);
+static THD_FUNCTION(Thread1, arg) {
   (void)arg;
-  chRegSetThreadName("runtime");
-  while (true) {
-    runtime_service_cycle();
+  chRegSetThreadName("sweep");
+#ifdef __FLIP_DISPLAY__
+  if (VNA_MODE(VNA_MODE_FLIP_DISPLAY))
+    lcd_set_flip(true);
+#endif
+  /*
+   * UI (menu, touch, buttons) and plot initialize
+   */
+  ui_init();
+  // Initialize graph plotting
+  plot_init();
+  while (1) {
+    bool completed = false;
+    uint16_t mask = measurement_pipeline_active_mask(&measurement_pipeline);
+    if (sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) {
+      sweep_service_wait_for_copy_release();
+      sweep_service_begin_measurement();
+      event_bus_publish(&app_event_bus, EVENT_SWEEP_STARTED, &mask);
+      completed = measurement_pipeline_execute(&measurement_pipeline, true, mask);
+      sweep_mode &= ~SWEEP_ONCE;
+      sweep_service_end_measurement();
+    } else {
+      sweep_service_end_measurement();
+      __WFI();
+    }
+    shell_service_pending_commands();
+    // Process UI inputs
+    sweep_mode |= SWEEP_UI_MODE;
+    ui_process();
+    sweep_mode &= ~SWEEP_UI_MODE;
+    // Process collected data, calculate trace coordinates and plot only if scan completed
+    if (completed) {
+      sweep_service_increment_generation();
+      event_bus_publish(&app_event_bus, EVENT_SWEEP_COMPLETED, &mask);
+      //      START_PROFILE
+      if ((props_mode & DOMAIN_MODE) == DOMAIN_TIME)
+        app_measurement_transform_domain(mask);
+      //      STOP_PROFILE;
+      // Prepare draw graphics, cache all lines, mark screen cells for redraw
+      request_to_redraw(REDRAW_PLOT);
+    }
+    schedule_battery_redraw();
+#ifndef DEBUG_CONSOLE_SHOW
+    // plot trace and other indications as raster
+    draw_all();
+#endif
+    state_manager_service();
   }
 }
-
 
 void pause_sweep(void) {
   sweep_mode &= ~SWEEP_ENABLE;
@@ -2485,17 +2452,21 @@ static void vna_shell_execute_line(char* line) {
   const char* command_name = NULL;
   const VNAShellCommand* cmd = shell_parse_command(line, &argc, &argv, &command_name);
   if (cmd) {
-    shell_request_deferred_execution(cmd, argc, argv);
+    uint16_t cmd_flag = cmd->flags;
+    if ((cmd_flag & CMD_RUN_IN_UI) && (sweep_mode & SWEEP_UI_MODE)) {
+      cmd_flag &= (uint16_t)~CMD_WAIT_MUTEX;
+    }
+    if (cmd_flag & CMD_BREAK_SWEEP) {
+      operation_requested |= OP_CONSOLE;
+    }
+    if (cmd_flag & CMD_WAIT_MUTEX) {
+      shell_request_deferred_execution(cmd, argc, argv);
+    } else {
+      cmd->sc_function((int)argc, argv);
+    }
   } else if (command_name && *command_name) {
     shell_printf("%s?" VNA_SHELL_NEWLINE_STR, command_name);
   }
-}
-
-static void console_command_handler(char* line) {
-  if (line == NULL) {
-    return;
-  }
-  vna_shell_execute_line(line);
 }
 
 #ifdef __SD_CARD_LOAD__
@@ -2548,11 +2519,29 @@ bool sd_card_load_config(void) {
 }
 #endif
 
+#ifdef VNA_SHELL_THREAD
+static THD_WORKING_AREA(waThread2, /* cmd_* max stack size + alpha */ 442);
+THD_FUNCTION(myshellThread, p) {
+  (void)p;
+  chRegSetThreadName("shell");
+  while (true) {
+    shell_printf(VNA_SHELL_PROMPT_STR);
+    if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH))
+      vna_shell_execute_line(shell_line);
+    else // Putting a delay in order to avoid an endless loop trying to read an unavailable stream.
+      chThdSleepMilliseconds(100);
+  }
+}
+#endif
+
 // Main thread stack size defined in makefile USE_PROCESS_STACKSIZE = 0x200
 // Profile stack usage (enable threads command by def ENABLE_THREADS_COMMAND) show:
 // Stack maximum usage = 472 bytes (need test more and run all commands), free stack = 40 bytes
 //
 int app_main(void) {
+  /*
+   * Initialize ChibiOS systems
+   */
   halInit();
   chSysInit();
 
@@ -2576,10 +2565,13 @@ int app_main(void) {
     }
   }
 
+  measurement_pipeline_init(&measurement_pipeline, drivers);
+  sweep_service_init();
+
   config_service_init();
-  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots), NULL, 0, NULL, 0);
-  config_service_attach_event_bus(&app_event_bus);
-  ui_attach_event_bus(&app_event_bus);
+  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
+                 app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage),
+                 app_event_nodes, ARRAY_COUNT(app_event_nodes));
 
   /*
    * restore config and calibration 0 slot from flash memory, also if need use backup data
@@ -2589,45 +2581,11 @@ int app_main(void) {
 #ifdef USE_VARIABLE_OFFSET
   si5351_set_frequency_offset(IF_OFFSET);
 #endif
-
-  measurement_engine_config_t measurement_cfg = {
-      .drivers = drivers,
-      .event_bus = &app_event_bus,
-      .port =
-          {
-              .context = NULL,
-              .is_sweep_enabled = runtime_measurement_is_enabled,
-              .on_cycle_started = runtime_measurement_cycle_started,
-              .on_cycle_completed = runtime_measurement_cycle_completed,
-          },
-  };
-  measurement_engine_init(&measurement_engine, &measurement_cfg);
-
-  menu_controller_port_t menu_port = {
-      .context = NULL,
-      .ui_init = runtime_ui_init,
-      .ui_process = runtime_ui_process,
-      .should_flip_display = runtime_should_flip,
-      .set_display_flip = runtime_set_flip,
-  };
-  menu_controller_init(&menu_controller, &menu_port);
-
-  display_presenter_port_t display_port = {
-      .context = NULL,
-      .read_battery_mv = runtime_read_battery,
-      .request_redraw = runtime_request_redraw,
-      .draw_all = runtime_draw_all,
-      .plot_init = runtime_plot_init,
-  };
-  display_presenter_init(&display_presenter, &display_port);
-
-  usb_command_server_config_t usb_cfg = {
-      .context = NULL,
-      .command_table = commands,
-      .event_bus = &app_event_bus,
-      .handler = console_command_handler,
-  };
-  usb_command_server_init(&usb_server, &usb_cfg);
+  /*
+   * Init Shell console connection data
+   */
+  shell_register_commands(commands);
+  shell_init_connection();
 
   /*
    * tlv320aic Initialize (audio codec)
@@ -2653,13 +2611,31 @@ int app_main(void) {
    */
   i2c_set_timings(STM32_I2C_TIMINGR);
 
-  usb_command_server_start(&usb_server);
-  size_t runtime_stack = THD_WORKING_AREA_SIZE(RUNTIME_THREAD_STACK_SIZE);
-  thread_t* runtime_thread =
-      chThdCreateFromHeap(NULL, runtime_stack, "runtime", NORMALPRIO - 1, RuntimeThread, NULL);
-  chDbgAssert(runtime_thread != NULL, "runtime thread alloc failed");
+  /*
+   * Startup sweep thread
+   */
+  chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO - 1, Thread1, NULL);
 
-  while (true) {
+  while (1) {
+    if (shell_check_connect()) {
+      shell_printf(VNA_SHELL_NEWLINE_STR "NanoVNA Shell" VNA_SHELL_NEWLINE_STR);
+#ifdef VNA_SHELL_THREAD
+#if CH_CFG_USE_WAITEXIT == FALSE
+#error "VNA_SHELL_THREAD use chThdWait, need enable CH_CFG_USE_WAITEXIT in chconf.h"
+#endif
+      thread_t* shelltp =
+          chThdCreateStatic(waThread2, sizeof(waThread2), NORMALPRIO + 1, myshellThread, NULL);
+      chThdWait(shelltp);
+#else
+      do {
+        shell_printf(VNA_SHELL_PROMPT_STR);
+        if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH))
+          vna_shell_execute_line(shell_line);
+        else
+          chThdSleepMilliseconds(200);
+      } while (shell_check_connect());
+#endif
+    }
     chThdSleepMilliseconds(1000);
   }
 }
@@ -2779,5 +2755,3 @@ VNA_SHELL_FUNCTION(cmd_dump) {
   }
 }
 #endif
-// Dedicated sweep/UI/USB worker thread settings.
-#define RUNTIME_THREAD_STACK_SIZE 768
