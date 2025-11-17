@@ -239,7 +239,14 @@ static THD_FUNCTION(Thread1, arg) {
           measurement_port->api->end_measurement != NULL) {
         measurement_port->api->end_measurement();
       }
-      __WFI();
+      bool usb_work_pending = false;
+      if (usb_port != NULL && usb_port->api != NULL &&
+          usb_port->api->has_pending_io != NULL) {
+        usb_work_pending = usb_port->api->has_pending_io();
+      }
+      if (!usb_work_pending) {
+        __WFI();
+      }
     }
     if (usb_port != NULL && usb_port->api != NULL &&
         usb_port->api->process_pending_commands != NULL) {

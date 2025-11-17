@@ -17,6 +17,7 @@ typedef struct {
   void (*register_commands)(const VNAShellCommand* table);
   void (*init_connection)(void);
   void (*process_pending_commands)(void);
+  bool (*has_pending_io)(void);
   bool (*check_connection)(void);
   int (*read_line)(char* buffer, int max_size);
   void (*execute_cmd_line)(char* line);

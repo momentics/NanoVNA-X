@@ -17,9 +17,14 @@
 #ifndef _USBCFG_H_
 #define _USBCFG_H_
 
+#include <stdbool.h>
+
 extern const USBConfig usbcfg;
 extern SerialUSBConfig serusbcfg;
 extern SerialUSBDriver SDU1;
+
+bool usb_console_is_ready(void);
+bool usb_console_rx_has_data(void);
 
 #endif /* _USBCFG_H_ */
 
