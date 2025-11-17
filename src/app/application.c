@@ -68,6 +68,10 @@ static display_presenter_t display_presenter;
 static menu_controller_t menu_controller;
 static usb_command_server_t usb_server;
 
+#define RUNTIME_THREAD_STACK_SIZE 768
+
+
+
 // The runtime loop now executes on the main thread so that it shares the
 // spacious stack that ChibiOS allocates for the startup context.  The previous
 // implementation moved the loop into a dedicated thread with a very small
@@ -270,8 +274,6 @@ static void runtime_service_cycle(void) {
   }
 }
 
-#define RUNTIME_THREAD_STACK_SIZE 544
-static THD_WORKING_AREA(waRuntimeThread, RUNTIME_THREAD_STACK_SIZE);
 static THD_FUNCTION(RuntimeThread, arg) {
   (void)arg;
   chRegSetThreadName("runtime");
@@ -2652,8 +2654,10 @@ int app_main(void) {
   i2c_set_timings(STM32_I2C_TIMINGR);
 
   usb_command_server_start(&usb_server);
-  chThdCreateStatic(waRuntimeThread, sizeof(waRuntimeThread), NORMALPRIO - 1, RuntimeThread,
-                    NULL);
+  size_t runtime_stack = THD_WORKING_AREA_SIZE(RUNTIME_THREAD_STACK_SIZE);
+  thread_t* runtime_thread =
+      chThdCreateFromHeap(NULL, runtime_stack, "runtime", NORMALPRIO - 1, RuntimeThread, NULL);
+  chDbgAssert(runtime_thread != NULL, "runtime thread alloc failed");
 
   while (true) {
     chThdSleepMilliseconds(1000);
@@ -2775,3 +2779,5 @@ VNA_SHELL_FUNCTION(cmd_dump) {
   }
 }
 #endif
+// Dedicated sweep/UI/USB worker thread settings.
+#define RUNTIME_THREAD_STACK_SIZE 768
