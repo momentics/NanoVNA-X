@@ -43,7 +43,7 @@ endif
 
 # Enable this if you want link time optimizations (LTO)
 ifeq ($(USE_LTO),)
-  USE_LTO = no
+  USE_LTO = yes
 endif
 
 # If enabled, this option allows to compile the application in THUMB mode.
@@ -180,6 +180,10 @@ CSRC = $(STARTUPSRC) \
        src/app/application.c \
        src/app/sweep_service.c \
        src/app/shell.c \
+       src/app/modules/measurement/measurement_module.c \
+       src/app/modules/processing/processing_module.c \
+       src/app/modules/ui/ui_module.c \
+       src/app/modules/usb/usb_module.c \
        src/core/common.c \
        src/drivers/si5351.c \
        src/drivers/tlv320aic3204.c \

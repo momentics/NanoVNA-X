@@ -22,6 +22,10 @@
 
 #include "app/app_features.h"
 #include "app/application.h"
+#include "app/modules/measurement.h"
+#include "app/modules/processing.h"
+#include "app/modules/ui.h"
+#include "app/modules/usb.h"
 #include "app/sweep_service.h"
 
 #include "ch.h"
@@ -63,6 +67,15 @@ static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
 static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
 
 static measurement_pipeline_t measurement_pipeline;
+static measurement_module_t measurement_module;
+static processing_module_t processing_module;
+static ui_module_t ui_subsystem;
+static usb_server_module_t usb_server_module;
+
+static const measurement_port_t* measurement_port = NULL;
+static const processing_port_t* processing_port = NULL;
+static const ui_port_t* ui_port = NULL;
+static const usb_server_port_t* usb_port = NULL;
 
 #ifdef __USE_SD_CARD__
 static FATFS fs_volume_instance;
@@ -134,14 +147,6 @@ uint8_t sweep_mode = SWEEP_ENABLE;
 // Sweep measured data
 float measured[2][SWEEP_POINTS_MAX][2];
 
-static int16_t battery_last_mv = INT16_MIN;
-static systime_t battery_next_sample = 0;
-
-#ifndef VBAT_MEASURE_INTERVAL
-#define BATTERY_REDRAW_INTERVAL S2ST(5)
-#else
-#define BATTERY_REDRAW_INTERVAL VBAT_MEASURE_INTERVAL
-#endif
 
 // Version text, displayed in Config->Version menu, also send by info command
 const char* info_about[] = {
@@ -183,20 +188,6 @@ void my_debug_log(int offs, char* log) {
 #define DEBUG_LOG(offs, text)
 #endif
 
-static void schedule_battery_redraw(void) {
-  systime_t now = chVTGetSystemTimeX();
-  if ((int32_t)(now - battery_next_sample) < 0) {
-    return;
-  }
-  battery_next_sample = now + BATTERY_REDRAW_INTERVAL;
-  int16_t vbat = adc_vbat_read();
-  if (vbat == battery_last_mv) {
-    return;
-  }
-  battery_last_mv = vbat;
-  request_to_redraw(REDRAW_BATTERY);
-}
-
 static THD_WORKING_AREA(waThread1, 768);
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
@@ -208,45 +199,87 @@ static THD_FUNCTION(Thread1, arg) {
   /*
    * UI (menu, touch, buttons) and plot initialize
    */
-  ui_init();
-  // Initialize graph plotting
-  plot_init();
+  if (ui_port != NULL && ui_port->api != NULL && ui_port->api->ui_init != NULL) {
+    ui_port->api->ui_init();
+  }
+  if (ui_port != NULL && ui_port->api != NULL && ui_port->api->plot_init != NULL) {
+    ui_port->api->plot_init();
+  }
   while (1) {
     bool completed = false;
-    uint16_t mask = measurement_pipeline_active_mask(&measurement_pipeline);
+    uint16_t mask = 0;
+    if (measurement_port != NULL && measurement_port->api != NULL &&
+        measurement_port->api->active_mask != NULL && measurement_port->pipeline != NULL) {
+      mask = measurement_port->api->active_mask(measurement_port->pipeline);
+    }
     if (sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) {
-      sweep_service_wait_for_copy_release();
-      sweep_service_begin_measurement();
-      event_bus_publish(&app_event_bus, EVENT_SWEEP_STARTED, &mask);
-      completed = measurement_pipeline_execute(&measurement_pipeline, true, mask);
+      if (measurement_port != NULL && measurement_port->api != NULL &&
+          measurement_port->api->wait_for_copy_release != NULL) {
+        measurement_port->api->wait_for_copy_release();
+      }
+      if (measurement_port != NULL && measurement_port->api != NULL &&
+          measurement_port->api->begin_measurement != NULL) {
+        measurement_port->api->begin_measurement();
+      }
+      if (processing_port != NULL && processing_port->api != NULL &&
+          processing_port->api->publish != NULL && processing_port->bus != NULL) {
+        processing_port->api->publish(processing_port->bus, EVENT_SWEEP_STARTED, &mask);
+      }
+      if (measurement_port != NULL && measurement_port->api != NULL &&
+          measurement_port->api->execute != NULL && measurement_port->pipeline != NULL) {
+        completed = measurement_port->api->execute(measurement_port->pipeline, true, mask);
+      }
       sweep_mode &= ~SWEEP_ONCE;
-      sweep_service_end_measurement();
+      if (measurement_port != NULL && measurement_port->api != NULL &&
+          measurement_port->api->end_measurement != NULL) {
+        measurement_port->api->end_measurement();
+      }
     } else {
-      sweep_service_end_measurement();
+      if (measurement_port != NULL && measurement_port->api != NULL &&
+          measurement_port->api->end_measurement != NULL) {
+        measurement_port->api->end_measurement();
+      }
       __WFI();
     }
-    shell_service_pending_commands();
+    if (usb_port != NULL && usb_port->api != NULL &&
+        usb_port->api->process_pending_commands != NULL) {
+      usb_port->api->process_pending_commands();
+    }
     // Process UI inputs
     sweep_mode |= SWEEP_UI_MODE;
-    ui_process();
+    if (ui_port != NULL && ui_port->api != NULL && ui_port->api->process != NULL) {
+      ui_port->api->process();
+    }
     sweep_mode &= ~SWEEP_UI_MODE;
     // Process collected data, calculate trace coordinates and plot only if scan completed
     if (completed) {
-      sweep_service_increment_generation();
-      event_bus_publish(&app_event_bus, EVENT_SWEEP_COMPLETED, &mask);
-      //      START_PROFILE
-      if ((props_mode & DOMAIN_MODE) == DOMAIN_TIME)
-        app_measurement_transform_domain(mask);
-      //      STOP_PROFILE;
-      // Prepare draw graphics, cache all lines, mark screen cells for redraw
-      request_to_redraw(REDRAW_PLOT);
+      if (measurement_port != NULL && measurement_port->api != NULL &&
+          measurement_port->api->increment_generation != NULL) {
+        measurement_port->api->increment_generation();
+      }
+      if (processing_port != NULL && processing_port->api != NULL &&
+          processing_port->api->publish != NULL && processing_port->bus != NULL) {
+        processing_port->api->publish(processing_port->bus, EVENT_SWEEP_COMPLETED, &mask);
+      }
+      if ((props_mode & DOMAIN_MODE) == DOMAIN_TIME && processing_port != NULL &&
+          processing_port->api != NULL && processing_port->api->transform_domain != NULL) {
+        processing_port->api->transform_domain(mask);
+      }
+      if (processing_port != NULL && processing_port->api != NULL &&
+          processing_port->api->request_redraw != NULL) {
+        processing_port->api->request_redraw(REDRAW_PLOT);
+      }
     }
-    schedule_battery_redraw();
-#ifndef DEBUG_CONSOLE_SHOW
-    // plot trace and other indications as raster
-    draw_all();
-#endif
-    state_manager_service();
+    if (ui_port != NULL && ui_port->api != NULL && ui_port->api->schedule_battery_redraw != NULL) {
+      ui_port->api->schedule_battery_redraw();
+    }
+    if (ui_port != NULL && ui_port->api != NULL && ui_port->api->draw != NULL) {
+      ui_port->api->draw();
+    }
+    if (processing_port != NULL && processing_port->api != NULL &&
+        processing_port->api->state_service != NULL) {
+      processing_port->api->state_service();
+    }
   }
 }
 
@@ -2497,7 +2530,12 @@ bool sd_card_load_config(void) {
         }
         shell_line[j] = 0;
         if (j > 0) {
+        if (usb_port != NULL && usb_port->api != NULL &&
+            usb_port->api->execute_cmd_line != NULL) {
+          usb_port->api->execute_cmd_line(shell_line);
+        } else {
           vna_shell_execute_cmd_line(shell_line);
+        }
         }
         j = 0;
         last_was_cr = (c == '\r');
@@ -2512,7 +2550,11 @@ bool sd_card_load_config(void) {
   }
   if (j > 0) {
     shell_line[j] = 0;
-    vna_shell_execute_cmd_line(shell_line);
+    if (usb_port != NULL && usb_port->api != NULL && usb_port->api->execute_cmd_line != NULL) {
+      usb_port->api->execute_cmd_line(shell_line);
+    } else {
+      vna_shell_execute_cmd_line(shell_line);
+    }
   }
   f_close(config_file);
   return TRUE;
@@ -2567,11 +2609,19 @@ int app_main(void) {
 
   measurement_pipeline_init(&measurement_pipeline, drivers);
   sweep_service_init();
+  measurement_module_init(&measurement_module, &measurement_pipeline);
+  measurement_port = measurement_module_port(&measurement_module);
 
   config_service_init();
   event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
                  app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage),
                  app_event_nodes, ARRAY_COUNT(app_event_nodes));
+  processing_module_init(&processing_module, &app_event_bus);
+  processing_port = processing_module_port(&processing_module);
+  ui_module_init(&ui_subsystem);
+  ui_port = ui_module_port(&ui_subsystem);
+  usb_server_module_init(&usb_server_module);
+  usb_port = usb_server_module_port(&usb_server_module);
 
   /*
    * restore config and calibration 0 slot from flash memory, also if need use backup data
@@ -2584,8 +2634,14 @@ int app_main(void) {
   /*
    * Init Shell console connection data
    */
-  shell_register_commands(commands);
-  shell_init_connection();
+  if (usb_port != NULL && usb_port->api != NULL && usb_port->api->register_commands != NULL &&
+      usb_port->api->init_connection != NULL) {
+    usb_port->api->register_commands(commands);
+    usb_port->api->init_connection();
+  } else {
+    shell_register_commands(commands);
+    shell_init_connection();
+  }
 
   /*
    * tlv320aic Initialize (audio codec)
@@ -2617,8 +2673,18 @@ int app_main(void) {
   chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO - 1, Thread1, NULL);
 
   while (1) {
-    if (shell_check_connect()) {
-      shell_printf(VNA_SHELL_NEWLINE_STR "NanoVNA Shell" VNA_SHELL_NEWLINE_STR);
+    bool connected = false;
+    if (usb_port != NULL && usb_port->api != NULL && usb_port->api->check_connection != NULL) {
+      connected = usb_port->api->check_connection();
+    } else {
+      connected = shell_check_connect();
+    }
+    if (connected) {
+      usb_server_printf_fn_t printf_fn =
+          (usb_port != NULL && usb_port->api != NULL && usb_port->api->printf_fn != NULL)
+              ? usb_port->api->printf_fn
+              : shell_printf;
+      printf_fn(VNA_SHELL_NEWLINE_STR "NanoVNA Shell" VNA_SHELL_NEWLINE_STR);
 #ifdef VNA_SHELL_THREAD
 #if CH_CFG_USE_WAITEXIT == FALSE
 #error "VNA_SHELL_THREAD use chThdWait, need enable CH_CFG_USE_WAITEXIT in chconf.h"
@@ -2628,12 +2694,23 @@ int app_main(void) {
       chThdWait(shelltp);
 #else
       do {
-        shell_printf(VNA_SHELL_PROMPT_STR);
-        if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH))
+        printf_fn(VNA_SHELL_PROMPT_STR);
+        int read_ok = 0;
+        if (usb_port != NULL && usb_port->api != NULL && usb_port->api->read_line != NULL) {
+          read_ok = usb_port->api->read_line(shell_line, VNA_SHELL_MAX_LENGTH);
+        } else {
+          read_ok = vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH);
+        }
+        if (read_ok)
           vna_shell_execute_line(shell_line);
         else
           chThdSleepMilliseconds(200);
-      } while (shell_check_connect());
+        if (usb_port != NULL && usb_port->api != NULL && usb_port->api->check_connection != NULL) {
+          connected = usb_port->api->check_connection();
+        } else {
+          connected = shell_check_connect();
+        }
+      } while (connected);
 #endif
     }
     chThdSleepMilliseconds(1000);
