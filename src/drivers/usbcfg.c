@@ -378,7 +378,7 @@ static bool usb_request_hook(USBDriver* usbp) {
 }
 
 bool usb_console_is_ready(void) {
-  return (chnGetFlags((BaseAsynchronousChannel*)&SDU1) & CHN_CONNECTED) != 0U;
+  return SDU1.state == SDU_READY;
 }
 
 bool usb_console_is_configured(void) {
@@ -390,6 +390,9 @@ bool usb_console_dtr_active(void) {
 }
 
 bool usb_console_rx_has_data(void) {
+  if (!usb_console_is_ready()) {
+    return false;
+  }
   bool pending = false;
   osalSysLock();
   pending = (SDU1.ibqueue.ptr != NULL) || (SDU1.ibqueue.bcounter != 0U);

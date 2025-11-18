@@ -72,7 +72,7 @@ static bool shell_usb_ready(void) {
   if (!shell_stream_is_usb()) {
     return true;
   }
-  return (chnGetFlags((BaseAsynchronousChannel*)&SDU1) & CHN_CONNECTED) != 0U;
+  return SDU1.state == SDU_READY;
 }
 
 static void shell_write(const void* buf, size_t size) {
