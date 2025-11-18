@@ -60,48 +60,29 @@ static void shell_reset_line_state(void) {
   shell_line_length = 0;
 }
 
-static void shell_prepare_line_buffer(char* line, int max_size) {
-  (void)max_size;
+static void shell_prepare_line_buffer(char* line) {
   if (shell_line_buffer != line) {
     shell_line_buffer = line;
     shell_line_length = 0;
   }
 }
 
-static bool shell_usb_ready(void) {
-  if (!shell_stream_is_usb()) {
-    return true;
-  }
-  return SDU1.state == SDU_READY;
-}
-
 static void shell_write(const void* buf, size_t size) {
-  if (shell_stream == NULL || buf == NULL || size == 0) {
-    return;
-  }
-  if (!shell_usb_ready()) {
+  if (shell_stream == NULL || buf == NULL) {
     return;
   }
   streamWrite(shell_stream, buf, size);
 }
 
 static size_t shell_read(void* buf, size_t size) {
-  if (shell_stream == NULL || buf == NULL || size == 0) {
-    return 0;
-  }
-  if (!shell_usb_ready()) {
+  if (shell_stream == NULL || buf == NULL) {
     return 0;
   }
   return streamRead(shell_stream, buf, size);
 }
 
-
-
 int shell_printf(const char* fmt, ...) {
   if (shell_stream == NULL) {
-    return 0;
-  }
-  if (!shell_usb_ready()) {
     return 0;
   }
   va_list ap;
@@ -320,10 +301,10 @@ int vna_shell_read_line(char* line, int max_size) {
   if (line == NULL || max_size <= 0) {
     return 0;
   }
-  shell_prepare_line_buffer(line, max_size);
-  const uint16_t max_chars = (uint16_t)((max_size > 0) ? (max_size - 1) : 0);
+  shell_prepare_line_buffer(line);
+  uint16_t j = shell_line_length;
   uint8_t c = 0;
-  while (shell_read(&c, 1) == 1) {
+  while (shell_read(&c, 1)) {
     if (shell_skip_linefeed) {
       shell_skip_linefeed = false;
       if (c == '\n') {
@@ -331,28 +312,26 @@ int vna_shell_read_line(char* line, int max_size) {
       }
     }
     if (c == 0x08 || c == 0x7F) {
-      if (shell_line_length > 0) {
-        shell_line_length--;
+      if (j > 0) {
         shell_write(backspace, sizeof backspace);
+        j--;
+        shell_line_length = j;
       }
       continue;
     }
     if (c == '\r' || c == '\n') {
       shell_skip_linefeed = (c == '\r');
       shell_printf(VNA_SHELL_NEWLINE_STR);
-      if (shell_line_buffer != NULL) {
-        shell_line_buffer[shell_line_length] = 0;
-      }
+      line[j] = 0;
       shell_line_length = 0;
       return 1;
     }
-    if (c < ' ' || shell_line_length >= max_chars) {
+    if (c < ' ' || j >= (uint16_t)(max_size - 1)) {
       continue;
     }
     shell_write(&c, 1);
-    if (shell_line_buffer != NULL) {
-      shell_line_buffer[shell_line_length++] = (char)c;
-    }
+    line[j++] = (char)c;
+    shell_line_length = j;
   }
   return 0;
 }

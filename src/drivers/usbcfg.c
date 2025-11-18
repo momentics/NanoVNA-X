@@ -17,6 +17,17 @@
 #include "hal.h"
 #include "nanovna.h"
 
+#define CDC_CONTROL_LINE_STATE_DTR 0x0001U
+#define CDC_CONTROL_LINE_STATE_RTS 0x0002U
+
+static volatile bool usb_console_configured = false;
+static volatile bool usb_console_line_active = false;
+
+static inline void usb_console_reset_state(void) {
+  usb_console_configured = false;
+  usb_console_line_active = false;
+}
+
 /* Virtual serial port over USB.*/
 SerialUSBDriver SDU1;
 
@@ -338,10 +349,13 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
   chSysLockFromISR();
   switch (event) {
   case USB_EVENT_RESET:
+    usb_console_reset_state();
     break;
   case USB_EVENT_ADDRESS:
     break;
   case USB_EVENT_CONFIGURED:
+    usb_console_configured = true;
+    usb_console_line_active = true;
     /* Enables the endpoints specified into the configuration.
        Note, this callback is invoked from an ISR so I-Class functions
        must be used.*/
@@ -353,6 +367,7 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
   case USB_EVENT_SUSPEND:
     /* Disconnection event on suspend.*/
     sduDisconnectI(&SDU1);
+    usb_console_reset_state();
     break;
   case USB_EVENT_WAKEUP:
     break;
@@ -373,20 +388,27 @@ static void sof_handler(USBDriver* usbp) {
   osalSysUnlockFromISR();
 }
 
-static bool usb_request_hook(USBDriver* usbp) {
-  return sduRequestsHook(usbp);
-}
+/*
+ * USB driver configuration.
+ */
+const USBConfig usbcfg = {usb_event, get_descriptor, sduRequestsHook, sof_handler};
+
+/*
+ * Serial over USB driver configuration.
+ */
+const SerialUSBConfig serusbcfg = {&USBD1, USBD1_DATA_REQUEST_EP, USBD1_DATA_AVAILABLE_EP,
+                                   USBD1_INTERRUPT_REQUEST_EP};
 
 bool usb_console_is_ready(void) {
-  return SDU1.state == SDU_READY;
+  return usb_console_configured && usb_console_line_active;
 }
 
 bool usb_console_is_configured(void) {
-  return usb_console_is_ready();
+  return usb_console_configured;
 }
 
 bool usb_console_dtr_active(void) {
-  return usb_console_is_ready();
+  return usb_console_line_active;
 }
 
 bool usb_console_rx_has_data(void) {
@@ -399,14 +421,3 @@ bool usb_console_rx_has_data(void) {
   osalSysUnlock();
   return pending;
 }
-
-/*
- * USB driver configuration.
- */
-const USBConfig usbcfg = {usb_event, get_descriptor, usb_request_hook, sof_handler};
-
-/*
- * Serial over USB driver configuration.
- */
-const SerialUSBConfig serusbcfg = {&USBD1, USBD1_DATA_REQUEST_EP, USBD1_DATA_AVAILABLE_EP,
-                                   USBD1_INTERRUPT_REQUEST_EP};
