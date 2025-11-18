@@ -742,12 +742,12 @@ extern const uint8_t x11x14_bits[];
 #define sFONT_GET_WIDTH(ch)  (14-(x11x14_bits[(ch-sFONT_START_CHAR)*2*sFONT_GET_HEIGHT+1]&0x7))
 #endif
 
+// Font type defines
+enum {FONT_SMALL = 0, FONT_NORMAL};
 #if _USE_FONT_ != _USE_SMALL_FONT_
- // Font type defines
- enum {FONT_SMALL = 0, FONT_NORMAL};
- void    lcd_set_font(int type);
+void lcd_set_font(int type);
 #else
- #define lcd_set_font(type) {}
+#define lcd_set_font(type) (void)(type)
 #endif
 
 extern const uint8_t numfont16x22[];
