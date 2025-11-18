@@ -195,7 +195,7 @@ static systime_t battery_next_sample = 0;
 
 // Version text, displayed in Config->Version menu, also send by info command
 const char* const info_about[] = {
-    "Board: " BOARD_NAME, "NanoVNA-X maintainer: @momentics <momentics@gmail.com>",
+    "Board: " BOARD_NAME, "Maintainer: @momentics <momentics@gmail.com>",
     "Version: " NANOVNA_VERSION_STRING " ["
     "p:" define_to_STR(
         SWEEP_POINTS_MAX) ", "
@@ -263,7 +263,8 @@ static void app_measurement_handle_result(measurement_engine_port_t* port,
 
 static void app_measurement_service_loop(measurement_engine_port_t* port) {
   (void)port;
-  shell_service_pending_commands();
+  while (event_bus_dispatch(&app_event_bus)) {
+  }
   sweep_mode |= SWEEP_UI_MODE;
   ui_port.api->process();
   sweep_mode &= (uint8_t)~SWEEP_UI_MODE;
@@ -556,9 +557,9 @@ VNA_SHELL_FUNCTION(cmd_threshold) {
 VNA_SHELL_FUNCTION(cmd_saveconfig) {
   (void)argc;
   (void)argv;
-  config_save();
+  config_service_notify_configuration_changed();
   state_manager_force_save();
-  shell_printf("Config saved" VNA_SHELL_NEWLINE_STR);
+  shell_printf("Saved" VNA_SHELL_NEWLINE_STR);
 }
 
 VNA_SHELL_FUNCTION(cmd_clearconfig) {
@@ -573,9 +574,8 @@ VNA_SHELL_FUNCTION(cmd_clearconfig) {
   }
 
   clear_all_config_prop_data();
-  shell_printf(
-      "Config and all cal data cleared." VNA_SHELL_NEWLINE_STR
-      "Do reset manually to take effect. Then do touch cal and save." VNA_SHELL_NEWLINE_STR);
+  shell_printf("Config and all cal data cleared." VNA_SHELL_NEWLINE_STR
+               "Reset manually, then run touch cal and save." VNA_SHELL_NEWLINE_STR);
 }
 
 VNA_SHELL_FUNCTION(cmd_data) {
@@ -2614,6 +2614,7 @@ int app_main(void) {
   event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
                  app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage),
                  app_event_nodes, ARRAY_COUNT(app_event_nodes));
+  config_service_attach_event_bus(&app_event_bus);
   shell_attach_bus(&app_event_bus);
   shell_on_session_start(usb_command_session_started);
   shell_on_session_stop(usb_command_session_stopped);

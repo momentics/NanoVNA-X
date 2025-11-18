@@ -128,12 +128,16 @@ dynamic allocation. Call `event_bus_init()` with a static subscription array, op
 mailbox storage (`msg_t` buffer plus queue length), and optional queue nodes that back the
 mailbox entries. When the mailbox buffers are provided, `event_bus_publish()` posts messages
 through the mailbox so a dedicated worker can call `event_bus_dispatch()` and fan them out to
-listeners. Without a mailbox the bus falls back to immediate, synchronous dispatch. Interrupt
-handlers should invoke `event_bus_publish_from_isr()`, which acquires queue slots in a
-lock-aware fashion. The predefined topics (`EVENT_SWEEP_STARTED`, `EVENT_SWEEP_COMPLETED`,
-`EVENT_TOUCH_INPUT`, `EVENT_STORAGE_UPDATED`, `EVENT_CONFIGURATION_CHANGED`, and
-`EVENT_USB_COMMAND_PENDING`) cover the current coordination needs; adding new topics
-requires extending the `event_bus_topic_t` enum.
+listeners. The sweep thread in NanoVNA-X drains this mailbox at the beginning of every UI /
+service pass, so deferred USB commands, configuration changes, and storage notifications stay
+synchronised without resorting to ad-hoc globals. The configuration service immediately
+persists settings changes and publishes `EVENT_STORAGE_UPDATED` so the UI layer can refresh
+its calibration widgets. Without a mailbox the bus falls back to immediate,
+synchronous dispatch. Interrupt handlers should invoke `event_bus_publish_from_isr()`, which
+acquires queue slots in a lock-aware fashion. The predefined topics (`EVENT_SWEEP_STARTED`,
+`EVENT_SWEEP_COMPLETED`, `EVENT_TOUCH_INPUT`, `EVENT_STORAGE_UPDATED`,
+`EVENT_CONFIGURATION_CHANGED`, and `EVENT_USB_COMMAND_PENDING`) cover the current coordination
+needs; adding new topics requires extending the `event_bus_topic_t` enum.
 
 The scheduler helper (`services/scheduler.[ch]`) keeps a fixed pool of four slots that wrap
 `chThdCreateStatic()`/`chThdTerminate()`. `scheduler_start()` returns a handle containing the
