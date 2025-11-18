@@ -48,6 +48,7 @@ static bool shell_skip_linefeed = false;
 static event_bus_t* shell_event_bus = NULL;
 static char* shell_line_buffer = NULL;
 static volatile uint16_t shell_line_length = 0;
+static bool usb_shell_session_active = false;
 
 static void shell_on_event(const event_bus_message_t* message, void* user_data);
 
@@ -194,7 +195,7 @@ void shell_reset_console(void) {
   qResetI(&SD1.iqueue);
 #endif
   osalSysUnlock();
-  shell_reset_line_state();
+  shell_reset_session_state();
   shell_restore_stream();
 }
 
@@ -396,4 +397,22 @@ void vna_shell_execute_cmd_line(char* line) {
   if (shell_stream == NULL) {
     shell_restore_stream();
   }
+}
+bool shell_wait_for_session_activity(void) {
+  if (!shell_stream_is_usb()) {
+    return true;
+  }
+  if (usb_shell_session_active) {
+    return true;
+  }
+  if (!usb_console_rx_has_data()) {
+    return false;
+  }
+  usb_shell_session_active = true;
+  return true;
+}
+
+void shell_reset_session_state(void) {
+  usb_shell_session_active = false;
+  shell_reset_line_state();
 }

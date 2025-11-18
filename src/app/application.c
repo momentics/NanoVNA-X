@@ -2688,6 +2688,10 @@ int app_main(void) {
       connected = shell_check_connect();
     }
     if (connected) {
+      if (!shell_wait_for_session_activity()) {
+        chThdSleepMilliseconds(100);
+        continue;
+      }
       usb_server_printf_fn_t printf_fn =
           (usb_port != NULL && usb_port->api != NULL && usb_port->api->printf_fn != NULL)
               ? usb_port->api->printf_fn
@@ -2720,6 +2724,9 @@ int app_main(void) {
         }
       } while (connected);
 #endif
+    }
+    else {
+      shell_reset_session_state();
     }
     chThdSleepMilliseconds(1000);
   }

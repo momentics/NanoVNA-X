@@ -66,6 +66,8 @@ void shell_reset_console(void);
 bool shell_check_connect(void);
 void shell_init_connection(void);
 void shell_restore_stream(void);
+bool shell_wait_for_session_activity(void);
+void shell_reset_session_state(void);
 
 const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** argv,
                                            const char** name_out);
