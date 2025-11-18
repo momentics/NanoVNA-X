@@ -75,6 +75,7 @@ static bool shell_io_write(const uint8_t* data, size_t size) {
       if (!shell_check_connect()) {
         return false;
       }
+      chThdSleepMilliseconds(5);
       continue;
     }
     written += sent;
@@ -94,6 +95,7 @@ static size_t shell_io_read(uint8_t* data, size_t size) {
       if (!shell_check_connect()) {
         break;
       }
+      chThdSleepMilliseconds(5);
       continue;
     }
     received += chunk;
