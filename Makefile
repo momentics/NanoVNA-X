@@ -43,7 +43,7 @@ endif
 
 # Enable this if you want link time optimizations (LTO)
 ifeq ($(USE_LTO),)
-  USE_LTO = no
+  USE_LTO = yes
 endif
 
 # If enabled, this option allows to compile the application in THUMB mode.
@@ -198,7 +198,11 @@ CSRC = $(STARTUPSRC) \
        src/platform/boards/stm32_peripherals.c \
        src/ui/hardware_input.c \
        src/system/state_manager.c \
-       src/middleware/chprintf.c
+       src/middleware/chprintf.c \
+       src/modules/measurement/measurement_port.c \
+       src/modules/processing/processing_port.c \
+       src/modules/ui/ui_port.c \
+       src/modules/usb/usb_server_port.c
 
 # C++ sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.
