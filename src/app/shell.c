@@ -72,11 +72,11 @@ static void shell_prepare_line_buffer(char* line, int max_size) {
 }
 
 static size_t shell_usb_write_bytes(const uint8_t* buf, size_t size) {
-  if (buf == NULL || size == 0 || !usb_console_is_ready()) {
+  if (buf == NULL || size == 0 || !usb_console_is_configured()) {
     return 0;
   }
   size_t written = 0;
-  while (written < size && usb_console_is_ready()) {
+  while (written < size && usb_console_is_configured()) {
     const size_t chunk =
         obqWriteTimeout(&SDU1.obqueue, buf + written, size - written, SHELL_USB_WRITE_TIMEOUT);
     if (chunk == 0) {
@@ -88,7 +88,7 @@ static size_t shell_usb_write_bytes(const uint8_t* buf, size_t size) {
 }
 
 static size_t shell_usb_read_bytes(void* buf, size_t size) {
-  if (buf == NULL || size == 0 || !usb_console_is_ready()) {
+  if (buf == NULL || size == 0 || !usb_console_is_configured() || !usb_console_dtr_active()) {
     return 0;
   }
   return ibqReadTimeout(&SDU1.ibqueue, (uint8_t*)buf, size, TIME_IMMEDIATE);
@@ -129,7 +129,7 @@ int shell_printf(const char* fmt, ...) {
   if (shell_stream == NULL) {
     return 0;
   }
-  if (shell_stream_is_usb() && !usb_console_is_ready()) {
+  if (shell_stream_is_usb() && !usb_console_is_configured()) {
     return 0;
   }
   va_list ap;
@@ -202,9 +202,9 @@ bool shell_check_connect(void) {
   if (VNA_MODE(VNA_MODE_CONNECTION)) {
     return true;
   }
-  return usb_console_is_ready();
+  return usb_console_is_configured();
 #else
-  return usb_console_is_ready();
+  return usb_console_is_configured();
 #endif
 }
 
