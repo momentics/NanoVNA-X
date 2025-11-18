@@ -2640,18 +2640,6 @@ int app_main(void) {
   si5351_set_frequency_offset(IF_OFFSET);
 #endif
   /*
-   * Init Shell console connection data
-   */
-  if (usb_port != NULL && usb_port->api != NULL && usb_port->api->register_commands != NULL &&
-      usb_port->api->init_connection != NULL) {
-    usb_port->api->register_commands(commands);
-    usb_port->api->init_connection();
-  } else {
-    shell_register_commands(commands);
-    shell_init_connection();
-  }
-
-  /*
    * tlv320aic Initialize (audio codec)
    */
   tlv320aic3204_init();
@@ -2680,6 +2668,18 @@ int app_main(void) {
    */
   chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO - 1, Thread1, NULL);
 
+  /*
+   * Init Shell console connection data
+   */
+  if (usb_port != NULL && usb_port->api != NULL && usb_port->api->register_commands != NULL &&
+      usb_port->api->init_connection != NULL) {
+    usb_port->api->register_commands(commands);
+    usb_port->api->init_connection();
+  } else {
+    shell_register_commands(commands);
+    shell_init_connection();
+  }
+
   while (1) {
     bool connected = false;
     if (usb_port != NULL && usb_port->api != NULL && usb_port->api->check_connection != NULL) {
@@ -2688,21 +2688,6 @@ int app_main(void) {
       connected = shell_check_connect();
     }
     if (connected) {
-#ifdef __USE_SERIAL_CONSOLE__
-      bool usb_ready = true;
-      if (!VNA_MODE(VNA_MODE_CONNECTION)) {
-        usb_ready = usb_console_is_ready();
-      }
-      if (!usb_ready) {
-        chThdSleepMilliseconds(200);
-        continue;
-      }
-#else
-      if (!usb_console_is_ready()) {
-        chThdSleepMilliseconds(200);
-        continue;
-      }
-#endif
       usb_server_printf_fn_t printf_fn =
           (usb_port != NULL && usb_port->api != NULL && usb_port->api->printf_fn != NULL)
               ? usb_port->api->printf_fn
