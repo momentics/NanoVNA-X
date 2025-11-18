@@ -17,17 +17,6 @@
 #include "hal.h"
 #include "nanovna.h"
 
-#define CDC_CONTROL_LINE_STATE_DTR 0x0001U
-#define CDC_CONTROL_LINE_STATE_RTS 0x0002U
-
-static volatile bool usb_console_configured = false;
-static volatile bool usb_console_line_active = false;
-
-static inline void usb_console_reset_state(void) {
-  usb_console_configured = false;
-  usb_console_line_active = false;
-}
-
 /* Virtual serial port over USB.*/
 SerialUSBDriver SDU1;
 
@@ -349,12 +338,10 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
   chSysLockFromISR();
   switch (event) {
   case USB_EVENT_RESET:
-    usb_console_reset_state();
     break;
   case USB_EVENT_ADDRESS:
     break;
   case USB_EVENT_CONFIGURED:
-    usb_console_configured = true;
     /* Enables the endpoints specified into the configuration.
        Note, this callback is invoked from an ISR so I-Class functions
        must be used.*/
@@ -366,7 +353,6 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
   case USB_EVENT_SUSPEND:
     /* Disconnection event on suspend.*/
     sduDisconnectI(&SDU1);
-    usb_console_reset_state();
     break;
   case USB_EVENT_WAKEUP:
     break;
@@ -388,32 +374,22 @@ static void sof_handler(USBDriver* usbp) {
 }
 
 static bool usb_request_hook(USBDriver* usbp) {
-  if ((usbp->setup.bmRequestType & USB_RTYPE_TYPE_MASK) == USB_RTYPE_TYPE_CLASS &&
-      usbp->setup.bRequest == CDC_SET_CONTROL_LINE_STATE) {
-    osalSysLockFromISR();
-    usb_console_line_active =
-        ((usbp->setup.wValue & CDC_CONTROL_LINE_STATE_DTR) != 0U) && usb_console_configured;
-    osalSysUnlockFromISR();
-  }
   return sduRequestsHook(usbp);
 }
 
 bool usb_console_is_ready(void) {
-  return usb_console_configured;
+  return usbGetDriverStateI(SDU1.config->usbp) == USB_ACTIVE;
 }
 
 bool usb_console_is_configured(void) {
-  return usb_console_configured;
+  return usb_console_is_ready();
 }
 
 bool usb_console_dtr_active(void) {
-  return usb_console_line_active;
+  return true;
 }
 
 bool usb_console_rx_has_data(void) {
-  if (!usb_console_configured || !usb_console_line_active) {
-    return false;
-  }
   bool pending = false;
   osalSysLock();
   pending = (SDU1.ibqueue.ptr != NULL) || (SDU1.ibqueue.bcounter != 0U);

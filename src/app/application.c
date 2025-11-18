@@ -2640,6 +2640,18 @@ int app_main(void) {
   si5351_set_frequency_offset(IF_OFFSET);
 #endif
   /*
+   * Init Shell console connection data
+   */
+  if (usb_port != NULL && usb_port->api != NULL && usb_port->api->register_commands != NULL &&
+      usb_port->api->init_connection != NULL) {
+    usb_port->api->register_commands(commands);
+    usb_port->api->init_connection();
+  } else {
+    shell_register_commands(commands);
+    shell_init_connection();
+  }
+
+  /*
    * tlv320aic Initialize (audio codec)
    */
   tlv320aic3204_init();
@@ -2667,18 +2679,6 @@ int app_main(void) {
    * Startup sweep thread
    */
   chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO - 1, Thread1, NULL);
-
-  /*
-   * Init Shell console connection data
-   */
-  if (usb_port != NULL && usb_port->api != NULL && usb_port->api->register_commands != NULL &&
-      usb_port->api->init_connection != NULL) {
-    usb_port->api->register_commands(commands);
-    usb_port->api->init_connection();
-  } else {
-    shell_register_commands(commands);
-    shell_init_connection();
-  }
 
   while (1) {
     bool connected = false;
