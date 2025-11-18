@@ -200,6 +200,10 @@ void init_i2s(void* buffer, uint16_t count);
 #define SAVE_CONFIG_SIZE 0x00000800
 // Depend from properties_t size, should be aligned by FLASH_PAGESIZE
 #define SAVE_PROP_CONFIG_SIZE 0x00004000
+
+// Flash region reserved for calibration/configuration storage (matches linker flash7)
+#define FLASH_CALIBRATION_SECTOR_START 0x0801C800U
+#define FLASH_CALIBRATION_SECTOR_SIZE  0x0001C800U
 #else
 // For STM32F072xB CPU setting
 #define FLASH_START_ADDRESS 0x08000000
@@ -207,21 +211,32 @@ void init_i2s(void* buffer, uint16_t count);
 
 #define FLASH_PAGESIZE 0x800
 
-#define SAVEAREA_MAX 5
+#define SAVEAREA_MAX 4
 
 // Depend from config_t size, should be aligned by FLASH_PAGESIZE
 #define SAVE_CONFIG_SIZE 0x00000800
 // Depend from properties_t size, should be aligned by FLASH_PAGESIZE
 #define SAVE_PROP_CONFIG_SIZE 0x00001800
+
+// Flash region reserved for calibration/configuration storage (matches linker flash7)
+#define FLASH_CALIBRATION_SECTOR_START 0x08018800U
+#define FLASH_CALIBRATION_SECTOR_SIZE  0x00007800U
 #endif
 
 // Save config_t and properties_t flash area (see flash7 from *.ld settings)
 #define SAVE_FULL_AREA_SIZE (SAVE_CONFIG_SIZE + SAVEAREA_MAX * SAVE_PROP_CONFIG_SIZE)
-// Save setting at end of CPU flash area
-// Config at end minus config size
-#define SAVE_CONFIG_ADDR (FLASH_START_ADDRESS + FLASH_TOTAL_SIZE - SAVE_CONFIG_SIZE)
+// Save setting at end of calibration flash region, keeping the data packed at the top.
+#define SAVE_CONFIG_ADDR                                                                             \
+  (FLASH_CALIBRATION_SECTOR_START + FLASH_CALIBRATION_SECTOR_SIZE - SAVE_CONFIG_SIZE)
 // Properties save area before config
-#define SAVE_PROP_CONFIG_ADDR (FLASH_START_ADDRESS + FLASH_TOTAL_SIZE - SAVE_FULL_AREA_SIZE)
+#define SAVE_PROP_CONFIG_ADDR (SAVE_CONFIG_ADDR - SAVEAREA_MAX * SAVE_PROP_CONFIG_SIZE)
+
+#if (SAVE_FULL_AREA_SIZE > FLASH_CALIBRATION_SECTOR_SIZE)
+#error "Calibration storage exceeds reserved flash sector"
+#endif
+#if (SAVE_PROP_CONFIG_ADDR < FLASH_CALIBRATION_SECTOR_START)
+#error "Calibration storage overlaps application flash"
+#endif
 
 // Erase settings on page
 void flash_erase_pages(uint32_t page_address, uint32_t size);
