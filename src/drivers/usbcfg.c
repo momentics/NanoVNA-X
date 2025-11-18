@@ -399,7 +399,7 @@ static bool usb_request_hook(USBDriver* usbp) {
 }
 
 bool usb_console_is_ready(void) {
-  return usb_console_configured;
+  return usb_console_configured && usb_console_line_active;
 }
 
 bool usb_console_is_configured(void) {
