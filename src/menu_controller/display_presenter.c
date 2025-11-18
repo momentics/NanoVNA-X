@@ -1,6 +1,6 @@
 #include "menu_controller/display_presenter.h"
 
-#include "system/nanovna.h"
+#include "nanovna.h"
 
 static const display_presenter_t* active_presenter = NULL;
 

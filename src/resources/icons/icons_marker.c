@@ -24,7 +24,7 @@
 //****************************************************************
 
 #include <stdint.h>
-#include "system/nanovna.h"
+#include "nanovna.h"
 
 // Reference bitmap (size and offset)
 #define REFERENCE_WIDTH 6

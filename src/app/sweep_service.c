@@ -104,6 +104,10 @@ static float geometry_mean(float v0, float v1, float v2) {
 #define SWEEP_STATE_PROGRESS_ACTIVE 0x01u
 #define SWEEP_STATE_LED_ACTIVE 0x02u
 
+#define SWEEP_UI_INPUT_SLICE_POINTS 1U
+#define SWEEP_UI_IDLE_SLICE_POINTS ((uint16_t)SWEEP_POINTS_MAX)
+#define SWEEP_UI_TIMESLICE_TICKS MS2ST(8U)
+
 static inline void sweep_reset_progress(void) {
   p_sweep = 0;
 }
@@ -172,20 +176,21 @@ static void sweep_progress_end(void) {
   sweep_state_flags &= (uint8_t)~SWEEP_STATE_PROGRESS_ACTIVE;
 }
 
+static inline bool sweep_timeslice_expired(systime_t slice_start) {
+  if ((SWEEP_UI_TIMESLICE_TICKS == 0) || slice_start == 0U) {
+    return false;
+  }
+  return chVTTimeElapsedSinceX(slice_start) >= SWEEP_UI_TIMESLICE_TICKS;
+}
+
 static inline uint16_t sweep_points_budget(bool break_on_operation) {
   if (!break_on_operation) {
     return UINT16_MAX;
   }
   if (sweep_ui_input_pending()) {
-    return 1U;
+    return SWEEP_UI_INPUT_SLICE_POINTS;
   }
-  if (config._bandwidth <= BANDWIDTH_100) {
-    return 4U;
-  }
-  if (config._bandwidth <= BANDWIDTH_1000) {
-    return 6U;
-  }
-  return 8U;
+  return SWEEP_UI_IDLE_SLICE_POINTS;
 }
 
 static inline void sweep_prepare_led_and_progress(bool show_progress) {
@@ -529,11 +534,16 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
     sweep_prepare_led_and_progress(show_progress);
   }
 
+  const systime_t slice_start = break_on_operation ? chVTGetSystemTimeX() : 0;
+
   for (; p_sweep < sweep_points; p_sweep++) {
     if (processed >= batch_budget) {
       break;
     }
     if (break_on_operation && sweep_ui_input_pending()) {
+      break;
+    }
+    if (sweep_timeslice_expired(slice_start)) {
       break;
     }
     freq_t frequency = get_frequency(p_sweep);

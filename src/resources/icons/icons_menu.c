@@ -25,7 +25,7 @@
 
 #include <stdint.h>
 
-#include "system/nanovna.h"
+#include "nanovna.h"
 
 // Touch test icon on screen
 #if LCD_WIDTH < 800

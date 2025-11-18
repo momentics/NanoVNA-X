@@ -15,7 +15,7 @@
 */
 
 #include "hal.h"
-#include "system/nanovna.h"
+#include "nanovna.h"
 
 /* Virtual serial port over USB.*/
 SerialUSBDriver SDU1;

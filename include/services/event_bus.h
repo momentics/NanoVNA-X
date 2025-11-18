@@ -23,6 +23,8 @@
 #pragma once
 
 #include "ch.h"
+#include "services/scheduler.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 
@@ -75,16 +77,4 @@ bool event_bus_subscribe(event_bus_t* bus, event_bus_topic_t topic, event_bus_li
 bool event_bus_publish(event_bus_t* bus, event_bus_topic_t topic, const void* payload);
 bool event_bus_publish_from_isr(event_bus_t* bus, event_bus_topic_t topic, const void* payload);
 
-/**
- * @brief Dispatches one pending message from the bus mailbox.
- *
- * Returns true if a message was delivered. Callers are expected to poll the
- * bus from a worker thread; NanoVNA-X drains the bus in the sweep thread
- * before every UI/service pass so configuration and shell events remain
- * synchronized without extra global state.
- */
-bool event_bus_dispatch(event_bus_t* bus);
-
-
-
-
+bool event_bus_dispatch(event_bus_t* bus, systime_t timeout);

@@ -25,7 +25,7 @@
 #include "ch.h"
 #include "hal.h"
 
-#include "system/nanovna.h"
+#include "nanovna.h"
 #include "usbcfg.h"
 
 #include <chprintf.h>

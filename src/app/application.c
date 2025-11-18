@@ -27,7 +27,7 @@
 #include "ch.h"
 #include "hal.h"
 #include "si5351.h"
-#include "system/nanovna.h"
+#include "nanovna.h"
 #include "app/shell.h"
 #include "usbcfg.h"
 #include "platform/hal.h"
@@ -195,7 +195,7 @@ static systime_t battery_next_sample = 0;
 
 // Version text, displayed in Config->Version menu, also send by info command
 const char* const info_about[] = {
-    "Board: " BOARD_NAME, "Maintainer: @momentics <momentics@gmail.com>",
+    "Board: " BOARD_NAME, "NanoVNA-X maintainer: @momentics <momentics@gmail.com>",
     "Version: " NANOVNA_VERSION_STRING " ["
     "p:" define_to_STR(
         SWEEP_POINTS_MAX) ", "
@@ -263,8 +263,7 @@ static void app_measurement_handle_result(measurement_engine_port_t* port,
 
 static void app_measurement_service_loop(measurement_engine_port_t* port) {
   (void)port;
-  while (event_bus_dispatch(&app_event_bus)) {
-  }
+  shell_service_pending_commands();
   sweep_mode |= SWEEP_UI_MODE;
   ui_port.api->process();
   sweep_mode &= (uint8_t)~SWEEP_UI_MODE;
@@ -557,9 +556,9 @@ VNA_SHELL_FUNCTION(cmd_threshold) {
 VNA_SHELL_FUNCTION(cmd_saveconfig) {
   (void)argc;
   (void)argv;
-  config_service_notify_configuration_changed();
+  config_save();
   state_manager_force_save();
-  shell_printf("Saved" VNA_SHELL_NEWLINE_STR);
+  shell_printf("Config saved" VNA_SHELL_NEWLINE_STR);
 }
 
 VNA_SHELL_FUNCTION(cmd_clearconfig) {
@@ -574,8 +573,9 @@ VNA_SHELL_FUNCTION(cmd_clearconfig) {
   }
 
   clear_all_config_prop_data();
-  shell_printf("Config and all cal data cleared." VNA_SHELL_NEWLINE_STR
-               "Reset manually, then run touch cal and save." VNA_SHELL_NEWLINE_STR);
+  shell_printf(
+      "Config and all cal data cleared." VNA_SHELL_NEWLINE_STR
+      "Do reset manually to take effect. Then do touch cal and save." VNA_SHELL_NEWLINE_STR);
 }
 
 VNA_SHELL_FUNCTION(cmd_data) {
@@ -2257,7 +2257,7 @@ VNA_SHELL_FUNCTION(cmd_release) {
 
 #ifdef ENABLE_SD_CARD_COMMAND
 #ifndef __USE_SD_CARD__
-#error "Need enable SD card support __USE_SD_CARD__ in system/nanovna.h, for use ENABLE_SD_CARD_COMMAND"
+#error "Need enable SD card support __USE_SD_CARD__ in nanovna.h, for use ENABLE_SD_CARD_COMMAND"
 #endif
 
 static FRESULT cmd_sd_card_mount(void) {
@@ -2514,7 +2514,7 @@ static void vna_shell_execute_line(char* line) {
 
 #ifdef __SD_CARD_LOAD__
 #ifndef __USE_SD_CARD__
-#error "Need enable SD card support __USE_SD_CARD__ in system/nanovna.h, for use __SD_CARD_LOAD__"
+#error "Need enable SD card support __USE_SD_CARD__ in nanovna.h, for use __SD_CARD_LOAD__"
 #endif
 bool sd_card_load_config(void) {
   if (f_mount(filesystem_volume(), "", 1) != FR_OK)
@@ -2614,7 +2614,6 @@ int app_main(void) {
   event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
                  app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage),
                  app_event_nodes, ARRAY_COUNT(app_event_nodes));
-  config_service_attach_event_bus(&app_event_bus);
   shell_attach_bus(&app_event_bus);
   shell_on_session_start(usb_command_session_started);
   shell_on_session_stop(usb_command_session_stopped);

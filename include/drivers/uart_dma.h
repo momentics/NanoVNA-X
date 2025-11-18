@@ -20,7 +20,7 @@
 
 #pragma once
 
-#include "system/nanovna.h"
+#include "nanovna.h"
 
 #ifdef __USE_SERIAL_CONSOLE__
 

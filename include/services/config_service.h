@@ -22,6 +22,7 @@
 
 #include <stdint.h>
 
+#include "nanovna.h"
 #include "services/event_bus.h"
 
 typedef struct {
@@ -34,14 +35,5 @@ typedef struct {
 
 const config_service_api_t* config_service_api(void);
 void config_service_init(void);
-/**
- * @brief Binds the configuration service to an event bus.
- *
- * Once attached, the service emits EVENT_STORAGE_UPDATED notifications after
- * persisting data so UI components can refresh calibration indicators.
- */
 void config_service_attach_event_bus(event_bus_t* bus);
 void config_service_notify_configuration_changed(void);
-
-
-

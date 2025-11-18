@@ -25,7 +25,7 @@
 #include "ch.h"
 #include "hal.h"
 
-#include "system/nanovna.h"
+#include "nanovna.h"
 #include "si5351.h"
 
 static void board_peripherals_init(void) {

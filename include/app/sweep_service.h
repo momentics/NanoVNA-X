@@ -28,7 +28,7 @@
 
 #include "app/app_features.h"
 #include "ch.h"
-#include "system/nanovna.h"
+#include "nanovna.h"
 
 #define SWEEP_CH0_MEASURE (1U << 0)
 #define SWEEP_CH1_MEASURE (1U << 1)

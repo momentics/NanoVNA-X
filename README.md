@@ -118,7 +118,7 @@ STM32F303 families.
   and icon bitmaps that back the rendering code are stored in `src/resources/`.
 
 Complementary headers live in `include/`, while board support files, linker scripts and
-startup code reside in `src/platform/boards/`. This structure lets the same measurement and UI engines run
+startup code reside in `boards/`. This structure lets the same measurement and UI engines run
 across both memory profiles with only targeted platform overrides.
 
 ## Event bus and scheduler
@@ -128,16 +128,12 @@ dynamic allocation. Call `event_bus_init()` with a static subscription array, op
 mailbox storage (`msg_t` buffer plus queue length), and optional queue nodes that back the
 mailbox entries. When the mailbox buffers are provided, `event_bus_publish()` posts messages
 through the mailbox so a dedicated worker can call `event_bus_dispatch()` and fan them out to
-listeners. The sweep thread in NanoVNA-X drains this mailbox at the beginning of every UI /
-service pass, so deferred USB commands, configuration changes, and storage notifications stay
-synchronised without resorting to ad-hoc globals. The configuration service immediately
-persists settings changes and publishes `EVENT_STORAGE_UPDATED` so the UI layer can refresh
-its calibration widgets. Without a mailbox the bus falls back to immediate,
-synchronous dispatch. Interrupt handlers should invoke `event_bus_publish_from_isr()`, which
-acquires queue slots in a lock-aware fashion. The predefined topics (`EVENT_SWEEP_STARTED`,
-`EVENT_SWEEP_COMPLETED`, `EVENT_TOUCH_INPUT`, `EVENT_STORAGE_UPDATED`,
-`EVENT_CONFIGURATION_CHANGED`, and `EVENT_USB_COMMAND_PENDING`) cover the current coordination
-needs; adding new topics requires extending the `event_bus_topic_t` enum.
+listeners. Without a mailbox the bus falls back to immediate, synchronous dispatch. Interrupt
+handlers should invoke `event_bus_publish_from_isr()`, which acquires queue slots in a
+lock-aware fashion. The predefined topics (`EVENT_SWEEP_STARTED`, `EVENT_SWEEP_COMPLETED`,
+`EVENT_TOUCH_INPUT`, `EVENT_STORAGE_UPDATED`, `EVENT_CONFIGURATION_CHANGED`, and
+`EVENT_USB_COMMAND_PENDING`) cover the current coordination needs; adding new topics
+requires extending the `event_bus_topic_t` enum.
 
 The scheduler helper (`services/scheduler.[ch]`) keeps a fixed pool of four slots that wrap
 `chThdCreateStatic()`/`chThdTerminate()`. `scheduler_start()` returns a handle containing the
@@ -165,7 +161,7 @@ The source tree has been reorganised so it is no longer a line-for-line fork of 
 | `include/app`, `src/app` | Application-facing APIs: the sweep service, shell, measurement pipeline, and UI glue. |
 | `include/services`, `src/services` | Cross-cutting infrastructure (config service, scheduler, event bus). |
 | `include/system`, `src/system` | Platform-level building blocks such as the new `state_manager` that owns persistence, backup registers, and autosave scheduling. |
-| `src/platform`, `src/platform/boards/*` | Low-level board support code shared with ChibiOS. |
+| `src/platform`, `boards/STM32F0/STM32F3` | Low-level board support code shared with ChibiOS. |
 
 This separation lets you trace dependencies easily (e.g. `ui/` depends on `system/state_manager.h` but not vice versa) and removes duplicated helper tables from multiple files. When porting patches from older firmware trees, map the functionality onto the closest module instead of copying entire source files.
 
@@ -257,7 +253,6 @@ There are several numbers of great companion PC tools from third-party.
 
 ## Documentation
 
-* [Developer notes](doc/developer_notes.md) — lifecycle + port map for contributors.
 * [NanoVNA-X menu structure](doc/menu_structure.md)
 * [NanoVNA-X menu & user workflow reference](doc/menu_and_user_guide.md)
 * [NanoVNA User Guide(ja)](https://cho45.github.io/NanoVNA-manual/) by cho45. [(en:google translate)](https://translate.google.com/translate?sl=ja&tl=en&u=https%3A%2F%2Fcho45.github.io%2FNanoVNA-manual%2F)

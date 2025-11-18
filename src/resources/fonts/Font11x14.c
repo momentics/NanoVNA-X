@@ -23,7 +23,7 @@
  */
 
 #include <stdint.h>
-#include "system/nanovna.h"
+#include "../nanovna.h"
 
 /*
  * Check 1 byte of bitmap data for get width

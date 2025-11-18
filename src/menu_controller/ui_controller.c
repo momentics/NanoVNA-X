@@ -20,7 +20,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#include "system/nanovna.h"
+#include "nanovna.h"
 #include "app/shell.h"
 #include "system/state_manager.h"
 #include "hal.h"
@@ -1002,7 +1002,7 @@ static UI_FUNCTION_CALLBACK(menu_config_cb) {
     ui_show_version();
     break;
   case MENU_CONFIG_SAVE:
-    config_service_notify_configuration_changed();
+    config_save();
     state_manager_force_save();
     menu_move_back(true);
     return;
@@ -2106,7 +2106,8 @@ static uint16_t fix_screenshot_format(uint16_t data) {
 }
 
 #ifdef __SD_FILE_BROWSER__
-#include "../modules/ui/vna_browser.c"
+#include "../modules/vna_browser.c"
+
 static UI_FUNCTION_CALLBACK(menu_sdcard_browse_cb) {
   data = fix_screenshot_format(data);
   ui_mode_browser(data);
@@ -2482,21 +2483,21 @@ const menuitem_t menu_stimulus[] = {
     {MT_ADV_CALLBACK, KM_STEP, "FREQ STEP\n " R_LINK_COLOR "%bF" S_Hz, menu_keyboard_acb},
     {MT_ADV_CALLBACK, KM_VAR, "JOG STEP\n " R_LINK_COLOR "AUTO", menu_keyboard_acb},
     {MT_ADV_CALLBACK, KM_POINTS, "SET POINTS\n " R_LINK_COLOR "%d", menu_keyboard_acb},
-// #if POINTS_SET_COUNT > 0
-//     {MT_ADV_CALLBACK, 0, "%d PTS", menu_points_acb},
-// #endif
-// #if POINTS_SET_COUNT > 1
-//     {MT_ADV_CALLBACK, 1, "%d PTS", menu_points_acb},
-// #endif
-// #if POINTS_SET_COUNT > 2
-//     {MT_ADV_CALLBACK, 2, "%d PTS", menu_points_acb},
-// #endif
-// #if POINTS_SET_COUNT > 3
-//     {MT_ADV_CALLBACK, 3, "%d PTS", menu_points_acb},
-// #endif
-// #if POINTS_SET_COUNT > 4
-//     {MT_ADV_CALLBACK, 4, "%d PTS", menu_points_acb},
-// #endif
+#if POINTS_SET_COUNT > 0
+    {MT_ADV_CALLBACK, 0, "%d PTS", menu_points_acb},
+#endif
+#if POINTS_SET_COUNT > 1
+    {MT_ADV_CALLBACK, 1, "%d PTS", menu_points_acb},
+#endif
+#if POINTS_SET_COUNT > 2
+    {MT_ADV_CALLBACK, 2, "%d PTS", menu_points_acb},
+#endif
+#if POINTS_SET_COUNT > 3
+    {MT_ADV_CALLBACK, 3, "%d PTS", menu_points_acb},
+#endif
+#if POINTS_SET_COUNT > 4
+    {MT_ADV_CALLBACK, 4, "%d PTS", menu_points_acb},
+#endif
     {MT_ADV_CALLBACK, 0, "MORE PTS\n " R_LINK_COLOR "%u", menu_points_sel_acb},
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };

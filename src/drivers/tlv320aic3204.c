@@ -20,7 +20,7 @@
  * Boston, MA 02110-1301, USA.
  */
 #include "hal.h"
-#include "system/nanovna.h"
+#include "nanovna.h"
 
 #define AIC3204_ADDR 0x18
 

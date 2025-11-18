@@ -177,17 +177,18 @@ bool event_bus_publish_from_isr(event_bus_t* bus, event_bus_topic_t topic, const
   return event_bus_publish_common(bus, topic, payload, true);
 }
 
-bool event_bus_dispatch(event_bus_t* bus) {
+bool event_bus_dispatch(event_bus_t* bus, systime_t timeout) {
   if (bus == NULL) {
     return false;
   }
 
   if (!bus->mailbox_ready) {
+    (void)timeout;
     return false;
   }
 
   msg_t raw;
-  msg_t result = chMBFetch(&bus->mailbox, &raw, TIME_IMMEDIATE);
+  msg_t result = chMBFetch(&bus->mailbox, &raw, timeout);
   if (result != MSG_OK) {
     return false;
   }

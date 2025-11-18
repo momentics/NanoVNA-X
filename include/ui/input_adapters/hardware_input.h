@@ -24,7 +24,7 @@
 
 #include "ch.h"
 #include "hal.h"
-#include "system/nanovna.h"
+#include "nanovna.h"
 
 #define NO_EVENT 0
 #define EVT_BUTTON_SINGLE_CLICK 0x01
