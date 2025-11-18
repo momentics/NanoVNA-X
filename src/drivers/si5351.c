@@ -20,7 +20,7 @@
  * Boston, MA 02110-1301, USA.
  */
 #include "hal.h"
-#include "nanovna.h"
+#include "system/nanovna.h"
 #include "si5351.h"
 
 // audio codec frequency clock

@@ -20,7 +20,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#include "nanovna.h"
+#include "system/nanovna.h"
 
 #ifdef USE_VARIABLE_OFFSET
 static int16_t sincos_tbl[AUDIO_SAMPLES_COUNT][2];
@@ -205,7 +205,7 @@ void dsp_process(audio_sample_t* capture, size_t length) {
 
 #else
 // Cortex M4 DSP instruction use
-#include "dsp.h"
+#include "dsp/dsp.h"
 
 static inline int32_t pack_sincos_pair(size_t index) {
   const int16_t* pair = &sincos_tbl[index][0];

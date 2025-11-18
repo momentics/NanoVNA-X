@@ -20,7 +20,7 @@
 
 #include "system/state_manager.h"
 
-#include "nanovna.h"
+#include "system/nanovna.h"
 
 #include "ch.h"
 
@@ -77,7 +77,7 @@ static void load_default_properties(void) {
   current_props._active_marker = 0;
   current_props._previous_marker = MARKER_INVALID;
   current_props._mode = 0;
-  current_props._reserved = 0;
+  current_props._stored_traces = 0;
   current_props._power = SI5351_CLK_DRIVE_STRENGTH_AUTO;
   current_props._cal_power = SI5351_CLK_DRIVE_STRENGTH_AUTO;
   current_props._measure = 0;

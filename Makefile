@@ -129,12 +129,12 @@ ifeq ($(TARGET),F303)
  include $(CHIBIOS)/os/common/startup/ARMCMx/compilers/GCC/mk/startup_stm32f3xx.mk
  include $(CHIBIOS)/os/hal/hal.mk
  include $(CHIBIOS)/os/hal/ports/STM32/STM32F3xx/platform.mk
- include boards/STM32F303/board.mk
+ include src/platform/boards/stm32f303/board.mk
 else
  include $(CHIBIOS)/os/common/startup/ARMCMx/compilers/GCC/mk/startup_stm32f0xx.mk
  include $(CHIBIOS)/os/hal/hal.mk
  include $(CHIBIOS)/os/hal/ports/STM32/STM32F0xx/platform.mk
- include boards/STM32F072/board.mk
+ include src/platform/boards/stm32f072/board.mk
 endif
 
 include $(CHIBIOS)/os/hal/osal/rt/osal.mk
@@ -153,9 +153,9 @@ include $(CHIBIOS)/os/hal/lib/streams/streams.mk
 
 # Define linker script file here
 ifeq ($(TARGET),F303)
- LDSCRIPT= boards/STM32F303/STM32F303xC.ld
+ LDSCRIPT= src/platform/boards/stm32f303/config/STM32F303xC.ld
 else
- LDSCRIPT= boards/STM32F072/STM32F072xB.ld
+ LDSCRIPT= src/platform/boards/stm32f072/config/STM32F072xB.ld
 endif
 
 # C sources that can be compiled in ARM or THUMB mode depending on the global
@@ -305,7 +305,9 @@ UDEFS+= -DVNA_AUTO_SELECT_RTC_SOURCE
 UADEFS =
 
 # List all user directories here
-UINCDIR = config include include/drivers boards/STM32F072 boards/STM32F303 $(BUILDDIR)/generated
+UINCDIR = config include include/drivers \
+          src/platform/boards/stm32f072/config src/platform/boards/stm32f303/config \
+          $(BUILDDIR)/generated
 
 # List the user directory to look for the libraries here
 ULIBDIR =
@@ -343,8 +345,8 @@ clear: clean
 
 TAGS: Makefile
 ifeq ($(TARGET),F303)
-	@etags *.[ch] boards/STM32F303/*.[ch] $(shell find third_party/ChibiOS -name \*.\[ch\] -print)
+	@etags *.[ch] src/platform/boards/stm32f303/config/*.[ch] $(shell find third_party/ChibiOS -name \*.\[ch\] -print)
 else
-	@etags *.[ch] boards/STM32F072/*.[ch] $(shell find third_party/ChibiOS -name \*.\[ch\] -print)
+	@etags *.[ch] src/platform/boards/stm32f072/config/*.[ch] $(shell find third_party/ChibiOS -name \*.\[ch\] -print)
 endif
 	@ls -l TAGS

@@ -20,7 +20,7 @@
  */
 #include "ch.h"
 #include "hal.h"
-#include "nanovna.h"
+#include "system/nanovna.h"
 #include "app/shell.h"
 #include "chprintf.h"
 #include "spi.h"

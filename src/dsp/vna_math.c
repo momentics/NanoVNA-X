@@ -18,7 +18,7 @@
  * the Free Software Foundation, Inc., 51 Franklin Street,
  * Boston, MA 02110-1301, USA.
  */
-#include "nanovna.h"
+#include "system/nanovna.h"
 #include <stdint.h>
 
 // Use table increase transform speed, but increase code size

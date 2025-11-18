@@ -15,7 +15,7 @@
 */
 
 #ifdef NANOVNA_F303
-#include "boards/STM32F303/mcuconf.h"
+#include "src/platform/boards/stm32f303/config/mcuconf.h"
 #else
-#include "boards/STM32F072/mcuconf.h"
+#include "src/platform/boards/stm32f072/config/mcuconf.h"
 #endif

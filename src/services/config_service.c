@@ -21,7 +21,7 @@
  */
 #include "ch.h"
 #include "hal.h"
-#include "nanovna.h"
+#include "system/nanovna.h"
 #include "services/config_service.h"
 #include "services/event_bus.h"
 

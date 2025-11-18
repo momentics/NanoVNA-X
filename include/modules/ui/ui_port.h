@@ -6,7 +6,7 @@
 
 #include <stdint.h>
 
-#include "nanovna.h"
+#include "system/nanovna.h"
 
 
 typedef struct ui_module_port ui_module_port_t;

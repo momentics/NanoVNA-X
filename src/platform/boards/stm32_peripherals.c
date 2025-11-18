@@ -21,16 +21,16 @@
  */
 #include "ch.h"
 #include "hal.h"
-#include "nanovna.h"
+#include "system/nanovna.h"
 
 // Compact STM32 ADC library
 #if HAL_USE_ADC == TRUE
 #error "Error VNA use self ADC lib, define HAL_USE_ADC = FALSE in halconf.h"
 #endif
 #ifdef NANOVNA_F303
-#include "boards/STM32F303/adc_v3.c"
+#include "src/platform/boards/stm32f303/drivers/adc_v3.c"
 #else
-#include "boards/STM32F072/adc_v1.c"
+#include "src/platform/boards/stm32f072/drivers/adc_v1.c"
 #endif
 
 // Compact STM32 I2C library
@@ -38,9 +38,9 @@
 #error "Error VNA use self I2C lib, define HAL_USE_I2C = FALSE in halconf.h"
 #endif
 #ifdef NANOVNA_F303
-#include "boards/STM32F303/i2c_v2.c"
+#include "src/platform/boards/stm32f303/drivers/i2c_v2.c"
 #else
-#include "boards/STM32F072/i2c_v2.c"
+#include "src/platform/boards/stm32f072/drivers/i2c_v2.c"
 #endif
 
 #ifdef __USE_RTC__
@@ -49,9 +49,9 @@
 #error "Error VNA use self RTC lib, define HAL_USE_RTC = FALSE in halconf.h"
 #endif
 #ifdef NANOVNA_F303
-#include "boards/STM32F303/rtc_v2.c"
+#include "src/platform/boards/stm32f303/drivers/rtc_v2.c"
 #else
-#include "boards/STM32F072/rtc_v2.c"
+#include "src/platform/boards/stm32f072/drivers/rtc_v2.c"
 #endif
 #endif
 
@@ -60,9 +60,9 @@
 #error "Need disable HAL_USE_DAC in halconf.h for use VNA_DAC"
 #endif
 #ifdef NANOVNA_F303
-#include "boards/STM32F303/dac_v1.c"
+#include "src/platform/boards/stm32f303/drivers/dac_v1.c"
 #else
-#include "boards/STM32F072/dac_v1.c"
+#include "src/platform/boards/stm32f072/drivers/dac_v1.c"
 #endif
 
 // Compact STM32 I2S library
@@ -70,40 +70,40 @@
 #error "Need disable HAL_USE_DAC in halconf.h for use VNA_DAC"
 #endif
 #ifdef NANOVNA_F303
-#include "boards/STM32F303/i2s.c"
+#include "src/platform/boards/stm32f303/drivers/i2s.c"
 #else
-#include "boards/STM32F072/i2s.c"
+#include "src/platform/boards/stm32f072/drivers/i2s.c"
 #endif
 
 // Compact STM32 flash library
 #ifdef NANOVNA_F303
-#include "boards/STM32F303/flash.c"
+#include "src/platform/boards/stm32f303/drivers/flash.c"
 #else
-#include "boards/STM32F072/flash.c"
+#include "src/platform/boards/stm32f072/drivers/flash.c"
 #endif
 
 // Compact STM32 GPIO library
 #if HAL_USE_PAL == FALSE
 #ifdef NANOVNA_F303
-#include "boards/STM32F303/gpio_v2.c"
+#include "src/platform/boards/stm32f303/drivers/gpio_v2.c"
 #else
-#include "boards/STM32F072/gpio_v2.c"
+#include "src/platform/boards/stm32f072/drivers/gpio_v2.c"
 #endif
 #endif
 
 // Compact STM32 DMA library
 #ifdef NANOVNA_F303
-#include "boards/STM32F303/dma_v1.c"
+#include "src/platform/boards/stm32f303/drivers/dma_v1.c"
 #else
-#include "boards/STM32F072/dma_v1.c"
+#include "src/platform/boards/stm32f072/drivers/dma_v1.c"
 #endif
 
 // Compact STM32 EXT library
 #if HAL_USE_EXT == FALSE
 #ifdef NANOVNA_F303
-#include "boards/STM32F303/exti_v1.c"
+#include "src/platform/boards/stm32f303/drivers/exti_v1.c"
 #else
-#include "boards/STM32F072/exti_v1.c"
+#include "src/platform/boards/stm32f072/drivers/exti_v1.c"
 #endif
 #endif
 

@@ -20,7 +20,7 @@
  */
 
 #include <stdint.h>
-#include "../nanovna.h"
+#include "system/nanovna.h"
 
 /*
  * Most font glyph have width 5 pixels

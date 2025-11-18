@@ -491,7 +491,7 @@ void tlv320aic3204_write_reg(uint8_t page, uint8_t reg, uint8_t data);
 /*
  * vna_math.c
  */
-#include "vna_math.h"
+#include "dsp/vna_math.h"
 
 /*
  * plot.c
@@ -1039,7 +1039,7 @@ typedef struct properties {
   uint16_t _cal_status;          // calibration data collected flags
   trace_t  _trace[TRACES_MAX];
   marker_t _markers[MARKERS_MAX];
-  uint8_t  _reserved;
+  uint8_t  _stored_traces;      // bitmask of persisted stored traces
   uint8_t  _velocity_factor;     // 0 .. 100 %
   float    _electrical_delay[2]; // delays for S11 and S21 traces in seconds
   float    _var_delay;           // electrical delay step by leveler

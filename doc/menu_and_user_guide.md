@@ -121,4 +121,4 @@ Automation clients rely on the USB shell prompt. Each session starts with `\r\nc
 
 ---
 
-This document mirrors the defaults in `include/nanovna.h` and `include/app.app_features.h`. Disable a feature flag at build time and the related menu entries disappear automatically.
+This document mirrors the defaults in `include/system/nanovna.h` and `include/app.app_features.h`. Disable a feature flag at build time and the related menu entries disappear automatically.

@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include "nanovna.h"
+#include "system/nanovna.h"
 
 typedef struct processing_port processing_port_t;
 typedef void (*processing_sample_func_t)(float* gamma);

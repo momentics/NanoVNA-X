@@ -28,7 +28,7 @@
  */
 
 #include "hal.h"
-#include "nanovna.h"
+#include "system/nanovna.h"
 #include "chprintf.h"
 #include <math.h>
 

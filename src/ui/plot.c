@@ -29,7 +29,7 @@
 #include "ch.h"
 #include "hal.h"
 #include "chprintf.h"
-#include "nanovna.h"
+#include "system/nanovna.h"
 #include "system/state_manager.h"
 
 // Icons bitmap resources
@@ -633,12 +633,21 @@ static void compact_cell_buffer(RenderCellCtx* rcx) {
  * Performs bounded searches on rectangular traces to avoid unnecessary work.
  */
 #if STORED_TRACES > 0
-static uint8_t enabled_store_trace = 0;
+static inline uint8_t stored_traces_mask(void) {
+  return current_props._stored_traces;
+}
+
+static inline void persist_stored_traces(uint8_t mask) {
+  current_props._stored_traces = mask;
+  state_manager_mark_dirty();
+}
 
 void toggle_stored_trace(int idx) {
-  uint8_t mask = 1 << idx;
-  if (enabled_store_trace & mask) {
-    enabled_store_trace &= ~mask;
+  uint8_t mask = (uint8_t)(1U << idx);
+  uint8_t stored = stored_traces_mask();
+  if ((stored & mask) != 0U) {
+    stored &= (uint8_t)~mask;
+    persist_stored_traces(stored);
     request_to_redraw(REDRAW_AREA);
     return;
   }
@@ -646,14 +655,17 @@ void toggle_stored_trace(int idx) {
     return;
   memcpy(trace_index_x[TRACES_MAX + idx], trace_index_x[current_trace], sizeof(trace_index_x[0]));
   memcpy(trace_index_y[TRACES_MAX + idx], trace_index_y[current_trace], sizeof(trace_index_y[0]));
-  enabled_store_trace |= mask;
+  stored |= mask;
+  persist_stored_traces(stored);
+  request_to_redraw(REDRAW_AREA);
 }
 
 uint8_t get_stored_traces(void) {
-  return enabled_store_trace;
+  return stored_traces_mask();
 }
 
 static bool need_process_trace(uint16_t idx) {
+  const uint8_t enabled_store_trace = stored_traces_mask();
   if (idx < TRACES_MAX)
     return trace[idx].enabled;
   else if (idx < TRACE_INDEX_COUNT)
@@ -672,7 +684,7 @@ uint8_t get_stored_traces(void) {
 static bool need_process_trace(uint16_t idx) {
   return trace[idx].enabled;
 }
-#define enabled_store_trace 0
+#define stored_traces_mask() 0U
 #endif
 
 static void render_traces_in_cell(RenderCellCtx* rcx) {
@@ -687,7 +699,7 @@ static void render_traces_in_cell(RenderCellCtx* rcx) {
     if (t < TRACES_MAX)
       rectangular = ((uint32_t)1u << trace[t].type) & RECTANGULAR_GRID_MASK;
     TraceIndexRange range = {.found = false, .i0 = 0, .i1 = 0};
-    if (rectangular && !enabled_store_trace && sweep_points > 30) {
+    if (rectangular && (stored_traces_mask() == 0U) && sweep_points > 30) {
       range = search_index_range_x(rcx->x0, rcx->x0 + rcx->w, index);
     }
     uint16_t start = range.found ? range.i0 : 0u;

@@ -20,7 +20,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#include "nanovna.h"
+#include "system/nanovna.h"
 #include "app/shell.h"
 #include "system/state_manager.h"
 #include "hal.h"
@@ -2106,8 +2106,7 @@ static uint16_t fix_screenshot_format(uint16_t data) {
 }
 
 #ifdef __SD_FILE_BROWSER__
-#include "../modules/vna_browser.c"
-
+#include "../modules/ui/vna_browser.c"
 static UI_FUNCTION_CALLBACK(menu_sdcard_browse_cb) {
   data = fix_screenshot_format(data);
   ui_mode_browser(data);

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2024, @momentics <momentics@gmail.com>
  * Based on Dmitry (DiSlord) dislordlive@gmail.com
  * All rights reserved.
@@ -18,7 +18,7 @@
  * the Free Software Foundation, Inc., 51 Franklin Street,
  * Boston, MA 02110-1301, USA.
  */
-#include "nanovna.h"
+#include "system/nanovna.h"
 #include "ui/input_adapters/hardware_input.h"
 static uint16_t file_count;
 static uint16_t page_count;

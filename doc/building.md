@@ -55,7 +55,7 @@ The codebase is now split into clearly defined layers rather than a flat DiSlord
 | `include/app`, `src/app` | Application-facing APIs (sweep service, shell, measurement pipeline, UI glue). |
 | `include/services`, `src/services` | Cross-cutting helpers such as the configuration service, scheduler, and event bus. |
 | `include/system`, `src/system` | Low-level components like `state_manager`, which owns persistence, backup registers, and delayed flash writes. |
-| `src/platform`, `boards/STM32F0/STM32F3` | Board support packages shared with ChibiOS. |
+| `src/platform`, `src/platform/boards/*` | Board support packages shared with ChibiOS. |
 
 When adding new code or porting patches, drop each feature into the matching layer to keep dependencies one-directional.
 

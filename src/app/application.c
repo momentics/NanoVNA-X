@@ -27,7 +27,7 @@
 #include "ch.h"
 #include "hal.h"
 #include "si5351.h"
-#include "nanovna.h"
+#include "system/nanovna.h"
 #include "app/shell.h"
 #include "usbcfg.h"
 #include "platform/hal.h"
@@ -2257,7 +2257,7 @@ VNA_SHELL_FUNCTION(cmd_release) {
 
 #ifdef ENABLE_SD_CARD_COMMAND
 #ifndef __USE_SD_CARD__
-#error "Need enable SD card support __USE_SD_CARD__ in nanovna.h, for use ENABLE_SD_CARD_COMMAND"
+#error "Need enable SD card support __USE_SD_CARD__ in system/nanovna.h, for use ENABLE_SD_CARD_COMMAND"
 #endif
 
 static FRESULT cmd_sd_card_mount(void) {
@@ -2514,7 +2514,7 @@ static void vna_shell_execute_line(char* line) {
 
 #ifdef __SD_CARD_LOAD__
 #ifndef __USE_SD_CARD__
-#error "Need enable SD card support __USE_SD_CARD__ in nanovna.h, for use __SD_CARD_LOAD__"
+#error "Need enable SD card support __USE_SD_CARD__ in system/nanovna.h, for use __SD_CARD_LOAD__"
 #endif
 bool sd_card_load_config(void) {
   if (f_mount(filesystem_volume(), "", 1) != FR_OK)
