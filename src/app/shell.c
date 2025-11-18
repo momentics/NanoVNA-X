@@ -76,10 +76,10 @@ static size_t shell_usb_write_bytes(const uint8_t* buf, size_t size) {
     return 0;
   }
   size_t written = 0;
-  while (written < size) {
+  while (written < size && usb_console_is_ready()) {
     const size_t chunk =
-        chnWriteTimeout(&SDU1, buf + written, size - written, SHELL_USB_WRITE_TIMEOUT);
-    if (chunk == 0 || !usb_console_is_ready()) {
+        obqWriteTimeout(&SDU1.obqueue, buf + written, size - written, SHELL_USB_WRITE_TIMEOUT);
+    if (chunk == 0) {
       break;
     }
     written += chunk;
@@ -91,7 +91,7 @@ static size_t shell_usb_read_bytes(void* buf, size_t size) {
   if (buf == NULL || size == 0 || !usb_console_is_ready()) {
     return 0;
   }
-  return chnReadTimeout(&SDU1, (uint8_t*)buf, size, TIME_IMMEDIATE);
+  return ibqReadTimeout(&SDU1.ibqueue, (uint8_t*)buf, size, TIME_IMMEDIATE);
 }
 
 static void shell_write(const void* buf, size_t size) {
