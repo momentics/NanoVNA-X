@@ -31,10 +31,6 @@
 #include <chprintf.h>
 #include <stdarg.h>
 
-#define SHELL_USB_WRITE_TIMEOUT MS2ST(5)
-#define SHELL_USB_READ_TIMEOUT MS2ST(50)
-#define SHELL_UART_WRITE_TIMEOUT MS2ST(5)
-
 static const VNAShellCommand* command_table = NULL;
 
 static BaseSequentialStream* shell_stream = NULL;
@@ -48,7 +44,6 @@ static bool shell_skip_linefeed = false;
 static event_bus_t* shell_event_bus = NULL;
 static char* shell_line_buffer = NULL;
 static volatile uint16_t shell_line_length = 0;
-static bool usb_shell_session_active = false;
 
 static void shell_on_event(const event_bus_message_t* message, void* user_data);
 
@@ -73,65 +68,24 @@ static void shell_prepare_line_buffer(char* line, int max_size) {
   }
 }
 
-static size_t shell_usb_write_bytes(const uint8_t* buf, size_t size) {
-  if (buf == NULL || size == 0 || !usb_console_is_ready()) {
-    return 0;
-  }
-  size_t written = 0;
-  while (written < size && usb_console_is_ready()) {
-    const size_t chunk =
-        obqWriteTimeout(&SDU1.obqueue, buf + written, size - written, SHELL_USB_WRITE_TIMEOUT);
-    if (chunk == 0) {
-      break;
-    }
-    written += chunk;
-  }
-  return written;
-}
-
-static size_t shell_usb_read_bytes(void* buf, size_t size) {
-  if (buf == NULL || size == 0 || !usb_console_is_ready()) {
-    return 0;
-  }
-  return ibqReadTimeout(&SDU1.ibqueue, (uint8_t*)buf, size, SHELL_USB_READ_TIMEOUT);
-}
-
 static void shell_write(const void* buf, size_t size) {
-  if (shell_stream == NULL || buf == NULL || size == 0) {
+  if (shell_stream == NULL || buf == NULL) {
     return;
   }
-  if (shell_stream_is_usb()) {
-    shell_usb_write_bytes((const uint8_t*)buf, size);
-    return;
-  }
-#ifdef __USE_SERIAL_CONSOLE__
-  sdWriteTimeout(&SD1, (const uint8_t*)buf, size, SHELL_UART_WRITE_TIMEOUT);
-#else
   streamWrite(shell_stream, buf, size);
-#endif
 }
 
 static size_t shell_read(void* buf, size_t size) {
-  if (shell_stream == NULL || buf == NULL || size == 0) {
+  if (shell_stream == NULL || buf == NULL) {
     return 0;
   }
-  if (shell_stream_is_usb()) {
-    return shell_usb_read_bytes(buf, size);
-  }
-#ifdef __USE_SERIAL_CONSOLE__
-  return sdReadTimeout(&SD1, (uint8_t*)buf, size, TIME_IMMEDIATE);
-#else
   return streamRead(shell_stream, buf, size);
-#endif
 }
 
 
 
 int shell_printf(const char* fmt, ...) {
   if (shell_stream == NULL) {
-    return 0;
-  }
-  if (shell_stream_is_usb() && !usb_console_is_ready()) {
     return 0;
   }
   va_list ap;
@@ -195,7 +149,7 @@ void shell_reset_console(void) {
   qResetI(&SD1.iqueue);
 #endif
   osalSysUnlock();
-  shell_reset_session_state();
+  shell_reset_line_state();
   shell_restore_stream();
 }
 
@@ -204,9 +158,12 @@ bool shell_check_connect(void) {
   if (VNA_MODE(VNA_MODE_CONNECTION)) {
     return true;
   }
-  return usb_console_is_ready();
+  osalSysLock();
+  const bool active = usb_is_active_locked();
+  osalSysUnlock();
+  return active;
 #else
-  return usb_console_is_ready();
+  return SDU1.config->usbp->state == USB_ACTIVE;
 #endif
 }
 
@@ -397,22 +354,4 @@ void vna_shell_execute_cmd_line(char* line) {
   if (shell_stream == NULL) {
     shell_restore_stream();
   }
-}
-bool shell_wait_for_session_activity(void) {
-  if (!shell_stream_is_usb()) {
-    return true;
-  }
-  if (usb_shell_session_active) {
-    return true;
-  }
-  if (!usb_console_rx_has_data()) {
-    return false;
-  }
-  usb_shell_session_active = true;
-  return true;
-}
-
-void shell_reset_session_state(void) {
-  usb_shell_session_active = false;
-  shell_reset_line_state();
 }
