@@ -23,6 +23,8 @@ extern const USBConfig usbcfg;
 extern SerialUSBConfig serusbcfg;
 extern SerialUSBDriver SDU1;
 
+bool usb_console_is_configured(void);
+bool usb_console_dtr_active(void);
 bool usb_console_is_ready(void);
 bool usb_console_rx_has_data(void);
 

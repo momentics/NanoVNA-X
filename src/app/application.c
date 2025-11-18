@@ -2207,8 +2207,9 @@ VNA_SHELL_FUNCTION(cmd_usart) {
   sdWriteTimeout(&SD1, (uint8_t*)VNA_SHELL_NEWLINE_STR, sizeof(VNA_SHELL_NEWLINE_STR) - 1, time);
   uint32_t size;
   uint8_t buffer[64];
-  while ((size = sdReadTimeout(&SD1, buffer, sizeof(buffer), time)))
-    streamWrite(&SDU1, buffer, size);
+  while ((size = sdReadTimeout(&SD1, buffer, sizeof(buffer), time)) != 0U) {
+    shell_stream_write(buffer, size);
+  }
 }
 #endif
 #endif

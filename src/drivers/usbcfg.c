@@ -402,6 +402,14 @@ bool usb_console_is_ready(void) {
   return usb_console_configured && usb_console_line_active;
 }
 
+bool usb_console_is_configured(void) {
+  return usb_console_configured;
+}
+
+bool usb_console_dtr_active(void) {
+  return usb_console_line_active;
+}
+
 bool usb_console_rx_has_data(void) {
   if (!usb_console_is_ready()) {
     return false;
