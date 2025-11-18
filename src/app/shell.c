@@ -42,6 +42,9 @@ static uint16_t pending_argc = 0;
 static char** pending_argv = NULL;
 static bool shell_skip_linefeed = false;
 static event_bus_t* shell_event_bus = NULL;
+static shell_session_callback_t shell_session_start_cb = NULL;
+static shell_session_callback_t shell_session_stop_cb = NULL;
+static bool shell_session_active = false;
 
 static void shell_on_event(const event_bus_message_t* message, void* user_data);
 
@@ -84,6 +87,20 @@ int serial_shell_printf(const char* fmt, ...) {
 
 void shell_stream_write(const void* buffer, size_t size) {
   shell_write(buffer, size);
+}
+
+static void shell_handle_session_transition(bool active) {
+  if (active && !shell_session_active) {
+    shell_session_active = true;
+    if (shell_session_start_cb != NULL) {
+      shell_session_start_cb();
+    }
+  } else if (!active && shell_session_active) {
+    shell_session_active = false;
+    if (shell_session_stop_cb != NULL) {
+      shell_session_stop_cb();
+    }
+  }
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
@@ -132,14 +149,18 @@ void shell_reset_console(void) {
 bool shell_check_connect(void) {
 #ifdef __USE_SERIAL_CONSOLE__
   if (VNA_MODE(VNA_MODE_CONNECTION)) {
+    shell_handle_session_transition(true);
     return true;
   }
   osalSysLock();
   const bool active = usb_is_active_locked();
   osalSysUnlock();
+  shell_handle_session_transition(active);
   return active;
 #else
-  return SDU1.config->usbp->state == USB_ACTIVE;
+  const bool active = SDU1.config->usbp->state == USB_ACTIVE;
+  shell_handle_session_transition(active);
+  return active;
 #endif
 }
 
@@ -215,7 +236,7 @@ void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t a
   osalThreadEnqueueTimeoutS(&shell_thread, TIME_INFINITE);
   osalSysUnlock();
   if (shell_event_bus != NULL) {
-    event_bus_publish(shell_event_bus, EVENT_SHELL_COMMAND_PENDING, NULL);
+    event_bus_publish(shell_event_bus, EVENT_USB_COMMAND_PENDING, NULL);
   }
 }
 
@@ -246,8 +267,19 @@ void shell_attach_event_bus(event_bus_t* bus) {
   }
   shell_event_bus = bus;
   if (bus != NULL) {
-    event_bus_subscribe(bus, EVENT_SHELL_COMMAND_PENDING, shell_on_event, NULL);
+    event_bus_subscribe(bus, EVENT_USB_COMMAND_PENDING, shell_on_event, NULL);
   }
+}
+
+void shell_register_session_start_callback(shell_session_callback_t callback) {
+  shell_session_start_cb = callback;
+  if (shell_session_active && shell_session_start_cb != NULL) {
+    shell_session_start_cb();
+  }
+}
+
+void shell_register_session_stop_callback(shell_session_callback_t callback) {
+  shell_session_stop_cb = callback;
 }
 
 static void shell_on_event(const event_bus_message_t* message, void* user_data) {
@@ -255,7 +287,7 @@ static void shell_on_event(const event_bus_message_t* message, void* user_data) 
   if (message == NULL) {
     return;
   }
-  if (message->topic != EVENT_SHELL_COMMAND_PENDING) {
+  if (message->topic != EVENT_USB_COMMAND_PENDING) {
     return;
   }
   shell_service_pending_commands();

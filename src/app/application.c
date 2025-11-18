@@ -37,7 +37,7 @@
 #include "modules/measurement/measurement_engine.h"
 #include "modules/processing/processing_port.h"
 #include "modules/ui/ui_port.h"
-#include "modules/usb/usb_server_port.h"
+#include "modules/usb/usb_command_server_port.h"
 #include "platform/boards/stm32_peripherals.h"
 #include "system/state_manager.h"
 #include "menu_controller/display_presenter.h"
@@ -77,8 +77,8 @@ static const processing_port_t processing_port __attribute__((unused)) = {.conte
                                                                           .api = &processing_port_api};
 static const ui_module_port_t ui_port __attribute__((unused)) = {.context = NULL,
                                                                  .api = &ui_port_api};
-static const usb_server_port_t usb_port __attribute__((unused)) = {.context = NULL,
-                                                                   .api = &usb_port_api};
+static const usb_command_server_port_t usb_port __attribute__((unused)) = {
+    .context = NULL, .api = &usb_command_server_port_api};
 
 static bool app_measurement_can_start_sweep(measurement_engine_port_t* port,
                                             measurement_engine_request_t* request);
@@ -106,10 +106,22 @@ static measurement_engine_port_t measurement_engine_port = {
   usb_port.api->request_deferred_execution((command), (argc), (argv))
 #define vna_shell_read_line(line, max_size) usb_port.api->read_line((line), (max_size))
 #define vna_shell_execute_cmd_line(line) usb_port.api->execute_cmd_line((line))
+#define shell_attach_bus(bus) usb_port.api->attach_event_bus((bus))
+#define shell_on_session_start(cb) usb_port.api->on_session_start((cb))
+#define shell_on_session_stop(cb) usb_port.api->on_session_stop((cb))
+
+static void usb_command_session_started(void);
+static void usb_command_session_stopped(void);
 
 #ifdef __USE_SD_CARD__
 static FATFS fs_volume_instance;
 static FIL fs_file_instance;
+
+static void usb_command_session_started(void) {
+  shell_printf(VNA_SHELL_NEWLINE_STR "NanoVNA Shell" VNA_SHELL_NEWLINE_STR);
+}
+
+static void usb_command_session_stopped(void) {}
 
 FATFS* filesystem_volume(void) {
   return &fs_volume_instance;
@@ -2613,6 +2625,9 @@ int app_main(void) {
   event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
                  app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage),
                  app_event_nodes, ARRAY_COUNT(app_event_nodes));
+  shell_attach_bus(&app_event_bus);
+  shell_on_session_start(usb_command_session_started);
+  shell_on_session_stop(usb_command_session_stopped);
   board_events_init(&board_events);
 
   ui_controller_port_t ui_controller_port = {
@@ -2668,8 +2683,10 @@ int app_main(void) {
   chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO - 1, Thread1, NULL);
 
   while (1) {
-    if (shell_check_connect()) {
-      shell_printf(VNA_SHELL_NEWLINE_STR "NanoVNA Shell" VNA_SHELL_NEWLINE_STR);
+    if (!shell_check_connect()) {
+      chThdSleepMilliseconds(1000);
+      continue;
+    }
 #ifdef VNA_SHELL_THREAD
 #if CH_CFG_USE_WAITEXIT == FALSE
 #error "VNA_SHELL_THREAD use chThdWait, need enable CH_CFG_USE_WAITEXIT in chconf.h"
@@ -2678,16 +2695,14 @@ int app_main(void) {
           chThdCreateStatic(waThread2, sizeof(waThread2), NORMALPRIO + 1, myshellThread, NULL);
       chThdWait(shelltp);
 #else
-      do {
-        shell_printf(VNA_SHELL_PROMPT_STR);
-        if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH))
-          vna_shell_execute_line(shell_line);
-        else
-          chThdSleepMilliseconds(200);
-      } while (shell_check_connect());
+    do {
+      shell_printf(VNA_SHELL_PROMPT_STR);
+      if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH))
+        vna_shell_execute_line(shell_line);
+      else
+        chThdSleepMilliseconds(200);
+    } while (shell_check_connect());
 #endif
-    }
-    chThdSleepMilliseconds(1000);
   }
 }
 

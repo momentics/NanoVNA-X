@@ -45,6 +45,8 @@ typedef struct {
   uint16_t flags;
 } VNAShellCommand;
 
+typedef void (*shell_session_callback_t)(void);
+
 enum {
   CMD_WAIT_MUTEX = 1,
   CMD_BREAK_SWEEP = 2,
@@ -72,6 +74,8 @@ const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** a
 void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t argc, char** argv);
 void shell_service_pending_commands(void);
 void shell_attach_event_bus(event_bus_t* bus);
+void shell_register_session_start_callback(shell_session_callback_t callback);
+void shell_register_session_stop_callback(shell_session_callback_t callback);
 
 int vna_shell_read_line(char* line, int max_size);
 void vna_shell_execute_cmd_line(char* line);

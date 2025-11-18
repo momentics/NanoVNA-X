@@ -204,7 +204,7 @@ CSRC = $(STARTUPSRC) \
        src/modules/measurement/measurement_engine.c \
        src/modules/processing/processing_port.c \
        src/modules/ui/ui_port.c \
-       src/modules/usb/usb_server_port.c
+       src/modules/usb/usb_command_server_port.c
 
 # C++ sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.
