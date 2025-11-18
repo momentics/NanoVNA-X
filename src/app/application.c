@@ -40,6 +40,9 @@
 #include "modules/usb/usb_server_port.h"
 #include "platform/boards/stm32_peripherals.h"
 #include "system/state_manager.h"
+#include "menu_controller/display_presenter.h"
+#include "menu_controller/ui_controller.h"
+#include "platform/boards/board_events.h"
 
 #ifdef __LCD_BRIGHTNESS__
 void lcd_set_brightness(uint16_t brightness);
@@ -59,11 +62,15 @@ void lcd_set_brightness(uint16_t brightness);
 // #define VNA_SHELL_THREAD
 
 static event_bus_t app_event_bus;
-static event_bus_subscription_t app_event_slots[8];
+static event_bus_subscription_t app_event_slots[6];
 
-#define APP_EVENT_QUEUE_DEPTH 8U
+#define APP_EVENT_QUEUE_DEPTH 6U
 static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
 static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
+
+static board_events_t board_events;
+static const display_presenter_t lcd_display_presenter = {.context = NULL,
+                                                          .api = &display_presenter_lcd_api};
 
 static measurement_engine_t measurement_engine;
 static const processing_port_t processing_port __attribute__((unused)) = {.context = NULL,
@@ -2494,7 +2501,7 @@ static void vna_shell_execute_line(char* line) {
       cmd_flag &= (uint16_t)~CMD_WAIT_MUTEX;
     }
     if (cmd_flag & CMD_BREAK_SWEEP) {
-      operation_requested |= OP_CONSOLE;
+      ui_controller_request_console_break();
     }
     if (cmd_flag & CMD_WAIT_MUTEX) {
       shell_request_deferred_execution(cmd, argc, argv);
@@ -2606,6 +2613,14 @@ int app_main(void) {
   event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
                  app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage),
                  app_event_nodes, ARRAY_COUNT(app_event_nodes));
+  board_events_init(&board_events);
+
+  ui_controller_port_t ui_controller_port = {
+      .board_events = &board_events,
+      .display = &lcd_display_presenter,
+      .config_events = &app_event_bus,
+  };
+  ui_controller_configure(&ui_controller_port);
 
   measurement_engine_init(&measurement_engine, &measurement_engine_port, &app_event_bus, drivers);
 

@@ -921,18 +921,23 @@ static msg_t lcd_put(void* ip, uint8_t ch) {
 }
 
 // Simple print in buffer function
-int lcd_printf(int16_t x, int16_t y, const char* fmt, ...) {
-  // Init small lcd print stream
+int lcd_printf_va(int16_t x, int16_t y, const char* fmt, va_list ap) {
   struct lcd_printStreamVMT {
     _base_sequential_stream_methods
   } lcd_vmt = {NULL, NULL, lcd_put, NULL};
   lcdPrintStream ps = {&lcd_vmt, x, y, x, y, 0};
-  // Performing the print operation using the common code.
+  va_list args;
+  va_copy(args, ap);
+  int retval = chvprintf((BaseSequentialStream*)(void*)&ps, fmt, args);
+  va_end(args);
+  return retval;
+}
+
+int lcd_printf(int16_t x, int16_t y, const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  int retval = chvprintf((BaseSequentialStream*)(void*)&ps, fmt, ap);
+  int retval = lcd_printf_va(x, y, fmt, ap);
   va_end(ap);
-  // Return number of bytes that would have been written.
   return retval;
 }
 

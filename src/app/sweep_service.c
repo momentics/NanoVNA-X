@@ -24,6 +24,7 @@
 
 #include "hal.h"
 #include "si5351.h"
+#include "menu_controller/ui_controller.h"
 
 #include <math.h>
 #include <stdalign.h>
@@ -71,7 +72,12 @@ void sweep_service_set_sample_function(void (*func)(float*)) {
 }
 
 static inline bool sweep_ui_input_pending(void) {
-  return (operation_requested & (OP_TOUCH | OP_LEVER)) != 0;
+  uint8_t pending = ui_controller_pending_requests();
+  if (pending & UI_CONTROLLER_REQUEST_CONSOLE) {
+    ui_controller_release_requests(UI_CONTROLLER_REQUEST_CONSOLE);
+    return true;
+  }
+  return (pending & (UI_CONTROLLER_REQUEST_TOUCH | UI_CONTROLLER_REQUEST_LEVER)) != 0;
 }
 
 #ifdef __USE_FREQ_TABLE__

@@ -23,6 +23,7 @@
 #include "ch.h"
 #include "services/event_bus.h"
 #include <stdalign.h>
+#include <stdarg.h>
 #include <stdint.h>
 
 // Define LCD display driver and size
@@ -62,6 +63,9 @@
 #define __USE_GRID_VALUES__
 // Add remote desktop option
 #define __REMOTE_DESKTOP__
+#if !defined(NANOVNA_F303)
+#undef __REMOTE_DESKTOP__
+#endif
 // Add RLE8 compression capture image format
 #define __CAPTURE_RLE8__
 // Allow flip display
@@ -1289,6 +1293,7 @@ void lcd_drawstring(int16_t x, int16_t y, const char *str);
 #endif
 int  lcd_printf(int16_t x, int16_t y, const char *fmt, ...);
 int  lcd_printf_v(int16_t x, int16_t y, const char *fmt, ...);
+int  lcd_printf_va(int16_t x, int16_t y, const char *fmt, va_list ap);
 int  lcd_drawchar_size(uint8_t ch, int x, int y, uint8_t size);
 void lcd_drawstring_size(const char *str, int x, int y, uint8_t size);
 void lcd_drawfont(uint8_t ch, int x, int y);
@@ -1449,13 +1454,6 @@ void ui_message_box(const char *header, const char *text, uint32_t delay);
 #ifdef __USE_SD_CARD__
 bool sd_card_load_config(void);
 #endif
-
-// Irq operation process set
-#define OP_NONE       0x00
-#define OP_LEVER      0x01
-#define OP_TOUCH      0x02
-#define OP_CONSOLE    0x04
-extern uint8_t operation_requested;
 
 #define TOUCH_THRESHOLD 2000
 /*

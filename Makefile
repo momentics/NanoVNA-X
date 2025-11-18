@@ -186,8 +186,10 @@ CSRC = $(STARTUPSRC) \
        src/dsp/dsp.c \
        src/dsp/vna_math.c \
        src/ui/plot.c \
-       src/ui/ui.c \
+       src/menu_controller/ui_controller.c \
        src/drivers/lcd.c \
+       src/menu_controller/display_presenter.c \
+       src/platform/boards/board_events.c \
        src/services/config_service.c \
        src/services/event_bus.c \
        src/services/scheduler.c \

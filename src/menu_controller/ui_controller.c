@@ -30,6 +30,9 @@
 #include <string.h>
 #include "si5351.h"
 #include "ui/input_adapters/hardware_input.h"
+#include "menu_controller/display_presenter.h"
+#include "menu_controller/ui_controller.h"
+#include "platform/boards/board_events.h"
 
 // Use size optimization (UI not need fast speed, better have smallest size)
 #pragma GCC optimize("Os")
@@ -52,9 +55,81 @@ static uint8_t touch_status_flag = 0;
 static uint8_t last_touch_status = EVT_TOUCH_NONE;
 static int16_t last_touch_x;
 static int16_t last_touch_y;
-uint8_t operation_requested = OP_NONE;
 
 static event_bus_t* ui_event_bus = NULL;
+static board_events_t* ui_board_events = NULL;
+static bool ui_board_events_subscribed = false;
+static uint8_t ui_request_flags = UI_CONTROLLER_REQUEST_NONE;
+
+#ifdef lcd_drawstring
+#undef lcd_drawstring
+#endif
+#ifdef lcd_drawstring_size
+#undef lcd_drawstring_size
+#endif
+#ifdef lcd_printf
+#undef lcd_printf
+#endif
+#ifdef lcd_drawchar
+#undef lcd_drawchar
+#endif
+#ifdef lcd_drawchar_size
+#undef lcd_drawchar_size
+#endif
+#ifdef lcd_drawfont
+#undef lcd_drawfont
+#endif
+#ifdef lcd_fill
+#undef lcd_fill
+#endif
+#ifdef lcd_bulk
+#undef lcd_bulk
+#endif
+#ifdef lcd_read_memory
+#undef lcd_read_memory
+#endif
+#ifdef lcd_line
+#undef lcd_line
+#endif
+#ifdef lcd_set_background
+#undef lcd_set_background
+#endif
+#ifdef lcd_set_colors
+#undef lcd_set_colors
+#endif
+#ifdef lcd_set_flip
+#undef lcd_set_flip
+#endif
+#ifdef lcd_set_font
+#undef lcd_set_font
+#endif
+#ifdef lcd_blit_bitmap
+#undef lcd_blit_bitmap
+#endif
+
+#define lcd_drawstring(...) display_presenter_drawstring(__VA_ARGS__)
+#define lcd_drawstring_size(...) display_presenter_drawstring_size(__VA_ARGS__)
+#define lcd_printf(...) display_presenter_printf(__VA_ARGS__)
+#define lcd_drawchar(...) display_presenter_drawchar(__VA_ARGS__)
+#define lcd_drawchar_size(...) display_presenter_drawchar_size(__VA_ARGS__)
+#define lcd_drawfont(...) display_presenter_drawfont(__VA_ARGS__)
+#define lcd_fill(...) display_presenter_fill(__VA_ARGS__)
+#define lcd_bulk(...) display_presenter_bulk(__VA_ARGS__)
+#define lcd_read_memory(...) display_presenter_read_memory(__VA_ARGS__)
+#define lcd_line(...) display_presenter_line(__VA_ARGS__)
+#define lcd_set_background(...) display_presenter_set_background(__VA_ARGS__)
+#define lcd_set_colors(...) display_presenter_set_colors(__VA_ARGS__)
+#define lcd_set_flip(...) display_presenter_set_flip(__VA_ARGS__)
+#define lcd_set_font(...) display_presenter_set_font(__VA_ARGS__)
+#define lcd_blit_bitmap(...) display_presenter_blit_bitmap(__VA_ARGS__)
+
+static void ui_controller_set_request(uint8_t mask);
+static uint8_t ui_controller_acquire_requests(uint8_t mask);
+static void ui_controller_dispatch_board_events(void);
+static void ui_controller_on_button_event(const board_event_t* event, void* user_data);
+static void ui_controller_on_touch_event(const board_event_t* event, void* user_data);
+static void ui_controller_publish_board_event(board_event_type_t topic, uint16_t channel,
+                                              bool from_isr);
 
 static void ui_on_event(const event_bus_message_t* message, void* user_data);
 
@@ -87,6 +162,103 @@ static void ui_on_event(const event_bus_message_t* message, void* user_data) {
     break;
   default:
     break;
+  }
+}
+
+static void ui_controller_set_request(uint8_t mask) {
+  chSysLock();
+  ui_request_flags |= mask;
+  chSysUnlock();
+}
+
+static uint8_t ui_controller_acquire_requests(uint8_t mask) {
+  chSysLock();
+  uint8_t pending = ui_request_flags & mask;
+  ui_request_flags &= (uint8_t)~pending;
+  chSysUnlock();
+  return pending;
+}
+
+uint8_t ui_controller_pending_requests(void) {
+  uint8_t flags;
+  chSysLock();
+  flags = ui_request_flags;
+  chSysUnlock();
+  if (ui_board_events != NULL) {
+    uint32_t pending_mask = board_events_pending_mask(ui_board_events);
+    if (pending_mask & (1U << BOARD_EVENT_BUTTON)) {
+      flags |= UI_CONTROLLER_REQUEST_LEVER;
+    }
+    if (pending_mask & (1U << BOARD_EVENT_TOUCH)) {
+      flags |= UI_CONTROLLER_REQUEST_TOUCH;
+    }
+  }
+  return flags;
+}
+
+void ui_controller_release_requests(uint8_t mask) {
+  chSysLock();
+  ui_request_flags &= (uint8_t)~mask;
+  chSysUnlock();
+}
+
+void ui_controller_request_console_break(void) {
+  ui_controller_set_request(UI_CONTROLLER_REQUEST_CONSOLE);
+}
+
+static void ui_controller_dispatch_board_events(void) {
+  if (ui_board_events == NULL) {
+    return;
+  }
+  while (board_events_dispatch(ui_board_events)) {
+  }
+}
+
+static void ui_controller_on_button_event(const board_event_t* event, void* user_data) {
+  (void)user_data;
+  (void)event;
+  ui_controller_set_request(UI_CONTROLLER_REQUEST_LEVER);
+}
+
+static void ui_controller_on_touch_event(const board_event_t* event, void* user_data) {
+  (void)user_data;
+  (void)event;
+  ui_controller_set_request(UI_CONTROLLER_REQUEST_TOUCH);
+}
+
+void ui_controller_configure(const ui_controller_port_t* port) {
+  if (port == NULL) {
+    display_presenter_bind(NULL);
+    ui_board_events = NULL;
+    ui_board_events_subscribed = false;
+    ui_attach_event_bus(NULL);
+    return;
+  }
+  display_presenter_bind(port->display);
+  ui_attach_event_bus(port->config_events);
+  ui_board_events = port->board_events;
+  if (ui_board_events != NULL && !ui_board_events_subscribed) {
+    board_events_subscribe(ui_board_events, BOARD_EVENT_BUTTON, ui_controller_on_button_event, NULL);
+    board_events_subscribe(ui_board_events, BOARD_EVENT_TOUCH, ui_controller_on_touch_event, NULL);
+    ui_board_events_subscribed = true;
+  }
+}
+
+static void ui_controller_publish_board_event(board_event_type_t topic, uint16_t channel,
+                                              bool from_isr) {
+  if (ui_board_events == NULL) {
+    return;
+  }
+  board_event_t event = {.topic = topic};
+  if (topic == BOARD_EVENT_BUTTON) {
+    event.data.button.channel = channel;
+  } else {
+    event.data.button.channel = channel;
+  }
+  if (from_isr) {
+    board_events_publish_from_isr(ui_board_events, &event);
+  } else {
+    board_events_publish(ui_board_events, &event);
   }
 }
 
@@ -375,7 +547,7 @@ void remote_touch_set(uint16_t state, int16_t x, int16_t y) {
     last_touch_x = x;
   if (y != -1)
     last_touch_y = y;
-  handle_touch_interrupt();
+  ui_controller_publish_board_event(BOARD_EVENT_TOUCH, 0, false);
 }
 #endif
 
@@ -3877,29 +4049,27 @@ static void ui_process_touch(void) {
 }
 
 void ui_process(void) {
-  // if (ui_mode >= UI_END) return; // for safe
-  if (operation_requested & OP_LEVER)
+  ui_controller_dispatch_board_events();
+  uint8_t requests = ui_controller_acquire_requests(UI_CONTROLLER_REQUEST_LEVER |
+                                                    UI_CONTROLLER_REQUEST_TOUCH);
+  if (requests & UI_CONTROLLER_REQUEST_LEVER) {
     ui_process_lever();
-  if (operation_requested & OP_TOUCH)
+  }
+  if (requests & UI_CONTROLLER_REQUEST_TOUCH) {
     ui_process_touch();
+  }
 
   touch_start_watchdog();
-  operation_requested = OP_NONE;
 }
 
 void handle_button_interrupt(uint16_t channel) {
-  (void)channel;
-  operation_requested |= OP_LEVER;
-  // cur_button = READ_PORT() & BUTTON_MASK;
+  ui_controller_publish_board_event(BOARD_EVENT_BUTTON, channel, true);
 }
 
 // static systime_t t_time = 0;
 //  Triggered touch interrupt call
 void handle_touch_interrupt(void) {
-  operation_requested |= OP_TOUCH;
-  //  systime_t n_time = chVTGetSystemTimeX();
-  //  shell_printf("%d\r\n", n_time - t_time);
-  //  t_time = n_time;
+  ui_controller_publish_board_event(BOARD_EVENT_TOUCH, 0, true);
 }
 
 #if HAL_USE_EXT == TRUE // Use ChibiOS EXT code (need lot of flash ~1.5k)
