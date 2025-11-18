@@ -2321,7 +2321,9 @@ void request_to_redraw(uint16_t mask) {
 }
 
 void plot_init(void) {
+#if _USE_FONT_ != _USE_SMALL_FONT_
   put_char = put_normal;
+#endif
   area_width = AREA_WIDTH_NORMAL;
   area_height = AREA_HEIGHT_NORMAL;
   request_to_redraw(REDRAW_PLOT | REDRAW_ALL);
