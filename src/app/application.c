@@ -34,7 +34,7 @@
 #include "services/config_service.h"
 #include "services/event_bus.h"
 #include "version_info.h"
-#include "modules/measurement/measurement_port.h"
+#include "modules/measurement/measurement_engine.h"
 #include "modules/processing/processing_port.h"
 #include "modules/ui/ui_port.h"
 #include "modules/usb/usb_server_port.h"
@@ -65,58 +65,26 @@ static event_bus_subscription_t app_event_slots[8];
 static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
 static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
 
-static measurement_module_context_t measurement_context;
-static const measurement_port_t measurement_port = {
-    .context = &measurement_context,
-    .api = &measurement_port_api,
-};
+static measurement_engine_t measurement_engine;
 static const processing_port_t processing_port __attribute__((unused)) = {.context = NULL,
                                                                           .api = &processing_port_api};
-static const ui_module_port_t ui_port __attribute__((unused)) = {.context = NULL, .api = &ui_port_api};
-static const usb_server_port_t usb_port __attribute__((unused)) = {.context = NULL, .api = &usb_port_api};
+static const ui_module_port_t ui_port __attribute__((unused)) = {.context = NULL,
+                                                                 .api = &ui_port_api};
+static const usb_server_port_t usb_port __attribute__((unused)) = {.context = NULL,
+                                                                   .api = &usb_port_api};
 
-#define MEASUREMENT_PORT_REF (&measurement_port)
+static bool app_measurement_can_start_sweep(measurement_engine_port_t* port,
+                                            measurement_engine_request_t* request);
+static void app_measurement_handle_result(measurement_engine_port_t* port,
+                                          const measurement_engine_result_t* result);
+static void app_measurement_service_loop(measurement_engine_port_t* port);
 
-#define measurement_pipeline_init(instance, drivers)                                               \
-  do {                                                                                             \
-    (void)(instance);                                                                              \
-    measurement_port.api->pipeline_init(measurement_port.context, (drivers));                      \
-  } while (0)
-#define measurement_pipeline_active_mask(instance)                                                 \
-  ((void)(instance), measurement_port.api->active_mask(measurement_port.context))
-#define measurement_pipeline_execute(instance, break_on_operation, mask)                           \
-  ((void)(instance),                                                                               \
-   measurement_port.api->execute(measurement_port.context, (break_on_operation), (mask)))
-
-#define sweep_service_init() measurement_port.api->service_init()
-#define sweep_service_wait_for_copy_release() measurement_port.api->wait_for_copy_release()
-#define sweep_service_begin_measurement() measurement_port.api->begin_measurement()
-#define sweep_service_end_measurement() measurement_port.api->end_measurement()
-#define sweep_service_increment_generation() measurement_port.api->increment_generation()
-#define sweep_service_wait_for_generation() measurement_port.api->wait_for_generation()
-#define sweep_service_reset_progress() measurement_port.api->reset_progress()
-#define sweep_service_snapshot_acquire(channel, snapshot)                                          \
-  measurement_port.api->snapshot_acquire((channel), (snapshot))
-#define sweep_service_snapshot_release(snapshot) measurement_port.api->snapshot_release((snapshot))
-#define sweep_service_start_capture(delay_ticks) measurement_port.api->start_capture((delay_ticks))
-#define sweep_service_wait_for_capture() measurement_port.api->wait_for_capture()
-#define sweep_service_rx_buffer() measurement_port.api->rx_buffer()
-#define sweep_service_set_sample_function(func) measurement_port.api->set_sample_function((func))
-#if ENABLED_DUMP_COMMAND
-#define sweep_service_prepare_dump(buffer, count, selection)                                       \
-  measurement_port.api->prepare_dump((buffer), (count), (selection))
-#define sweep_service_dump_ready() measurement_port.api->dump_ready()
-#endif
-
-#define app_measurement_get_sweep_mask() measurement_port.api->sweep_mask()
-#define app_measurement_sweep(break_on_operation, mask)                                            \
-  measurement_port.api->sweep((break_on_operation), (mask))
-#define app_measurement_set_frequency(freq) measurement_port.api->set_frequency((freq))
-#define app_measurement_set_frequencies(start, stop, points)                                       \
-  measurement_port.api->set_frequencies((start), (stop), (points))
-#define app_measurement_transform_domain(mask) measurement_port.api->transform_domain((mask))
-#define set_smooth_factor(factor) measurement_port.api->set_smooth_factor((factor))
-#define get_smooth_factor() measurement_port.api->get_smooth_factor()
+static measurement_engine_port_t measurement_engine_port = {
+    .context = NULL,
+    .can_start_sweep = app_measurement_can_start_sweep,
+    .handle_result = app_measurement_handle_result,
+    .service_loop = app_measurement_service_loop,
+};
 
 #define shell_register_commands(table) usb_port.api->register_commands((table))
 #define shell_init_connection() usb_port.api->init_connection()
@@ -265,6 +233,41 @@ static void schedule_battery_redraw(void) {
   request_to_redraw(REDRAW_BATTERY);
 }
 
+static bool app_measurement_can_start_sweep(measurement_engine_port_t* port,
+                                            measurement_engine_request_t* request) {
+  (void)port;
+  if (request != NULL) {
+    request->break_on_operation = true;
+  }
+  return (sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) != 0;
+}
+
+static void app_measurement_handle_result(measurement_engine_port_t* port,
+                                          const measurement_engine_result_t* result) {
+  (void)port;
+  sweep_mode &= (uint8_t)~SWEEP_ONCE;
+  if (result == NULL || !result->completed) {
+    return;
+  }
+  if ((props_mode & DOMAIN_MODE) == DOMAIN_TIME) {
+    app_measurement_transform_domain(result->sweep_mask);
+  }
+  request_to_redraw(REDRAW_PLOT);
+}
+
+static void app_measurement_service_loop(measurement_engine_port_t* port) {
+  (void)port;
+  shell_service_pending_commands();
+  sweep_mode |= SWEEP_UI_MODE;
+  ui_port.api->process();
+  sweep_mode &= (uint8_t)~SWEEP_UI_MODE;
+  schedule_battery_redraw();
+#ifndef DEBUG_CONSOLE_SHOW
+  draw_all();
+#endif
+  state_manager_service();
+}
+
 static THD_WORKING_AREA(waThread1, 768);
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
@@ -280,41 +283,7 @@ static THD_FUNCTION(Thread1, arg) {
   // Initialize graph plotting
   plot_init();
   while (1) {
-    bool completed = false;
-    uint16_t mask = measurement_pipeline_active_mask(MEASUREMENT_PORT_REF);
-    if (sweep_mode & (SWEEP_ENABLE | SWEEP_ONCE)) {
-      sweep_service_wait_for_copy_release();
-      sweep_service_begin_measurement();
-      event_bus_publish(&app_event_bus, EVENT_SWEEP_STARTED, &mask);
-      completed = measurement_pipeline_execute(MEASUREMENT_PORT_REF, true, mask);
-      sweep_mode &= ~SWEEP_ONCE;
-      sweep_service_end_measurement();
-    } else {
-      sweep_service_end_measurement();
-      __WFI();
-    }
-    shell_service_pending_commands();
-    // Process UI inputs
-    sweep_mode |= SWEEP_UI_MODE;
-    ui_port.api->process();
-    sweep_mode &= ~SWEEP_UI_MODE;
-    // Process collected data, calculate trace coordinates and plot only if scan completed
-    if (completed) {
-      sweep_service_increment_generation();
-      event_bus_publish(&app_event_bus, EVENT_SWEEP_COMPLETED, &mask);
-      //      START_PROFILE
-      if ((props_mode & DOMAIN_MODE) == DOMAIN_TIME)
-        app_measurement_transform_domain(mask);
-      //      STOP_PROFILE;
-      // Prepare draw graphics, cache all lines, mark screen cells for redraw
-      request_to_redraw(REDRAW_PLOT);
-    }
-    schedule_battery_redraw();
-#ifndef DEBUG_CONSOLE_SHOW
-    // plot trace and other indications as raster
-    draw_all();
-#endif
-    state_manager_service();
+    measurement_engine_tick(&measurement_engine);
   }
 }
 
@@ -353,7 +322,7 @@ properties_t current_props;
 
 int load_properties(uint32_t id) {
   int r = caldata_recall(id);
-  measurement_port.api->update_frequencies();
+  app_measurement_update_frequencies();
 #ifdef __VNA_MEASURE_MODULE__
   plot_set_measure_mode(current_props._measure);
 #endif
@@ -371,7 +340,7 @@ VNA_SHELL_FUNCTION(cmd_resume) {
   (void)argv;
 
   // restore frequencies array and cal
-  measurement_port.api->update_frequencies();
+  app_measurement_update_frequencies();
   resume_sweep();
 }
 
@@ -817,7 +786,7 @@ void set_sweep_points(uint16_t points) {
   if (points == sweep_points)
     return;
   sweep_points = points;
-  measurement_port.api->update_frequencies();
+  app_measurement_update_frequencies();
   update_backup_data();
   state_manager_mark_dirty();
 }
@@ -941,7 +910,7 @@ VNA_SHELL_FUNCTION(cmd_scan) {
 
   if (restore_config) {
     sweep_points = original_points;
-    measurement_port.api->update_frequencies();
+    app_measurement_update_frequencies();
   }
 }
 
@@ -1101,7 +1070,7 @@ static void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforc
     update_backup_data();
     return;
   }
-  measurement_port.api->update_frequencies();
+  app_measurement_update_frequencies();
   update_backup_data();
   state_manager_mark_dirty();
 }
@@ -1114,7 +1083,7 @@ void reset_sweep_frequency(void) {
   frequency0 = cal_frequency0;
   frequency1 = cal_frequency1;
   sweep_points = cal_sweep_points;
-  measurement_port.api->update_frequencies();
+  app_measurement_update_frequencies();
   update_backup_data();
   state_manager_mark_dirty();
 }
@@ -2633,13 +2602,12 @@ int app_main(void) {
     }
   }
 
-  measurement_pipeline_init(MEASUREMENT_PORT_REF, drivers);
-  sweep_service_init();
-
   config_service_init();
   event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
                  app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage),
                  app_event_nodes, ARRAY_COUNT(app_event_nodes));
+
+  measurement_engine_init(&measurement_engine, &measurement_engine_port, &app_event_bus, drivers);
 
   /*
    * restore config and calibration 0 slot from flash memory, also if need use backup data

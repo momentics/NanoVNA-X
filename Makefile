@@ -199,7 +199,7 @@ CSRC = $(STARTUPSRC) \
        src/ui/hardware_input.c \
        src/system/state_manager.c \
        src/middleware/chprintf.c \
-       src/modules/measurement/measurement_port.c \
+       src/modules/measurement/measurement_engine.c \
        src/modules/processing/processing_port.c \
        src/modules/ui/ui_port.c \
        src/modules/usb/usb_server_port.c
