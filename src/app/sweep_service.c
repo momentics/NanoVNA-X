@@ -255,23 +255,14 @@ void sweep_service_reset_progress(void) {
 }
 
 void sweep_service_wait_for_copy_release(void) {
-  const systime_t start = chVTGetSystemTimeX();
   while (true) {
     osalSysLock();
-    const bool busy = sweep_copy_in_progress;
-    if (!busy) {
-      osalSysUnlock();
-      break;
-    }
-    const bool timed_out = chVTTimeElapsedSinceX(start) > MS2ST(50);
-    if (timed_out) {
-      sweep_copy_in_progress = false;
-    }
+    bool busy = sweep_copy_in_progress;
     osalSysUnlock();
-    if (timed_out) {
+    if (!busy) {
       break;
     }
-    chThdSleepMilliseconds(1);
+    chThdYield();
   }
 }
 

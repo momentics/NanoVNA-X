@@ -42,44 +42,24 @@ static uint16_t pending_argc = 0;
 static char** pending_argv = NULL;
 static bool shell_skip_linefeed = false;
 static event_bus_t* shell_event_bus = NULL;
-static char* shell_line_buffer = NULL;
-static volatile uint16_t shell_line_length = 0;
 
 static void shell_on_event(const event_bus_message_t* message, void* user_data);
 
-static bool shell_stream_is_usb(void) {
-#ifdef __USE_SERIAL_CONSOLE__
-  return shell_stream != (BaseSequentialStream*)&SD1;
-#else
-  return true;
-#endif
-}
-
-static void shell_reset_line_state(void) {
-  shell_line_buffer = NULL;
-  shell_line_length = 0;
-}
-
-static void shell_prepare_line_buffer(char* line) {
-  if (shell_line_buffer != line) {
-    shell_line_buffer = line;
-    shell_line_length = 0;
-  }
-}
-
 static void shell_write(const void* buf, size_t size) {
-  if (shell_stream == NULL || buf == NULL) {
+  if (shell_stream == NULL) {
     return;
   }
   streamWrite(shell_stream, buf, size);
 }
 
 static size_t shell_read(void* buf, size_t size) {
-  if (shell_stream == NULL || buf == NULL) {
+  if (shell_stream == NULL) {
     return 0;
   }
   return streamRead(shell_stream, buf, size);
 }
+
+
 
 int shell_printf(const char* fmt, ...) {
   if (shell_stream == NULL) {
@@ -146,7 +126,6 @@ void shell_reset_console(void) {
   qResetI(&SD1.iqueue);
 #endif
   osalSysUnlock();
-  shell_reset_line_state();
   shell_restore_stream();
 }
 
@@ -271,19 +250,6 @@ void shell_attach_event_bus(event_bus_t* bus) {
   }
 }
 
-bool shell_has_pending_io(void) {
-  if (pending_command != NULL) {
-    return true;
-  }
-  if (shell_line_length > 0) {
-    return true;
-  }
-  if (shell_stream_is_usb() && usb_console_rx_has_data()) {
-    return true;
-  }
-  return false;
-}
-
 static void shell_on_event(const event_bus_message_t* message, void* user_data) {
   (void)user_data;
   if (message == NULL) {
@@ -298,12 +264,8 @@ static void shell_on_event(const event_bus_message_t* message, void* user_data) 
 static const char backspace[] = {0x08, 0x20, 0x08, 0x00};
 
 int vna_shell_read_line(char* line, int max_size) {
-  if (line == NULL || max_size <= 0) {
-    return 0;
-  }
-  shell_prepare_line_buffer(line);
-  uint16_t j = shell_line_length;
-  uint8_t c = 0;
+  uint8_t c;
+  uint16_t j = 0;
   while (shell_read(&c, 1)) {
     if (shell_skip_linefeed) {
       shell_skip_linefeed = false;
@@ -311,11 +273,10 @@ int vna_shell_read_line(char* line, int max_size) {
         continue;
       }
     }
-    if (c == 0x08 || c == 0x7F) {
+    if (c == 0x08 || c == 0x7f) {
       if (j > 0) {
         shell_write(backspace, sizeof backspace);
         j--;
-        shell_line_length = j;
       }
       continue;
     }
@@ -323,15 +284,13 @@ int vna_shell_read_line(char* line, int max_size) {
       shell_skip_linefeed = (c == '\r');
       shell_printf(VNA_SHELL_NEWLINE_STR);
       line[j] = 0;
-      shell_line_length = 0;
       return 1;
     }
-    if (c < ' ' || j >= (uint16_t)(max_size - 1)) {
+    if (c < ' ' || j >= max_size - 1) {
       continue;
     }
     shell_write(&c, 1);
     line[j++] = (char)c;
-    shell_line_length = j;
   }
   return 0;
 }

@@ -32,12 +32,8 @@
 
 // VNA math used library
 #ifdef __USE_VNA_MATH__
-// Some functions implemented in hardware FPU.
-// A few build configurations (notably Cortex-M0 targets) accidentally
-// define __FPU_PRESENT despite compiling without hardware FP support,
-// so also check the compiler-provided __ARM_FP flag before using the
-// inline assembly opcodes in order to keep F072 builds functional.
-#if defined(__ARM_FP) && (__FPU_PRESENT == 1) && (__FPU_USED == 1)
+// Some functions implemented in hardware FPU
+#if (__FPU_PRESENT == 1) && (__FPU_USED == 1)
 __attribute__((always_inline)) __STATIC_INLINE float vna_fabsf(float x) {
   __asm__("vabs.f32 %0, %1" : "=t"(x) : "t"(x));
   return x;
