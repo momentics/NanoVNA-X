@@ -1512,7 +1512,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_marker_tracking_acb) {
 }
 
 #ifdef __VNA_MEASURE_MODULE__
-extern const menuitem_t* menu_measure_list[];
+extern const menuitem_t* const menu_measure_list[];
 static UI_FUNCTION_ADV_CALLBACK(menu_measure_acb) {
   if (b) {
     b->icon = current_props._measure == data ? BUTTON_ICON_GROUP_CHECKED : BUTTON_ICON_GROUP;
@@ -2613,7 +2613,7 @@ const menuitem_t menu_measure[] = {
 };
 
 // Dynamic menu selector depend from measure mode
-const menuitem_t* menu_measure_list[] = {
+const menuitem_t* const menu_measure_list[] = {
     [MEASURE_NONE] = menu_measure,
 #ifdef __USE_LC_MATCHING__
     [MEASURE_LC_MATH] = menu_measure_lc,

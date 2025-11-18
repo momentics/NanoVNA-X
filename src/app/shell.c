@@ -48,22 +48,66 @@ static bool shell_session_active = false;
 
 static void shell_on_event(const event_bus_message_t* message, void* user_data);
 
-static void shell_write(const void* buf, size_t size) {
-  if (shell_stream == NULL) {
-    return;
+static void shell_assign_stream(BaseSequentialStream* stream) {
+  shell_stream = stream;
+}
+
+static inline BaseAsynchronousChannel* shell_current_channel(void) {
+  return (BaseAsynchronousChannel*)shell_stream;
+}
+
+#define SHELL_IO_TIMEOUT MS2ST(20)
+#define SHELL_IO_CHUNK_SIZE 64U
+
+static bool shell_io_write(const uint8_t* data, size_t size) {
+  BaseAsynchronousChannel* channel = shell_current_channel();
+  if (channel == NULL || data == NULL) {
+    return false;
   }
-  streamWrite(shell_stream, buf, size);
+  size_t written = 0;
+  while (written < size) {
+    size_t chunk = size - written;
+    if (chunk > SHELL_IO_CHUNK_SIZE) {
+      chunk = SHELL_IO_CHUNK_SIZE;
+    }
+    size_t sent = chnWriteTimeout(channel, data + written, chunk, SHELL_IO_TIMEOUT);
+    if (sent == 0) {
+      if (!shell_check_connect()) {
+        return false;
+      }
+      continue;
+    }
+    written += sent;
+  }
+  return true;
+}
+
+static size_t shell_io_read(uint8_t* data, size_t size) {
+  BaseAsynchronousChannel* channel = shell_current_channel();
+  if (channel == NULL || data == NULL) {
+    return 0;
+  }
+  size_t received = 0;
+  while (received < size) {
+    size_t chunk = chnReadTimeout(channel, data + received, size - received, SHELL_IO_TIMEOUT);
+    if (chunk == 0) {
+      if (!shell_check_connect()) {
+        break;
+      }
+      continue;
+    }
+    received += chunk;
+  }
+  return received;
+}
+
+static void shell_write(const void* buf, size_t size) {
+  (void)shell_io_write((const uint8_t*)buf, size);
 }
 
 static size_t shell_read(void* buf, size_t size) {
-  if (shell_stream == NULL) {
-    return 0;
-  }
-  return streamRead(shell_stream, buf, size);
+  return shell_io_read((uint8_t*)buf, size);
 }
-
-
-
 int shell_printf(const char* fmt, ...) {
   if (shell_stream == NULL) {
     return 0;
@@ -106,13 +150,13 @@ static void shell_handle_session_transition(bool active) {
 #ifdef __USE_SERIAL_CONSOLE__
 #define PREPARE_STREAM                                                                             \
   do {                                                                                             \
-    shell_stream = VNA_MODE(VNA_MODE_CONNECTION) ? (BaseSequentialStream*)&SD1                     \
-                                                 : (BaseSequentialStream*)&SDU1;                   \
+    shell_assign_stream(VNA_MODE(VNA_MODE_CONNECTION) ? (BaseSequentialStream*)&SD1                \
+                                                      : (BaseSequentialStream*)&SDU1);             \
   } while (false)
 #else
 #define PREPARE_STREAM                                                                             \
   do {                                                                                             \
-    shell_stream = (BaseSequentialStream*)&SDU1;                                                   \
+    shell_assign_stream((BaseSequentialStream*)&SDU1);                                             \
   } while (false)
 #endif
 
@@ -329,14 +373,14 @@ int vna_shell_read_line(char* line, int max_size) {
 
 void vna_shell_execute_cmd_line(char* line) {
   BaseSequentialStream* previous = shell_stream;
-  shell_stream = NULL;
+  shell_assign_stream(NULL);
   uint16_t argc = 0;
   char** argv = NULL;
   const VNAShellCommand* cmd = shell_parse_command(line, &argc, &argv, NULL);
   if (cmd != NULL && (cmd->flags & CMD_RUN_IN_LOAD)) {
     cmd->sc_function(argc, argv);
   }
-  shell_stream = previous;
+  shell_assign_stream(previous);
   if (shell_stream == NULL) {
     shell_restore_stream();
   }

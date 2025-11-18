@@ -388,7 +388,7 @@ void send_region(remote_region_t *rd, uint8_t * buf, uint16_t size);
 #define SWEEP_UI_MODE 0x80
 
 extern  uint8_t sweep_mode;
-extern const char *info_about[];
+extern const char* const info_about[];
 
 /*
  * Measure timings for si5351 generator, after ready

@@ -117,7 +117,7 @@ static const storage_driver_t storage_driver = {
     .erase_pages = storage_driver_erase,
 };
 
-static PlatformDrivers drivers = {
+static const PlatformDrivers drivers = {
     .init = board_peripherals_init,
     .display = &display_driver,
     .adc = &adc_driver,

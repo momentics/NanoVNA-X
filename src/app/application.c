@@ -199,7 +199,7 @@ static systime_t battery_next_sample = 0;
 #endif
 
 // Version text, displayed in Config->Version menu, also send by info command
-const char* info_about[] = {
+const char* const info_about[] = {
     "Board: " BOARD_NAME, "NanoVNA-X maintainer: @momentics <momentics@gmail.com>",
     "Refactored from @DiSlord and @edy555", "Licensed under GPL.",
     "  https://github.com/momentics/NanoVNA-X",
