@@ -68,8 +68,18 @@ static void shell_prepare_line_buffer(char* line, int max_size) {
   }
 }
 
+static bool shell_usb_ready(void) {
+  if (!shell_stream_is_usb()) {
+    return true;
+  }
+  return (chnGetFlags((BaseAsynchronousChannel*)&SDU1) & CHN_CONNECTED) != 0U;
+}
+
 static void shell_write(const void* buf, size_t size) {
   if (shell_stream == NULL || buf == NULL || size == 0) {
+    return;
+  }
+  if (!shell_usb_ready()) {
     return;
   }
   streamWrite(shell_stream, buf, size);
@@ -79,6 +89,9 @@ static size_t shell_read(void* buf, size_t size) {
   if (shell_stream == NULL || buf == NULL || size == 0) {
     return 0;
   }
+  if (!shell_usb_ready()) {
+    return 0;
+  }
   return streamRead(shell_stream, buf, size);
 }
 
@@ -86,6 +99,9 @@ static size_t shell_read(void* buf, size_t size) {
 
 int shell_printf(const char* fmt, ...) {
   if (shell_stream == NULL) {
+    return 0;
+  }
+  if (!shell_usb_ready()) {
     return 0;
   }
   va_list ap;

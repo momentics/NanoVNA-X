@@ -378,7 +378,7 @@ static bool usb_request_hook(USBDriver* usbp) {
 }
 
 bool usb_console_is_ready(void) {
-  return usbGetDriverStateI(SDU1.config->usbp) == USB_ACTIVE;
+  return (chnGetFlags((BaseAsynchronousChannel*)&SDU1) & CHN_CONNECTED) != 0U;
 }
 
 bool usb_console_is_configured(void) {
@@ -386,7 +386,7 @@ bool usb_console_is_configured(void) {
 }
 
 bool usb_console_dtr_active(void) {
-  return true;
+  return usb_console_is_ready();
 }
 
 bool usb_console_rx_has_data(void) {

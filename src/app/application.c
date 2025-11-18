@@ -2688,6 +2688,12 @@ int app_main(void) {
       connected = shell_check_connect();
     }
     if (connected) {
+      if (usb_port == NULL || usb_port->api == NULL || usb_port->api->has_pending_io == NULL) {
+        if (!usb_console_is_ready()) {
+          chThdSleepMilliseconds(200);
+          continue;
+        }
+      }
       usb_server_printf_fn_t printf_fn =
           (usb_port != NULL && usb_port->api != NULL && usb_port->api->printf_fn != NULL)
               ? usb_port->api->printf_fn
