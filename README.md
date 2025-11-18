@@ -20,11 +20,10 @@ NanoVNA-X: Enhanced Firmware for NanoVNA H/H4
 They are standalone portable devices with LCD and battery.
 
 NanoVNA-X is maintained by **@momentics** (https://github.com/momentics/) and optimised for the
-memory-constrained STM32F072 and STM32F303 platforms. The codebase is a continuation of
-the outstanding work by [@DiSlord](https://github.com/DiSlord/) and is ultimately derived
-from the original firmware created by [@edy555](https://github.com/edy555). The firmware
-continues to be distributed under the terms of the GNU GPL so that the original authors
-retain their rights to their work.
+memory-constrained STM32F072 and STM32F303 platforms. While the project was initially bootstrapped
+from the public NanoVNA firmware, the current codebase is a purpose-built architecture focused on
+responsiveness, deterministic sweeps, and clean subsystem boundaries. The firmware remains GPLv3 so
+that every contributor, past and present, keeps their rights.
 
 This repository contains the source code of the improved NanoVNA-H and NanoVNA-H4 firmware
 used in the NanoVNA-X project. The documentation describes the build and flash process on a
@@ -33,9 +32,9 @@ similar.
 
 ## Acknowledgment and Disclaimer
 
-- Profound thanks to [@DiSlord](https://github.com/DiSlord/) for the original firmware text and the foundations that significantly inspired and enabled the start of this new firmware project.
-- This firmware evolves rapidly and, with each daily change, diverges further from the original implementation.
-- The original codebase was exceptionally feature‑rich; NanoVNA‑X keeps the proven UX while modernising the architecture, and the SD subsystem is now fully integrated again (S‑parameter capture, screenshots, firmware dumps, command scripts, and on-device formatting).
+- Respect to [@edy555](https://github.com/edy555) and [@DiSlord](https://github.com/DiSlord) for open-sourcing the original NanoVNA firmware; their work made a community-grade VNA possible in the first place.
+- NanoVNA-X has since been re-architected and the sweep/UI subsystems now share very little code with the legacy tree; every release deliberately moves further away from the blocking design.
+- The goal is to keep the familiar UX while delivering a maintainable, modular implementation with first-class SD features (S‑parameter capture, screenshots, firmware dumps, scripted commands, on-device formatting).
 
 ## What Makes NanoVNA-X Different
 
@@ -45,7 +44,7 @@ similar.
 - **Integrated SD workflow.** The internal micro-SD slot supports calibration slots, S1P/S2P exports, BMP or compact RLE-TIFF screenshots, firmware dumps, scripted command playback, and a deterministic `FORMAT SD` routine that uses FatFs mkfs parameters aligned with Keysight/R&S service practices.
 
 ## Improvements
-The firmware has undergone significant re-architecture and stabilization since the [@DiSlord](https://github.com/DiSlord/) release, focusing on responsiveness, standalone usability, and performance on memory-constrained hardware.
+The firmware was rewritten around a layered ChibiOS stack that emphasises responsiveness, standalone usability, and reliable sweeps on constrained hardware.
 
 ### Firmware Stability and Responsiveness
 The core of the firmware was reworked from blocking calls to a fully asynchronous, event-driven architecture using ChibiOS primitives (Mailboxes, Events, and Semaphores).
@@ -270,8 +269,4 @@ Hardware design material is disclosed to prevent bad quality clone. Please let m
 
 ## Credit
 * [@momentics](https://github.com/momentics/) – NanoVNA-X maintainer and integrator.
-
-## Based on code from:
-* [@DiSlord](https://github.com/DiSlord/) – original NanoVNA-D firmware author whose
-  work forms the foundation of this project and remains licensed under the GNU GPL.
-* [@edy555](https://github.com/edy555)
+* The broader NanoVNA community – especially [@edy555](https://github.com/edy555) and [@DiSlord](https://github.com/DiSlord) – for releasing the original schematics, DSP tables, and firmware under the GPL.

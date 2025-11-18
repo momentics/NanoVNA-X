@@ -48,7 +48,7 @@ cd NanoVNA-X
 
 ### 2.1 Inspect the source tree
 
-The codebase is now split into clearly defined layers rather than a flat DiSlord-era port:
+The codebase is now split into clearly defined layers rather than the historical monolithic fork:
 
 | Path | Purpose |
 | --- | --- |
