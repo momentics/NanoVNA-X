@@ -325,19 +325,19 @@
  * @brief   Serial over USB number of buffers.
  * @note    The default is 2 buffers.
  */
-#if !defined(SERIAL_RX_USB_BUFFERS_NUMBER) || defined(__DOXYGEN__)
-#define SERIAL_USB_RX_BUFFERS_NUMBER 1
+#if !defined(SERIAL_USB_RX_BUFFERS_NUMBER) || defined(__DOXYGEN__)
+#define SERIAL_USB_RX_BUFFERS_NUMBER 2
 #endif
-#if !defined(SERIAL_TX_USB_BUFFERS_NUMBER) || defined(__DOXYGEN__)
+#if !defined(SERIAL_USB_TX_BUFFERS_NUMBER) || defined(__DOXYGEN__)
 #define SERIAL_USB_TX_BUFFERS_NUMBER 2
 #endif
 
 // USB Send timeout
 #if !defined(USB_WRITE_TIMEOUT) || defined(__DOXYGEN__)
-#define USB_WRITE_TIMEOUT MS2ST(5)
+#define USB_WRITE_TIMEOUT TIME_INFINITE
 #endif
 #if !defined(USB_READ_TIMEOUT) || defined(__DOXYGEN__)
-#define USB_READ_TIMEOUT TIME_IMMEDIATE
+#define USB_READ_TIMEOUT TIME_INFINITE
 #endif
 
 // #define STM32_USB_USE_FAST_COPY   TRUE
