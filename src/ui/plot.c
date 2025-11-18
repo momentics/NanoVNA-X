@@ -84,8 +84,8 @@
 
 static uint16_t redraw_request = 0; // contains REDRAW_XXX flags
 
-static uint16_t area_width = AREA_WIDTH_NORMAL;
-static uint16_t area_height = AREA_HEIGHT_NORMAL;
+static uint16_t area_width;
+static uint16_t area_height;
 
 // Cell render use spi buffer
 /**
@@ -908,7 +908,7 @@ static void put_normal(cellPrintStream* ps, uint8_t ch) {
 
 #if _USE_FONT_ != _USE_SMALL_FONT_
 typedef void (*font_put_t)(cellPrintStream* ps, uint8_t ch);
-static font_put_t put_char = put_normal;
+static font_put_t put_char;
 static void put_small(cellPrintStream* ps, uint8_t ch) {
   uint16_t w = sFONT_GET_WIDTH(ch);
 #if VNA_ENABLE_SHADOW_TEXT
@@ -2230,7 +2230,12 @@ static void draw_cal_status(void) {
 #define BATTERY_WARNING_LEVEL 3300
 static void draw_battery_status(void) {
   int16_t vbat = adc_vbat_read();
-  static int16_t last_drawn_vbat = INT16_MIN;
+  static int16_t last_drawn_vbat;
+  static bool last_vbat_initialized = false;
+  if (!last_vbat_initialized) {
+    last_drawn_vbat = INT16_MIN;
+    last_vbat_initialized = true;
+  }
   if (vbat <= 0 && last_drawn_vbat <= 0)
     return;
   if (vbat == last_drawn_vbat)
@@ -2316,6 +2321,9 @@ void request_to_redraw(uint16_t mask) {
 }
 
 void plot_init(void) {
+  put_char = put_normal;
+  area_width = AREA_WIDTH_NORMAL;
+  area_height = AREA_HEIGHT_NORMAL;
   request_to_redraw(REDRAW_PLOT | REDRAW_ALL);
   draw_all();
 }

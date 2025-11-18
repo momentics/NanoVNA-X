@@ -263,7 +263,7 @@ static void ui_controller_publish_board_event(board_event_type_t topic, uint16_t
 }
 
 //==============================================
-static uint16_t menu_button_height = MENU_BUTTON_HEIGHT(MENU_BUTTON_MIN);
+static uint16_t menu_button_height;
 
 enum {
   UI_NORMAL,
@@ -404,7 +404,7 @@ static uint8_t ui_mode = UI_NORMAL;
 static const keypads_t* keypads;
 static uint8_t keypad_mode;
 static uint8_t menu_current_level = 0;
-static int8_t selection = -1;
+static int8_t selection;
 
 // UI menu structure
 // Type of menu item:
@@ -738,8 +738,15 @@ static void touch_position(int* x, int* y) {
 #endif
 
   static int16_t cal_cache[4] = {0};
-  static int32_t scale_x = 1 << 16;
-  static int32_t scale_y = 1 << 16;
+  static int32_t scale_x = 0;
+  static int32_t scale_y = 0;
+  static bool scale_ready = false;
+
+  if (!scale_ready) {
+    scale_x = 1 << 16;
+    scale_y = 1 << 16;
+    scale_ready = true;
+  }
 
   // Check if calibration data has changed and recalculate scales if needed
   if (memcmp(cal_cache, config._touch_cal, sizeof(cal_cache)) != 0) {
@@ -752,7 +759,8 @@ static void touch_position(int* x, int* y) {
       scale_x = ((int32_t)(LCD_WIDTH - 1 - 2 * CALIBRATION_OFFSET) << 16) / denom_x;
       scale_y = ((int32_t)(LCD_HEIGHT - 1 - 2 * CALIBRATION_OFFSET) << 16) / denom_y;
     } else {
-      // Division by zero, keep default scale
+      scale_x = 1 << 16;
+      scale_y = 1 << 16;
     }
   }
 
@@ -2786,7 +2794,17 @@ const menuitem_t menu_top[] = {
 };
 
 #define MENU_STACK_DEPTH_MAX 5
-const menuitem_t* menu_stack[MENU_STACK_DEPTH_MAX] = {menu_top, NULL, NULL, NULL, NULL};
+const menuitem_t* menu_stack[MENU_STACK_DEPTH_MAX];
+
+static void menu_stack_reset(void) {
+  menu_stack[0] = menu_top;
+  for (size_t i = 1; i < MENU_STACK_DEPTH_MAX; i++) {
+    menu_stack[i] = NULL;
+  }
+  menu_current_level = 0;
+  selection = -1;
+  menu_button_height = MENU_BUTTON_HEIGHT(MENU_BUTTON_MIN);
+}
 
 static const menuitem_t* menu_next_item(const menuitem_t* m) {
   if (m == NULL)
@@ -4117,6 +4135,7 @@ static void ui_init_ext(void) {
 #endif
 
 void ui_init() {
+  menu_stack_reset();
   ui_input_reset_state();
   // Activates the EXT driver 1.
   ui_init_ext();

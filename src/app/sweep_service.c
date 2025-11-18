@@ -60,7 +60,7 @@ static uint16_t sweep_bar_drawn_pixels = 0;
 static uint8_t sweep_bar_pending = 0;
 
 static uint8_t smooth_factor = 0;
-static void (*volatile sample_func)(float* gamma) = calculate_gamma;
+static void (*volatile sample_func)(float* gamma) = NULL;
 
 void sweep_service_set_sample_function(void (*func)(float*)) {
   if (func == NULL) {

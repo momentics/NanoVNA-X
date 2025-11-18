@@ -142,6 +142,10 @@
 #define HAL_USE_SERIAL_USB TRUE
 #endif
 
+#if !defined(SERIAL_USB_USE_TIME_FUNCTIONS) || defined(__DOXYGEN__)
+#define SERIAL_USB_USE_TIME_FUNCTIONS TRUE
+#endif
+
 /**
  * @brief   Enables the SPI subsystem.
  */

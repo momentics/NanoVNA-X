@@ -50,12 +50,22 @@
  * Current Line Coding.
  */
 
-cdc_linecoding_t linecoding = {
+static const cdc_linecoding_t linecoding_default = {
   {0x00, 0x40, 0x38, 0x00},             /* 0x00384000 = 3686400              */
   LC_STOP_1, LC_PARITY_NONE, 8
 };
 
+cdc_linecoding_t linecoding;
+
+#if !defined(SERIAL_USB_USE_TIME_FUNCTIONS)
+#define SERIAL_USB_USE_TIME_FUNCTIONS FALSE
+#endif
+
+#if SERIAL_USB_USE_TIME_FUNCTIONS
+#undef DISABLE_TIME_FUNCTIONS
+#else
 #define DISABLE_TIME_FUNCTIONS
+#endif
 /*===========================================================================*/
 /* Driver local functions.                                                   */
 /*===========================================================================*/
@@ -190,6 +200,7 @@ static void obnotify(io_buffers_queue_t *bqp) {
  * @init
  */
 void sduInit(void) {
+  linecoding = linecoding_default;
 }
 
 /**

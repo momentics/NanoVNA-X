@@ -86,12 +86,7 @@ static void app_measurement_handle_result(measurement_engine_port_t* port,
                                           const measurement_engine_result_t* result);
 static void app_measurement_service_loop(measurement_engine_port_t* port);
 
-static measurement_engine_port_t measurement_engine_port = {
-    .context = NULL,
-    .can_start_sweep = app_measurement_can_start_sweep,
-    .handle_result = app_measurement_handle_result,
-    .service_loop = app_measurement_service_loop,
-};
+static measurement_engine_port_t measurement_engine_port;
 
 #define shell_register_commands(table) usb_port.api->register_commands((table))
 #define shell_init_connection() usb_port.api->init_connection()
@@ -185,11 +180,11 @@ static void cmd_dump(int argc, char* argv[]);
 #define ENABLE_SD_CARD_COMMAND
 #endif
 
-uint8_t sweep_mode = SWEEP_ENABLE;
+uint8_t sweep_mode;
 // Sweep measured data
 float measured[2][SWEEP_POINTS_MAX][2];
 
-static int16_t battery_last_mv = INT16_MIN;
+static int16_t battery_last_mv;
 static systime_t battery_next_sample = 0;
 
 #ifndef VBAT_MEASURE_INTERVAL
@@ -201,8 +196,6 @@ static systime_t battery_next_sample = 0;
 // Version text, displayed in Config->Version menu, also send by info command
 const char* const info_about[] = {
     "Board: " BOARD_NAME, "NanoVNA-X maintainer: @momentics <momentics@gmail.com>",
-    "Refactored from @DiSlord and @edy555", "Licensed under GPL.",
-    "  https://github.com/momentics/NanoVNA-X",
     "Version: " NANOVNA_VERSION_STRING " ["
     "p:" define_to_STR(
         SWEEP_POINTS_MAX) ", "
@@ -212,13 +205,7 @@ const char* const info_about[] = {
                                                   AUDIO_ADC_FREQ_K1) "k, "
                                                                      "Lcd:" define_to_STR(LCD_WIDTH) "x" define_to_STR(
                                                                          LCD_HEIGHT) "]",
-    "Build Time: " __DATE__ " - " __TIME__,
-    //  "Kernel: " CH_KERNEL_VERSION,
-    //  "Compiler: " PORT_COMPILER_NAME,
-    "Architecture: " PORT_ARCHITECTURE_NAME " Core Variant: " PORT_CORE_VARIANT_NAME,
-    //  "Port Info: " PORT_INFO,
-    "Platform: " PLATFORM_NAME,
-    0 // sentinel
+    "Build Time: " __DATE__ " - " __TIME__, 0 // sentinel
 };
 
 // Allow draw some debug on LCD
@@ -2600,6 +2587,8 @@ int app_main(void) {
    */
   halInit();
   chSysInit();
+  sweep_mode = SWEEP_ENABLE;
+  battery_last_mv = INT16_MIN;
 
   platform_init();
   const PlatformDrivers* drivers = platform_get_drivers();
@@ -2637,6 +2626,10 @@ int app_main(void) {
   };
   ui_controller_configure(&ui_controller_port);
 
+  measurement_engine_port.context = NULL;
+  measurement_engine_port.can_start_sweep = app_measurement_can_start_sweep;
+  measurement_engine_port.handle_result = app_measurement_handle_result;
+  measurement_engine_port.service_loop = app_measurement_service_loop;
   measurement_engine_init(&measurement_engine, &measurement_engine_port, &app_event_bus, drivers);
 
   /*
