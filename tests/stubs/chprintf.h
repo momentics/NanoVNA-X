@@ -18,15 +18,18 @@
  * Boston, MA 02110-1301, USA.
  */
 
+
+
+/*
+ * Minimal host stub for the ChibiOS chprintf helpers.  The production firmware
+ * relies on chvprintf() for shell output; unit tests provide the implementation
+ * in their translation unit so they can capture formatted strings.
+ */
+
 #pragma once
 
-#include <stdbool.h>
-#include <stdint.h>
+#include <stdarg.h>
 
-uint16_t app_measurement_get_sweep_mask(void);
-bool app_measurement_sweep(bool break_on_operation, uint16_t mask);
-void sweep_service_init(void);
-void sweep_service_wait_for_copy_release(void);
-void sweep_service_begin_measurement(void);
-void sweep_service_end_measurement(void);
-uint32_t sweep_service_increment_generation(void);
+typedef struct BaseSequentialStream BaseSequentialStream;
+
+int chvprintf(BaseSequentialStream* chp, const char* fmt, va_list ap);

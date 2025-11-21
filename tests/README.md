@@ -8,6 +8,13 @@ functions without requiring any STM32 hardware.
   - `test_common.c`: CLI parsing helpers (`my_atof`, `parse_line`, `packbits`, …)
   - `test_vna_math.c`: LUT-driven trig/FFT helpers used by the DSP pipeline
   - `test_measurement_pipeline.c`: integration glue that proxies sweep requests
+  - `test_dsp_backend.c`: scalar DSP accumulation path that runs when SIMD is disabled
+  - `test_legacy_measure.c`: RF legacy analytics (quadratic solver, cursor search, regression)
+  - `test_event_bus.c`: synchronous/asynchronous event bus dispatch with mailbox recycling
+  - `test_scheduler.c`: cooperative task scheduler slot allocation, failure paths, and stop logic
+  - `test_measurement_engine.c`: RF engine state machine, event publication, and sweep orchestration
+  - `test_shell_service.c`: CLI parser/buffer handling plus deferred command queue + event bus glue
+  - `test_display_presenter.c`: presenter wrappers that forward drawing calls to the active API
 - `tests/stubs/` provides lightweight stand-ins for headers that normally come
   from ChibiOS/HAL so that host builds can compile firmware files.
 
