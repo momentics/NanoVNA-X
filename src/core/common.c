@@ -23,9 +23,6 @@
 #include <stdbool.h>
 #include "hal.h"
 
-// Use size optimization (UI not need fast speed, better have smallest size)
-#pragma GCC optimize("Os")
-
 // Use macro, std isdigit more big
 #define _isdigit(c) (c >= '0' && c <= '9')
 // Rewrite universal standart str to value functions to more compact

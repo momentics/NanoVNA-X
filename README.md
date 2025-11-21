@@ -38,6 +38,13 @@ similar.
 
 ## What Makes NanoVNA-X Different
 
+- Layered runtime instead of a monolithic `main.c`: the sweep thread, CLI, and services are wired together in `src/runtime/` via explicit ports, so control flow is inspectable and unit-testable rather than hidden inside `app_main`.
+- Zero-copy sweep pipeline: RF orchestration now revolves around `sweep_service_snapshot_t` snapshots and a `measurement_engine` coordinator, letting the UI, USB CLI, and SD-card jobs consume captured buffers without re-triggering hardware sweeps.
+- Infrastructure services in `infra/`: the event bus, cooperative scheduler, configuration/calibration persistence, and autosave-aware state manager replace the hard-coded globals used in v0.9.1, making background work predictable and recoverable.
+- Clean interfaces: CLI, USB transport, UI hooks, and DSP helpers sit behind `include/interfaces/*` contracts, removing the legacy `#include "*.c"` patterns and making it obvious where transport-agnostic logic lives.
+- UI/input rework: presenters, controllers, input adapters, fonts, and icons live under `src/ui/`, enabling SD-card browsing, remote desktop, and better on-device messaging without touching hardware drivers.
+- Tooling/documentation refresh: the single `VERSION` file feeds builds and release automation, the Makefile tracks the new folder layout, and both English/Russian docs explain the divergence so downstream forks know what changed relative to DiSlord’s tree.
+
 - **Predictable, event-driven architecture.** The sweep engine, UI, USB CDC shell, and measurement DSP cooperate through the ChibiOS event bus and watchdog-guarded timeouts. A hung codec, synthesiser, or PC host can no longer freeze the instrument mid-calibration.
 - **Measurement-focused DMA budget.** SPI LCD transfers and TLV320 I²S captures use DMA, while the UART console was intentionally moved to an IRQ driver so that DMA channels are always available for RF data paths.
 - **Unique USB identity by default.** Every unit now enumerates with a serial number derived from its MCU unique ID (System -> Device -> MORE -> *USB DEVICE UID* still allows opting out for legacy workflows).
@@ -51,7 +58,7 @@ The core of the firmware was reworked from blocking calls to a fully asynchronou
 * **Non-Blocking USB:** The USB CDC (serial) stack is now fully asynchronous. The firmware no longer hangs if a host PC connects, disconnects, or stalls during a data transfer. This resolves the most common source of device freezes.
 * **Timeout-Driven Recovery:** Critical subsystems, including the measurement engine and I²C bus, are guarded by timeouts. A stalled operation will no longer lock up the device; instead, the subsystem attempts to recover cleanly.
 * **RTOS-based Concurrency:** Busy-wait loops and polling have been replaced with efficient RTOS-based signaling, reducing CPU load and improving battery life. The measurement thread, UI, and USB stack now cooperate without race conditions or deadlocks.
-* **Persistent State:** A dedicated `system/state_manager` module snapshots sweep limits, UI flags, and calibration slots to flash. Changes are auto-saved after you stop editing (or immediately via *Save Config*), so editing the sweep on the device or over USB survives a cold boot without hammering flash.
+* **Persistent State:** A dedicated `infra/state/state_manager` module snapshots sweep limits, UI flags, and calibration slots to flash. Changes are auto-saved after you stop editing (or immediately via *Save Config*), so editing the sweep on the device or over USB survives a cold boot without hammering flash.
 * **UI/Sweep Sync:** The UI and sweep engine are now decoupled. The UI remains responsive even during complex calculations, and on-screen data is always synchronized with the underlying measurement state.
 
 ### Performance and Resource Management
@@ -87,8 +94,8 @@ integration, measurement processing and the user interface so the firmware remai
 maintainable while fitting into the tight flash and RAM budgets of the STM32F072 and
 STM32F303 families.
 
-* **Boot and application runtime.** The firmware starts in `src/core/main.c`, which hands off
-  to `app_main()` so that all higher level wiring lives in `src/app/application.c`. That
+* **Boot and application runtime.** The firmware starts in `src/runtime/main.c`, which hands off
+  to `runtime_main()` so that all higher level wiring lives in `src/runtime/runtime_entry.c`. That
   entry point initialises ChibiOS/RT, configures the USB console and synthesiser drivers,
   brings up the measurement pipeline, and spins a dedicated sweep thread that coordinates
   measurements, UI updates and shell commands.
@@ -97,24 +104,24 @@ STM32F303 families.
   structure with its initialisation hooks and peripheral descriptors. This keeps the core
   application agnostic of whether it is running on the NanoVNA-H (STM32F072) or NanoVNA-H4
   (STM32F303) hardware variants.
-* **Services layer.** Shared infrastructure lives in `src/services/`. The event bus provides
+* **Services layer.** Shared infrastructure lives in `src/infra/`. The event bus provides
   a publish/subscribe mechanism with a fixed topic list and optional mailbox-backed delivery
   so code running in interrupt context can queue work for later dispatch. The scheduler helper
   wraps ChibiOS thread creation and termination, while the configuration service persists user
   settings and calibration slots in MCU flash with checksum protection.
-* **Measurement pipeline and DSP.** `src/measurement/pipeline.c` provides a slim façade that
-  bridges platform drivers and the measurement routines inside `app/application.c`. It forwards
+* **Measurement pipeline and DSP.** `src/rf/pipeline/measurement_pipeline.c` provides a slim façade that
+  bridges platform drivers and the measurement routines inside `src/rf/sweep/`. It forwards
   sweep execution to the application layer and reports the current channel mask. Numerical
-  helpers and calibration maths reside in `src/dsp/`, keeping compute-heavy code isolated from
+  helpers and calibration maths reside in `src/processing/`, keeping compute-heavy code isolated from
   hardware access.
-* **Drivers and middleware.** Low-level device interactions are implemented in `src/drivers/`
+* **Drivers and middleware.** Low-level device interactions are implemented in `src/platform/peripherals/`
   for the LCD, Si5351 synthesiser, TLV320 codec and USB front-end, while `src/middleware/`
   houses small integration shims such as the `chprintf` binding for ChibiOS streams. ChibiOS
   itself is vendored under `third_party/` and configured through the headers in `config/`
   and top-level `chconf.h`/`halconf.h`.
 * **User interface layer.** The sweep thread initialises the UI toolkit (`src/ui/`), processes
   hardware inputs, refreshes plotting primitives and marks screen regions for redraw. Fonts
-  and icon bitmaps that back the rendering code are stored in `src/resources/`.
+  and icon bitmaps that back the rendering code are stored in `src/ui/resources/`.
 
 Complementary headers live in `include/`, while board support files, linker scripts and
 startup code reside in `boards/`. This structure lets the same measurement and UI engines run
@@ -122,7 +129,7 @@ across both memory profiles with only targeted platform overrides.
 
 ## Event bus and scheduler
 
-The event bus (`services/event_bus.[ch]`) is a small publish/subscribe helper that avoids
+The event bus (`infra/event/event_bus.[ch]`) is a small publish/subscribe helper that avoids
 dynamic allocation. Call `event_bus_init()` with a static subscription array, optional
 mailbox storage (`msg_t` buffer plus queue length), and optional queue nodes that back the
 mailbox entries. When the mailbox buffers are provided, `event_bus_publish()` posts messages
@@ -134,7 +141,7 @@ lock-aware fashion. The predefined topics (`EVENT_SWEEP_STARTED`, `EVENT_SWEEP_C
 `EVENT_USB_COMMAND_PENDING`) cover the current coordination needs; adding new topics
 requires extending the `event_bus_topic_t` enum.
 
-The scheduler helper (`services/scheduler.[ch]`) keeps a fixed pool of four slots that wrap
+The scheduler helper (`infra/task/scheduler.[ch]`) keeps a fixed pool of four slots that wrap
 `chThdCreateStatic()`/`chThdTerminate()`. `scheduler_start()` returns a handle containing the
 assigned slot so callers can later stop the worker through `scheduler_stop()`. It does not
 implement time slicing or cooperative yielding; task priorities and timing remain under the
@@ -157,12 +164,15 @@ The source tree has been reorganised so it is no longer a line-for-line fork of 
 
 | Path | Purpose |
 | --- | --- |
-| `include/app`, `src/app` | Application-facing APIs: the sweep service, shell, measurement pipeline, and UI glue. |
-| `include/services`, `src/services` | Cross-cutting infrastructure (config service, scheduler, event bus). |
-| `include/system`, `src/system` | Platform-level building blocks such as the new `state_manager` that owns persistence, backup registers, and autosave scheduling. |
+| `include/runtime`, `src/runtime` | Application entry points, feature flags, CLI plumbing, and sweep orchestration. |
+| `include/rf`, `src/rf` | Sweep orchestration, measurement pipeline, and RF analytics. |
+| `include/processing`, `src/processing` | DSP kernels and math helpers shared by the measurement and UI layers. |
+| `include/infra`, `src/infra` | Cross-cutting services (event bus, scheduler, configuration, persistent state). |
+| `include/interfaces`, `src/interfaces` | Clean ports for the CLI, USB transport, UI hooks, and processing adapters. |
+| `include/ui`, `src/ui` | Rendering, controllers, input adapters, and UI resources (fonts/icons). |
 | `src/platform`, `boards/STM32F0/STM32F3` | Low-level board support code shared with ChibiOS. |
 
-This separation lets you trace dependencies easily (e.g. `ui/` depends on `system/state_manager.h` but not vice versa) and removes duplicated helper tables from multiple files. When porting patches from older firmware trees, map the functionality onto the closest module instead of copying entire source files.
+This separation lets you trace dependencies easily (e.g. `ui/` depends on `infra/state/state_manager.h` but not vice versa) and removes duplicated helper tables from multiple files. When porting patches from older firmware trees, map the functionality onto the closest module instead of copying entire source files.
 
 ## Building the firmware
 
@@ -170,77 +180,6 @@ NanoVNA-X uses a standard GNU Make workflow and the Arm GNU GCC toolchain.
 See [`doc/building.md`](doc/building.md) for a fully detailed guide; the
 Russian translation is available in [`doc/building_ru.md`](doc/building_ru.md).
 summary below outlines the essential steps for a clean build.
-
-### 1. Install the cross-compiler
-
-Recent versions of `gcc-arm-none-eabi` are supported; there is no need to rely
-on archived releases.
-
-#### macOS (Homebrew)
-
-```
-brew install gcc-arm-none-eabi dfu-util
-```
-
-#### Ubuntu / Debian
-
-```
-sudo apt update
-sudo apt install gcc-arm-none-eabi libnewlib-arm-none-eabi dfu-util
-```
-
-After installation confirm that the compiler is available:
-
-```
-arm-none-eabi-gcc --version
-```
-
-### 2. Fetch the source code
-
-Clone the repository:
-
-```
-git clone https://github.com/momentics/NanoVNA-X.git
-cd NanoVNA-X
-```
-
-Updating to the latest revision later only requires `git pull`.
-
-### 3. Build the desired firmware profile
-
-Set the `TARGET` environment variable to select the board and invoke `make`.
-Use `make clean` when switching between targets to avoid mixing artefacts.
-
-```
-export TARGET=F072   # NanoVNA-H (default)
-make clean
-make -j$(nproc)
-```
-
-For the NanoVNA-H4 firmware build, set `TARGET=F303`. Build outputs are written
-to `build/` (`H.bin`/`H4.bin`, `.elf`, `.hex`). See [doc/building.md](doc/building.md)
-for a breakdown of which artefact to use with DFU, SWD, or debugging tools.
-
-### 4. Flash the firmware
-
-Place the device into DFU mode using one of the following methods:
-
-* Open the device and jumper `BOOT0` pin to `Vdd` when powering the device.
-* Select menu System -> Device -> DFU (requires recent firmware).
-* Press the jog switch on your H4 while powering the device.
-
-Then flash the binary generated in the previous step:
-
-```
-export TARGET=F072
-make flash
-```
-
-`make flash` uses `dfu-util` under the hood and will upload the matching
-`build/H.bin` or `build/H4.bin` artefact for the selected target. `dfu-util`
-prints status diagnostics such as a transient "firmware is corrupt" warning
-while switching the device out of DFU mode; the build script clears the status
-automatically and the message can be ignored.
 
 ## Companion Tools
 

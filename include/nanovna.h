@@ -21,7 +21,7 @@
  */
 #pragma once
 #include "ch.h"
-#include "services/event_bus.h"
+#include "infra/event/event_bus.h"
 #include <stdalign.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -491,7 +491,7 @@ void tlv320aic3204_write_reg(uint8_t page, uint8_t reg, uint8_t data);
 /*
  * vna_math.c
  */
-#include "vna_math.h"
+#include "processing/vna_math.h"
 
 /*
  * plot.c

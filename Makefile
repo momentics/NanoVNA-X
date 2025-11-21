@@ -170,41 +170,41 @@ CSRC = $(STARTUPSRC) \
        $(STREAMSSRC) \
        third_party/FatFs/ff.c \
        third_party/FatFs/ffunicode.c \
-       src/resources/fonts/numfont16x22.c \
-       src/resources/fonts/Font5x7.c \
-       src/resources/fonts/Font6x10.c \
-       src/resources/fonts/Font7x11b.c \
-       src/resources/fonts/Font11x14.c \
-       src/drivers/usbcfg.c \
-       src/core/main.c \
-       src/app/application.c \
-       src/app/sweep_service.c \
-       src/app/shell.c \
+       src/ui/resources/fonts/numfont16x22.c \
+       src/ui/resources/fonts/Font5x7.c \
+       src/ui/resources/fonts/Font6x10.c \
+       src/ui/resources/fonts/Font7x11b.c \
+       src/ui/resources/fonts/Font11x14.c \
+       src/platform/peripherals/usbcfg.c \
+       src/runtime/main.c \
+       src/runtime/runtime_entry.c \
+       src/rf/sweep/sweep_orchestrator.c \
+       src/interfaces/cli/shell_service.c \
        src/core/common.c \
-       src/drivers/si5351.c \
-       src/drivers/tlv320aic3204.c \
-       src/dsp/dsp.c \
-       src/dsp/vna_math.c \
-       src/ui/plot.c \
-       src/menu_controller/ui_controller.c \
-       src/drivers/lcd.c \
-       src/menu_controller/display_presenter.c \
+       src/platform/peripherals/si5351.c \
+       src/platform/peripherals/tlv320aic3204.c \
+       src/processing/dsp_backend.c \
+       src/processing/vna_math.c \
+       src/ui/display/plot.c \
+       src/ui/controller/ui_controller.c \
+       src/platform/peripherals/lcd.c \
+       src/ui/display/display_presenter.c \
        src/platform/boards/board_events.c \
-       src/services/config_service.c \
-       src/services/event_bus.c \
-       src/services/scheduler.c \
-       src/measurement/pipeline.c \
+       src/infra/storage/config_service.c \
+       src/infra/event/event_bus.c \
+       src/infra/task/scheduler.c \
+       src/rf/pipeline/measurement_pipeline.c \
        src/platform/platform_hal.c \
        src/platform/boards/board_registry.c \
        src/platform/boards/nanovna_board.c \
        src/platform/boards/stm32_peripherals.c \
-       src/ui/hardware_input.c \
-       src/system/state_manager.c \
+       src/ui/input/hardware_input.c \
+       src/infra/state/state_manager.c \
        src/middleware/chprintf.c \
-       src/modules/measurement/measurement_engine.c \
-       src/modules/processing/processing_port.c \
-       src/modules/ui/ui_port.c \
-       src/modules/usb/usb_command_server_port.c
+       src/rf/engine/measurement_engine.c \
+       src/interfaces/ports/processing_port.c \
+       src/interfaces/ports/ui_port.c \
+       src/interfaces/ports/usb_command_server_port.c
 
 # C++ sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.
@@ -305,7 +305,7 @@ UDEFS+= -DVNA_AUTO_SELECT_RTC_SOURCE
 UADEFS =
 
 # List all user directories here
-UINCDIR = config include include/drivers boards/STM32F072 boards/STM32F303 $(BUILDDIR)/generated
+UINCDIR = config include boards/STM32F072 boards/STM32F303 $(BUILDDIR)/generated
 
 # List the user directory to look for the libraries here
 ULIBDIR =

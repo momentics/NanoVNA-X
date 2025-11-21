@@ -26,7 +26,7 @@
 #include "hal.h"
 
 #include "nanovna.h"
-#include "si5351.h"
+#include "platform/peripherals/si5351.h"
 
 static void board_peripherals_init(void) {
   rccEnableDMA1(false);
