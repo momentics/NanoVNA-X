@@ -39,7 +39,7 @@ similar.
 ## What Makes NanoVNA-X Different
 
 - **Layered runtime instead of a monolithic `main.c`.** The sweep thread, CLI, and services are wired together in `src/runtime/` via explicit ports, so control flow is inspectable and unit-testable rather than hidden inside `app_main`.
-- Zero-copy sweep pipeline: RF orchestration now revolves around `sweep_service_snapshot_t` snapshots and a `measurement_engine` coordinator, letting the UI, USB CLI, and SD-card jobs consume captured buffers without re-triggering hardware sweeps.
+- **Zero-copy sweep pipeline.** RF orchestration now revolves around `sweep_service_snapshot_t` snapshots and a `measurement_engine` coordinator, letting the UI, USB CLI, and SD-card jobs consume captured buffers without re-triggering hardware sweeps.
 - **Infrastructure services in `infra/`.** The event bus, cooperative scheduler, configuration/calibration persistence, and autosave-aware state manager replace the hard-coded globals used in v0.9.1, making background work predictable and recoverable.
 - **Clean interfaces.** CLI, USB transport, UI hooks, and DSP helpers sit behind `include/interfaces/*` contracts, removing the legacy `#include "*.c"` patterns and making it obvious where transport-agnostic logic lives.
 - **UI/input rework.** presenters, controllers, input adapters, fonts, and icons live under `src/ui/`, enabling SD-card browsing, remote desktop, and better on-device messaging without touching hardware drivers.
