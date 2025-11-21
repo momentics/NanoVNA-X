@@ -169,7 +169,7 @@ The source tree has been reorganised so it is no longer a line-for-line fork of 
 | `include/infra`, `src/infra` | Cross-cutting services (event bus, scheduler, configuration, persistent state). |
 | `include/interfaces`, `src/interfaces` | Clean ports for the CLI, USB transport, UI hooks, and processing adapters. |
 | `include/ui`, `src/ui` | Rendering, controllers, input adapters, and UI resources (fonts/icons). |
-| `src/platform`, `boards/STM32F0/STM32F3` | Low-level board support code shared with ChibiOS. |
+| `src/platform`, `boards/STM32F072/STM32F303` | Low-level board support code shared with ChibiOS. |
 
 This separation lets you trace dependencies easily (e.g. `ui/` depends on `infra/state/state_manager.h` but not vice versa) and removes duplicated helper tables from multiple files. When porting patches from older firmware trees, map the functionality onto the closest module instead of copying entire source files.
 

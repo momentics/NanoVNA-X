@@ -58,7 +58,7 @@ The codebase is now split into clearly defined layers rather than the historical
 | `include/infra`, `src/infra` | Shared services (configuration persistence, scheduler, event bus, state manager). |
 | `include/interfaces`, `src/interfaces` | Clean ports for the CLI, USB transport, UI handlers, and processing adapters. |
 | `include/ui`, `src/ui` | Rendering, controllers, input adapters, and embedded font/icon assets. |
-| `src/platform`, `boards/STM32F0/STM32F3` | Board support packages shared with ChibiOS. |
+| `src/platform`, `boards/STM32F072/STM32F303` | Board support packages shared with ChibiOS. |
 
 When adding new code or porting patches, drop each feature into the matching layer to keep dependencies one-directional.
 
