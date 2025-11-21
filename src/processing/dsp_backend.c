@@ -21,6 +21,7 @@
  */
 
 #include "nanovna.h"
+#include <stddef.h>
 
 #ifdef USE_VARIABLE_OFFSET
 static int16_t sincos_tbl[AUDIO_SAMPLES_COUNT][2];
@@ -298,11 +299,15 @@ void fetch_amplitude_ref(float* gamma) {
   gamma[1] = (measure_t)rc_acc * 1e-9f;
 }
 
-void reset_dsp_accumerator(void) {
+void reset_dsp_accumulator(void) {
   uint32_t primask = dsp_enter_critical();
   acc_ref_s = 0;
   acc_ref_c = 0;
   acc_samp_s = 0;
   acc_samp_c = 0;
   dsp_exit_critical(primask);
+}
+
+void reset_dsp_accumerator(void) {
+  reset_dsp_accumulator();
 }

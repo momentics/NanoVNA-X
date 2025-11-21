@@ -326,7 +326,8 @@ HOST_LDFLAGS ?= -lm
 
 TEST_BUILD_DIR := build/tests
 TEST_SUITES := $(TEST_BUILD_DIR)/test_common $(TEST_BUILD_DIR)/test_vna_math \
-               $(TEST_BUILD_DIR)/test_measurement_pipeline
+               $(TEST_BUILD_DIR)/test_measurement_pipeline $(TEST_BUILD_DIR)/test_dsp_backend \
+               $(TEST_BUILD_DIR)/test_legacy_measure
 
 $(TEST_BUILD_DIR):
 	@mkdir -p $@
@@ -339,6 +340,12 @@ $(TEST_BUILD_DIR)/test_vna_math: tests/unit/test_vna_math.c src/processing/vna_m
 
 $(TEST_BUILD_DIR)/test_measurement_pipeline: tests/unit/test_measurement_pipeline.c \
 		src/rf/pipeline/measurement_pipeline.c | $(TEST_BUILD_DIR)
+	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+
+$(TEST_BUILD_DIR)/test_dsp_backend: tests/unit/test_dsp_backend.c src/processing/dsp_backend.c | $(TEST_BUILD_DIR)
+	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+
+$(TEST_BUILD_DIR)/test_legacy_measure: tests/unit/test_legacy_measure.c src/processing/vna_math.c | $(TEST_BUILD_DIR)
 	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 .PHONY: test tests

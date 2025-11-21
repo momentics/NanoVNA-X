@@ -22,6 +22,7 @@
 
 #include <math.h>
 #include <stdint.h>
+#include "arm_intrinsics.h"
 
 #ifndef __STATIC_INLINE
 #define __STATIC_INLINE static inline
@@ -31,6 +32,9 @@
 #define __USE_VNA_MATH__ 1
 #define SWEEP_POINTS_MAX 512
 #define FFT_SIZE 512
+#define AUDIO_SAMPLES_COUNT 48
+#define AUDIO_ADC_FREQ 192000
+#define FREQUENCY_OFFSET (7000 * (AUDIO_ADC_FREQ / AUDIO_SAMPLES_COUNT / 1000))
 #define VNA_PI 3.14159265358979323846f
 
 typedef float audio_sample_t;
