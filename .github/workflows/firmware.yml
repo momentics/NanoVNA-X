@@ -152,6 +152,12 @@ jobs:
           restore-keys: |
             build-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-
 
+      - name: Run host unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          make test
+
       - name: Build firmware
         env:
           TARGET: ${{ matrix.target }}

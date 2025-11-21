@@ -1,7 +1,5 @@
 /*
  * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * Based on Dmitry (DiSlord) dislordlive@gmail.com
- * Based on TAKAHASHI Tomohiro (TTRFTECH) edy555@gmail.com
  * All rights reserved.
  *
  * This is free software; you can redistribute it and/or modify
@@ -20,25 +18,22 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#include "rf/pipeline/measurement_pipeline.h"
-#include <stddef.h>
+#pragma once
 
-#include "rf/sweep/sweep_orchestrator.h"
+#include <stdint.h>
 
-void measurement_pipeline_init(measurement_pipeline_t* pipeline, const PlatformDrivers* drivers) {
-  if (pipeline == NULL) {
-    return;
-  }
-  pipeline->drivers = drivers;
-}
+typedef uint32_t systime_t;
+typedef int32_t msg_t;
+typedef struct {
+  int dummy;
+} mailbox_t;
 
-uint16_t measurement_pipeline_active_mask(measurement_pipeline_t* pipeline) {
-  (void)pipeline;
-  return app_measurement_get_sweep_mask();
-}
+typedef struct thread {
+  int dummy;
+} thread_t;
 
-bool measurement_pipeline_execute(measurement_pipeline_t* pipeline, bool break_on_operation,
-                                  uint16_t channel_mask) {
-  (void)pipeline;
-  return app_measurement_sweep(break_on_operation, channel_mask);
-}
+typedef int tprio_t;
+
+typedef struct {
+  int dummy;
+} threads_queue_t;

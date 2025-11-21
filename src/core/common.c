@@ -266,6 +266,7 @@ int packbits(char* source, char* dest, int size) {
   return pk;
 }
 
+#ifndef NANOVNA_HOST_TEST
 /*
  * Delay 8 core tick function
  */
@@ -285,3 +286,8 @@ void _delay_8t(uint32_t cycles) {
         : // No memory
   );
 }
+#else
+void _delay_8t(uint32_t cycles) {
+  (void)cycles;
+}
+#endif

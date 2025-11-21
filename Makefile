@@ -3,6 +3,8 @@
 # NOTE: Can be overridden externally.
 #
 
+.DEFAULT_GOAL := all
+
 #Build target
 ifeq ($(TARGET),)
   TARGET = F072
@@ -316,6 +318,38 @@ ULIBS = -lm
 #
 # End of user defines
 ##############################################################################
+
+# Host-side unit tests
+HOST_CC ?= gcc
+HOST_CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic
+HOST_LDFLAGS ?= -lm
+
+TEST_BUILD_DIR := build/tests
+TEST_SUITES := $(TEST_BUILD_DIR)/test_common $(TEST_BUILD_DIR)/test_vna_math \
+               $(TEST_BUILD_DIR)/test_measurement_pipeline
+
+$(TEST_BUILD_DIR):
+	@mkdir -p $@
+
+$(TEST_BUILD_DIR)/test_common: tests/unit/test_common.c src/core/common.c | $(TEST_BUILD_DIR)
+	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+
+$(TEST_BUILD_DIR)/test_vna_math: tests/unit/test_vna_math.c src/processing/vna_math.c | $(TEST_BUILD_DIR)
+	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+
+$(TEST_BUILD_DIR)/test_measurement_pipeline: tests/unit/test_measurement_pipeline.c \
+		src/rf/pipeline/measurement_pipeline.c | $(TEST_BUILD_DIR)
+	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+
+.PHONY: test tests
+tests: $(TEST_SUITES)
+
+test: tests
+	@set -e; \
+	for suite in $(TEST_SUITES); do \
+		echo "[RUN] $$suite"; \
+		"$$suite"; \
+	done
 
 RULESPATH = $(CHIBIOS)/os/common/startup/ARMCMx/compilers/GCC
 include $(RULESPATH)/rules.mk
