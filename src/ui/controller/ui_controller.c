@@ -27,6 +27,8 @@
 #include "infra/event/event_bus.h"
 #include "infra/storage/config_service.h"
 #include "chprintf.h"
+#include "chmemcore.h"
+#include <stddef.h>
 #include <string.h>
 #include "platform/peripherals/si5351.h"
 #include "ui/input/hardware_input.h"
@@ -452,6 +454,61 @@ typedef struct {
   const void* reference;
 } __attribute__((packed)) menuitem_t;
 
+typedef struct {
+  uint8_t type;
+  uint8_t data;
+} menu_descriptor_t;
+
+typedef struct {
+  uint16_t value;
+  const char* label;
+  int8_t icon;
+} option_desc_t;
+
+static menuitem_t* ui_menu_list(const menu_descriptor_t* descriptors, size_t count,
+                                const char* label, const void* reference,
+                                menuitem_t* out) {
+  if (descriptors == NULL || out == NULL)
+    return out;
+  for (size_t i = 0; i < count; i++) {
+    out->type = descriptors[i].type;
+    out->data = descriptors[i].data;
+    out->label = label;
+    out->reference = reference;
+    out++;
+  }
+  return out;
+}
+
+static void menu_set_next(menuitem_t* entry, const menuitem_t* next) {
+  if (entry == NULL)
+    return;
+  entry->type = MT_NEXT;
+  entry->data = 0;
+  entry->label = NULL;
+  entry->reference = next;
+}
+
+static void ui_cycle_option(uint16_t* dst, const option_desc_t* list, size_t count, button_t* b) {
+  if (dst == NULL || list == NULL || count == 0)
+    return;
+  size_t idx = 0;
+  while (idx < count && list[idx].value != *dst)
+    idx++;
+  if (idx >= count)
+    idx = 0;
+  const option_desc_t* desc = &list[idx];
+  if (b) {
+    if (desc->label)
+      b->p1.text = desc->label;
+    if (desc->icon >= 0)
+      b->icon = desc->icon;
+    return;
+  }
+  idx = (idx + 1) % count;
+  *dst = list[idx].value;
+}
+
 static void ui_mode_normal(void);
 static void ui_mode_menu(void);
 static void ui_mode_keypad(int _keypad_mode);
@@ -460,9 +517,20 @@ static void menu_draw(uint32_t mask);
 static void menu_move_back(bool leave_ui);
 static void menu_push_submenu(const menuitem_t* submenu);
 static void menu_set_submenu(const menuitem_t* submenu);
+static const menuitem_t* menu_build_save_menu(void);
+static const menuitem_t* menu_build_recall_menu(void);
+static const menuitem_t* menu_build_bandwidth_menu(void);
+static const menuitem_t* menu_build_points_menu(void);
+static const menuitem_t* menu_build_marker_select_menu(void);
+static const menuitem_t* menu_build_marker_smith_menu(uint8_t channel);
+static const menuitem_t* menu_build_serial_speed_menu(void);
+static const menuitem_t* menu_build_power_menu(void);
+#ifdef __USE_SMOOTH__
+static const menuitem_t* menu_build_smooth_menu(void);
+#endif
 
 // Icons for UI
-#include "../resources/icons/icons_menu.c"
+#include "../resources/icons/icons_menu.h"
 
 #if 0
 static void btn_wait(void) {
@@ -917,12 +985,11 @@ static UI_FUNCTION_ADV_CALLBACK(menu_cal_enh_acb) {
   request_to_redraw(REDRAW_CAL_STATUS);
 }
 
-extern const menuitem_t menu_save[];
 static UI_FUNCTION_CALLBACK(menu_caldone_cb) {
   cal_done();
   menu_move_back(false);
   if (data == 0)
-    menu_push_submenu(menu_save);
+    menu_push_submenu(menu_build_save_menu());
 }
 
 static UI_FUNCTION_CALLBACK(menu_cal_reset_cb) {
@@ -977,6 +1044,11 @@ static UI_FUNCTION_ADV_CALLBACK(menu_recall_acb) {
     return;
   }
   load_properties(data);
+}
+
+static UI_FUNCTION_CALLBACK(menu_recall_submenu_cb) {
+  (void)data;
+  menu_push_submenu(menu_build_recall_menu());
 }
 
 enum {
@@ -1044,6 +1116,11 @@ static UI_FUNCTION_ADV_CALLBACK(menu_save_acb) {
   }
 }
 
+static UI_FUNCTION_CALLBACK(menu_save_submenu_cb) {
+  (void)data;
+  menu_push_submenu(menu_build_save_menu());
+}
+
 static UI_FUNCTION_ADV_CALLBACK(menu_trace_acb) {
   if (b) {
     if (trace[data].enabled) {
@@ -1076,8 +1153,6 @@ static UI_FUNCTION_ADV_CALLBACK(menu_traces_acb) {
   menu_push_submenu(menu_trace);
 }
 
-extern const menuitem_t menu_marker_s11smith[];
-extern const menuitem_t menu_marker_s21smith[];
 extern const menuitem_t menu_marker[];
 static uint8_t get_smith_format(void) {
   return (current_trace != TRACE_INVALID) ? trace[current_trace].smith_format : 0;
@@ -1120,7 +1195,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_format_acb) {
 
   if (format == TRC_SMITH && trace[current_trace].type == TRC_SMITH &&
       trace[current_trace].channel == channel)
-    menu_push_submenu(channel == 0 ? menu_marker_s11smith : menu_marker_s21smith);
+    menu_push_submenu(menu_build_marker_smith_menu(channel));
   else
     set_trace_type(current_trace, format, channel);
 }
@@ -1142,38 +1217,32 @@ static UI_FUNCTION_ADV_CALLBACK(menu_channel_acb) {
     set_trace_channel(current_trace, ch ^ 1);
 }
 
+static const option_desc_t transform_window_options[] = {
+    {TD_WINDOW_MINIMUM, "MINIMUM", BUTTON_ICON_NONE},
+    {TD_WINDOW_NORMAL, "NORMAL", BUTTON_ICON_NONE},
+    {TD_WINDOW_MAXIMUM, "MAXIMUM", BUTTON_ICON_NONE},
+};
+
 static UI_FUNCTION_ADV_CALLBACK(menu_transform_window_acb) {
-  const char* text = "";
-  switch (props_mode & TD_WINDOW) {
-  case TD_WINDOW_MINIMUM:
-    text = "MINIMUM";
-    data = TD_WINDOW_NORMAL;
-    break;
-  case TD_WINDOW_NORMAL:
-    text = "NORMAL";
-    data = TD_WINDOW_MAXIMUM;
-    break;
-  case TD_WINDOW_MAXIMUM:
-    text = "MAXIMUM";
-    data = TD_WINDOW_MINIMUM;
-    break;
-  }
-  if (b) {
-    b->p1.text = text;
+  uint16_t window = props_mode & TD_WINDOW;
+  ui_cycle_option(&window, transform_window_options, ARRAY_COUNT(transform_window_options), b);
+  if (b)
     return;
-  }
-  props_mode = (props_mode & ~TD_WINDOW) | data;
+  props_mode = (props_mode & (uint16_t)~TD_WINDOW) | window;
 }
+
+static const option_desc_t transform_state_options[] = {
+    {0, "OFF", BUTTON_ICON_NOCHECK},
+    {DOMAIN_TIME, "ON", BUTTON_ICON_CHECK},
+};
 
 static UI_FUNCTION_ADV_CALLBACK(menu_transform_acb) {
   (void)data;
-  if (b) {
-    if (props_mode & DOMAIN_TIME)
-      b->icon = BUTTON_ICON_CHECK;
-    b->p1.text = (props_mode & DOMAIN_TIME) ? "ON" : "OFF";
+  uint16_t state = props_mode & DOMAIN_TIME;
+  ui_cycle_option(&state, transform_state_options, ARRAY_COUNT(transform_state_options), b);
+  if (b)
     return;
-  }
-  props_mode ^= DOMAIN_TIME;
+  props_mode = (props_mode & (uint16_t)~DOMAIN_TIME) | state;
   select_lever_mode(LM_MARKER);
   request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
 }
@@ -1186,14 +1255,13 @@ static UI_FUNCTION_ADV_CALLBACK(menu_transform_filter_acb) {
   props_mode = (props_mode & ~TD_FUNC) | data;
 }
 
-const menuitem_t menu_bandwidth[];
 static UI_FUNCTION_ADV_CALLBACK(menu_bandwidth_sel_acb) {
   (void)data;
   if (b) {
     b->p1.u = get_bandwidth_frequency(config._bandwidth);
     return;
   }
-  menu_push_submenu(menu_bandwidth);
+  menu_push_submenu(menu_build_bandwidth_menu());
 }
 
 static UI_FUNCTION_ADV_CALLBACK(menu_bandwidth_acb) {
@@ -1295,16 +1363,22 @@ static UI_FUNCTION_ADV_CALLBACK(menu_smooth_acb) {
   }
   set_smooth_factor(data);
 }
+
+static UI_FUNCTION_ADV_CALLBACK(menu_smooth_sel_acb) {
+  (void)data;
+  if (b)
+    return;
+  menu_push_submenu(menu_build_smooth_menu());
+}
 #endif
 
-const menuitem_t menu_sweep_points[];
 static UI_FUNCTION_ADV_CALLBACK(menu_points_sel_acb) {
   (void)data;
   if (b) {
     b->p1.u = sweep_points;
     return;
   }
-  menu_push_submenu(menu_sweep_points);
+  menu_push_submenu(menu_build_points_menu());
 }
 
 static const uint16_t point_counts_set[POINTS_SET_COUNT] = POINTS_SET;
@@ -1318,7 +1392,6 @@ static UI_FUNCTION_ADV_CALLBACK(menu_points_acb) {
   set_sweep_points(p_count);
 }
 
-const menuitem_t menu_power[];
 static UI_FUNCTION_ADV_CALLBACK(menu_power_sel_acb) {
   (void)data;
   if (b) {
@@ -1327,7 +1400,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_power_sel_acb) {
                   2 + current_props._power * 2);
     return;
   }
-  menu_push_submenu(menu_power);
+  menu_push_submenu(menu_build_power_menu());
 }
 
 static UI_FUNCTION_ADV_CALLBACK(menu_power_acb) {
@@ -1581,6 +1654,11 @@ static UI_FUNCTION_ADV_CALLBACK(menu_marker_sel_acb) {
   request_to_redraw(REDRAW_MARKER);
 }
 
+static UI_FUNCTION_CALLBACK(menu_marker_select_cb) {
+  (void)data;
+  menu_push_submenu(menu_build_marker_select_menu());
+}
+
 static UI_FUNCTION_CALLBACK(menu_marker_disable_all_cb) {
   (void)data;
   for (int i = 0; i < MARKERS_MAX; i++)
@@ -1613,14 +1691,13 @@ static UI_FUNCTION_ADV_CALLBACK(menu_serial_speed_acb) {
   shell_update_speed(speed);
 }
 
-extern const menuitem_t menu_serial_speed[];
 static UI_FUNCTION_ADV_CALLBACK(menu_serial_speed_sel_acb) {
   (void)data;
   if (b) {
     b->p1.u = config._serial_speed;
     return;
   }
-  menu_push_submenu(menu_serial_speed);
+  menu_push_submenu(menu_build_serial_speed_menu());
 }
 #endif
 
@@ -2126,15 +2203,21 @@ static UI_FUNCTION_CALLBACK(menu_sdcard_cb) {
 }
 #endif // __USE_SD_CARD__
 
+static const option_desc_t band_mode_options[] = {
+    {0, "Si5351", BUTTON_ICON_NONE},
+    {1, "MS5351", BUTTON_ICON_NONE},
+    {2, "SWC5351", BUTTON_ICON_NONE},
+};
+
 static UI_FUNCTION_ADV_CALLBACK(menu_band_sel_acb) {
   (void)data;
-  static const char* gen_names[] = {"Si5351", "MS5351", "SWC5351"};
-  if (b) {
-    b->p1.text = gen_names[config._band_mode];
+  uint16_t mode = config._band_mode;
+  ui_cycle_option(&mode, band_mode_options, ARRAY_COUNT(band_mode_options), b);
+  if (b)
     return;
-  }
-  if (++config._band_mode >= ARRAY_COUNT(gen_names))
-    config._band_mode = 0;
+  if (config._band_mode == mode)
+    return;
+  config._band_mode = (uint8_t)mode;
   si5351_set_band_mode(config._band_mode);
   config_service_notify_configuration_changed();
 }
@@ -2204,64 +2287,37 @@ static const menuitem_t menu_calop[] = {
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
-const menuitem_t menu_save[] = {
-#ifdef __SD_FILE_BROWSER__
-    {MT_CALLBACK, FMT_CAL_FILE, "SAVE TO\n SD CARD", menu_sdcard_cb},
-#endif
-    {MT_ADV_CALLBACK, 0, "Empty %d", menu_save_acb},
-    {MT_ADV_CALLBACK, 1, "Empty %d", menu_save_acb},
-    {MT_ADV_CALLBACK, 2, "Empty %d", menu_save_acb},
+static const menu_descriptor_t menu_state_slots_desc[] = {
+    {MT_ADV_CALLBACK, 0},
+    {MT_ADV_CALLBACK, 1},
+    {MT_ADV_CALLBACK, 2},
 #if SAVEAREA_MAX > 3
-    {MT_ADV_CALLBACK, 3, "Empty %d", menu_save_acb},
+    {MT_ADV_CALLBACK, 3},
 #endif
 #if SAVEAREA_MAX > 4
-    {MT_ADV_CALLBACK, 4, "Empty %d", menu_save_acb},
+    {MT_ADV_CALLBACK, 4},
 #endif
 #if SAVEAREA_MAX > 5
-    {MT_ADV_CALLBACK, 5, "Empty %d", menu_save_acb},
+    {MT_ADV_CALLBACK, 5},
 #endif
 #if SAVEAREA_MAX > 6
-    {MT_ADV_CALLBACK, 6, "Empty %d", menu_save_acb},
+    {MT_ADV_CALLBACK, 6},
 #endif
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
-const menuitem_t menu_recall[] = {
-#ifdef __SD_FILE_BROWSER__
-    {MT_CALLBACK, FMT_CAL_FILE, "LOAD FROM\n SD CARD", menu_sdcard_browse_cb},
+#if defined(__SD_FILE_BROWSER__)
+#define MENU_STATE_SD_ENTRY 1
+#else
+#define MENU_STATE_SD_ENTRY 0
 #endif
-    {MT_ADV_CALLBACK, 0, "Empty %d", menu_recall_acb},
-    {MT_ADV_CALLBACK, 1, "Empty %d", menu_recall_acb},
-    {MT_ADV_CALLBACK, 2, "Empty %d", menu_recall_acb},
-#if SAVEAREA_MAX > 3
-    {MT_ADV_CALLBACK, 3, "Empty %d", menu_recall_acb},
-#endif
-#if SAVEAREA_MAX > 4
-    {MT_ADV_CALLBACK, 4, "Empty %d", menu_recall_acb},
-#endif
-#if SAVEAREA_MAX > 5
-    {MT_ADV_CALLBACK, 5, "Empty %d", menu_recall_acb},
-#endif
-#if SAVEAREA_MAX > 6
-    {MT_ADV_CALLBACK, 6, "Empty %d", menu_recall_acb},
-#endif
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
 
-const menuitem_t menu_power[] = {
-    {MT_ADV_CALLBACK, SI5351_CLK_DRIVE_STRENGTH_AUTO, "AUTO", menu_power_acb},
-    {MT_ADV_CALLBACK, SI5351_CLK_DRIVE_STRENGTH_2MA, "%u m" S_AMPER, menu_power_acb},
-    {MT_ADV_CALLBACK, SI5351_CLK_DRIVE_STRENGTH_4MA, "%u m" S_AMPER, menu_power_acb},
-    {MT_ADV_CALLBACK, SI5351_CLK_DRIVE_STRENGTH_6MA, "%u m" S_AMPER, menu_power_acb},
-    {MT_ADV_CALLBACK, SI5351_CLK_DRIVE_STRENGTH_8MA, "%u m" S_AMPER, menu_power_acb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
+
 
 const menuitem_t menu_cal_flow[] = {
     {MT_SUBMENU, 0, "MECH CAL", menu_calop},
     {MT_ADV_CALLBACK, 0, "CAL RANGE", menu_cal_range_acb},
     {MT_ADV_CALLBACK, 0, "CAL POWER", menu_power_sel_acb},
-    {MT_SUBMENU, 0, "SAVE CAL", menu_save},
+    {MT_CALLBACK, 0, "SAVE CAL", menu_save_submenu_cb},
     {MT_ADV_CALLBACK, 0, "CAL APPLY", menu_cal_apply_acb},
     {MT_ADV_CALLBACK, 0, "ENHANCED\nRESPONSE", menu_cal_enh_acb},
 #ifdef __VNA_Z_RENORMALIZATION__
@@ -2272,8 +2328,8 @@ const menuitem_t menu_cal_flow[] = {
 };
 
 const menuitem_t menu_state_io[] = {
-    {MT_SUBMENU, 0, "SAVE CAL", menu_save},
-    {MT_SUBMENU, 0, "RECALL CAL", menu_recall},
+    {MT_CALLBACK, 0, "SAVE CAL", menu_save_submenu_cb},
+    {MT_CALLBACK, 0, "RECALL CAL", menu_recall_submenu_cb},
     {MT_ADV_CALLBACK, 0, "CAL APPLY", menu_cal_apply_acb},
     {MT_CALLBACK, 0, "CAL RESET", menu_cal_reset_cb},
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
@@ -2389,44 +2445,47 @@ const menuitem_t menu_transform[] = {
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
-const menuitem_t menu_bandwidth[] = {
+static const menu_descriptor_t menu_bandwidth_desc[] = {
 #ifdef BANDWIDTH_8000
-    {MT_ADV_CALLBACK, BANDWIDTH_8000, "%u " S_Hz, menu_bandwidth_acb},
+    {MT_ADV_CALLBACK, BANDWIDTH_8000},
 #endif
 #ifdef BANDWIDTH_4000
-    {MT_ADV_CALLBACK, BANDWIDTH_4000, "%u " S_Hz, menu_bandwidth_acb},
+    {MT_ADV_CALLBACK, BANDWIDTH_4000},
 #endif
 #ifdef BANDWIDTH_2000
-    {MT_ADV_CALLBACK, BANDWIDTH_2000, "%u " S_Hz, menu_bandwidth_acb},
+    {MT_ADV_CALLBACK, BANDWIDTH_2000},
 #endif
 #ifdef BANDWIDTH_1000
-    {MT_ADV_CALLBACK, BANDWIDTH_1000, "%u " S_Hz, menu_bandwidth_acb},
+    {MT_ADV_CALLBACK, BANDWIDTH_1000},
 #endif
 #ifdef BANDWIDTH_333
-    {MT_ADV_CALLBACK, BANDWIDTH_333, "%u " S_Hz, menu_bandwidth_acb},
+    {MT_ADV_CALLBACK, BANDWIDTH_333},
 #endif
 #ifdef BANDWIDTH_100
-    {MT_ADV_CALLBACK, BANDWIDTH_100, "%u " S_Hz, menu_bandwidth_acb},
+    {MT_ADV_CALLBACK, BANDWIDTH_100},
 #endif
 #ifdef BANDWIDTH_30
-    {MT_ADV_CALLBACK, BANDWIDTH_30, "%u " S_Hz, menu_bandwidth_acb},
+    {MT_ADV_CALLBACK, BANDWIDTH_30},
 #endif
 #ifdef BANDWIDTH_10
-    {MT_ADV_CALLBACK, BANDWIDTH_10, "%u " S_Hz, menu_bandwidth_acb},
+    {MT_ADV_CALLBACK, BANDWIDTH_10},
 #endif
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+
+static const menu_descriptor_t menu_power_desc[] = {
+    {MT_ADV_CALLBACK, SI5351_CLK_DRIVE_STRENGTH_2MA},
+    {MT_ADV_CALLBACK, SI5351_CLK_DRIVE_STRENGTH_4MA},
+    {MT_ADV_CALLBACK, SI5351_CLK_DRIVE_STRENGTH_6MA},
+    {MT_ADV_CALLBACK, SI5351_CLK_DRIVE_STRENGTH_8MA},
 };
 
 #ifdef __USE_SMOOTH__
-const menuitem_t menu_smooth_count[] = {
-    {MT_ADV_CALLBACK, VNA_MODE_SMOOTH, "SMOOTH\n " R_LINK_COLOR "%s avg", menu_vna_mode_acb},
-    {MT_ADV_CALLBACK, 0, "SMOOTH\nOFF", menu_smooth_acb},
-    {MT_ADV_CALLBACK, 1, "x%d", menu_smooth_acb},
-    {MT_ADV_CALLBACK, 2, "x%d", menu_smooth_acb},
-    {MT_ADV_CALLBACK, 4, "x%d", menu_smooth_acb},
-    {MT_ADV_CALLBACK, 5, "x%d", menu_smooth_acb},
-    {MT_ADV_CALLBACK, 6, "x%d", menu_smooth_acb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+static const menu_descriptor_t menu_smooth_desc[] = {
+    {MT_ADV_CALLBACK, 1},
+    {MT_ADV_CALLBACK, 2},
+    {MT_ADV_CALLBACK, 4},
+    {MT_ADV_CALLBACK, 5},
+    {MT_ADV_CALLBACK, 6},
 };
 #endif
 
@@ -2443,7 +2502,7 @@ const menuitem_t menu_display[] = {
 const menuitem_t menu_measure_tools[] = {
     {MT_SUBMENU, 0, "TRANSFORM", menu_transform},
 #ifdef __USE_SMOOTH__
-    {MT_SUBMENU, 0, "DATA\nSMOOTH", menu_smooth_count},
+    {MT_ADV_CALLBACK, 0, "DATA\nSMOOTH", menu_smooth_sel_acb},
 #endif
 #ifdef __VNA_MEASURE_MODULE__
     {MT_CALLBACK, 0, "MEASURE", menu_measure_cb},
@@ -2456,22 +2515,20 @@ const menuitem_t menu_measure_tools[] = {
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
-const menuitem_t menu_sweep_points[] = {
-    {MT_ADV_CALLBACK, KM_POINTS, "SET POINTS\n " R_LINK_COLOR "%d", (const void*)menu_keyboard_acb},
-    {MT_ADV_CALLBACK, 0, "%d point", menu_points_acb},
+static const menu_descriptor_t menu_points_desc[] = {
+    {MT_ADV_CALLBACK, 0},
 #if POINTS_SET_COUNT > 1
-    {MT_ADV_CALLBACK, 1, "%d point", menu_points_acb},
+    {MT_ADV_CALLBACK, 1},
 #endif
 #if POINTS_SET_COUNT > 2
-    {MT_ADV_CALLBACK, 2, "%d point", menu_points_acb},
+    {MT_ADV_CALLBACK, 2},
 #endif
 #if POINTS_SET_COUNT > 3
-    {MT_ADV_CALLBACK, 3, "%d point", menu_points_acb},
+    {MT_ADV_CALLBACK, 3},
 #endif
 #if POINTS_SET_COUNT > 4
-    {MT_ADV_CALLBACK, 4, "%d point", menu_points_acb},
+    {MT_ADV_CALLBACK, 4},
 #endif
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
 const menuitem_t menu_stimulus[] = {
@@ -2502,57 +2559,203 @@ const menuitem_t menu_stimulus[] = {
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
-const menuitem_t menu_marker_sel[] = {
-    {MT_ADV_CALLBACK, 0, "MARKER %d", menu_marker_sel_acb},
+static const menu_descriptor_t menu_marker_sel_desc[] = {
+    {MT_ADV_CALLBACK, 0},
 #if MARKERS_MAX >= 2
-    {MT_ADV_CALLBACK, 1, "MARKER %d", menu_marker_sel_acb},
+    {MT_ADV_CALLBACK, 1},
 #endif
 #if MARKERS_MAX >= 3
-    {MT_ADV_CALLBACK, 2, "MARKER %d", menu_marker_sel_acb},
+    {MT_ADV_CALLBACK, 2},
 #endif
 #if MARKERS_MAX >= 4
-    {MT_ADV_CALLBACK, 3, "MARKER %d", menu_marker_sel_acb},
+    {MT_ADV_CALLBACK, 3},
 #endif
 #if MARKERS_MAX >= 5
-    {MT_ADV_CALLBACK, 4, "MARKER %d", menu_marker_sel_acb},
+    {MT_ADV_CALLBACK, 4},
 #endif
 #if MARKERS_MAX >= 6
-    {MT_ADV_CALLBACK, 5, "MARKER %d", menu_marker_sel_acb},
+    {MT_ADV_CALLBACK, 5},
 #endif
 #if MARKERS_MAX >= 7
-    {MT_ADV_CALLBACK, 6, "MARKER %d", menu_marker_sel_acb},
+    {MT_ADV_CALLBACK, 6},
 #endif
 #if MARKERS_MAX >= 8
-    {MT_ADV_CALLBACK, 7, "MARKER %d", menu_marker_sel_acb},
+    {MT_ADV_CALLBACK, 7},
 #endif
-    {MT_CALLBACK, 0, "ALL OFF", menu_marker_disable_all_cb},
-    {MT_ADV_CALLBACK, 0, "DELTA", menu_marker_delta_acb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
-const menuitem_t menu_marker_s21smith[] = {
-    {MT_ADV_CALLBACK, MS_LIN, "%s", menu_marker_smith_acb},
-    {MT_ADV_CALLBACK, MS_LOG, "%s", menu_marker_smith_acb},
-    {MT_ADV_CALLBACK, MS_REIM, "%s", menu_marker_smith_acb},
-    {MT_ADV_CALLBACK, MS_SHUNT_RX, "%s", menu_marker_smith_acb},
-    {MT_ADV_CALLBACK, MS_SHUNT_RLC, "%s", menu_marker_smith_acb},
-    {MT_ADV_CALLBACK, MS_SERIES_RX, "%s", menu_marker_smith_acb},
-    {MT_ADV_CALLBACK, MS_SERIES_RLC, "%s", menu_marker_smith_acb},
-    {MT_NEXT, 0, NULL, (const void*)menu_back} // next-> menu_back
+static const menu_descriptor_t menu_marker_s21smith_desc[] = {
+    {MT_ADV_CALLBACK, MS_LIN},
+    {MT_ADV_CALLBACK, MS_LOG},
+    {MT_ADV_CALLBACK, MS_REIM},
+    {MT_ADV_CALLBACK, MS_SHUNT_RX},
+    {MT_ADV_CALLBACK, MS_SHUNT_RLC},
+    {MT_ADV_CALLBACK, MS_SERIES_RX},
+    {MT_ADV_CALLBACK, MS_SERIES_RLC},
 };
 
-const menuitem_t menu_marker_s11smith[] = {
-    {MT_ADV_CALLBACK, MS_LIN, "%s", menu_marker_smith_acb},
-    {MT_ADV_CALLBACK, MS_LOG, "%s", menu_marker_smith_acb},
-    {MT_ADV_CALLBACK, MS_REIM, "%s", menu_marker_smith_acb},
-    {MT_ADV_CALLBACK, MS_RX, "%s", menu_marker_smith_acb},
-    {MT_ADV_CALLBACK, MS_RLC, "%s", menu_marker_smith_acb},
-    {MT_ADV_CALLBACK, MS_GB, "%s", menu_marker_smith_acb},
-    {MT_ADV_CALLBACK, MS_GLC, "%s", menu_marker_smith_acb},
-    {MT_ADV_CALLBACK, MS_RpXp, "%s", menu_marker_smith_acb},
-    {MT_ADV_CALLBACK, MS_RpLC, "%s", menu_marker_smith_acb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+static const menu_descriptor_t menu_marker_s11smith_desc[] = {
+    {MT_ADV_CALLBACK, MS_LIN},
+    {MT_ADV_CALLBACK, MS_LOG},
+    {MT_ADV_CALLBACK, MS_REIM},
+    {MT_ADV_CALLBACK, MS_RX},
+    {MT_ADV_CALLBACK, MS_RLC},
+    {MT_ADV_CALLBACK, MS_GB},
+    {MT_ADV_CALLBACK, MS_GLC},
+    {MT_ADV_CALLBACK, MS_RpXp},
+    {MT_ADV_CALLBACK, MS_RpLC},
 };
+
+static const menu_descriptor_t menu_serial_speed_desc[] = {
+    {MT_ADV_CALLBACK, 0},
+    {MT_ADV_CALLBACK, 1},
+    {MT_ADV_CALLBACK, 2},
+    {MT_ADV_CALLBACK, 3},
+    {MT_ADV_CALLBACK, 4},
+    {MT_ADV_CALLBACK, 5},
+    {MT_ADV_CALLBACK, 6},
+    {MT_ADV_CALLBACK, 7},
+    {MT_ADV_CALLBACK, 8},
+    {MT_ADV_CALLBACK, 9},
+};
+
+enum {
+  MENU_DYNAMIC_SAVE_SIZE = MENU_STATE_SD_ENTRY + ARRAY_COUNT(menu_state_slots_desc) + 1,
+  MENU_DYNAMIC_BANDWIDTH_SIZE = ARRAY_COUNT(menu_bandwidth_desc) + 1,
+  MENU_DYNAMIC_POINTS_SIZE = 1 + ARRAY_COUNT(menu_points_desc) + 1,
+  MENU_DYNAMIC_MARKER_SEL_SIZE = ARRAY_COUNT(menu_marker_sel_desc) + 3,
+  MENU_DYNAMIC_MARKER_S11_SIZE = ARRAY_COUNT(menu_marker_s11smith_desc) + 1,
+  MENU_DYNAMIC_MARKER_S21_SIZE = ARRAY_COUNT(menu_marker_s21smith_desc) + 1,
+  MENU_DYNAMIC_SERIAL_SPEED_SIZE = ARRAY_COUNT(menu_serial_speed_desc) + 1,
+  MENU_DYNAMIC_POWER_SIZE = 1 + ARRAY_COUNT(menu_power_desc) + 1,
+#ifdef __USE_SMOOTH__
+  MENU_DYNAMIC_SMOOTH_SIZE = 2 + ARRAY_COUNT(menu_smooth_desc) + 1,
+#endif
+};
+
+#define MENU_MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MENU_DYNAMIC_BUFFER_BASE                                                                                      \
+  MENU_MAX(MENU_DYNAMIC_SAVE_SIZE,                                                                                    \
+           MENU_MAX(MENU_DYNAMIC_BANDWIDTH_SIZE,                                                                      \
+                   MENU_MAX(MENU_DYNAMIC_POINTS_SIZE,                                                                 \
+                            MENU_MAX(MENU_DYNAMIC_MARKER_SEL_SIZE,                                                    \
+                                     MENU_MAX(MENU_DYNAMIC_MARKER_S11_SIZE,                                           \
+                                              MENU_MAX(MENU_DYNAMIC_MARKER_S21_SIZE,                                  \
+                                                       MENU_MAX(MENU_DYNAMIC_SERIAL_SPEED_SIZE,                       \
+                                                                MENU_DYNAMIC_POWER_SIZE)))))))
+#ifdef __USE_SMOOTH__
+#define MENU_DYNAMIC_BUFFER_SIZE MENU_MAX(MENU_DYNAMIC_BUFFER_BASE, MENU_DYNAMIC_SMOOTH_SIZE)
+#else
+#define MENU_DYNAMIC_BUFFER_SIZE MENU_DYNAMIC_BUFFER_BASE
+#endif
+
+static menuitem_t* menu_dynamic_buffer;
+
+static menuitem_t* menu_dynamic_acquire(void) {
+  if (menu_dynamic_buffer == NULL) {
+    menu_dynamic_buffer =
+        chCoreAllocAligned(MENU_DYNAMIC_BUFFER_SIZE * sizeof(menuitem_t), PORT_NATURAL_ALIGN);
+    if (menu_dynamic_buffer == NULL)
+      chSysHalt("menu buffer");
+  }
+  return menu_dynamic_buffer;
+}
+#undef MENU_DYNAMIC_BUFFER_BASE
+#undef MENU_MAX
+
+static const menuitem_t* menu_build_save_menu(void) {
+  menuitem_t* cursor = menu_dynamic_acquire();
+#ifdef __SD_FILE_BROWSER__
+  *cursor++ =
+      (menuitem_t){MT_CALLBACK, FMT_CAL_FILE, "SAVE TO\n SD CARD", menu_sdcard_cb};
+#endif
+  cursor = ui_menu_list(menu_state_slots_desc, ARRAY_COUNT(menu_state_slots_desc), "Empty %d",
+                        menu_save_acb, cursor);
+  menu_set_next(cursor, menu_back);
+  return menu_dynamic_buffer;
+}
+
+static const menuitem_t* menu_build_recall_menu(void) {
+  menuitem_t* cursor = menu_dynamic_acquire();
+#ifdef __SD_FILE_BROWSER__
+  *cursor++ = (menuitem_t){MT_CALLBACK, FMT_CAL_FILE, "LOAD FROM\n SD CARD",
+                           menu_sdcard_browse_cb};
+#endif
+  cursor = ui_menu_list(menu_state_slots_desc, ARRAY_COUNT(menu_state_slots_desc), "Empty %d",
+                        menu_recall_acb, cursor);
+  menu_set_next(cursor, menu_back);
+  return menu_dynamic_buffer;
+}
+
+static const menuitem_t* menu_build_bandwidth_menu(void) {
+  menuitem_t* cursor = menu_dynamic_acquire();
+  cursor = ui_menu_list(menu_bandwidth_desc, ARRAY_COUNT(menu_bandwidth_desc), "%u " S_Hz,
+                        menu_bandwidth_acb, cursor);
+  menu_set_next(cursor, menu_back);
+  return menu_dynamic_buffer;
+}
+
+static const menuitem_t* menu_build_points_menu(void) {
+  menuitem_t* cursor = menu_dynamic_acquire();
+  *cursor++ = (menuitem_t){MT_ADV_CALLBACK,
+                           KM_POINTS,
+                           "SET POINTS\n " R_LINK_COLOR "%d",
+                           (const void*)menu_keyboard_acb};
+  cursor = ui_menu_list(menu_points_desc, ARRAY_COUNT(menu_points_desc), "%d point",
+                        menu_points_acb, cursor);
+  menu_set_next(cursor, menu_back);
+  return menu_dynamic_buffer;
+}
+
+static const menuitem_t* menu_build_marker_select_menu(void) {
+  menuitem_t* cursor = menu_dynamic_acquire();
+  cursor = ui_menu_list(menu_marker_sel_desc, ARRAY_COUNT(menu_marker_sel_desc), "MARKER %d",
+                        menu_marker_sel_acb, cursor);
+  *cursor++ = (menuitem_t){MT_CALLBACK, 0, "ALL OFF", menu_marker_disable_all_cb};
+  *cursor++ = (menuitem_t){MT_ADV_CALLBACK, 0, "DELTA", menu_marker_delta_acb};
+  menu_set_next(cursor, menu_back);
+  return menu_dynamic_buffer;
+}
+
+static const menuitem_t* menu_build_marker_smith_menu(uint8_t channel) {
+  menuitem_t* cursor = menu_dynamic_acquire();
+  const menu_descriptor_t* desc = channel == 0 ? menu_marker_s11smith_desc : menu_marker_s21smith_desc;
+  size_t count = channel == 0 ? ARRAY_COUNT(menu_marker_s11smith_desc) : ARRAY_COUNT(menu_marker_s21smith_desc);
+  cursor = ui_menu_list(desc, count, "%s", menu_marker_smith_acb, cursor);
+  menu_set_next(cursor, menu_back);
+  return menu_dynamic_buffer;
+}
+
+static const menuitem_t* menu_build_serial_speed_menu(void) {
+  menuitem_t* cursor = menu_dynamic_acquire();
+  cursor = ui_menu_list(menu_serial_speed_desc, ARRAY_COUNT(menu_serial_speed_desc), "%u",
+                        menu_serial_speed_acb, cursor);
+  menu_set_next(cursor, menu_back);
+  return menu_dynamic_buffer;
+}
+
+static const menuitem_t* menu_build_power_menu(void) {
+  menuitem_t* cursor = menu_dynamic_acquire();
+  *cursor++ =
+      (menuitem_t){MT_ADV_CALLBACK, SI5351_CLK_DRIVE_STRENGTH_AUTO, "AUTO", menu_power_acb};
+  cursor = ui_menu_list(menu_power_desc, ARRAY_COUNT(menu_power_desc), "%u m" S_AMPER,
+                        menu_power_acb, cursor);
+  menu_set_next(cursor, menu_back);
+  return menu_dynamic_buffer;
+}
+
+#ifdef __USE_SMOOTH__
+static const menuitem_t* menu_build_smooth_menu(void) {
+  menuitem_t* cursor = menu_dynamic_acquire();
+  *cursor++ = (menuitem_t){MT_ADV_CALLBACK, VNA_MODE_SMOOTH, "SMOOTH\n " R_LINK_COLOR "%s avg",
+                           menu_vna_mode_acb};
+  *cursor++ = (menuitem_t){MT_ADV_CALLBACK, 0, "SMOOTH\nOFF", menu_smooth_acb};
+  cursor = ui_menu_list(menu_smooth_desc, ARRAY_COUNT(menu_smooth_desc), "x%d", menu_smooth_acb,
+                        cursor);
+  menu_set_next(cursor, menu_back);
+  return menu_dynamic_buffer;
+}
+#endif
 
 #ifdef __VNA_MEASURE_MODULE__
 // Select menu depend from measure mode
@@ -2642,7 +2845,7 @@ const menuitem_t* const menu_measure_list[] = {
 #endif
 
 const menuitem_t menu_marker[] = {
-    {MT_SUBMENU, 0, "SELECT\nMARKER", menu_marker_sel},
+    {MT_CALLBACK, 0, "SELECT\nMARKER", menu_marker_select_cb},
     {MT_ADV_CALLBACK, 0, "TRACKING", menu_marker_tracking_acb},
     {MT_ADV_CALLBACK, VNA_MODE_SEARCH, "SEARCH\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
     {MT_CALLBACK, MK_SEARCH_LEFT, "SEARCH\n " S_LARROW "LEFT", menu_marker_search_dir_cb},
@@ -2664,19 +2867,6 @@ const menuitem_t menu_dfu[] = {
 #endif
 
 #ifdef __USE_SERIAL_CONSOLE__
-const menuitem_t menu_serial_speed[] = {
-    {MT_ADV_CALLBACK, 0, "%u", menu_serial_speed_acb},
-    {MT_ADV_CALLBACK, 1, "%u", menu_serial_speed_acb},
-    {MT_ADV_CALLBACK, 2, "%u", menu_serial_speed_acb},
-    {MT_ADV_CALLBACK, 3, "%u", menu_serial_speed_acb},
-    {MT_ADV_CALLBACK, 4, "%u", menu_serial_speed_acb},
-    {MT_ADV_CALLBACK, 5, "%u", menu_serial_speed_acb},
-    {MT_ADV_CALLBACK, 6, "%u", menu_serial_speed_acb},
-    {MT_ADV_CALLBACK, 7, "%u", menu_serial_speed_acb},
-    {MT_ADV_CALLBACK, 8, "%u", menu_serial_speed_acb},
-    {MT_ADV_CALLBACK, 9, "%u", menu_serial_speed_acb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
 
 const menuitem_t menu_connection[] = {
     {MT_ADV_CALLBACK, VNA_MODE_CONNECTION, "CONNECTION\n " R_LINK_COLOR "%s", menu_vna_mode_acb},

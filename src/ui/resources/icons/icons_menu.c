@@ -23,29 +23,17 @@
 //                    Icons used in UI
 //****************************************************************
 
-#include <stdint.h>
-
-#include "nanovna.h"
+#include "icons_menu.h"
 
 // Touch test icon on screen
 #if LCD_WIDTH < 800
-#define CALIBRATION_OFFSET 16
-#define TOUCH_MARK_W 9
-#define TOUCH_MARK_H 9
-#define TOUCH_MARK_X 4
-#define TOUCH_MARK_Y 4
-static const uint8_t touch_bitmap[] = {
+const uint8_t touch_bitmap[] = {
     _BMP16(0b0000100000000000), _BMP16(0b0100100100000000), _BMP16(0b0010101000000000),
     _BMP16(0b0000100000000000), _BMP16(0b1111011110000000), _BMP16(0b0000100000000000),
     _BMP16(0b0010101000000000), _BMP16(0b0100100100000000), _BMP16(0b0000100000000000),
 };
 #else
-#define CALIBRATION_OFFSET 16
-#define TOUCH_MARK_W 15
-#define TOUCH_MARK_H 15
-#define TOUCH_MARK_X 7
-#define TOUCH_MARK_Y 7
-static const uint8_t touch_bitmap[] = {
+const uint8_t touch_bitmap[] = {
     _BMP16(0b0000000100000000), _BMP16(0b0100000100000100), _BMP16(0b0010000100001000),
     _BMP16(0b0001000100010000), _BMP16(0b0000100100100000), _BMP16(0b0000010101000000),
     _BMP16(0b0000000100000000), _BMP16(0b1111111011111110), _BMP16(0b0000000100000000),
@@ -56,11 +44,7 @@ static const uint8_t touch_bitmap[] = {
 
 // Icons for menus
 #if _USE_FONT_ < 3
-#define ICON_SIZE 14
-#define ICON_WIDTH 11
-#define ICON_HEIGHT 11
-#define ICON_GET_DATA(i) (&button_icons[2 * ICON_HEIGHT * (i)])
-static const uint8_t button_icons[] = {
+const uint8_t button_icons[] = {
     _BMP16(0b1111111111000000), _BMP16(0b1000000001000000), _BMP16(0b1000000001000000),
     _BMP16(0b1000000001000000), _BMP16(0b1000000001000000), _BMP16(0b1000000001000000),
     _BMP16(0b1000000001000000), _BMP16(0b1000000001000000), _BMP16(0b1000000001000000),
@@ -92,11 +76,7 @@ static const uint8_t button_icons[] = {
     _BMP16(0b1000000000100000), _BMP16(0b1111111111100000),
 };
 #else
-#define ICON_SIZE 18
-#define ICON_WIDTH 14
-#define ICON_HEIGHT 14
-#define ICON_GET_DATA(i) (&button_icons[2 * ICON_HEIGHT * (i)])
-static const uint8_t button_icons[] = {
+const uint8_t button_icons[] = {
     _BMP16(0b1111111111111000), _BMP16(0b1000000000001000), _BMP16(0b1000000000001000),
     _BMP16(0b1000000000001000), _BMP16(0b1000000000001000), _BMP16(0b1000000000001000),
     _BMP16(0b1000000000001000), _BMP16(0b1000000000001000), _BMP16(0b1000000000001000),

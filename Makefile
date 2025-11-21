@@ -21,7 +21,7 @@ USE_OPT = -Os -fno-inline-small-functions -ggdb -fomit-frame-pointer -falign-fun
  endif
 endif
 # additional options, use math optimisations
-USE_OPT+= -ffast-math -fsingle-precision-constant
+USE_OPT+= -ffast-math -fsingle-precision-constant -fmerge-constants
 
 # C specific options here (added to USE_OPT).
 ifeq ($(USE_COPT),)
@@ -177,6 +177,7 @@ CSRC = $(STARTUPSRC) \
        src/ui/resources/fonts/Font6x10.c \
        src/ui/resources/fonts/Font7x11b.c \
        src/ui/resources/fonts/Font11x14.c \
+       src/ui/resources/icons/icons_menu.c \
        src/platform/peripherals/usbcfg.c \
        src/runtime/main.c \
        src/runtime/runtime_entry.c \
@@ -296,6 +297,15 @@ ifeq ($(TARGET),F303)
  UDEFS = -DARM_MATH_CM4 -DNANOVNA_F303
 else
  UDEFS = -DARM_MATH_CM0
+endif
+ifeq ($(TARGET),F072)
+# F072 build targets do not expose TLV320/port diagnostics; trim their commands
+# to reclaim flash when LTO is disabled.
+ UDEFS += -DENABLE_SAMPLE_COMMAND=0 \
+          -DENABLE_GAIN_COMMAND=0 \
+          -DENABLE_PORT_COMMAND=0 \
+          -DENABLE_STAT_COMMAND=0 \
+          -DENABLE_THREADS_COMMAND=0
 endif
 #Enable if use RTC and need auto select source LSE or LSI
 UDEFS+= -DVNA_AUTO_SELECT_RTC_SOURCE
