@@ -309,7 +309,7 @@ void pause_sweep(void) {
   sweep_mode &= ~SWEEP_ENABLE;
 }
 
-static inline void resume_sweep(void) {
+void resume_sweep(void) {
   sweep_mode |= SWEEP_ENABLE;
 }
 
@@ -930,6 +930,7 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     sweep_points = original_points;
     app_measurement_update_frequencies();
   }
+  resume_sweep();
 }
 
 #if ENABLE_SCANBIN_COMMAND
@@ -993,7 +994,7 @@ static void update_marker_index(freq_t fstart, freq_t fstop, uint16_t points) {
   }
 }
 
-static inline void sweep_get_ordered(freq_t* start, freq_t* stop) {
+static void sweep_get_ordered(freq_t* start, freq_t* stop) {
   freq_t a = frequency0;
   freq_t b = frequency1;
   if (a <= b) {
