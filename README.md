@@ -38,13 +38,12 @@ similar.
 
 ## What Makes NanoVNA-X Different
 
-- Layered runtime instead of a monolithic `main.c`: the sweep thread, CLI, and services are wired together in `src/runtime/` via explicit ports, so control flow is inspectable and unit-testable rather than hidden inside `app_main`.
+- **Layered runtime instead of a monolithic `main.c`.** The sweep thread, CLI, and services are wired together in `src/runtime/` via explicit ports, so control flow is inspectable and unit-testable rather than hidden inside `app_main`.
 - Zero-copy sweep pipeline: RF orchestration now revolves around `sweep_service_snapshot_t` snapshots and a `measurement_engine` coordinator, letting the UI, USB CLI, and SD-card jobs consume captured buffers without re-triggering hardware sweeps.
-- Infrastructure services in `infra/`: the event bus, cooperative scheduler, configuration/calibration persistence, and autosave-aware state manager replace the hard-coded globals used in v0.9.1, making background work predictable and recoverable.
-- Clean interfaces: CLI, USB transport, UI hooks, and DSP helpers sit behind `include/interfaces/*` contracts, removing the legacy `#include "*.c"` patterns and making it obvious where transport-agnostic logic lives.
-- UI/input rework: presenters, controllers, input adapters, fonts, and icons live under `src/ui/`, enabling SD-card browsing, remote desktop, and better on-device messaging without touching hardware drivers.
-- Tooling/documentation refresh: the single `VERSION` file feeds builds and release automation, the Makefile tracks the new folder layout, and both English/Russian docs explain the divergence so downstream forks know what changed relative to DiSlord’s tree.
-
+- **Infrastructure services in `infra/`.** The event bus, cooperative scheduler, configuration/calibration persistence, and autosave-aware state manager replace the hard-coded globals used in v0.9.1, making background work predictable and recoverable.
+- **Clean interfaces.** CLI, USB transport, UI hooks, and DSP helpers sit behind `include/interfaces/*` contracts, removing the legacy `#include "*.c"` patterns and making it obvious where transport-agnostic logic lives.
+- **UI/input rework.** presenters, controllers, input adapters, fonts, and icons live under `src/ui/`, enabling SD-card browsing, remote desktop, and better on-device messaging without touching hardware drivers.
+- **Tooling/documentation refresh.** the single `VERSION` file feeds builds and release automation, the Makefile tracks the new folder layout, and both English/Russian docs explain the divergence so downstream forks know what changed relative to DiSlord’s tree.
 - **Predictable, event-driven architecture.** The sweep engine, UI, USB CDC shell, and measurement DSP cooperate through the ChibiOS event bus and watchdog-guarded timeouts. A hung codec, synthesiser, or PC host can no longer freeze the instrument mid-calibration.
 - **Measurement-focused DMA budget.** SPI LCD transfers and TLV320 I²S captures use DMA, while the UART console was intentionally moved to an IRQ driver so that DMA channels are always available for RF data paths.
 - **Unique USB identity by default.** Every unit now enumerates with a serial number derived from its MCU unique ID (System -> Device -> MORE -> *USB DEVICE UID* still allows opting out for legacy workflows).
@@ -55,21 +54,21 @@ The firmware was rewritten around a layered ChibiOS stack that emphasises respon
 
 ### Firmware Stability and Responsiveness
 The core of the firmware was reworked from blocking calls to a fully asynchronous, event-driven architecture using ChibiOS primitives (Mailboxes, Events, and Semaphores).
-* **Non-Blocking USB:** The USB CDC (serial) stack is now fully asynchronous. The firmware no longer hangs if a host PC connects, disconnects, or stalls during a data transfer. This resolves the most common source of device freezes.
-* **Timeout-Driven Recovery:** Critical subsystems, including the measurement engine and I²C bus, are guarded by timeouts. A stalled operation will no longer lock up the device; instead, the subsystem attempts to recover cleanly.
-* **RTOS-based Concurrency:** Busy-wait loops and polling have been replaced with efficient RTOS-based signaling, reducing CPU load and improving battery life. The measurement thread, UI, and USB stack now cooperate without race conditions or deadlocks.
-* **Persistent State:** A dedicated `infra/state/state_manager` module snapshots sweep limits, UI flags, and calibration slots to flash. Changes are auto-saved after you stop editing (or immediately via *Save Config*), so editing the sweep on the device or over USB survives a cold boot without hammering flash.
-* **UI/Sweep Sync:** The UI and sweep engine are now decoupled. The UI remains responsive even during complex calculations, and on-screen data is always synchronized with the underlying measurement state.
+* **Non-Blocking USB.** The USB CDC (serial) stack is now fully asynchronous. The firmware no longer hangs if a host PC connects, disconnects, or stalls during a data transfer. This resolves the most common source of device freezes.
+* **Timeout-Driven Recovery.** Critical subsystems, including the measurement engine and I²C bus, are guarded by timeouts. A stalled operation will no longer lock up the device; instead, the subsystem attempts to recover cleanly.
+* **RTOS-based Concurrency.** Busy-wait loops and polling have been replaced with efficient RTOS-based signaling, reducing CPU load and improving battery life. The measurement thread, UI, and USB stack now cooperate without race conditions or deadlocks.
+* **Persistent State.** A dedicated `infra/state/state_manager` module snapshots sweep limits, UI flags, and calibration slots to flash. Changes are auto-saved after you stop editing (or immediately via *Save Config*), so editing the sweep on the device or over USB survives a cold boot without hammering flash.
+* **UI/Sweep Sync.** The UI and sweep engine are now decoupled. The UI remains responsive even during complex calculations, and on-screen data is always synchronized with the underlying measurement state.
 
 ### Performance and Resource Management
-* **Targeted Memory Optimization:** Static RAM consumption has been significantly reduced, especially for the 16 kB STM32F072 (NanoVNA-H) target. This was achieved by tuning buffer sizes, disabling features like trace caching on low-memory models, and moving key buffers to CCM RAM on the STM32F303.
-* **Strategic DMA Usage:** The DMA architecture was refined to prioritize measurement stability. DMA is used for the most demanding data paths:
-    *   **LCD Interface (SPI):** Ensures smooth, high-speed UI and graph rendering.
-    *   **Measurement Pipeline (I²S):** Guarantees sample delivery from the codec without dropping data.
+* **Targeted Memory Optimization** Static RAM consumption has been significantly reduced, especially for the 16 kB STM32F072 (NanoVNA-H) target. This was achieved by tuning buffer sizes, disabling features like trace caching on low-memory models, and moving key buffers to CCM RAM on the STM32F303.
+* **Strategic DMA Usage** The DMA architecture was refined to prioritize measurement stability. DMA is used for the most demanding data paths:
+    *   **LCD Interface (SPI)** Ensures smooth, high-speed UI and graph rendering.
+    *   **Measurement Pipeline (I²S)** Guarantees sample delivery from the codec without dropping data.
     *   To free up DMA channels for these critical tasks, the **UART console was intentionally moved to a non-DMA, interrupt-driven driver.** This prevents resource conflicts and prioritizes measurement integrity.
 
 ### Sweep Throughput (STM32F072 reference)
-Measured on production NanoVNA-H hardware with a 101-point sweep:
+Measured on production NanoVNA-H hardware with a 101-point sweep.
 
 | Scenario | Effective throughput |
 | --- | --- |
@@ -79,13 +78,13 @@ Measured on production NanoVNA-H hardware with a 101-point sweep:
 STM32F303-based NanoVNA-H4 units benefit from the larger SRAM pool and typically exceed these numbers, but the F072 figures above define the guaranteed baseline for field deployments.
 
 ### New Features and Capabilities
-* **PLL Stabilization:** The Si5351 synthesizer programming sequence was optimized to reduce frequency overshoot and drift, improving measurement repeatability, especially at the start of a sweep.
-* **Deterministic USB serial numbers:** The firmware now enables the USB unique-ID mode at boot, so every unit enumerates with a stable serial number that host software (NanoVNA-App, NanoVNA Saver, etc.) can display without extra configuration.
+* **PLL Stabilization** The Si5351 synthesizer programming sequence was optimized to reduce frequency overshoot and drift, improving measurement repeatability, especially at the start of a sweep.
+* **Deterministic USB serial numbers** The firmware now enables the USB unique-ID mode at boot, so every unit enumerates with a stable serial number that host software (NanoVNA-App, NanoVNA Saver, etc.) can display without extra configuration.
 
 ### Build and Development Workflow
-* **Automated Versioning:** The firmware version is now automatically embedded during the build process from a single `VERSION` file.
-* **Improved CI/CD:** The GitHub Actions workflows have been optimized for faster, more reliable builds with better caching.
-* **DFU File Generation:** A Python-based script for creating DfuSe-compatible firmware files has been integrated into the release process.
+* **Automated Versioning** The firmware version is now automatically embedded during the build process from a single `VERSION` file.
+* **Improved CI/CD** The GitHub Actions workflows have been optimized for faster, more reliable builds with better caching.
+* **DFU File Generation** A Python-based script for creating DfuSe-compatible firmware files has been integrated into the release process.
 
 ## Architecture Overview
 
@@ -185,8 +184,8 @@ summary below outlines the essential steps for a clean build.
 
 There are several numbers of great companion PC tools from third-party.
 
-* [GoVNA](https://github.com/momentics/GoVNA): A robust and secure Go library for controlling NanoVNA vector network analyzers. Features multi-protocol support (V1, V2/LiteVNA), automatic device detection, and optimized for high-performance server-side applications.
-* [PyVNA](https://github.com/momentics/PyVNA): Multi-protocol Python library for NanoVNA V1/V2/LiteVNA, derived from GoVNA for high performance & secure server-side applications. Supports auto-detection, robust device pooling, and comprehensive data handling.
+* [GoVNA](https://github.com/momentics/GoVNA). A robust and secure Go library for controlling NanoVNA vector network analyzers. Features multi-protocol support (V1, V2/LiteVNA), automatic device detection, and optimized for high-performance server-side applications.
+* [PyVNA](https://github.com/momentics/PyVNA). Multi-protocol Python library for NanoVNA V1/V2/LiteVNA, derived from GoVNA for high performance & secure server-side applications. Supports auto-detection, robust device pooling, and comprehensive data handling.
 * [NanoVNA-App software](https://github.com/OneOfEleven/NanoVNA-App) by OneOfEleven
 
 ## Documentation
