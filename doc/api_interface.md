@@ -97,15 +97,54 @@ When the binary bit is set, the reply starts with the 16-bit mask and 16-bit poi
 ### 5.4 Storage and configuration persistence
 * `clearconfig {1234}` — Factory reset of persistent configuration and calibration (requires the literal key `1234`).
 * `saveconfig` — Persist the current configuration.
+* `sd_list [pattern]` (`ENABLE_SD_CARD_COMMAND` and `__USE_SD_CARD__`) — Enumerate files on the internal micro-SD card. Without arguments the firmware lists every entry as `<filename> <size_bytes>`. When a wildcard pattern is supplied (the same syntax accepted by FatFs `f_findnext`, e.g., `*.s2p`), only matching files are returned.  
+  **Example**
+  ```text
+  ch> sd_list *.s1p\r\n
+  ANT_MATCH.s1p 2048\r\n
+  FILTER_LOW.s1p 4096\r\n
+  ch>
+  ```
+* `sd_read {filename}` (`ENABLE_SD_CARD_COMMAND`) — Stream the contents of an SD file over USB. The reply starts with a 32-bit little-endian file length followed by the raw bytes. Hosts must read exactly the advertised length and then wait for the prompt. Common use cases include fetching S-parameter captures or screenshots saved on-board.  
+  **Example**
+  ```text
+  ch> sd_read CAPTURE001.bmp\r\n
+  <4-byte length><BMP payload>ch>
+  ```
+* `sd_delete {filename}` (`ENABLE_SD_CARD_COMMAND`) — Remove a file from the SD card. The firmware prints `delete: <name> OK` on success or `delete: <name> err` if FatFs returns an error such as “file not found.”  
+  **Example**
+  ```text
+  ch> sd_delete OLD_CAL.S2P\r\n
+  delete: OLD_CAL.S2P OK\r\n
+  ch>
+  ```
+* `msg {delay_ms} [text] [header]` (`__SD_CARD_LOAD__`) — Display an on-device modal message box for automation scripts loaded from SD. `delay_ms` controls how long the popup remains visible. The optional body `text` and `header` strings are rendered verbatim (UTF-8). When invoked over USB, the command behaves the same way and returns immediately after posting to the UI queue.  
+  **Example**
+  ```text
+  ch> msg 2000 "Connect DUT" "Calibration"\r\n
+  ch>  # prompt returns instantly while the display shows the message for 2 seconds
+  ```
 
 ### 5.5 System information and diagnostics
 * `b {idx} {mode} {value}` (`ENABLE_BAND_COMMAND`) — Update Si5351 band-configuration tables. `{mode}` must be one of `mode|freq|div|mul|omul|pow|opow|l|r|lr|adj`.
 * `dac {0-4095}` (`__VNA_ENABLE_DAC__`) — Program the auxiliary DAC output.
 * `gain {lgain} [rgain]` (`ENABLE_GAIN_COMMAND`) — Adjust TLV320AIC3204 PGA gains.
+* `port {0|1}` (`ENABLE_PORT_COMMAND`) — Select which audio path (0 = TX loopback, 1 = RX) the TLV320 codec feeds into the measurement pipeline. This is primarily useful for factory diagnostics and scripted validation where the signal chain must be forced to a specific port.  
+  **Example**
+  ```text
+  ch> port 0\r\n   # route TX excitation back into the ADC for a closed-loop test
+  ch>
+  ```
 * `info` (`ENABLE_INFO_COMMAND`) — Print the null-terminated `info_about[]` strings that describe the firmware build.
 * `reset [dfu]` — Perform a software reset, optionally entering DFU boot mode when compiled with `__DFU_SOFTWARE_MODE__`.
 * `stat` (`ENABLE_STAT_COMMAND`) — Capture raw ADC samples and report channel averages and RMS values.
 * `tcxo`, `threshold`, `version`, `vbat`, `vbat_offset` — See Sections 5.1 and 5.3 for related behaviour. `version` prints `NANOVNA_VERSION_STRING`; `vbat` reports the instantaneous battery voltage in millivolts; `vbat_offset` gets or sets the correction offset.
+* `color {palette_index} {rgb24}` (`ENABLE_COLOR_COMMAND`) — Inspect or modify the UI color palette. When called without valid arguments the firmware prints all palette entries as `index: 0xRRGGBB`. Supplying both parameters updates the target entry and triggers a full-screen redraw.  
+  **Example**
+  ```text
+  ch> color 5 0x00ff00\r\n   # make palette slot 5 bright green
+  ch>
+  ```
 * `threads` (`ENABLE_THREADS_COMMAND`) — Dump ChibiOS thread diagnostics, including stack usage and priorities.
 * `time` (`__USE_RTC__`) — Query or set the RTC. `time` alone prints the current date/time. `time b {YYMMDD_hex} {HHMMSS_hex}` writes raw registers. Individual fields (e.g., `y`, `m`, `d`, `h`, `min`, `sec`, `ppm`) can be updated with decimal values.
 * `usart_cfg {baud}` / `usart {string} [timeout_ms]` (`ENABLE_USART_COMMAND` and `__USE_SERIAL_CONSOLE__`) — Reconfigure or use the hardware UART console. `usart` sends the string (plus newline) to the UART and streams any reply back over USB until the timeout expires.
@@ -118,9 +157,20 @@ When the binary bit is set, the reply starts with the 16-bit mask and 16-bit poi
 ### 5.7 Developer utilities
 * `dump [selection]` (`ENABLED_DUMP_COMMAND`) — Capture raw I/Q samples for debugging.
 * `i2c {page} {reg} {data}` (`ENABLE_I2C_COMMAND`) — Write to the TLV320AIC3204 codec registers.
-* `i2c {timing}` (`ENABLE_I2C_TIMINGS`) — Low-level reprogramming of I²C timing registers.
+* `i {scldel} {sdadel} {sclh} {scll}` (`ENABLE_I2C_TIMINGS`) — Low-level reprogramming of the STM32 I²C timing register. The four decimal arguments map to the `SCLDEL`, `SDADEL`, `SCLH`, and `SCLL` bit-fields. Use this command only when you fully understand the timing budget; invalid values can stall the codec bus.  
+  **Example**
+  ```text
+  ch> i 3 2 14 16\r\n
+  ch>
+  ```
 * `lcd {cmd} [byte ...]` (`ENABLE_LCD_COMMAND`) — Send raw commands to the LCD controller and report the return status.
 * `sample {gamma|ampl|ref}` (`ENABLE_SAMPLE_COMMAND`) — Switch the diagnostic sample source used by some measurements.
+* `t {idx} {value}` (`ENABLE_SI5351_TIMINGS`) — Reprogram Si5351 PLL timing registers. `idx` selects one of the eight cached timing entries, `value` is the raw register content written via `si5351_set_timing()`. This hook exists for production-line calibration where fine control over PLL loop parameters is required.  
+  **Example**
+  ```text
+  ch> t 2 120\r\n
+  ch>
+  ```
 * `si {reg} {value}` (`ENABLE_SI5351_REG_WRITE`) — Write directly to Si5351 registers.
 * `test` (`ENABLE_TEST_COMMAND`) — Reserved for ad-hoc diagnostics (no default output).
 
