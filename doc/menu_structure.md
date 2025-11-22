@@ -22,6 +22,9 @@
   - CAL APPLY
   - CAL RESET
 
+For detailed 12-point calibration instructions, see the documentation:
+* [12-Point Calibration Guide](calibration_12_point.md)
+
 ## STIMULUS
 - START / STOP / CENTER / SPAN -> keypad entries
 - CW FREQ -> single-frequency output

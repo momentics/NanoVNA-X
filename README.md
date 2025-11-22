@@ -190,6 +190,7 @@ There are several numbers of great companion PC tools from third-party.
 
 ## Documentation
 
+* [12-Point Calibration Guide (English)](doc/calibration_12_point.md)
 * [NanoVNA-X menu structure](doc/menu_structure.md)
 * [NanoVNA-X menu & user workflow reference](doc/menu_and_user_guide.md)
 * [NanoVNA User Guide(ja)](https://cho45.github.io/NanoVNA-manual/) by cho45. [(en:google translate)](https://translate.google.com/translate?sl=ja&tl=en&u=https%3A%2F%2Fcho45.github.io%2FNanoVNA-manual%2F)

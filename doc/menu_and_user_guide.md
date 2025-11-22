@@ -34,6 +34,9 @@ This guide documents the on-device menu tree implemented in the current NanoVNA-
 * `LOAD STD` *(with `__VNA_Z_RENORMALIZATION__`)* lets you edit the nominal load impedance used during calibration.
 * `CAL RESET` clears the working calibration (enhanced-response state is preserved).
 
+For detailed 12-point calibration instructions, see the documentation:
+* [English: 12-Point Calibration Guide](calibration_12_point.md)
+
 ### SAVE/RECALL
 This companion submenu mirrors the slot operations for field workflows:
 * `SAVE CAL` / `RECALL CAL` provide immediate access to calibration storage without stepping through the MECH CAL flow.

@@ -488,13 +488,19 @@ static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
       idx = 0;
     } else {
       freq_t span = stop - start;
-      int32_t k = (int32_t)((uint64_t)(f - start) * (points - 1U) / span);
-      if (k < 0) {
-        k = 0;
-      } else if (k >= (int32_t)(points - 1U)) {
-        k = (int32_t)(points - 1U);
+      // Calculate the position - use float for more accurate interpolation
+      float ratio = (float)(f - start) / (float)span;
+      float interpolated_pos = ratio * (points - 1U);
+      
+      // Bound-check the position
+      if (interpolated_pos < 0.0f) {
+        idx = 0;
+      } else if (interpolated_pos > (points - 1U)) {
+        idx = points - 1U;
+      } else {
+        // Round to nearest integer to reduce interpolation errors
+        idx = (uint16_t)(interpolated_pos + 0.5f);
       }
-      idx = k;
     }
   }
   for (uint16_t eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
