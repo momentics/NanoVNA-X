@@ -29,16 +29,15 @@
 
 // Use sin table and interpolation for sin/sos calculations
 #ifdef __VNA_USE_MATH_TABLES__
-// Use 512 table for calculation sin/cos value, also use this table for FFT
-#define FAST_MATH_TABLE_SIZE 512
+// Use quarter-wave table for calculation sin/cos values (0 to 90 degrees = 1/4 of circle)
+#define QTR_WAVE_TABLE_SIZE 129  // 128 entries for 0-90 degrees + 1 for interpolation
+#define FAST_MATH_TABLE_SIZE 512 // Keep for compatibility with FFT_SIZE calculations
 
-// Not use high part of table
-#define GET_SIN_TABLE(idx) (((idx) < 256) ? sin_table_512[(idx)] : -sin_table_512[(idx) - 256])
-
-static const float sin_table_512[FAST_MATH_TABLE_SIZE / 2 + 1] = {
+// Quarter-wave table for both vna_sincosf and FFT functions (0 to 90 degrees only)
+static const float sin_table_qtr[QTR_WAVE_TABLE_SIZE] = {
     /*
      * float has about 7.2 digits of precision
-      for (int i = 0; i < FAST_MATH_TABLE_SIZE; i++) {
+      for (int i = 0; i < QTR_WAVE_TABLE_SIZE; i++) {
         printf("% .8f,%c", sin(2 * M_PI * i / FAST_MATH_TABLE_SIZE), i % 8 == 7 ? '\n' : ' ');
       }
     */
@@ -60,67 +59,99 @@ static const float sin_table_512[FAST_MATH_TABLE_SIZE / 2 + 1] = {
     0.96043052f, 0.96377607f, 0.96697647f, 0.97003125f, 0.97293995f, 0.97570213f, 0.97831737f,
     0.98078528f, 0.98310549f, 0.98527764f, 0.98730142f, 0.98917651f, 0.99090264f, 0.99247953f,
     0.99390697f, 0.99518473f, 0.99631261f, 0.99729046f, 0.99811811f, 0.99879546f, 0.99932238f,
-    0.99969882f, 0.99992470f, 1.00000000f, 0.99992470f, 0.99969882f, 0.99932238f, 0.99879546f,
-    0.99811811f, 0.99729046f, 0.99631261f, 0.99518473f, 0.99390697f, 0.99247953f, 0.99090264f,
-    0.98917651f, 0.98730142f, 0.98527764f, 0.98310549f, 0.98078528f, 0.97831737f, 0.97570213f,
-    0.97293995f, 0.97003125f, 0.96697647f, 0.96377607f, 0.96043052f, 0.95694034f, 0.95330604f,
-    0.94952818f, 0.94560733f, 0.94154407f, 0.93733901f, 0.93299280f, 0.92850608f, 0.92387953f,
-    0.91911385f, 0.91420976f, 0.90916798f, 0.90398929f, 0.89867447f, 0.89322430f, 0.88763962f,
-    0.88192126f, 0.87607009f, 0.87008699f, 0.86397286f, 0.85772861f, 0.85135519f, 0.84485357f,
-    0.83822471f, 0.83146961f, 0.82458930f, 0.81758481f, 0.81045720f, 0.80320753f, 0.79583690f,
-    0.78834643f, 0.78073723f, 0.77301045f, 0.76516727f, 0.75720885f, 0.74913639f, 0.74095113f,
-    0.73265427f, 0.72424708f, 0.71573083f, 0.70710678f, 0.69837625f, 0.68954054f, 0.68060100f,
-    0.67155895f, 0.66241578f, 0.65317284f, 0.64383154f, 0.63439328f, 0.62485949f, 0.61523159f,
-    0.60551104f, 0.59569930f, 0.58579786f, 0.57580819f, 0.56573181f, 0.55557023f, 0.54532499f,
-    0.53499762f, 0.52458968f, 0.51410274f, 0.50353838f, 0.49289819f, 0.48218377f, 0.47139674f,
-    0.46053871f, 0.44961133f, 0.43861624f, 0.42755509f, 0.41642956f, 0.40524131f, 0.39399204f,
-    0.38268343f, 0.37131719f, 0.35989504f, 0.34841868f, 0.33688985f, 0.32531029f, 0.31368174f,
-    0.30200595f, 0.29028468f, 0.27851969f, 0.26671276f, 0.25486566f, 0.24298018f, 0.23105811f,
-    0.21910124f, 0.20711138f, 0.19509032f, 0.18303989f, 0.17096189f, 0.15885814f, 0.14673047f,
-    0.13458071f, 0.12241068f, 0.11022221f, 0.09801714f, 0.08579731f, 0.07356456f, 0.06132074f,
-    0.04906767f, 0.03680722f, 0.02454123f, 0.01227154f, 0.00000000f,
-    /*
-                -0.01227154f,-0.02454123f,-0.03680722f,-0.04906767f,-0.06132074f,-0.07356456f,-0.08579731f,
-    -0.09801714f,-0.11022221f,-0.12241068f,-0.13458071f,-0.14673047f,-0.15885814f,-0.17096189f,-0.18303989f,
-    -0.19509032f,-0.20711138f,-0.21910124f,-0.23105811f,-0.24298018f,-0.25486566f,-0.26671276f,-0.27851969f,
-    -0.29028468f,-0.30200595f,-0.31368174f,-0.32531029f,-0.33688985f,-0.34841868f,-0.35989504f,-0.37131719f,
-    -0.38268343f,-0.39399204f,-0.40524131f,-0.41642956f,-0.42755509f,-0.43861624f,-0.44961133f,-0.46053871f,
-    -0.47139674f,-0.48218377f,-0.49289819f,-0.50353838f,-0.51410274f,-0.52458968f,-0.53499762f,-0.54532499f,
-    -0.55557023f,-0.56573181f,-0.57580819f,-0.58579786f,-0.59569930f,-0.60551104f,-0.61523159f,-0.62485949f,
-    -0.63439328f,-0.64383154f,-0.65317284f,-0.66241578f,-0.67155895f,-0.68060100f,-0.68954054f,-0.69837625f,
-    -0.70710678f,-0.71573083f,-0.72424708f,-0.73265427f,-0.74095113f,-0.74913639f,-0.75720885f,-0.76516727f,
-    -0.77301045f,-0.78073723f,-0.78834643f,-0.79583690f,-0.80320753f,-0.81045720f,-0.81758481f,-0.82458930f,
-    -0.83146961f,-0.83822471f,-0.84485357f,-0.85135519f,-0.85772861f,-0.86397286f,-0.87008699f,-0.87607009f,
-    -0.88192126f,-0.88763962f,-0.89322430f,-0.89867447f,-0.90398929f,-0.90916798f,-0.91420976f,-0.91911385f,
-    -0.92387953f,-0.92850608f,-0.93299280f,-0.93733901f,-0.94154407f,-0.94560733f,-0.94952818f,-0.95330604f,
-    -0.95694034f,-0.96043052f,-0.96377607f,-0.96697647f,-0.97003125f,-0.97293995f,-0.97570213f,-0.97831737f,
-    -0.98078528f,-0.98310549f,-0.98527764f,-0.98730142f,-0.98917651f,-0.99090264f,-0.99247953f,-0.99390697f,
-    -0.99518473f,-0.99631261f,-0.99729046f,-0.99811811f,-0.99879546f,-0.99932238f,-0.99969882f,-0.99992470f,
-    -1.00000000f,-0.99992470f,-0.99969882f,-0.99932238f,-0.99879546f,-0.99811811f,-0.99729046f,-0.99631261f,
-    -0.99518473f,-0.99390697f,-0.99247953f,-0.99090264f,-0.98917651f,-0.98730142f,-0.98527764f,-0.98310549f,
-    -0.98078528f,-0.97831737f,-0.97570213f,-0.97293995f,-0.97003125f,-0.96697647f,-0.96377607f,-0.96043052f,
-    -0.95694034f,-0.95330604f,-0.94952818f,-0.94560733f,-0.94154407f,-0.93733901f,-0.93299280f,-0.92850608f,
-    -0.92387953f,-0.91911385f,-0.91420976f,-0.90916798f,-0.90398929f,-0.89867447f,-0.89322430f,-0.88763962f,
-    -0.88192126f,-0.87607009f,-0.87008699f,-0.86397286f,-0.85772861f,-0.85135519f,-0.84485357f,-0.83822471f,
-    -0.83146961f,-0.82458930f,-0.81758481f,-0.81045720f,-0.80320753f,-0.79583690f,-0.78834643f,-0.78073723f,
-    -0.77301045f,-0.76516727f,-0.75720885f,-0.74913639f,-0.74095113f,-0.73265427f,-0.72424708f,-0.71573083f,
-    -0.70710678f,-0.69837625f,-0.68954054f,-0.68060100f,-0.67155895f,-0.66241578f,-0.65317284f,-0.64383154f,
-    -0.63439328f,-0.62485949f,-0.61523159f,-0.60551104f,-0.59569930f,-0.58579786f,-0.57580819f,-0.56573181f,
-    -0.55557023f,-0.54532499f,-0.53499762f,-0.52458968f,-0.51410274f,-0.50353838f,-0.49289819f,-0.48218377f,
-    -0.47139674f,-0.46053871f,-0.44961133f,-0.43861624f,-0.42755509f,-0.41642956f,-0.40524131f,-0.39399204f,
-    -0.38268343f,-0.37131719f,-0.35989504f,-0.34841868f,-0.33688985f,-0.32531029f,-0.31368174f,-0.30200595f,
-    -0.29028468f,-0.27851969f,-0.26671276f,-0.25486566f,-0.24298018f,-0.23105811f,-0.21910124f,-0.20711138f,
-    -0.19509032f,-0.18303989f,-0.17096189f,-0.15885814f,-0.14673047f,-0.13458071f,-0.12241068f,-0.11022221f,
-    -0.09801714f,-0.08579731f,-0.07356456f,-0.06132074f,-0.04906767f,-0.03680722f,-0.02454123f,-0.01227154f,
-    -0.00000000f*/
+    0.99969882f, 0.99992470f, 1.00000000f
 };
 //
 #if FFT_SIZE == 256
-#define FFT_SIN(i) sin_table_512[2 * (i)]
-#define FFT_COS(i) ((i) > 64 ? -sin_table_512[2 * (i) - 128] : sin_table_512[128 - 2 * (i)])
+// For FFT_SIZE = 256, table index maps to angle (i/256)*360 degrees
+// Using quarter-wave table (0-90 degrees), we need to map accordingly
+static inline float fft_sin_256(uint16_t i) {
+    // Scale i to get equivalent in 0-511 range for consistent mapping
+    uint16_t scaled_i = i * 2; // equivalent to i in 0-511 range
+    uint8_t quad = scaled_i >> 7;  // scaled_i / 128 = quadrant (0-3)  
+    uint16_t in_quad_pos = scaled_i & 0x7F;  // scaled_i % 128 = position within quadrant
+
+    if (quad == 0) { // 0-90 degrees
+        if (in_quad_pos >= QTR_WAVE_TABLE_SIZE - 1) in_quad_pos = QTR_WAVE_TABLE_SIZE - 2;
+        return sin_table_qtr[in_quad_pos];
+    } else if (quad == 1) { // 90-180 degrees: sin(90°+x) = cos(x)
+        if (in_quad_pos >= QTR_WAVE_TABLE_SIZE - 1) in_quad_pos = QTR_WAVE_TABLE_SIZE - 2;
+        return sin_table_qtr[128 - in_quad_pos];
+    } else if (quad == 2) { // 180-270 degrees: sin(180°+x) = -sin(x)  
+        if (in_quad_pos >= QTR_WAVE_TABLE_SIZE - 1) in_quad_pos = QTR_WAVE_TABLE_SIZE - 2;
+        return -sin_table_qtr[in_quad_pos];
+    } else { // 270-360 degrees: sin(270°+x) = -cos(x)
+        if (in_quad_pos >= QTR_WAVE_TABLE_SIZE - 1) in_quad_pos = QTR_WAVE_TABLE_SIZE - 2;
+        return -sin_table_qtr[128 - in_quad_pos];
+    }
+}
+
+static inline float fft_cos_256(uint16_t i) {
+    // Scale i to get equivalent in 0-511 range for consistent mapping
+    uint16_t scaled_i = i * 2; // equivalent to i in 0-511 range
+    uint8_t quad = scaled_i >> 7;  // scaled_i / 128 = quadrant (0-3)  
+    uint16_t in_quad_pos = scaled_i & 0x7F;  // scaled_i % 128 = position within quadrant
+
+    if (quad == 0) { // 0-90 degrees: cos(x)
+        if (in_quad_pos >= QTR_WAVE_TABLE_SIZE - 1) in_quad_pos = QTR_WAVE_TABLE_SIZE - 2;
+        return sin_table_qtr[128 - in_quad_pos]; // cos(x) = sin(90° - x)
+    } else if (quad == 1) { // 90-180 degrees: cos(90°+x) = -sin(x)
+        if (in_quad_pos >= QTR_WAVE_TABLE_SIZE - 1) in_quad_pos = QTR_WAVE_TABLE_SIZE - 2;
+        return -sin_table_qtr[in_quad_pos];
+    } else if (quad == 2) { // 180-270 degrees: cos(180°+x) = -cos(x)
+        if (in_quad_pos >= QTR_WAVE_TABLE_SIZE - 1) in_quad_pos = QTR_WAVE_TABLE_SIZE - 2;
+        return -sin_table_qtr[128 - in_quad_pos]; // cos(x) = sin(90° - x)
+    } else { // 270-360 degrees: cos(270°+x) = sin(x)
+        if (in_quad_pos >= QTR_WAVE_TABLE_SIZE - 1) in_quad_pos = QTR_WAVE_TABLE_SIZE - 2;
+        return sin_table_qtr[in_quad_pos];
+    }
+}
+
+#define FFT_SIN(i) fft_sin_256(i)
+#define FFT_COS(i) fft_cos_256(i)
 #elif FFT_SIZE == 512
-#define FFT_SIN(i) sin_table_512[(i)]
-#define FFT_COS(i) ((i) > 128 ? -sin_table_512[(i) - 128] : sin_table_512[128 - (i)])
+// For FFT_SIZE = 512, table index maps to angle (i/512)*360 degrees  
+// Using quarter-wave table (0-90 degrees), we need to map accordingly
+static inline float fft_sin_512(uint16_t i) {
+    uint8_t quad = i >> 7;  // i / 128 = quadrant (0-3)  
+    uint16_t in_quad_pos = i & 0x7F;  // i % 128 = position within quadrant
+
+    if (quad == 0) { // 0-90 degrees
+        if (in_quad_pos >= QTR_WAVE_TABLE_SIZE - 1) in_quad_pos = QTR_WAVE_TABLE_SIZE - 2;
+        return sin_table_qtr[in_quad_pos];
+    } else if (quad == 1) { // 90-180 degrees: sin(90°+x) = cos(x)
+        if (in_quad_pos >= QTR_WAVE_TABLE_SIZE - 1) in_quad_pos = QTR_WAVE_TABLE_SIZE - 2;
+        return sin_table_qtr[128 - in_quad_pos];
+    } else if (quad == 2) { // 180-270 degrees: sin(180°+x) = -sin(x)  
+        if (in_quad_pos >= QTR_WAVE_TABLE_SIZE - 1) in_quad_pos = QTR_WAVE_TABLE_SIZE - 2;
+        return -sin_table_qtr[in_quad_pos];
+    } else { // 270-360 degrees: sin(270°+x) = -cos(x)
+        if (in_quad_pos >= QTR_WAVE_TABLE_SIZE - 1) in_quad_pos = QTR_WAVE_TABLE_SIZE - 2;
+        return -sin_table_qtr[128 - in_quad_pos];
+    }
+}
+
+static inline float fft_cos_512(uint16_t i) {
+    uint8_t quad = i >> 7;  // i / 128 = quadrant (0-3)  
+    uint16_t in_quad_pos = i & 0x7F;  // i % 128 = position within quadrant
+
+    if (quad == 0) { // 0-90 degrees: cos(x)
+        if (in_quad_pos >= QTR_WAVE_TABLE_SIZE - 1) in_quad_pos = QTR_WAVE_TABLE_SIZE - 2;
+        return sin_table_qtr[128 - in_quad_pos]; // cos(x) = sin(90° - x)
+    } else if (quad == 1) { // 90-180 degrees: cos(90°+x) = -sin(x)
+        if (in_quad_pos >= QTR_WAVE_TABLE_SIZE - 1) in_quad_pos = QTR_WAVE_TABLE_SIZE - 2;
+        return -sin_table_qtr[in_quad_pos];
+    } else if (quad == 2) { // 180-270 degrees: cos(180°+x) = -cos(x)
+        if (in_quad_pos >= QTR_WAVE_TABLE_SIZE - 1) in_quad_pos = QTR_WAVE_TABLE_SIZE - 2;
+        return -sin_table_qtr[128 - in_quad_pos]; // cos(x) = sin(90° - x)
+    } else { // 270-360 degrees: cos(270°+x) = sin(x)
+        if (in_quad_pos >= QTR_WAVE_TABLE_SIZE - 1) in_quad_pos = QTR_WAVE_TABLE_SIZE - 2;
+        return sin_table_qtr[in_quad_pos];
+    }
+}
+
+#define FFT_SIN(i) fft_sin_512(i)
+#define FFT_COS(i) fft_cos_512(i)
 #else
 #error "Need use bigger sin/cos table for new FFT size"
 #endif
@@ -332,73 +363,79 @@ void vna_sincosf(float angle, float* pSinVal, float* pCosVal) {
   *pSinVal = sinf(angle);
   *pCosVal = cosf(angle);
 #else
-  uint16_t indexS, indexC; // Index variable
-  float f1, f2, d1, d2;    // Two nearest output values
-  float fract, temp;
-
-  // Round angle to range 0.0 to 1.0
+  float temp;
+  // Normalize angle to range [0, 1) (0 to 360 degrees)
   temp = vna_fabsf(angle);
-  temp -= (uint32_t)temp;
+  temp = temp - (uint32_t)temp;
 
-  // Scale input from range 0.0 to 1.0 to table size
-  temp *= FAST_MATH_TABLE_SIZE;
+  // Scale to get index for full circle (0 to 511)
+  float scaled = temp * FAST_MATH_TABLE_SIZE;
+  uint16_t full_index = (uint16_t)scaled;
+  float fract = scaled - full_index;
 
-  indexS = temp;
-  indexC = indexS + (FAST_MATH_TABLE_SIZE / 4); // cosine add 0.25 (pi/2) to read from sine table
-  // Calculation of fractional value
-  fract = temp - indexS;
-  // Align indexes to table
-  indexS &= (FAST_MATH_TABLE_SIZE - 1);
-  indexC &= (FAST_MATH_TABLE_SIZE - 1);
+  // Determine quadrant (0-3 for 4 quadrants of 90 degrees each)
+  // Each quadrant has 128 entries (512/4 = 128)
+  uint8_t quad = full_index >> 7;  // full_index / 128 = which quadrant (0-3)
+  uint16_t in_quad_pos = full_index & 0x7F;  // full_index % 128 = position within quadrant (0-127)
 
-  // Read two nearest values of input value from the cos & sin tables
-#if 0
-  f1 = GET_SIN_TABLE(indexC  );
-  f2 = GET_SIN_TABLE(indexC+1);
-  d1 = GET_SIN_TABLE(indexS  );
-  d2 = GET_SIN_TABLE(indexS+1);
-#else
-  if (indexC < 256) {
-    f1 = sin_table_512[indexC + 0];
-    f2 = sin_table_512[indexC + 1];
-  } else {
-    f1 = -sin_table_512[indexC - 256 + 0];
-    f2 = -sin_table_512[indexC - 256 + 1];
+  // Get quarter-wave table values for interpolation
+  uint16_t table_idx = in_quad_pos;
+  if (table_idx >= QTR_WAVE_TABLE_SIZE - 1) table_idx = QTR_WAVE_TABLE_SIZE - 2;
+  
+  // Get sin and cos values from quarter-wave table with interpolation
+  float sin_val0 = sin_table_qtr[table_idx];
+  float sin_val1 = sin_table_qtr[table_idx + 1];
+  float sin_interp = sin_val0 + fract * (sin_val1 - sin_val0);
+  
+  // Get complementary angle for cosine: cos(x) = sin(90° - x)
+  // The complementary index maps 0->128, 1->127, ..., 127->1, 128->0
+  uint16_t comp_idx = (table_idx <= 128) ? (128 - table_idx) : 0;
+  if (comp_idx >= QTR_WAVE_TABLE_SIZE - 1) comp_idx = QTR_WAVE_TABLE_SIZE - 2;
+  
+  float cos_val0 = sin_table_qtr[comp_idx];
+  float cos_val1 = sin_table_qtr[comp_idx + 1];
+  float cos_interp = cos_val0 + fract * (cos_val1 - cos_val0);
+
+  float sin_final, cos_final;
+
+  // Apply quadrant-specific transformations using correct trigonometric identities
+  switch (quad) {
+    case 0: // 0 to 90 degrees (first quadrant): 0.000 to 0.250
+      // Angle maps directly to [0°, 90°]
+      sin_final = sin_interp;   // sin(x) 
+      cos_final = cos_interp;   // cos(x)
+      break;
+    case 1: // 90 to 180 degrees (second quadrant): 0.250 to 0.500
+      // For angle in [90°, 180°], let x = actual_angle - 90°, where x ∈ [0°, 90°]
+      // sin(90° + x) = cos(x), cos(90° + x) = -sin(x)
+      sin_final = cos_interp;   // cos(x) where x is the equivalent angle in [0°,90°]
+      cos_final = -sin_interp;  // -sin(x) where x is the equivalent angle in [0°,90°]
+      break;
+    case 2: // 180 to 270 degrees (third quadrant): 0.500 to 0.750
+      // For angle in [180°, 270°], let x = actual_angle - 180°, where x ∈ [0°, 90°]
+      // sin(180° + x) = -sin(x), cos(180° + x) = -cos(x)
+      sin_final = -sin_interp;  // -sin(x) where x is the equivalent angle in [0°,90°]
+      cos_final = -cos_interp;  // -cos(x) where x is the equivalent angle in [0°,90°]
+      break;
+    case 3: // 270 to 360 degrees (fourth quadrant): 0.750 to 1.000
+      // For angle in [270°, 360°], let x = actual_angle - 270°, where x ∈ [0°, 90°]
+      // sin(270° + x) = -cos(x), cos(270° + x) = sin(x)
+      sin_final = -cos_interp;  // -cos(x) where x is the equivalent angle in [0°,90°]
+      cos_final = sin_interp;   // sin(x) where x is the equivalent angle in [0°,90°]
+      break;
+    default:
+      sin_final = 0.0f;
+      cos_final = 1.0f;
+      break;
   }
-  if (indexS < 256) {
-    d1 = sin_table_512[indexS + 0];
-    d2 = sin_table_512[indexS + 1];
-  } else {
-    d1 = -sin_table_512[indexS - 256 + 0];
-    d2 = -sin_table_512[indexS - 256 + 1];
-  }
-#endif
 
-#if 1
-  // 1e-7 error on 512 size table
-  const float Dn =
-      2 * VNA_PI / FAST_MATH_TABLE_SIZE; // delta between the two points in table (fixed);
-  float Df;
-  // Calculation of cos value
-  Df = f2 - f1; // delta between the values of the functions
-  temp = Dn * (d1 + d2) + 2 * Df;
-  temp = Df + (d1 * Dn + temp - fract * temp);
-  temp = fract * temp - d1 * Dn;
-  *pCosVal = f1 + fract * temp;
-  // Calculation of sin value
-  Df = d1 - d2; // delta between the values of the functions
-  temp = Dn * (f1 + f2) + 2 * Df;
-  temp = Df + (f1 * Dn + temp - fract * temp);
-  temp = fract * temp - f1 * Dn;
-  *pSinVal = d1 - fract * temp;
-#else
-  // 1e-5 error  on 512 size table
-  // Calculation of sin and cos value, use simple linear interpolation
-  *pCosVal = fract * (f2 - f1) + f1;
-  *pSinVal = fract * (d2 - d1) + d1;
-#endif
-  if (angle < 0)
-    *pSinVal = -*pSinVal;
+  // Handle negative angles: sin(-x) = -sin(x), cos(-x) = cos(x)
+  if (angle < 0) {
+    sin_final = -sin_final;
+  }
+
+  *pSinVal = sin_final;
+  *pCosVal = cos_final;
 #endif
 }
 
