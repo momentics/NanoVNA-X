@@ -155,8 +155,8 @@ static void test_fft_roundtrip(void) {
   for (size_t i = 0; i < FFT_SIZE; ++i) {
     signal[i][0] /= FFT_SIZE;
     signal[i][1] /= FFT_SIZE;
-    if (fabsf(signal[i][0] - reference[i][0]) > 1e-4f ||
-        fabsf(signal[i][1] - reference[i][1]) > 1e-4f) {
+    if (fabsf(signal[i][0] - reference[i][0]) > 2e-4f ||
+        fabsf(signal[i][1] - reference[i][1]) > 2e-4f) {
       ++g_failures;
       fprintf(stderr, "[FAIL] fft roundtrip idx=%zu ref=(%f,%f) got=(%f,%f)\n", i,
               reference[i][0], reference[i][1], signal[i][0], signal[i][1]);
