@@ -339,7 +339,8 @@ TEST_SUITES := $(TEST_BUILD_DIR)/test_common $(TEST_BUILD_DIR)/test_vna_math \
                $(TEST_BUILD_DIR)/test_measurement_pipeline $(TEST_BUILD_DIR)/test_dsp_backend \
                $(TEST_BUILD_DIR)/test_legacy_measure $(TEST_BUILD_DIR)/test_event_bus \
                $(TEST_BUILD_DIR)/test_scheduler $(TEST_BUILD_DIR)/test_measurement_engine \
-               $(TEST_BUILD_DIR)/test_shell_service $(TEST_BUILD_DIR)/test_display_presenter
+               $(TEST_BUILD_DIR)/test_shell_service $(TEST_BUILD_DIR)/test_display_presenter \
+               $(TEST_BUILD_DIR)/test_accuracy_analysis
 
 $(TEST_BUILD_DIR):
 	@mkdir -p $@
@@ -348,7 +349,7 @@ $(TEST_BUILD_DIR)/test_common: tests/unit/test_common.c src/core/common.c | $(TE
 	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_vna_math: tests/unit/test_vna_math.c src/processing/vna_math.c | $(TEST_BUILD_DIR)
-	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_measurement_pipeline: tests/unit/test_measurement_pipeline.c \
 		src/rf/pipeline/measurement_pipeline.c | $(TEST_BUILD_DIR)
@@ -377,6 +378,9 @@ $(TEST_BUILD_DIR)/test_shell_service: tests/unit/test_shell_service.c src/interf
 $(TEST_BUILD_DIR)/test_display_presenter: tests/unit/test_display_presenter.c \
 		src/ui/display/display_presenter.c | $(TEST_BUILD_DIR)
 	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+
+$(TEST_BUILD_DIR)/test_accuracy_analysis: tests/unit/test_accuracy_analysis.c src/processing/vna_math.c | $(TEST_BUILD_DIR)
+	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 .PHONY: test tests
 tests: $(TEST_SUITES)
