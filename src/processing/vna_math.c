@@ -102,6 +102,34 @@ static const float sin_table_qtr[QTR_WAVE_TABLE_SIZE] = {
   1.00000000f
 };
 //
+// Common function for quadratic interpolation using the quarter-wave table
+static inline float quadratic_interpolation(float x) {
+    int idx = (int)x;
+    float fract = x - idx;
+    
+    float y0, y1, y2;
+    if (idx >= QTR_WAVE_TABLE_SIZE - 2) {
+        // At or near the end of table, use linear interpolation to avoid out-of-bounds
+        idx = (idx >= QTR_WAVE_TABLE_SIZE - 1) ? QTR_WAVE_TABLE_SIZE - 2 : idx;
+        y0 = sin_table_qtr[idx];
+        y1 = sin_table_qtr[idx + 1];
+        y2 = y1;  // Use same value for quadratic computation (effectively linear)
+    } else {
+        y0 = sin_table_qtr[idx];
+        y1 = sin_table_qtr[idx + 1];
+        y2 = sin_table_qtr[idx + 2];
+    }
+    
+    if (idx >= QTR_WAVE_TABLE_SIZE - 2) {
+        // Use linear interpolation near boundaries
+        float t = (idx >= QTR_WAVE_TABLE_SIZE - 1) ? 1.0f : fract;
+        return y0 + t * (y1 - y0);
+    } else {
+        // Use quadratic interpolation: f(x) = f0 + t*(f1-f0) + t*(t-1)*(f2-2*f1+f0)/2
+        return y0 + fract * (y1 - y0) + fract * (fract - 1.0f) * (y2 - 2.0f * y1 + y0) * 0.5f;
+    }
+}
+
 #if FFT_SIZE == 256
 // For FFT_SIZE = 256, table index maps to angle (i/256)*360 degrees
 // Using quarter-wave table (0-90 degrees) with 256 intervals (257 values), we need to map accordingly
@@ -113,32 +141,23 @@ static inline float fft_sin_256(uint16_t i) {
     // Each FFT quadrant (64 steps) represents 90 degrees
     // Our table has 256 intervals for 90 degrees, so each FFT step corresponds to 256/64 table steps
     float table_float_idx = in_quad_pos * (256.0f / 64.0f);
-    uint16_t table_idx = (uint16_t)table_float_idx;
-    float fract = table_float_idx - table_idx;
     
-    // Ensure indices are within bounds
-    if (table_idx >= QTR_WAVE_TABLE_SIZE - 1) {
-        table_idx = QTR_WAVE_TABLE_SIZE - 2;
-        fract = 0.0f;
-    }
-    
-    // Get values for linear interpolation
-    float sin_val0 = sin_table_qtr[table_idx];
-    float sin_val1 = sin_table_qtr[table_idx + 1];
-    float sin_interp = sin_val0 + fract * (sin_val1 - sin_val0);
+    // Get sin value using common quadratic interpolation function
+    float sin_interp = quadratic_interpolation(table_float_idx);
 
     // Calculate complementary angle for cosine (cos(x) = sin(90° - x))
     float comp_float_idx = (256.0f - table_float_idx);
-    uint16_t comp_idx = (uint16_t)comp_float_idx;
-    float comp_fract = comp_float_idx - comp_idx;
-    if (comp_idx >= QTR_WAVE_TABLE_SIZE - 1) {
-        comp_idx = QTR_WAVE_TABLE_SIZE - 2;
-        comp_fract = 0.0f;
+    float cos_interp;
+    if (comp_float_idx >= 256.0f) {
+        // When cos_scaled is at or above 256, directly use the value at index 256 (sin of 90° = 1)
+        cos_interp = sin_table_qtr[256];
+    } else if (comp_float_idx < 0.0f) {
+        // When cos_scaled is below 0, directly use the value at index 0 (sin of 0° = 0)
+        cos_interp = sin_table_qtr[0];
+    } else {
+        // Get cosine value using common quadratic interpolation function
+        cos_interp = quadratic_interpolation(comp_float_idx);
     }
-    
-    float cos_val0 = sin_table_qtr[comp_idx];
-    float cos_val1 = sin_table_qtr[comp_idx + 1];
-    float cos_interp = cos_val0 + comp_fract * (cos_val1 - cos_val0);
 
     // Apply quadrant-specific transformations
     if (quad == 0) { // 0-90 degrees
@@ -159,32 +178,23 @@ static inline float fft_cos_256(uint16_t i) {
     // Each FFT quadrant (64 steps) represents 90 degrees
     // Our table has 256 intervals for 90 degrees, so each FFT step corresponds to 256/64 table steps
     float table_float_idx = in_quad_pos * (256.0f / 64.0f);
-    uint16_t table_idx = (uint16_t)table_float_idx;
-    float fract = table_float_idx - table_idx;
     
-    // Ensure indices are within bounds
-    if (table_idx >= QTR_WAVE_TABLE_SIZE - 1) {
-        table_idx = QTR_WAVE_TABLE_SIZE - 2;
-        fract = 0.0f;
-    }
-    
-    // Get values for linear interpolation
-    float sin_val0 = sin_table_qtr[table_idx];
-    float sin_val1 = sin_table_qtr[table_idx + 1];
-    float sin_interp = sin_val0 + fract * (sin_val1 - sin_val0);
+    // Get sin value using common quadratic interpolation function
+    float sin_interp = quadratic_interpolation(table_float_idx);
 
     // Calculate complementary angle for cosine (cos(x) = sin(90° - x))
     float comp_float_idx = (256.0f - table_float_idx);
-    uint16_t comp_idx = (uint16_t)comp_float_idx;
-    float comp_fract = comp_float_idx - comp_idx;
-    if (comp_idx >= QTR_WAVE_TABLE_SIZE - 1) {
-        comp_idx = QTR_WAVE_TABLE_SIZE - 2;
-        comp_fract = 0.0f;
+    float cos_interp;
+    if (comp_float_idx >= 256.0f) {
+        // When cos_scaled is at or above 256, directly use the value at index 256 (sin of 90° = 1)
+        cos_interp = sin_table_qtr[256];
+    } else if (comp_float_idx < 0.0f) {
+        // When cos_scaled is below 0, directly use the value at index 0 (sin of 0° = 0)
+        cos_interp = sin_table_qtr[0];
+    } else {
+        // Get cosine value using common quadratic interpolation function
+        cos_interp = quadratic_interpolation(comp_float_idx);
     }
-    
-    float cos_val0 = sin_table_qtr[comp_idx];
-    float cos_val1 = sin_table_qtr[comp_idx + 1];
-    float cos_interp = cos_val0 + comp_fract * (cos_val1 - cos_val0);
 
     // Apply quadrant-specific transformations
     if (quad == 0) { // 0-90 degrees: cos(x) -> sin(90° - x)
@@ -212,32 +222,23 @@ static inline float fft_sin_512(uint16_t i) {
     // Each FFT quadrant (128 steps) represents 90 degrees
     // Our table has 256 intervals for 90 degrees, so each FFT step corresponds to 256/128 table steps
     float table_float_idx = in_quad_pos * (256.0f / 128.0f);
-    uint16_t table_idx = (uint16_t)table_float_idx;
-    float fract = table_float_idx - table_idx;
     
-    // Ensure indices are within bounds
-    if (table_idx >= QTR_WAVE_TABLE_SIZE - 1) {
-        table_idx = QTR_WAVE_TABLE_SIZE - 2;
-        fract = 0.0f;
-    }
-    
-    // Get values for linear interpolation
-    float sin_val0 = sin_table_qtr[table_idx];
-    float sin_val1 = sin_table_qtr[table_idx + 1];
-    float sin_interp = sin_val0 + fract * (sin_val1 - sin_val0);
+    // Get sin value using common quadratic interpolation function
+    float sin_interp = quadratic_interpolation(table_float_idx);
 
     // Calculate complementary angle for cosine
     float comp_float_idx = (256.0f - table_float_idx);
-    uint16_t comp_idx = (uint16_t)comp_float_idx;
-    float comp_fract = comp_float_idx - comp_idx;
-    if (comp_idx >= QTR_WAVE_TABLE_SIZE - 1) {
-        comp_idx = QTR_WAVE_TABLE_SIZE - 2;
-        comp_fract = 0.0f;
+    float cos_interp;
+    if (comp_float_idx >= 256.0f) {
+        // When cos_scaled is at or above 256, directly use the value at index 256 (sin of 90° = 1)
+        cos_interp = sin_table_qtr[256];
+    } else if (comp_float_idx < 0.0f) {
+        // When cos_scaled is below 0, directly use the value at index 0 (sin of 0° = 0)
+        cos_interp = sin_table_qtr[0];
+    } else {
+        // Get cosine value using common quadratic interpolation function
+        cos_interp = quadratic_interpolation(comp_float_idx);
     }
-    
-    float cos_val0 = sin_table_qtr[comp_idx];
-    float cos_val1 = sin_table_qtr[comp_idx + 1];
-    float cos_interp = cos_val0 + comp_fract * (cos_val1 - cos_val0);
 
     // Apply quadrant-specific transformations
     if (quad == 0) { // 0-90 degrees
@@ -258,32 +259,23 @@ static inline float fft_cos_512(uint16_t i) {
     // Each FFT quadrant (128 steps) represents 90 degrees
     // Our table has 256 intervals for 90 degrees, so each FFT step corresponds to 256/128 table steps
     float table_float_idx = in_quad_pos * (256.0f / 128.0f);
-    uint16_t table_idx = (uint16_t)table_float_idx;
-    float fract = table_float_idx - table_idx;
     
-    // Ensure indices are within bounds
-    if (table_idx >= QTR_WAVE_TABLE_SIZE - 1) {
-        table_idx = QTR_WAVE_TABLE_SIZE - 2;
-        fract = 0.0f;
-    }
-    
-    // Get values for linear interpolation
-    float sin_val0 = sin_table_qtr[table_idx];
-    float sin_val1 = sin_table_qtr[table_idx + 1];
-    float sin_interp = sin_val0 + fract * (sin_val1 - sin_val0);
+    // Get sin value using common quadratic interpolation function
+    float sin_interp = quadratic_interpolation(table_float_idx);
 
     // Calculate complementary angle for cosine
     float comp_float_idx = (256.0f - table_float_idx);
-    uint16_t comp_idx = (uint16_t)comp_float_idx;
-    float comp_fract = comp_float_idx - comp_idx;
-    if (comp_idx >= QTR_WAVE_TABLE_SIZE - 1) {
-        comp_idx = QTR_WAVE_TABLE_SIZE - 2;
-        comp_fract = 0.0f;
+    float cos_interp;
+    if (comp_float_idx >= 256.0f) {
+        // When cos_scaled is at or above 256, directly use the value at index 256 (sin of 90° = 1)
+        cos_interp = sin_table_qtr[256];
+    } else if (comp_float_idx < 0.0f) {
+        // When cos_scaled is below 0, directly use the value at index 0 (sin of 0° = 0)
+        cos_interp = sin_table_qtr[0];
+    } else {
+        // Get cosine value using common quadratic interpolation function
+        cos_interp = quadratic_interpolation(comp_float_idx);
     }
-    
-    float cos_val0 = sin_table_qtr[comp_idx];
-    float cos_val1 = sin_table_qtr[comp_idx + 1];
-    float cos_interp = cos_val0 + comp_fract * (cos_val1 - cos_val0);
 
     // Apply quadrant-specific transformations
     if (quad == 0) { // 0-90 degrees: cos(x) -> sin(90° - x)
@@ -529,74 +521,22 @@ void vna_sincosf(float angle, float* pSinVal, float* pCosVal) {
   uint8_t quad = full_index / 256;  // which quadrant (0-3)
   uint16_t in_quad_pos = full_index % 256;  // position within quadrant (0-255)
 
-  // Get quarter-wave table values with boundary checks for quadratic interpolation
-  uint16_t table_idx = in_quad_pos;
-  
-  // Get sin values with boundary checks for quadratic interpolation
-  float sin_val0, sin_val1, sin_val2;
-  if (table_idx >= QTR_WAVE_TABLE_SIZE - 2) {
-      // At or near the end of table, use linear interpolation to avoid out-of-bounds
-      table_idx = (table_idx >= QTR_WAVE_TABLE_SIZE - 1) ? QTR_WAVE_TABLE_SIZE - 2 : table_idx;
-      sin_val0 = sin_table_qtr[table_idx];
-      sin_val1 = sin_table_qtr[table_idx + 1];
-      sin_val2 = sin_val1;  // Use same value for quadratic computation (effectively linear)
-  } else {
-      sin_val0 = sin_table_qtr[table_idx];
-      sin_val1 = sin_table_qtr[table_idx + 1];
-      sin_val2 = sin_table_qtr[table_idx + 2];
-  }
-  
-  // Perform quadratic interpolation for sin values
-  float sin_interp;
-  if (table_idx >= QTR_WAVE_TABLE_SIZE - 2) {
-      // Use linear interpolation near boundaries
-      float t = (table_idx >= QTR_WAVE_TABLE_SIZE - 1) ? 1.0f : fract;
-      sin_interp = sin_val0 + t * (sin_val1 - sin_val0);
-  } else {
-      // Use quadratic interpolation: f(x) = f0 + t*(f1-f0) + t*(t-1)*(f2-2*f1+f0)/2
-      sin_interp = sin_val0 + fract * (sin_val1 - sin_val0) + fract * (fract - 1.0f) * (sin_val2 - 2.0f * sin_val1 + sin_val0) * 0.5f;
-  }
+  // Get sin value using common quadratic interpolation function
+  float sin_interp = quadratic_interpolation(in_quad_pos + fract);
   
   // For cosine, we need sin at complementary angle: cos(x) = sin(90° - x)
   // Calculate complementary angle in table index space 
-  float cos_scaled = 256.0f - (table_idx + fract);
+  float comp_angle = 256.0f - (in_quad_pos + fract);
   float cos_interp;
-  // Ensure cos_scaled is in valid range for table lookup [0, 256] for our table size
-  if (cos_scaled >= 256.0f) {
-      // When cos_scaled is at or above 256, directly use the value at index 256 (sin of 90° = 1)
+  if (comp_angle >= 256.0f) {
+      // When comp_angle is at or above 256, directly use the value at index 256 (sin of 90° = 1)
       cos_interp = sin_table_qtr[256];
-  } else if (cos_scaled < 0.0f) {
-      // When cos_scaled is below 0, directly use the value at index 0 (sin of 0° = 0, but this should be cos)
-      // Actually this shouldn't happen in the standard range, but let's handle it
+  } else if (comp_angle < 0.0f) {
+      // When comp_angle is below 0, directly use the value at index 0 (sin of 0° = 0)
       cos_interp = sin_table_qtr[0];
   } else {
-      // Perform quadratic interpolation for cosine values
-      uint16_t cos_table_idx = (uint16_t)cos_scaled;
-      float cos_fract = cos_scaled - cos_table_idx;
-      
-      // Get cosine values with boundary checks for quadratic interpolation
-      float cos_val0, cos_val1, cos_val2;
-      if (cos_table_idx >= QTR_WAVE_TABLE_SIZE - 2) {
-          // At or near the end of table, use linear interpolation to avoid out-of-bounds
-          cos_table_idx = (cos_table_idx >= QTR_WAVE_TABLE_SIZE - 1) ? QTR_WAVE_TABLE_SIZE - 2 : cos_table_idx;
-          cos_val0 = sin_table_qtr[cos_table_idx];
-          cos_val1 = sin_table_qtr[cos_table_idx + 1];
-          cos_val2 = cos_val1;  // Use same value for quadratic computation (effectively linear)
-      } else {
-          cos_val0 = sin_table_qtr[cos_table_idx];
-          cos_val1 = sin_table_qtr[cos_table_idx + 1];
-          cos_val2 = sin_table_qtr[cos_table_idx + 2];
-      }
-      
-      // Perform interpolation for cosine
-      if (cos_table_idx >= QTR_WAVE_TABLE_SIZE - 2) {
-          // Use linear interpolation near boundaries
-          float t = (cos_table_idx >= QTR_WAVE_TABLE_SIZE - 1) ? 1.0f : cos_fract;
-          cos_interp = cos_val0 + t * (cos_val1 - cos_val0);
-      } else {
-          // Use quadratic interpolation: f(x) = f0 + t*(f1-f0) + t*(t-1)*(f2-2*f1+f0)/2
-          cos_interp = cos_val0 + cos_fract * (cos_val1 - cos_val0) + cos_fract * (cos_fract - 1.0f) * (cos_val2 - 2.0f * cos_val1 + cos_val0) * 0.5f;
-      }
+      // Get cosine value using common quadratic interpolation function
+      cos_interp = quadratic_interpolation(comp_angle);
   }
 
   float sin_final, cos_final;

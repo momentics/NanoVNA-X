@@ -18,6 +18,15 @@
  * Boston, MA 02110-1301, USA.
  */
 
+/*
+ * Test precision verification:
+ * - vna_sincosf: tolerance 0.000001 for sin/cos values and 0.00001 for trigonometric identity
+ * - vna_modff: tolerance 0.00000005 for integer and fractional parts
+ * - vna_sqrtf: tolerance 0.000001 for square root calculations
+ * - FFT impulse: tolerance 0.0000005 for frequency domain flatness
+ * - FFT roundtrip: tolerance 0.00005 for forward/inverse transform accuracy
+ */
+
 /**
  * LUT accuracy tests for vna_sincosf().
  *
@@ -60,13 +69,13 @@ static void check_angle(float angle) {
   const float rad = angle * (2.0f * VNA_PI);
   const float sin_ref = sinf(rad);
   const float cos_ref = cosf(rad);
-  const float tol = 5e-5f; /* generous margin vs <1e-7 LUT spec to keep CI stable */
+  const float tol = 1e-6f; /* improved tolerance for LUT accuracy */
 
   expect_close("sin", angle, sin_ref, sin_lut, tol);
   expect_close("cos", angle, cos_ref, cos_lut, tol);
 
   const float magnitude = fabsf(sin_lut * sin_lut + cos_lut * cos_lut - 1.0f);
-  if (magnitude > 5e-4f) {
+  if (magnitude > 1e-5f) {
     ++g_failures;
     fprintf(stderr, "[FAIL] norm angle=%f drift=%e\n", angle, magnitude);
   }
@@ -94,13 +103,13 @@ static void test_modff(void) {
    */
   float i = 0.0f;
   float f = vna_modff(12.75f, &i);
-  if (fabsf(i - 12.0f) > 1e-6f || fabsf(f - 0.75f) > 1e-6f) {
+  if (fabsf(i - 12.0f) > 5e-8f || fabsf(f - 0.75f) > 5e-8f) {
     ++g_failures;
     fprintf(stderr, "[FAIL] modff positive i=%f f=%f\n", i, f);
   }
 
   f = vna_modff(-3.5f, &i);
-  if (fabsf(i + 3.0f) > 1e-6f || fabsf(f + 0.5f) > 1e-6f) {
+  if (fabsf(i + 3.0f) > 5e-8f || fabsf(f + 0.5f) > 5e-8f) {
     ++g_failures;
     fprintf(stderr, "[FAIL] modff negative i=%f f=%f\n", i, f);
   }
@@ -111,7 +120,7 @@ static void test_vna_sqrt(void) {
   for (size_t i = 0; i < ARRAY_SIZE(samples); ++i) {
     float ref = sqrtf(samples[i]);
     float got = vna_sqrtf(samples[i]);
-    if (fabsf(ref - got) > 1e-5f) {
+    if (fabsf(ref - got) > 1e-6f) {
       ++g_failures;
       fprintf(stderr, "[FAIL] sqrt sample=%f ref=%f got=%f\n", samples[i], ref, got);
     }
@@ -128,7 +137,7 @@ static void test_fft_impulse(void) {
   bins[0][0] = 1.0f;
   fft_forward(bins);
   for (size_t i = 0; i < FFT_SIZE; ++i) {
-    if (fabsf(bins[i][0] - 1.0f) > 1e-5f || fabsf(bins[i][1]) > 1e-5f) {
+    if (fabsf(bins[i][0] - 1.0f) > 5e-7f || fabsf(bins[i][1]) > 5e-7f) {
       ++g_failures;
       fprintf(stderr, "[FAIL] fft impulse idx=%zu real=%f imag=%f\n", i, bins[i][0], bins[i][1]);
       break;
@@ -155,8 +164,8 @@ static void test_fft_roundtrip(void) {
   for (size_t i = 0; i < FFT_SIZE; ++i) {
     signal[i][0] /= FFT_SIZE;
     signal[i][1] /= FFT_SIZE;
-    if (fabsf(signal[i][0] - reference[i][0]) > 2.1e-4f ||
-        fabsf(signal[i][1] - reference[i][1]) > 2.1e-4f) {
+    if (fabsf(signal[i][0] - reference[i][0]) > 5e-5f ||
+        fabsf(signal[i][1] - reference[i][1]) > 5e-5f) {
       ++g_failures;
       fprintf(stderr, "[FAIL] fft roundtrip idx=%zu ref=(%f,%f) got=(%f,%f)\n", i,
               reference[i][0], reference[i][1], signal[i][0], signal[i][1]);
