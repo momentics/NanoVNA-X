@@ -60,6 +60,8 @@ static uint8_t sweep_bar_pending = 0;
 static uint8_t smooth_factor = 0;
 static void (*volatile sample_func)(float* gamma) = NULL;
 
+static binary_semaphore_t capture_done_sem;
+
 void sweep_service_set_sample_function(void (*func)(float*)) {
   if (func == NULL) {
     func = calculate_gamma;
@@ -240,6 +242,9 @@ void i2s_lld_serve_rx_interrupt(uint32_t flags) {
   duplicate_buffer_to_dump(p, AUDIO_BUFFER_LEN);
 #endif
   --wait_count;
+  if (wait_count == 0U) {
+    chBSemSignalI(&capture_done_sem);
+  }
 }
 
 void sweep_service_init(void) {
@@ -252,6 +257,7 @@ void sweep_service_init(void) {
   sweep_bar_pending = 0;
   smooth_factor = 0;
   sample_func = calculate_gamma;
+  chBSemObjectInit(&capture_done_sem, true);
 #if ENABLED_DUMP_COMMAND
   dump_buffer = NULL;
   dump_len = 0;
@@ -357,23 +363,11 @@ bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
 void sweep_service_start_capture(systime_t delay_ticks) {
   ready_time = chVTGetSystemTimeX() + delay_ticks;
   wait_count = config._bandwidth + 2U;
+  chBSemReset(&capture_done_sem, true);
 }
 
 bool sweep_service_wait_for_capture(void) {
-  systime_t start_time = chVTGetSystemTimeX();
-  systime_t timeout = MS2ST(500); // 500ms timeout - adjust as needed
-  while (wait_count != 0U) {
-    systime_t current_time = chVTGetSystemTimeX();
-    if (current_time - start_time >= timeout) {
-      // Timeout occurred - break to prevent hanging
-      // This can happen if I2S interrupts don't fire properly (e.g. USB not connected)
-      wait_count = 0;
-      reset_dsp_accumerator();
-      return false;
-    }
-    __WFI();
-  }
-  return true;
+  return chBSemWaitTimeout(&capture_done_sem, MS2ST(500)) == MSG_OK;
 }
 
 const audio_sample_t* sweep_service_rx_buffer(void) {

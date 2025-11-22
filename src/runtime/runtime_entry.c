@@ -161,7 +161,7 @@ static void cmd_dump(int argc, char* argv[]);
 // Enable color command, allow change config color for traces, grid, menu
 #define ENABLE_COLOR_COMMAND
 // Enable transform command
-#define ENABLE_TRANSFORM_COMMAND
+// #define ENABLE_TRANSFORM_COMMAND
 // Enable sample command
 // #define ENABLE_SAMPLE_COMMAND
 // Enable I2C command for send data to AIC3204, used for debug

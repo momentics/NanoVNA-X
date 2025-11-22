@@ -49,6 +49,7 @@ typedef struct {
   uint32_t generation;
 } sweep_service_snapshot_t;
 
+void sweep_service_attach_event_bus(event_bus_t* bus);
 void sweep_service_init(void);
 void sweep_service_wait_for_copy_release(void);
 void sweep_service_begin_measurement(void);
