@@ -1845,7 +1845,38 @@ static void trace_into_index(int t) {
     const float rscale = P_RADIUS / scale;
     int16_t y, x;
     for (i = start; i <= stop; i++) {
-      cartesian_scale(array[i], &x, &y, rscale);
+      // For Smith chart, use proper transformation instead of cartesian coordinates
+      if (trace[t].type == TRC_SMITH) {
+        float real = array[i][0];
+        float imag = array[i][1];
+        // Calculate |Γ|^2 = real^2 + imag^2
+        float mag2 = real*real + imag*imag;
+        // Apply Smith chart transformation: x = cx + R * (2*real) / (1 + real^2 + imag^2)
+        // y = cy - R * (2*imag) / (1 + real^2 + imag^2)
+        // But since we're using a scale factor, we need to account for it properly
+        float denominator = 1.0f + mag2;
+        if (denominator > 0.001f) { // Avoid division by very small numbers
+          x = P_CENTER_X + float2int((2.0f * real / denominator) * rscale);
+          y = P_CENTER_Y - float2int((2.0f * imag / denominator) * rscale);
+        } else {
+          // If denominator is too small, this is near the center (matched condition)
+          x = P_CENTER_X;
+          y = P_CENTER_Y;
+        }
+        
+        // Apply clipping to keep points within display bounds
+        if (x < CELLOFFSETX)
+          x = CELLOFFSETX;
+        else if (x > CELLOFFSETX + WIDTH)
+          x = CELLOFFSETX + WIDTH;
+        if (y < 0)
+          y = 0;
+        else if (y > HEIGHT)
+          y = HEIGHT;
+      } else {
+        // For polar charts, use the existing cartesian scale approach
+        cartesian_scale(array[i], &x, &y, rscale);
+      }
       mark_set_index(index, i, (uint16_t)x, (uint16_t)y, &line_state);
     }
     return;
