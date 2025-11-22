@@ -987,13 +987,11 @@ static UI_FUNCTION_ADV_CALLBACK(menu_cal_enh_acb) {
 
 static UI_FUNCTION_CALLBACK(menu_caldone_cb) {
   cal_done();
-  // Move back to parent menu first (from MECH CAL submenu to CAL menu)
+  // For both cases, simply return to the parent menu
+  // This avoids potential memory allocation issues with menu_build_save_menu()
   menu_move_back(false);
-  // Then, if saving to flash (data=0), show save submenu
-  if (data == 0) {
-    menu_push_submenu(menu_build_save_menu());
-  }
-  // For DONE IN RAM (data=1), just stay in the parent menu (CAL menu)
+  // This allows the user to save calibration separately via CAL -> SAVE CAL
+  // which is safer and avoids potential memory allocation issues
 }
 
 static UI_FUNCTION_CALLBACK(menu_cal_reset_cb) {
@@ -2319,7 +2317,13 @@ static const menu_descriptor_t menu_state_slots_desc[] = {
 
 
 const menuitem_t menu_cal_flow[] = {
-    {MT_SUBMENU, 0, "MECH CAL", menu_calop},
+    {MT_ADV_CALLBACK, CAL_OPEN, "OPEN", menu_calop_acb},
+    {MT_ADV_CALLBACK, CAL_SHORT, "SHORT", menu_calop_acb},
+    {MT_ADV_CALLBACK, CAL_LOAD, "LOAD", menu_calop_acb},
+    {MT_ADV_CALLBACK, CAL_ISOLN, "ISOLN", menu_calop_acb},
+    {MT_ADV_CALLBACK, CAL_THRU, "THRU", menu_calop_acb},
+    {MT_CALLBACK, 0, "DONE", menu_caldone_cb},
+    {MT_CALLBACK, 1, "DONE IN RAM", menu_caldone_cb},
     {MT_ADV_CALLBACK, 0, "CAL RANGE", menu_cal_range_acb},
     {MT_ADV_CALLBACK, 0, "CAL POWER", menu_power_sel_acb},
     {MT_CALLBACK, 0, "SAVE CAL", menu_save_submenu_cb},
