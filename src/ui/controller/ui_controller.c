@@ -1224,6 +1224,7 @@ static const option_desc_t transform_window_options[] = {
 };
 
 static UI_FUNCTION_ADV_CALLBACK(menu_transform_window_acb) {
+  (void)data;  // Suppress unused parameter warning
   uint16_t window = props_mode & TD_WINDOW;
   ui_cycle_option(&window, transform_window_options, ARRAY_COUNT(transform_window_options), b);
   if (b)

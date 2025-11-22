@@ -77,9 +77,9 @@ void measure_sincosf_accuracy(void) {
         }
     }
     
-    printf("Max sin error: %.2e at angle %.6f\n", max_sin_error, max_sin_error_angle);
-    printf("Max cos error: %.2e at angle %.6f\n", max_cos_error, max_cos_error_angle);
-    printf("Max norm error (sin^2 + cos^2 - 1): %.2e at angle %.6f\n", max_norm_error, max_norm_error_angle);
+    printf("Max sin error: %f at angle %.6f\n", max_sin_error, max_sin_error_angle);
+    printf("Max cos error: %f at angle %.6f\n", max_cos_error, max_cos_error_angle);
+    printf("Max norm error (sin^2 + cos^2 - 1): %f at angle %.6f\n", max_norm_error, max_norm_error_angle);
     printf("\n");
 }
 
@@ -115,8 +115,8 @@ void measure_modff_accuracy(void) {
         }
     }
     
-    printf("Max integer part error: %.2e\n", max_ipart_error);
-    printf("Max fractional part error: %.2e\n", max_fpart_error);
+    printf("Max integer part error: %f\n", max_ipart_error);
+    printf("Max fractional part error: %f\n", max_fpart_error);
     printf("\n");
 }
 
@@ -142,7 +142,7 @@ void measure_sqrtf_accuracy(void) {
         }
     }
     
-    printf("Max sqrt error: %.2e\n", max_error);
+    printf("Max sqrt error: %f\n", max_error);
     printf("\n");
 }
 
@@ -188,8 +188,8 @@ void measure_fft_accuracy(void) {
         if (imag_err > max_roundtrip_error) max_roundtrip_error = imag_err;
     }
     
-    printf("Max FFT impulse error: %.2e\n", max_impulse_error);
-    printf("Max FFT roundtrip error: %.2e\n", max_roundtrip_error);
+    printf("Max FFT impulse error: %f\n", max_impulse_error);
+    printf("Max FFT roundtrip error: %f\n", max_roundtrip_error);
     printf("\n");
 }
 
@@ -227,8 +227,8 @@ void measure_extended_sincosf_accuracy(void) {
         }
     }
     
-    printf("Extended range max sin error: %.2e\n", max_sin_error);
-    printf("Extended range max cos error: %.2e\n", max_cos_error);
+    printf("Extended range max sin error: %f\n", max_sin_error);
+    printf("Extended range max cos error: %f\n", max_cos_error);
     printf("\n");
 }
 

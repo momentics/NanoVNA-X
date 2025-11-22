@@ -1183,75 +1183,27 @@ static void eterm_copy(int dst, int src) {
 static void eterm_calc_es(void) {
   int i;
   for (i = 0; i < sweep_points; i++) {
-    // Calculate theoretical OPEN standard value considering frequency-dependent effects
-    // An ideal open has infinite impedance but real opens have parasitic capacitance
-    // Z_open = 1/(jwc) = -j/(wc) -> S11_open = (Z_open - Z0)/(Z_open + Z0)
-    float c = 50e-15f;  // typical parasitic capacitance for open
-    float z0 = 50.0f;   // nominal impedance
-    float w = 2 * VNA_PI * frequencies[i];  // angular frequency
-    // Calculate 1/(jwc) = -j/(wc) = 1/(jwc)_imag (real part = 0, imag = -1/(wc))
-    float wc = w * c;
-    if (wc > 1e-20f) {  // prevent division by zero
-      float z_imag = -1.0f / wc;  // imaginary part of open impedance
-      // S11_open = (Z_open - Z0)/(Z_open + Z0) = (-j*Z_imag - Z0)/(-j*Z_imag + Z0)
-      // Multiply top and bottom by complex conjugate of denominator
-      float denom_real = z_imag * z_imag + z0 * z0;
-      if (denom_real > 1e-20f) {
-        float s11aor = (z0 * z0 - z_imag * z_imag) / denom_real;  // real part 
-        float s11aoi = (2 * z0 * z_imag) / denom_real;            // imag part
-        // S11mo’= S11mo - Ed (OPEN measurement after directivity correction)
-        // S11ms’= S11ms - Ed (SHORT measurement after directivity correction)
-        float s11or = cal_data[CAL_OPEN][i][0] - cal_data[ETERM_ED][i][0];
-        float s11oi = cal_data[CAL_OPEN][i][1] - cal_data[ETERM_ED][i][1];
-        float s11sr = cal_data[CAL_SHORT][i][0] - cal_data[ETERM_ED][i][0];
-        float s11si = cal_data[CAL_SHORT][i][1] - cal_data[ETERM_ED][i][1];
-        // ES = (S_open' - S_short') / (S_open'/S_open_theory - S_short'/S_short_theory)
-        // For short: S_short_theory ≈ -1 (ideal short)
-        float numr = s11or - s11sr;  // S_open' - S_short'
-        float numi = s11oi - s11si;  // S_open' - S_short'
-        // Denominator: S_open'/S_open_theory - S_short'/(-1) = S_open'/S_open_theory + S_short'
-        float denomr = s11or / s11aor - s11sr / (-1.0f); // S_open'/S_open_theory + S_short'
-        float denomi = s11oi / s11aor - s11si / (-1.0f); // S_open'/S_open_theory + S_short'
-        
-        // Complex division: (numr + j*numi) / (denomr + j*denomi)
-        float d = denomr * denomr + denomi * denomi;
-        if (d > 1e-20f) {
-          float inv = 1.0f / d;
-          cal_data[ETERM_ES][i][0] = (numr * denomr + numi * denomi) * inv;
-          cal_data[ETERM_ES][i][1] = (numi * denomr - numr * denomi) * inv;
-        } else {
-          // Set to default value if division by zero would occur
-          cal_data[ETERM_ES][i][0] = 0.0f;
-          cal_data[ETERM_ES][i][1] = 0.0f;
-        }
-      } else {
-        // If denominator calculation fails, use default
-        cal_data[ETERM_ES][i][0] = 0.0f;
-        cal_data[ETERM_ES][i][1] = 0.0f;
-      }
+    // S11mo' = S11mo - ED (after directivity correction)
+    // S11ms' = S11ms - ED (after directivity correction)
+    float open_r = cal_data[CAL_OPEN][i][0] - cal_data[ETERM_ED][i][0];
+    float open_i = cal_data[CAL_OPEN][i][1] - cal_data[ETERM_ED][i][1];
+    float short_r = cal_data[CAL_SHORT][i][0] - cal_data[ETERM_ED][i][0];
+    float short_i = cal_data[CAL_SHORT][i][1] - cal_data[ETERM_ED][i][1];
+    
+    // ES = (S_open' - S_short') / (S_open' + S_short') for ideal standards
+    float num_r = open_r - short_r;
+    float num_i = open_i - short_i;
+    float den_r = open_r + short_r;
+    float den_i = open_i + short_i;
+    
+    // Complex division to calculate source match error
+    float denom = den_r * den_r + den_i * den_i;
+    if (denom > 1e-20f) {
+      cal_data[ETERM_ES][i][0] = (num_r * den_r + num_i * den_i) / denom;
+      cal_data[ETERM_ES][i][1] = (num_i * den_r - num_r * den_i) / denom;
     } else {
-      // For very low frequencies, treat OPEN as ideal (S11 = +1)
-      float s11or = cal_data[CAL_OPEN][i][0] - cal_data[ETERM_ED][i][0];
-      float s11oi = cal_data[CAL_OPEN][i][1] - cal_data[ETERM_ED][i][1];
-      float s11sr = cal_data[CAL_SHORT][i][0] - cal_data[ETERM_ED][i][0];
-      float s11si = cal_data[CAL_SHORT][i][1] - cal_data[ETERM_ED][i][1];
-      
-      // ES = (S_open' - S_short') / (S_open'/1 - S_short'/(-1)) = (S_open' - S_short') / (S_open' + S_short')
-      float numr = s11or - s11sr;
-      float numi = s11oi - s11si;
-      float denomr = s11or + s11sr;
-      float denomi = s11oi + s11si;
-      
-      float d = denomr * denomr + denomi * denomi;
-      if (d > 1e-20f) {
-        float inv = 1.0f / d;
-        cal_data[ETERM_ES][i][0] = (numr * denomr + numi * denomi) * inv;
-        cal_data[ETERM_ES][i][1] = (numi * denomr - numr * denomi) * inv;
-      } else {
-        // Set to default value if division by zero would occur
-        cal_data[ETERM_ES][i][0] = 0.0f;
-        cal_data[ETERM_ES][i][1] = 0.0f;
-      }
+      cal_data[ETERM_ES][i][0] = 0.0f;
+      cal_data[ETERM_ES][i][1] = 0.0f;
     }
   }
   cal_status &= ~CALSTAT_OPEN;
@@ -1261,37 +1213,26 @@ static void eterm_calc_es(void) {
 static void eterm_calc_er(int sign) {
   int i;
   for (i = 0; i < sweep_points; i++) {
-    // Calculate reflection tracking error (ER)
-    // For SHORT standard: ER = S_short' - ES * GAMMA_short
-    // For OPEN standard: ER = S_open' - ES * GAMMA_open
-    // where S' = S - ED (after directivity correction)
-    // For ideal standards: GAMMA_short = -1, GAMMA_open = +1
+    // Calculate reflection tracking error based on standard used
+    // For SHORT standard: ER = S_short' - ES * (-1) = S_short' + ES
+    // For OPEN standard: ER = S_open' - ES * (+1) = S_open' - ES
+    float std_r, std_i;  // Standard measurement after directivity correction
     
-    // Get the measured standard (after directivity correction)
-    float s11mr, s11mi;  // measured S11 after directivity correction
-    if (sign < 0) {
-      // Use SHORT standard (sign = -1)
-      s11mr = cal_data[CAL_SHORT][i][0] - cal_data[ETERM_ED][i][0];
-      s11mi = cal_data[CAL_SHORT][i][1] - cal_data[ETERM_ED][i][1];
-      
-      // ER = S_short' - ES * (-1) = S_short' + ES
-      cal_data[ETERM_ER][i][0] = s11mr + cal_data[ETERM_ES][i][0];
-      cal_data[ETERM_ER][i][1] = s11mi + cal_data[ETERM_ES][i][1];
-    } else {
-      // Use OPEN standard (sign = +1, or any positive value)
-      s11mr = cal_data[CAL_OPEN][i][0] - cal_data[ETERM_ED][i][0];
-      s11mi = cal_data[CAL_OPEN][i][1] - cal_data[ETERM_ED][i][1];
-      
-      // ER = S_open' - ES * (+1) = S_open' - ES
-      cal_data[ETERM_ER][i][0] = s11mr - cal_data[ETERM_ES][i][0];
-      cal_data[ETERM_ER][i][1] = s11mi - cal_data[ETERM_ES][i][1];
+    if (sign < 0) {  // Use SHORT standard
+      std_r = cal_data[CAL_SHORT][i][0] - cal_data[ETERM_ED][i][0];
+      std_i = cal_data[CAL_SHORT][i][1] - cal_data[ETERM_ED][i][1];
+      // ER = S_short' + ES (since ideal SHORT has Gamma = -1)
+      cal_data[ETERM_ER][i][0] = std_r + cal_data[ETERM_ES][i][0];
+      cal_data[ETERM_ER][i][1] = std_i + cal_data[ETERM_ES][i][1];
+      cal_status &= ~CALSTAT_SHORT;
+    } else {  // Use OPEN standard
+      std_r = cal_data[CAL_OPEN][i][0] - cal_data[ETERM_ED][i][0];
+      std_i = cal_data[CAL_OPEN][i][1] - cal_data[ETERM_ED][i][1];
+      // ER = S_open' - ES (since ideal OPEN has Gamma = +1)
+      cal_data[ETERM_ER][i][0] = std_r - cal_data[ETERM_ES][i][0];
+      cal_data[ETERM_ER][i][1] = std_i - cal_data[ETERM_ES][i][1];
+      cal_status &= ~CALSTAT_OPEN;
     }
-  }
-  // Update status based on standard used
-  if (sign < 0) {
-    cal_status &= ~CALSTAT_SHORT;
-  } else {
-    cal_status &= ~CALSTAT_OPEN;
   }
   cal_status |= CALSTAT_ER;
 }
@@ -2019,6 +1960,7 @@ static struct {
 #endif
 } stat;
 
+VNA_SHELL_FUNCTION(cmd_stat) __attribute__((unused));
 VNA_SHELL_FUNCTION(cmd_stat) {
   const int16_t* p = (const int16_t*)sweep_service_rx_buffer();
   int32_t acc0, acc1;
