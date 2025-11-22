@@ -72,8 +72,8 @@ Measured on production NanoVNA-H hardware with a 101-point sweep.
 
 | Scenario | Effective throughput |
 | --- | --- |
-| 50 kHz–900 MHz span without harmonic retune breaks | 138–142 points per second (variance stems from Si5351 PLL settling time). |
-| 50 kHz–2.7 GHz full span with harmonic retunes (50–300 / 300–600 / 600–900 MHz fundamental bands plus harmonic hops) | 165–172 points per second thanks to the pipelined sweep engine and optimised IF bandwidth scheduling. |
+| 50 kHz–300 MHz span without harmonic retune breaks | 175–178 points per second (variance stems from Si5351 PLL settling time). |
+| 50 kHz–2.7 GHz full span with harmonic retunes (50–300 / 300–600 / 600–900 MHz fundamental bands plus harmonic hops) | 223–232 points per second thanks to the pipelined sweep engine and optimised IF bandwidth scheduling. |
 
 STM32F303-based NanoVNA-H4 units benefit from the larger SRAM pool and typically exceed these numbers, but the F072 figures above define the guaranteed baseline for field deployments.
 
