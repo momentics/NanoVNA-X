@@ -343,6 +343,23 @@ void sweep_service_wait_for_generation(void) {
   }
 }
 
+bool sweep_service_wait_for_capture(void) {
+  if ((__get_PRIMASK() & 1) != 0) {
+    // Interrupts are disabled, this will hang.
+    return false;
+  }
+  systime_t start_time = chVTGetSystemTimeX();
+  systime_t timeout = MS2ST(1000); // 1 second timeout to prevent infinite wait
+  
+  while (sweep_service_current_generation() == 0U) {
+    if (chVTGetSystemTimeX() - start_time >= timeout) {
+      // Timeout occurred, break to prevent hanging
+      break;
+    }
+    chThdSleepMilliseconds(1);
+  }
+}
+
 bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* snapshot) {
   if (snapshot == NULL || channel >= 2U) {
     return false;
