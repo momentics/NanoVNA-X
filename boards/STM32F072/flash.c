@@ -37,11 +37,42 @@ static inline void flash_clear_status_flags(void) {
   FLASH->SR = flags;
 }
 
-static inline void flash_wait_for_last_operation(void) {
-  while (FLASH->SR & FLASH_SR_BSY) {
-    // wait
+static inline int flash_wait_for_last_operation(void) {
+  // Add a timeout counter to prevent infinite loop
+  volatile uint32_t timeout = 0xFFFFF;  // Set appropriate timeout value
+  
+  while ((FLASH->SR & FLASH_SR_BSY) && (timeout > 0)) {
+    timeout--;
   }
+  
+  // Check if we timed out
+  if (timeout == 0) {
+    // Clear the busy flag by software reset if stuck
+    FLASH->SR |= FLASH_SR_EOP;  // Clear EOP if set
+    return -1;  // Return error
+  }
+  
+  // Check for error flags
+  uint32_t error_flags = 0;
+#if defined(FLASH_SR_WRPRTERR)
+  error_flags |= FLASH_SR_WRPRTERR;
+#elif defined(FLASH_SR_WRPERR)
+  error_flags |= FLASH_SR_WRPERR;
+#endif
+#ifdef FLASH_SR_PGERR
+  error_flags |= FLASH_SR_PGERR;
+#endif
+#ifdef FLASH_SR_OPERR
+  error_flags |= FLASH_SR_OPERR;
+#endif
+  
+  if (FLASH->SR & error_flags) {
+    flash_clear_status_flags();
+    return -1;  // Return error
+  }
+  
   flash_clear_status_flags();
+  return 0;  // Success
 }
 
 static inline uint32_t flash_enter_critical(void) {
@@ -61,11 +92,11 @@ static inline void flash_lock(void) {
 }
 
 static void flash_erase_page0(uint32_t page_address) {
-  flash_wait_for_last_operation();
+  (void)flash_wait_for_last_operation();
   FLASH->CR |= FLASH_CR_PER;
   FLASH->AR = page_address;
   FLASH->CR |= FLASH_CR_STRT;
-  flash_wait_for_last_operation();
+  (void)flash_wait_for_last_operation();
   FLASH->CR &= ~FLASH_CR_PER;
 }
 
@@ -95,10 +126,16 @@ void flash_program_half_word_buffer(uint16_t* dst, uint16_t *data, uint16_t size
   flash_erase_pages_unlocked((uint32_t)dst, size);
   __IO uint16_t* p = dst;
   for (uint32_t i = 0; i < size / sizeof(uint16_t); i++) {
-    flash_wait_for_last_operation();
+    if (flash_wait_for_last_operation() != 0) {
+      // If waiting fails, try to continue with the next word to avoid hanging
+      continue;
+    }
     FLASH->CR |= FLASH_CR_PG;
     p[i] = data[i];
-    flash_wait_for_last_operation();
+    if (flash_wait_for_last_operation() != 0) {
+      // If programming failed, continue to avoid indefinite hanging
+      continue;
+    }
     FLASH->CR &= ~FLASH_CR_PG;
   }
   flash_lock();
