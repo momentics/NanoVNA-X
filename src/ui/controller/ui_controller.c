@@ -987,9 +987,13 @@ static UI_FUNCTION_ADV_CALLBACK(menu_cal_enh_acb) {
 
 static UI_FUNCTION_CALLBACK(menu_caldone_cb) {
   cal_done();
+  // Move back to parent menu first (from MECH CAL submenu to CAL menu)
   menu_move_back(false);
-  if (data == 0)
+  // Then, if saving to flash (data=0), show save submenu
+  if (data == 0) {
     menu_push_submenu(menu_build_save_menu());
+  }
+  // For DONE IN RAM (data=1), just stay in the parent menu (CAL menu)
 }
 
 static UI_FUNCTION_CALLBACK(menu_cal_reset_cb) {
