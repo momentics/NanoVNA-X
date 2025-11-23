@@ -707,17 +707,16 @@ uint8_t get_smooth_factor(void) {
 }
 
 int app_measurement_set_frequency(freq_t freq) {
+  // Use dynamic delay returned by si5351_set_frequency which accounts for PLL settling time
+  // Different values are returned based on frequency range changes, PLL resets, etc.
+  // This ensures proper synchronization between frequency setting and measurement
   int delay = si5351_set_frequency(freq, current_props._power);
   
-  // Add enhanced synchronization delay after frequency change to ensure signal stability
-  // This improves measurement accuracy, especially during frequency transitions
+  // Use the original delay calculation from DiSlord firmware for proper timing
+  // If no specific delay returned, use default channel change delay
   if (delay == 0) {
-    delay = DELAY_CHANNEL_CHANGE; // Default delay if not provided by PLL
+    delay = DELAY_CHANNEL_CHANGE;
   }
-  
-  // Add minimal additional stabilization time after PLL lock
-  // This helps ensure that oscillator has fully settled before measurement begins
-  delay += 500; // Add 500 microseconds for additional settling
   
   return delay;
 }
