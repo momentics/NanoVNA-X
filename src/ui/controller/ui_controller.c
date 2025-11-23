@@ -2370,17 +2370,14 @@ const menuitem_t menu_cal_management[] = {
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
-const menuitem_t menu_cal_flow[] = {
-    {MT_SUBMENU, 0, "CAL WIZARD", menu_cal_wizard},
-    {MT_SUBMENU, 0, "CAL OPTIONS", menu_cal_options},
-    {MT_SUBMENU, 0, "SAVE/RECALL", menu_state_io},
-    {MT_SUBMENU, 0, "CAL MANAGE", menu_cal_management},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
+
 
 const menuitem_t menu_cal_menu[] = {
-    {MT_SUBMENU, 0, "CALIBRATE", menu_cal_flow},
-    {MT_SUBMENU, 0, "SAVE/RECALL", menu_state_io},
+    {MT_SUBMENU, 0, "CAL WIZARD", menu_cal_wizard},
+    {MT_SUBMENU, 0, "CAL OPTIONS", menu_cal_options},
+    {MT_SUBMENU, 0, "CAL MANAGE", menu_cal_management},
+    {MT_CALLBACK, 0, "SAVE CAL", menu_save_submenu_cb},
+    {MT_CALLBACK, 0, "RECALL CAL", menu_recall_submenu_cb},
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
@@ -2582,22 +2579,6 @@ const menuitem_t menu_stimulus[] = {
     {MT_ADV_CALLBACK, KM_CW, "CW FREQ", menu_keyboard_acb},
     {MT_ADV_CALLBACK, KM_STEP, "FREQ STEP\n " R_LINK_COLOR "%bF" S_Hz, menu_keyboard_acb},
     {MT_ADV_CALLBACK, KM_VAR, "JOG STEP\n " R_LINK_COLOR "AUTO", menu_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_POINTS, "SET POINTS\n " R_LINK_COLOR "%d", menu_keyboard_acb},
-#if POINTS_SET_COUNT > 0
-    {MT_ADV_CALLBACK, 0, "%d PTS", menu_points_acb},
-#endif
-#if POINTS_SET_COUNT > 1
-    {MT_ADV_CALLBACK, 1, "%d PTS", menu_points_acb},
-#endif
-#if POINTS_SET_COUNT > 2
-    {MT_ADV_CALLBACK, 2, "%d PTS", menu_points_acb},
-#endif
-#if POINTS_SET_COUNT > 3
-    {MT_ADV_CALLBACK, 3, "%d PTS", menu_points_acb},
-#endif
-#if POINTS_SET_COUNT > 4
-    {MT_ADV_CALLBACK, 4, "%d PTS", menu_points_acb},
-#endif
     {MT_ADV_CALLBACK, 0, "MORE PTS\n " R_LINK_COLOR "%u", menu_points_sel_acb},
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
