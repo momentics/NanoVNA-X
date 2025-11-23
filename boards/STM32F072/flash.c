@@ -40,7 +40,7 @@ static inline void flash_clear_status_flags(void) {
 
 static inline int flash_wait_for_last_operation(void) {
   // Add a timeout counter to prevent infinite loop
-  volatile uint32_t timeout = 0x1FFFF;  // Reduced timeout to prevent long hangs
+  volatile uint32_t timeout = 0x100000;  // Increased timeout for reliability
   
   while ((FLASH->SR & FLASH_SR_BSY) && (timeout > 0)) {
     timeout--;
@@ -93,11 +93,19 @@ static inline void flash_lock(void) {
 }
 
 static void flash_erase_page0(uint32_t page_address) {
-  (void)flash_wait_for_last_operation();
+  if (flash_wait_for_last_operation() != 0) {
+    return;  // Return if previous operation failed
+  }
   FLASH->CR |= FLASH_CR_PER;
   FLASH->AR = page_address;
   FLASH->CR |= FLASH_CR_STRT;
-  (void)flash_wait_for_last_operation();
+  
+  // Wait for operation with timeout
+  if (flash_wait_for_last_operation() != 0) {
+    // If timeout occurred, try to clear the error
+    FLASH->CR &= ~FLASH_CR_PER;
+    return;
+  }
   FLASH->CR &= ~FLASH_CR_PER;
 }
 

@@ -986,12 +986,27 @@ static UI_FUNCTION_ADV_CALLBACK(menu_cal_enh_acb) {
 }
 
 static UI_FUNCTION_CALLBACK(menu_caldone_cb) {
+  // Pause sweep before completing calibration to prevent conflicts during flash operations
+  bool was_sweeping = (sweep_mode & SWEEP_ENABLE) != 0;
+  if (was_sweeping) {
+    pause_sweep();
+  }
+  
   cal_done();
+  
+  // Allow time for any background operations to complete
+  chThdSleepMilliseconds(50);
+  
   // For both cases, simply return to the parent menu
   // This avoids potential memory allocation issues with menu_build_save_menu()
   menu_move_back(false);
   // This allows the user to save calibration separately via CAL -> SAVE CAL
   // which is safer and avoids potential memory allocation issues
+  
+  // Resume sweep if it was running before
+  if (was_sweeping) {
+    resume_sweep();
+  }
 }
 
 static UI_FUNCTION_CALLBACK(menu_cal_reset_cb) {
@@ -1045,7 +1060,22 @@ static UI_FUNCTION_ADV_CALLBACK(menu_recall_acb) {
       b->icon = BUTTON_ICON_CHECK;
     return;
   }
+  
+  // Pause sweep during flash recall to prevent conflicts
+  bool was_sweeping = (sweep_mode & SWEEP_ENABLE) != 0;
+  if (was_sweeping) {
+    pause_sweep();
+  }
+  
   load_properties(data);
+  
+  // Allow time for flash operations to complete
+  chThdSleepMilliseconds(50);
+  
+  // Resume sweep if it was running before
+  if (was_sweeping) {
+    resume_sweep();
+  }
 }
 
 static UI_FUNCTION_CALLBACK(menu_recall_submenu_cb) {
@@ -1112,9 +1142,29 @@ static UI_FUNCTION_ADV_CALLBACK(menu_save_acb) {
       b->p1.u = data;
     return;
   }
-  if (caldata_save(data) == 0) {
+  
+  // Pause sweep during flash save to prevent conflicts
+  bool was_sweeping = (sweep_mode & SWEEP_ENABLE) != 0;
+  if (was_sweeping) {
+    pause_sweep();
+  }
+  
+  int result = caldata_save(data);
+  
+  // Allow time for flash operations to complete
+  chThdSleepMilliseconds(100);
+  
+  // Resume sweep if it was running before
+  if (was_sweeping) {
+    resume_sweep();
+  }
+  
+  if (result == 0) {
     menu_move_back(true);
     request_to_redraw(REDRAW_BACKUP | REDRAW_CAL_STATUS);
+  } else {
+    // Show error if save failed
+    ui_message_box("SAVE ERROR", "Failed to save calibration", 1000);
   }
 }
 
