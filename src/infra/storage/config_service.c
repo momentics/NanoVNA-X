@@ -28,6 +28,9 @@
 #include <stdbool.h>
 #include <string.h>
 
+// Semaphore to protect flash operations from concurrent access
+static semaphore_t flash_operation_semaphore;
+
 uint16_t lastsaveid = 0;
 #if SAVEAREA_MAX >= 8
 #error "Increase checksum_ok type for save more cache slots"
@@ -63,12 +66,19 @@ static uint32_t checksum(const void* start, size_t len) {
 }
 
 static int config_save_impl(void) {
+  // Wait for exclusive access to flash operations
+  chSemWait(&flash_operation_semaphore);
+  
   // Apply magic word and calculate checksum
   config.magic = CONFIG_MAGIC;
   config.checksum = checksum(&config, sizeof config - sizeof config.checksum);
 
   // write to flash
   flash_program_half_word_buffer((uint16_t*)SAVE_CONFIG_ADDR, (uint16_t*)&config, sizeof(config_t));
+  
+  // Release the semaphore
+  chSemSignal(&flash_operation_semaphore);
+  
   if (config_event_bus != NULL) {
     event_bus_publish(config_event_bus, EVENT_STORAGE_UPDATED, NULL);
   }
@@ -90,6 +100,9 @@ static int caldata_save_impl(uint32_t id) {
   if (id >= SAVEAREA_MAX)
     return -1;
 
+  // Wait for exclusive access to flash operations
+  chSemWait(&flash_operation_semaphore);
+  
   // Apply magic word and calculate checksum
   current_props.magic = PROPERTIES_MAGIC;
   current_props.checksum =
@@ -99,6 +112,9 @@ static int caldata_save_impl(uint32_t id) {
   uint16_t* dst = (uint16_t*)calibration_slot_area(id);
   flash_program_half_word_buffer(dst, (uint16_t*)&current_props, sizeof(properties_t));
 
+  // Release the semaphore
+  chSemSignal(&flash_operation_semaphore);
+  
   lastsaveid = id;
   return 0;
 }
@@ -136,10 +152,17 @@ static int caldata_recall_impl(uint32_t id) {
 }
 
 static void clear_all_config_prop_data_impl(void) {
+  // Wait for exclusive access to flash operations
+  chSemWait(&flash_operation_semaphore);
+  
   lastsaveid = NO_SAVE_SLOT;
   checksum_ok = 0;
   // unlock and erase flash pages
   flash_erase_pages(SAVE_PROP_CONFIG_ADDR, SAVE_FULL_AREA_SIZE);
+  
+  // Release the semaphore
+  chSemSignal(&flash_operation_semaphore);
+  
   if (config_event_bus != NULL) {
     event_bus_publish(config_event_bus, EVENT_STORAGE_UPDATED, NULL);
   }
@@ -155,7 +178,12 @@ static const config_service_api_t api = {
 
 static bool initialized = false;
 
+static void config_service_init_semaphore(void) {
+  chSemObjectInit(&flash_operation_semaphore, 1);  // Initialize with 1 (available)
+}
+
 void config_service_init(void) {
+  config_service_init_semaphore();
   initialized = true;
 }
 
