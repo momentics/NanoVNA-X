@@ -271,8 +271,11 @@ void calculate_gamma(float* gamma) {
   }
   measure_t ss = (measure_t)ss_acc;
   measure_t sc = (measure_t)sc_acc;
-  gamma[0] = (sc * rc + ss * rs) / rr;
-  gamma[1] = (ss * rc - sc * rs) / rr;
+  // Calculate reflection coefficient by dividing sample by reference: gamma = samp/ref
+  // Complex division: (samp_real + j*samp_imag) / (ref_real + j*ref_imag)
+  // = [(samp_real*ref_real + samp_imag*ref_imag) + j*(samp_imag*ref_real - samp_real*ref_imag)] / |ref|^2
+  gamma[0] = (ss * rs + sc * rc) / rr; // Real part: (samp_real*ref_real + samp_imag*ref_imag) / |ref|^2
+  gamma[1] = (sc * rs - ss * rc) / rr; // Imaginary part: (samp_imag*ref_real - samp_real*ref_imag) / |ref|^2
 #else
   measure_t rs_rc = (measure_t)rs_acc / rc_acc;
   measure_t sc_rc = (measure_t)sc_acc / rc_acc;
