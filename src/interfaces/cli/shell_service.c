@@ -43,13 +43,8 @@ static event_bus_t* shell_event_bus = NULL;
 static shell_session_callback_t shell_session_start_cb = NULL;
 static shell_session_callback_t shell_session_stop_cb = NULL;
 static bool shell_session_active = false;
-static mutex_t* shell_mutex = NULL;
 
 static void shell_on_event(const event_bus_message_t* message, void* user_data);
-
-void shell_set_mutex(mutex_t* mutex) {
-  shell_mutex = mutex;
-}
 
 static void shell_assign_stream(BaseSequentialStream* stream) {
   shell_stream = stream;
@@ -302,15 +297,7 @@ void shell_service_pending_commands(void) {
     pending_command = NULL;
     osalSysUnlock();
 
-    if (shell_mutex != NULL && (command->flags & CMD_WAIT_MUTEX)) {
-      chMtxLock(shell_mutex);
-    }
-
     command->sc_function(argc, argv);
-
-    if (shell_mutex != NULL && (command->flags & CMD_WAIT_MUTEX)) {
-      chMtxUnlock(shell_mutex);
-    }
 
     osalSysLock();
     osalThreadDequeueNextI(&shell_thread, MSG_OK);

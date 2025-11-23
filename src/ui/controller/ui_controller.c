@@ -34,10 +34,7 @@
 #include "ui/input/hardware_input.h"
 #include "ui/display/display_presenter.h"
 #include "ui/controller/ui_controller.h"
-#include "runtime/runtime_entry.h"
-#include "ui/display/display_presenter.h"
-#include "infra/event/event_bus.h"
-#include "infra/state/state_manager.h"
+#include "platform/boards/board_events.h"
 
 // Use size optimization (UI not need fast speed, better have smallest size)
 #pragma GCC optimize("Os")
@@ -959,10 +956,22 @@ static bool select_lever_mode(int mode) {
 }
 
 static UI_FUNCTION_ADV_CALLBACK(menu_calop_acb) {
-  chMtxLock(&ui_mutex);
+  static const struct {
+    uint8_t mask, next;
+  } c_list[5] = {
+      [CAL_LOAD] = {CALSTAT_LOAD, 3},   [CAL_OPEN] = {CALSTAT_OPEN, 1},
+      [CAL_SHORT] = {CALSTAT_SHORT, 2}, [CAL_THRU] = {CALSTAT_THRU, 6},
+      [CAL_ISOLN] = {CALSTAT_ISOLN, 4},
+  };
+  if (b) {
+    if (cal_status & c_list[data].mask)
+      b->icon = BUTTON_ICON_CHECK;
+    return;
+  }
+  // Reset the physical button debounce state when advancing through CAL steps
+  ui_input_reset_state();
   cal_collect(data);
-  chMtxUnlock(&ui_mutex);
-  request_to_redraw(REDRAW_CAL_STATUS);
+  selection = c_list[data].next;
 }
 
 static UI_FUNCTION_ADV_CALLBACK(menu_cal_enh_acb) {
@@ -2269,7 +2278,17 @@ static const menuitem_t menu_sdcard[] = {
 };
 #endif
 
-
+static const menuitem_t menu_calop[] = {
+    {MT_ADV_CALLBACK, CAL_OPEN, "OPEN", menu_calop_acb},
+    {MT_ADV_CALLBACK, CAL_SHORT, "SHORT", menu_calop_acb},
+    {MT_ADV_CALLBACK, CAL_LOAD, "LOAD", menu_calop_acb},
+    {MT_ADV_CALLBACK, CAL_ISOLN, "ISOLN", menu_calop_acb},
+    {MT_ADV_CALLBACK, CAL_THRU, "THRU", menu_calop_acb},
+    //{ MT_ADV_CALLBACK, KM_EDELAY, "E-DELAY", menu_keyboard_acb },
+    {MT_CALLBACK, 0, "DONE", menu_caldone_cb},
+    {MT_CALLBACK, 1, "DONE IN RAM", menu_caldone_cb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
 
 static const menu_descriptor_t menu_state_slots_desc[] = {
     {MT_ADV_CALLBACK, 0},
@@ -2297,32 +2316,38 @@ static const menu_descriptor_t menu_state_slots_desc[] = {
 
 
 
-static const menuitem_t menu_cal_settings[] = {
-  {MT_ADV_CALLBACK, 0, "APPLY", menu_cal_apply_acb},
-  {MT_ADV_CALLBACK, 0, "ENHANCED\nRESPONSE", menu_cal_enh_acb},
-  {MT_CALLBACK, 0, "RESET", menu_cal_reset_cb},
-  {MT_CALLBACK, 0, "BACK", menu_back_cb},
-  {MT_NEXT, 0, NULL, NULL}
+const menuitem_t menu_cal_flow[] = {
+    {MT_ADV_CALLBACK, CAL_OPEN, "OPEN", menu_calop_acb},
+    {MT_ADV_CALLBACK, CAL_SHORT, "SHORT", menu_calop_acb},
+    {MT_ADV_CALLBACK, CAL_LOAD, "LOAD", menu_calop_acb},
+    {MT_ADV_CALLBACK, CAL_ISOLN, "ISOLN", menu_calop_acb},
+    {MT_ADV_CALLBACK, CAL_THRU, "THRU", menu_calop_acb},
+    {MT_CALLBACK, 0, "DONE", menu_caldone_cb},
+    {MT_CALLBACK, 1, "DONE IN RAM", menu_caldone_cb},
+    {MT_ADV_CALLBACK, 0, "CAL RANGE", menu_cal_range_acb},
+    {MT_ADV_CALLBACK, 0, "CAL POWER", menu_power_sel_acb},
+    {MT_CALLBACK, 0, "SAVE CAL", menu_save_submenu_cb},
+    {MT_ADV_CALLBACK, 0, "CAL APPLY", menu_cal_apply_acb},
+    {MT_ADV_CALLBACK, 0, "ENHANCED\nRESPONSE", menu_cal_enh_acb},
+#ifdef __VNA_Z_RENORMALIZATION__
+    {MT_ADV_CALLBACK, KM_CAL_LOAD_R, "LOAD STD\n " R_LINK_COLOR "%bF" S_OHM, menu_keyboard_acb},
+#endif
+    {MT_CALLBACK, 0, "CAL RESET", menu_cal_reset_cb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
-static const menuitem_t menu_calibrate[] = {
-  {MT_ADV_CALLBACK, CAL_OPEN, "OPEN", menu_calop_acb},
-  {MT_ADV_CALLBACK, CAL_SHORT, "SHORT", menu_calop_acb},
-  {MT_ADV_CALLBACK, CAL_LOAD, "LOAD", menu_calop_acb},
-  {MT_ADV_CALLBACK, CAL_ISOLN, "ISOLN", menu_calop_acb},
-  {MT_ADV_CALLBACK, CAL_THRU, "THRU", menu_calop_acb},
-  {MT_CALLBACK, 0, "DONE", menu_caldone_cb},
-  {MT_CALLBACK, 0, "BACK", menu_back_cb},
-  {MT_NEXT, 0, NULL, NULL}
+const menuitem_t menu_state_io[] = {
+    {MT_CALLBACK, 0, "SAVE CAL", menu_save_submenu_cb},
+    {MT_CALLBACK, 0, "RECALL CAL", menu_recall_submenu_cb},
+    {MT_ADV_CALLBACK, 0, "CAL APPLY", menu_cal_apply_acb},
+    {MT_CALLBACK, 0, "CAL RESET", menu_cal_reset_cb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
 const menuitem_t menu_cal_menu[] = {
-  {MT_SUBMENU, 0, "CALIBRATE", menu_calibrate},
-  {MT_CALLBACK, 0, "SAVE", menu_save_submenu_cb},
-  {MT_CALLBACK, 0, "RECALL", menu_recall_submenu_cb},
-  {MT_SUBMENU, 0, "SETTINGS", menu_cal_settings},
-  {MT_CALLBACK, 0, "BACK", menu_back_cb},
-  {MT_NEXT, 0, NULL, NULL}
+    {MT_SUBMENU, 0, "MECH CAL", menu_cal_flow},
+    {MT_SUBMENU, 0, "SAVE/RECALL", menu_state_io},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
 const menuitem_t menu_trace[] = {

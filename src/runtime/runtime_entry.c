@@ -43,7 +43,6 @@
 #include "ui/display/display_presenter.h"
 #include "ui/controller/ui_controller.h"
 #include "platform/boards/board_events.h"
-#include <chmtx.h>
 
 #ifdef __LCD_BRIGHTNESS__
 void lcd_set_brightness(uint16_t brightness);
@@ -92,8 +91,6 @@ static const ui_module_port_t ui_port __attribute__((unused)) = {.context = NULL
                                                                  .api = &ui_port_api};
 static const usb_command_server_port_t usb_port __attribute__((unused)) = {
     .context = NULL, .api = &usb_command_server_port_api};
-
-mutex_t ui_mutex;
 
 static bool app_measurement_can_start_sweep(measurement_engine_port_t* port,
                                             measurement_engine_request_t* request);
@@ -164,7 +161,7 @@ static void cmd_dump(int argc, char* argv[]);
 // Enable color command, allow change config color for traces, grid, menu
 #define ENABLE_COLOR_COMMAND
 // Enable transform command
-// #define ENABLE_TRANSFORM_COMMAND
+#define ENABLE_TRANSFORM_COMMAND
 // Enable sample command
 // #define ENABLE_SAMPLE_COMMAND
 // Enable I2C command for send data to AIC3204, used for debug
@@ -2599,52 +2596,121 @@ THD_FUNCTION(myshellThread, p) {
 // Stack maximum usage = 472 bytes (need test more and run all commands), free stack = 40 bytes
 //
 int runtime_main(void) {
+  /*
+   * Initialize ChibiOS systems
+   */
   halInit();
   chSysInit();
+  sweep_mode = SWEEP_ENABLE;
+  battery_last_mv = INT16_MIN;
 
-  chMtxObjectInit(&ui_mutex);
-  shell_set_mutex(&ui_mutex);
-
-  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
-                 app_event_queue_storage, APP_EVENT_QUEUE_DEPTH, app_event_nodes,
-                 ARRAY_COUNT(app_event_nodes));
-
-  board_events_init(&board_events);
+  platform_init();
+  const PlatformDrivers* drivers = platform_get_drivers();
+  if (drivers != NULL) {
+    if (drivers->init) {
+      drivers->init();
+    }
+    if (drivers->display && drivers->display->init) {
+      drivers->display->init();
+    }
+    if (drivers->adc && drivers->adc->init) {
+      drivers->adc->init();
+    }
+    if (drivers->generator && drivers->generator->init) {
+      drivers->generator->init();
+    }
+    if (drivers->storage && drivers->storage->init) {
+      drivers->storage->init();
+    }
+  }
 
   config_service_init();
-  state_manager_init();
-
-  const PlatformDrivers* drivers = platform_get_drivers();
-  measurement_engine_init(&measurement_engine, &measurement_engine_port, &app_event_bus, drivers);
-
-  shell_init_connection();
-  shell_register_commands(commands);
+  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
+                 app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage),
+                 app_event_nodes, ARRAY_COUNT(app_event_nodes));
   shell_attach_bus(&app_event_bus);
   shell_on_session_start(usb_command_session_started);
   shell_on_session_stop(usb_command_session_stopped);
+  board_events_init(&board_events);
 
-  chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO, Thread1, NULL);
+  ui_controller_port_t ui_controller_port = {
+      .board_events = &board_events,
+      .display = &lcd_display_presenter,
+      .config_events = &app_event_bus,
+  };
+  ui_controller_configure(&ui_controller_port);
 
-  while (true) {
+  measurement_engine_port.context = NULL;
+  measurement_engine_port.can_start_sweep = app_measurement_can_start_sweep;
+  measurement_engine_port.handle_result = app_measurement_handle_result;
+  measurement_engine_port.service_loop = app_measurement_service_loop;
+  measurement_engine_init(&measurement_engine, &measurement_engine_port, &app_event_bus, drivers);
+
+  /*
+   * restore config and calibration 0 slot from flash memory, also if need use backup data
+   */
+  state_manager_init();
+
+#ifdef USE_VARIABLE_OFFSET
+  si5351_set_frequency_offset(IF_OFFSET);
+#endif
+  /*
+   * Init Shell console connection data
+   */
+  shell_register_commands(commands);
+  shell_init_connection();
+
+  /*
+   * tlv320aic Initialize (audio codec)
+   */
+  tlv320aic3204_init();
+  chThdSleepMilliseconds(200); // Wait for aic codec start
+                               /*
+                                * I2S Initialize
+                                */
+  init_i2s((void*)sweep_service_rx_buffer(),
+           (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
+
+/*
+ * SD Card init (if inserted) allow fix issues
+ * Some card after insert work in SDIO mode and can corrupt SPI exchange (need switch it to SPI)
+ */
+#ifdef __USE_SD_CARD__
+  disk_initialize(0);
+#endif
+
+  /*
+   * I2C bus run on work speed
+   */
+  i2c_set_timings(STM32_I2C_TIMINGR);
+
+  /*
+   * Startup sweep thread
+   */
+  chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO - 1, Thread1, NULL);
+
+  while (1) {
     if (!shell_check_connect()) {
-      chThdSleepMilliseconds(100);
+      chThdSleepMilliseconds(1000);
       continue;
     }
-    char line[VNA_SHELL_MAX_LENGTH];
-    if (vna_shell_read_line(line, VNA_SHELL_MAX_LENGTH)) {
-      uint16_t argc = 0;
-      char** argv = NULL;
-      const char* name = NULL;
-      const VNAShellCommand* command = shell_parse_command(line, &argc, &argv, &name);
-      if (command != NULL) {
-        shell_request_deferred_execution(command, argc, argv);
-      } else if (name != NULL) {
-        shell_printf("invalid command: %s" VNA_SHELL_NEWLINE_STR, name);
-      }
-    }
-    chThdSleepMilliseconds(10);
+#ifdef VNA_SHELL_THREAD
+#if CH_CFG_USE_WAITEXIT == FALSE
+#error "VNA_SHELL_THREAD use chThdWait, need enable CH_CFG_USE_WAITEXIT in chconf.h"
+#endif
+      thread_t* shelltp =
+          chThdCreateStatic(waThread2, sizeof(waThread2), NORMALPRIO + 1, myshellThread, NULL);
+      chThdWait(shelltp);
+#else
+    do {
+      shell_printf(VNA_SHELL_PROMPT_STR);
+      if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH))
+        vna_shell_execute_line(shell_line);
+      else
+        chThdSleepMilliseconds(200);
+    } while (shell_check_connect());
+#endif
   }
-  return 0;
 }
 
 /* The prototype shows it is a naked function - in effect this is just an

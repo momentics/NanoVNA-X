@@ -49,14 +49,12 @@ typedef struct {
   uint32_t generation;
 } sweep_service_snapshot_t;
 
-void sweep_service_attach_event_bus(event_bus_t* bus);
 void sweep_service_init(void);
 void sweep_service_wait_for_copy_release(void);
 void sweep_service_begin_measurement(void);
 void sweep_service_end_measurement(void);
 uint32_t sweep_service_increment_generation(void);
 uint32_t sweep_service_current_generation(void);
-void sweep_service_wait_for_generation(void);
 void sweep_service_wait_for_generation(void);
 void sweep_service_reset_progress(void);
 bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* snapshot);

@@ -60,8 +60,6 @@ static uint8_t sweep_bar_pending = 0;
 static uint8_t smooth_factor = 0;
 static void (*volatile sample_func)(float* gamma) = NULL;
 
-static binary_semaphore_t capture_done_sem;
-
 void sweep_service_set_sample_function(void (*func)(float*)) {
   if (func == NULL) {
     func = calculate_gamma;
@@ -227,26 +225,6 @@ static void duplicate_buffer_to_dump(audio_sample_t* p, size_t n) {
 }
 #endif
 
-static event_bus_t* g_event_bus = NULL;
-static volatile bool dma_capture_complete = false;
-
-static enum {
-  SWEEP_FSM_IDLE,
-  SWEEP_FSM_WAITING_FOR_CH0,
-  SWEEP_FSM_WAITING_FOR_CH1
-} sweep_fsm_state = SWEEP_FSM_IDLE;
-
-static void dma_capture_complete_handler(const event_bus_message_t* msg, void* context) {
-  (void)msg;
-  (void)context;
-  dma_capture_complete = true;
-}
-
-void sweep_service_attach_event_bus(event_bus_t* bus) {
-  g_event_bus = bus;
-  event_bus_subscribe(g_event_bus, EVENT_DMA_CAPTURE_COMPLETE, dma_capture_complete_handler, NULL);
-}
-
 void i2s_lld_serve_rx_interrupt(uint32_t flags) {
   uint16_t wait = wait_count;
   if (wait == 0U || chVTGetSystemTimeX() < ready_time) {
@@ -262,12 +240,6 @@ void i2s_lld_serve_rx_interrupt(uint32_t flags) {
   duplicate_buffer_to_dump(p, AUDIO_BUFFER_LEN);
 #endif
   --wait_count;
-  if (wait_count == 0U && g_event_bus != NULL) {
-    event_bus_publish_from_isr(g_event_bus, EVENT_DMA_CAPTURE_COMPLETE, NULL);
-  }
-  if (wait_count == 0U) {
-    chBSemSignalI(&capture_done_sem);
-  }
 }
 
 void sweep_service_init(void) {
@@ -280,7 +252,6 @@ void sweep_service_init(void) {
   sweep_bar_pending = 0;
   smooth_factor = 0;
   sample_func = calculate_gamma;
-  chBSemObjectInit(&capture_done_sem, true);
 #if ENABLED_DUMP_COMMAND
   dump_buffer = NULL;
   dump_len = 0;
@@ -343,19 +314,6 @@ void sweep_service_wait_for_generation(void) {
   }
 }
 
-bool sweep_service_wait_for_capture(void) {
-  systime_t start_time = chVTGetSystemTimeX();
-  systime_t timeout = MS2ST(1000); // 1 second timeout to prevent infinite wait
-  
-  while (sweep_service_current_generation() == 0U) {
-    if (chVTGetSystemTimeX() - start_time >= timeout) {
-      // Timeout occurred, break to prevent hanging
-      break;
-    }
-    chThdSleepMilliseconds(1);
-  }
-}
-
 bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* snapshot) {
   if (snapshot == NULL || channel >= 2U) {
     return false;
@@ -399,10 +357,24 @@ bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
 void sweep_service_start_capture(systime_t delay_ticks) {
   ready_time = chVTGetSystemTimeX() + delay_ticks;
   wait_count = config._bandwidth + 2U;
-  chBSemReset(&capture_done_sem, true);
 }
 
-
+bool sweep_service_wait_for_capture(void) {
+  systime_t start_time = chVTGetSystemTimeX();
+  systime_t timeout = MS2ST(500); // 500ms timeout - adjust as needed
+  while (wait_count != 0U) {
+    systime_t current_time = chVTGetSystemTimeX();
+    if (current_time - start_time >= timeout) {
+      // Timeout occurred - break to prevent hanging
+      // This can happen if I2S interrupts don't fire properly (e.g. USB not connected)
+      wait_count = 0;
+      reset_dsp_accumerator();
+      return false;
+    }
+    __WFI();
+  }
+  return true;
+}
 
 const audio_sample_t* sweep_service_rx_buffer(void) {
   return rx_buffer;
@@ -542,68 +514,67 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
     sweep_reset_progress();
     sweep_progress_end();
     sweep_led_end();
-    sweep_fsm_state = SWEEP_FSM_IDLE;
   }
   if (break_on_operation && mask == 0U) {
     sweep_progress_end();
     sweep_led_end();
     return false;
   }
-
-  if (sweep_fsm_state != SWEEP_FSM_IDLE) {
-    if (!dma_capture_complete) {
-      // Waiting for capture to complete
-      return false;
-    }
-    dma_capture_complete = false;
-  }
-
-  if (p_sweep == 0U && sweep_fsm_state == SWEEP_FSM_IDLE) {
-    sweep_prepare_led_and_progress(config._bandwidth >= BANDWIDTH_100);
-  }
-
-  if (break_on_operation && sweep_ui_input_pending()) {
-    return false;
-  }
-
   float data[4];
   float c_data[CAL_TYPE_COUNT][2];
+  bool completed = false;
   int delay = 0;
   int st_delay = DELAY_SWEEP_START;
   int interpolation_idx = p_sweep;
+  bool show_progress = config._bandwidth >= BANDWIDTH_100;
+  uint16_t batch_budget = sweep_points_budget(break_on_operation);
+  uint16_t processed = 0;
   float offset = 1.0f;
   if (mask & SWEEP_APPLY_S21_OFFSET) {
     offset = vna_expf(s21_offset * (logf(10.0f) / 20.0f));
   }
 
-  freq_t frequency = get_frequency(p_sweep);
-  uint8_t extra_cycles = 0U;
-  if (mask & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE)) {
-    delay = app_measurement_set_frequency(frequency);
-    interpolation_idx = (mask & SWEEP_USE_INTERPOLATION) ? -1 : (int)p_sweep;
-    extra_cycles = si5351_take_settling_cycles();
+  if (p_sweep == 0U) {
+    sweep_prepare_led_and_progress(show_progress);
   }
-  // This is a simplification. The original code had a loop for extra_cycles.
-  // For now, we assume total_cycles is 1.
-  bool final_cycle = true;
 
+  const systime_t slice_start = break_on_operation ? chVTGetSystemTimeX() : 0;
 
-  if (sweep_fsm_state == SWEEP_FSM_IDLE) {
-    if (mask & SWEEP_CH0_MEASURE) {
-      tlv320aic3204_select(0);
-      sweep_service_start_capture(delay + st_delay);
-      sweep_fsm_state = SWEEP_FSM_WAITING_FOR_CH0;
-      return false; // Wait for capture
+  for (; p_sweep < sweep_points; p_sweep++) {
+    if (processed >= batch_budget) {
+      break;
     }
-    // If CH0 is not measured, fall through to CH1
-  }
-
-  if (sweep_fsm_state == SWEEP_FSM_WAITING_FOR_CH0) {
-    if (mask & SWEEP_CH0_MEASURE) {
+    if (break_on_operation && sweep_ui_input_pending()) {
+      break;
+    }
+    if (sweep_timeslice_expired(slice_start)) {
+      break;
+    }
+    freq_t frequency = get_frequency(p_sweep);
+    uint8_t extra_cycles = 0U;
+    if (mask & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE)) {
+      delay = app_measurement_set_frequency(frequency);
+      interpolation_idx = (mask & SWEEP_USE_INTERPOLATION) ? -1 : (int)p_sweep;
+      extra_cycles = si5351_take_settling_cycles();
+    }
+    uint8_t total_cycles = extra_cycles + 1U;
+    for (uint8_t cycle = 0; cycle < total_cycles; cycle++) {
+      bool final_cycle = (cycle == total_cycles - 1U);
+      int cycle_delay = delay;
+      int cycle_st_delay = (cycle == 0U) ? st_delay : 0;
+      if (mask & SWEEP_CH0_MEASURE) {
+        tlv320aic3204_select(0);
+        sweep_service_start_capture(cycle_delay + cycle_st_delay);
+        cycle_delay = DELAY_CHANNEL_CHANGE;
+        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
+          cal_interpolate(interpolation_idx, frequency, c_data);
+        }
+        if (!sweep_service_wait_for_capture()) {
+          goto capture_failure;
+        }
         void (*sample_cb)(float*) = sample_func;
         sample_cb(&data[0]);
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-          cal_interpolate(interpolation_idx, frequency, c_data);
           apply_ch0_error_term(data, c_data);
         }
         if (mask & SWEEP_APPLY_EDELAY_S11) {
@@ -611,25 +582,16 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
         }
         measured[0][p_sweep][0] = data[0];
         measured[0][p_sweep][1] = data[1];
-    }
-    sweep_fsm_state = SWEEP_FSM_IDLE; // Done with CH0
-    // Fall through to start CH1 capture in the same sweep point
-  }
-
-  if (sweep_fsm_state == SWEEP_FSM_IDLE) {
-    if (mask & SWEEP_CH1_MEASURE) {
-      tlv320aic3204_select(1);
-      sweep_service_start_capture(delay + st_delay);
-      sweep_fsm_state = SWEEP_FSM_WAITING_FOR_CH1;
-      return false; // Wait for capture
-    }
-    // If CH1 is not measured, fall through to the end of the point
-  }
-
-  if (sweep_fsm_state == SWEEP_FSM_WAITING_FOR_CH1) {
-    if (mask & SWEEP_CH1_MEASURE) {
+      }
+      if (mask & SWEEP_CH1_MEASURE) {
+        tlv320aic3204_select(1);
+        sweep_service_start_capture(cycle_delay + cycle_st_delay);
+        cycle_delay = DELAY_CHANNEL_CHANGE;
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION) && (mask & SWEEP_CH0_MEASURE) == 0U) {
           cal_interpolate(interpolation_idx, frequency, c_data);
+        }
+        if (!sweep_service_wait_for_capture()) {
+          goto capture_failure;
         }
         void (*sample_cb)(float*) = sample_func;
         sample_cb(&data[2]);
@@ -644,29 +606,31 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
         }
         measured[1][p_sweep][0] = data[2];
         measured[1][p_sweep][1] = data[3];
+      }
     }
-    sweep_fsm_state = SWEEP_FSM_IDLE; // Done with CH1
-  }
-
 #ifdef __VNA_Z_RENORMALIZATION__
-  if (mask & SWEEP_USE_RENORMALIZATION) {
-    apply_renormalization(data, mask);
-  }
+    if (mask & SWEEP_USE_RENORMALIZATION) {
+      apply_renormalization(data, mask);
+    }
 #endif
-  if (config._bandwidth >= BANDWIDTH_100 && sweep_points > 1U) {
-    uint16_t current_bar = (uint16_t)(((uint32_t)p_sweep * WIDTH) / (sweep_points - 1U));
-    sweep_progress_update(current_bar);
+    if (show_progress && sweep_points > 1U) {
+      uint16_t current_bar = (uint16_t)(((uint32_t)p_sweep * WIDTH) / (sweep_points - 1U));
+      sweep_progress_update(current_bar);
+    }
+    processed++;
   }
-
-  p_sweep++;
-
-  if (p_sweep >= sweep_points) {
+  completed = (p_sweep == sweep_points);
+  if (completed) {
     sweep_progress_end();
     sweep_led_end();
-    return true; // Sweep completed
   }
+  return completed;
 
-  return false; // Continue sweep
+capture_failure:
+  sweep_reset_progress();
+  sweep_progress_end();
+  sweep_led_end();
+  return false;
 }
 
 void measurement_data_smooth(uint16_t ch_mask) {

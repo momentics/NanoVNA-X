@@ -53,10 +53,6 @@ enum {
 };
 
 void shell_register_commands(const VNAShellCommand* table);
-void shell_set_mutex(mutex_t* mutex);
-
-void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t argc, char** argv);
-void shell_service_pending_commands(void);
 
 int shell_printf(const char* fmt, ...);
 #ifdef __USE_SERIAL_CONSOLE__

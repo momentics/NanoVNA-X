@@ -19,14 +19,5 @@
  */
 
 #pragma once
-#include <stdint.h>
-#include "nanovna.h"
-#include <chmtx.h>
-
-extern mutex_t ui_mutex;
-
-void set_sweep_frequency(uint16_t type, freq_t freq);
-
-void reset_sweep_frequency(void);
 
 int runtime_main(void);
