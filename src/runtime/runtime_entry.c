@@ -129,7 +129,24 @@ static void usb_command_session_started(void) {
 }
 
 static void usb_command_session_stopped(void) {}
+#else
+static void usb_command_session_started(void) {
+  // Empty when SD card support is disabled
+}
 
+static void usb_command_session_stopped(void) {}
+
+// Forward declarations for when SD card is disabled (to match the signature)
+void* filesystem_volume(void) {
+  return NULL;  // Return NULL when SD card support is disabled
+}
+
+void* filesystem_file(void) {
+  return NULL;  // Return NULL when SD card support is disabled
+}
+#endif
+
+#ifdef __USE_SD_CARD__
 FATFS* filesystem_volume(void) {
   return &fs_volume_instance;
 }

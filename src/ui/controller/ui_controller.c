@@ -2771,6 +2771,7 @@ static const menuitem_t* menu_build_marker_smith_menu(uint8_t channel) {
   return menu_dynamic_buffer;
 }
 
+#ifdef __USE_SERIAL_CONSOLE__
 static const menuitem_t* menu_build_serial_speed_menu(void) {
   menuitem_t* cursor = menu_dynamic_acquire();
   cursor = ui_menu_list(menu_serial_speed_desc, ARRAY_COUNT(menu_serial_speed_desc), "%u",
@@ -2778,6 +2779,7 @@ static const menuitem_t* menu_build_serial_speed_menu(void) {
   menu_set_next(cursor, menu_back);
   return menu_dynamic_buffer;
 }
+#endif
 
 static const menuitem_t* menu_build_power_menu(void) {
   menuitem_t* cursor = menu_dynamic_acquire();
@@ -3010,7 +3012,9 @@ const menuitem_t menu_system[] = {
 #endif
     {MT_SUBMENU, 0, "DEVICE", menu_device},
 #ifdef __USE_SERIAL_CONSOLE__
-    {MT_SUBMENU, 0, "CONNECTION", menu_connection},
+    #ifdef __USE_SERIAL_CONSOLE__
+{MT_SUBMENU, 0, "CONNECTION", menu_connection},
+#endif
 #endif
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };

@@ -50,15 +50,15 @@
 // Allow enter to DFU from menu or command
 #define __DFU_SOFTWARE_MODE__
 // Add RTC clock support
-#define __USE_RTC__
+//#define __USE_RTC__
 // Add RTC backup registers support
 #define __USE_BACKUP__
 // Add SD card support, requires RTC for timestamps
-#define __USE_SD_CARD__
+//#define __USE_SD_CARD__
 // Use unique serial string for USB
 #define __USB_UID__
 // If enabled serial in halconf.h, possible enable serial console control
-#define __USE_SERIAL_CONSOLE__
+//#define __USE_SERIAL_CONSOLE__
 // Add show y grid line values option
 #define __USE_GRID_VALUES__
 // Add remote desktop option
@@ -91,7 +91,7 @@
 #define __USE_DSP__
 #endif
 // Add measure module option (allow made some measure calculations on data)
-#define __VNA_MEASURE_MODULE__
+//#define __VNA_MEASURE_MODULE__
 // Add Z normalization feature
 //#define __VNA_Z_RENORMALIZATION__
 
