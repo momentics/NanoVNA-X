@@ -182,17 +182,17 @@ void state_manager_mark_dirty(void) {
 
 void state_manager_force_save(void) {
 #ifdef __USE_BACKUP__
-  // Temporarily disable sweep during flash save to prevent conflicts
-  uint8_t saved_mode = sweep_mode;
-  if (sweep_mode & SWEEP_ENABLE) {
-    sweep_mode &= ~SWEEP_ENABLE;
+  // Pause sweep completely during flash save to prevent conflicts
+  bool was_sweeping = (sweep_mode & SWEEP_ENABLE) != 0;
+  if (was_sweeping) {
+    pause_sweep();
   }
   
   caldata_save(active_calibration_slot());
   
-  // Restore sweep mode after save
-  if (saved_mode & SWEEP_ENABLE) {
-    sweep_mode = saved_mode;
+  // Resume sweep if it was running before
+  if (was_sweeping) {
+    resume_sweep();
   }
   
   sweep_state_dirty = false;
