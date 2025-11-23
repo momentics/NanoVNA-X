@@ -2337,7 +2337,13 @@ static const menu_descriptor_t menu_state_slots_desc[] = {
 
 
 
-const menuitem_t menu_cal_flow[] = {
+const menuitem_t menu_state_io[] = {
+    {MT_CALLBACK, 0, "SAVE CAL", menu_save_submenu_cb},
+    {MT_CALLBACK, 0, "RECALL CAL", menu_recall_submenu_cb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+
+const menuitem_t menu_cal_wizard[] = {
     {MT_ADV_CALLBACK, CAL_OPEN, "OPEN", menu_calop_acb},
     {MT_ADV_CALLBACK, CAL_SHORT, "SHORT", menu_calop_acb},
     {MT_ADV_CALLBACK, CAL_LOAD, "LOAD", menu_calop_acb},
@@ -2345,28 +2351,35 @@ const menuitem_t menu_cal_flow[] = {
     {MT_ADV_CALLBACK, CAL_THRU, "THRU", menu_calop_acb},
     {MT_CALLBACK, 0, "DONE", menu_caldone_cb},
     {MT_CALLBACK, 1, "DONE IN RAM", menu_caldone_cb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+
+const menuitem_t menu_cal_options[] = {
     {MT_ADV_CALLBACK, 0, "CAL RANGE", menu_cal_range_acb},
     {MT_ADV_CALLBACK, 0, "CAL POWER", menu_power_sel_acb},
-    {MT_CALLBACK, 0, "SAVE CAL", menu_save_submenu_cb},
-    {MT_ADV_CALLBACK, 0, "CAL APPLY", menu_cal_apply_acb},
     {MT_ADV_CALLBACK, 0, "ENHANCED\nRESPONSE", menu_cal_enh_acb},
 #ifdef __VNA_Z_RENORMALIZATION__
     {MT_ADV_CALLBACK, KM_CAL_LOAD_R, "LOAD STD\n " R_LINK_COLOR "%bF" S_OHM, menu_keyboard_acb},
 #endif
-    {MT_CALLBACK, 0, "CAL RESET", menu_cal_reset_cb},
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
-const menuitem_t menu_state_io[] = {
-    {MT_CALLBACK, 0, "SAVE CAL", menu_save_submenu_cb},
-    {MT_CALLBACK, 0, "RECALL CAL", menu_recall_submenu_cb},
+const menuitem_t menu_cal_management[] = {
     {MT_ADV_CALLBACK, 0, "CAL APPLY", menu_cal_apply_acb},
     {MT_CALLBACK, 0, "CAL RESET", menu_cal_reset_cb},
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
+const menuitem_t menu_cal_flow[] = {
+    {MT_SUBMENU, 0, "CAL WIZARD", menu_cal_wizard},
+    {MT_SUBMENU, 0, "CAL OPTIONS", menu_cal_options},
+    {MT_SUBMENU, 0, "SAVE/RECALL", menu_state_io},
+    {MT_SUBMENU, 0, "CAL MANAGE", menu_cal_management},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+
 const menuitem_t menu_cal_menu[] = {
-    {MT_SUBMENU, 0, "MECH CAL", menu_cal_flow},
+    {MT_SUBMENU, 0, "CALIBRATE", menu_cal_flow},
     {MT_SUBMENU, 0, "SAVE/RECALL", menu_state_io},
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
