@@ -1215,10 +1215,10 @@ static void eterm_calc_es(void) {
     float short_r = cal_data[CAL_SHORT][i][0] - cal_data[ETERM_ED][i][0];
     float short_i = cal_data[CAL_SHORT][i][1] - cal_data[ETERM_ED][i][1];
     
-    // Correct formula for ES (Source Match) error term
-    // ES = -(S_open' + S_short') / (S_open' - S_short')
-    float num_r = -(open_r + short_r);
-    float num_i = -(open_i + short_i);
+    // ES = (S_open' + S_short') / (S_open' - S_short') 
+    // following original DiSlord formula
+    float num_r = open_r + short_r;
+    float num_i = open_i + short_i;
     float den_r = open_r - short_r;
     float den_i = open_i - short_i;
     
@@ -1244,26 +1244,26 @@ static void eterm_calc_es(void) {
 static void eterm_calc_er(int sign) {
   int i;
   for (i = 0; i < sweep_points; i++) {
-    // Calculate reflection tracking error based on standard used
-    // For SHORT standard (ideal Gamma = -1): ER = S_short' * (1 + ES)
-    // For OPEN standard (ideal Gamma = +1): ER = S_open' * (1 - ES)
-    float std_r, std_i;  // Standard measurement after directivity correction
-    float es_r = cal_data[ETERM_ES][i][0];
-    float es_i = cal_data[ETERM_ES][i][1];
-    
+    // Er = sign*(1-sign*Es)S11ms'
+    float s11sr, s11si;
+    float esr = cal_data[ETERM_ES][i][0];
+    float esi = cal_data[ETERM_ES][i][1];
+    if (sign > 0) {
+      esr = -esr;
+      esi = -esi;
+    }
+    esr = 1 + esr;
     if (sign < 0) {  // Use SHORT standard
-      std_r = cal_data[CAL_SHORT][i][0] - cal_data[ETERM_ED][i][0];
-      std_i = cal_data[CAL_SHORT][i][1] - cal_data[ETERM_ED][i][1];
-      // ER = S_short' * (1 + ES)
-      cal_data[ETERM_ER][i][0] = std_r * (1.0f + es_r) - std_i * es_i;
-      cal_data[ETERM_ER][i][1] = std_i * (1.0f + es_r) + std_r * es_i;
+      float s11mr = cal_data[CAL_SHORT][i][0] - cal_data[ETERM_ED][i][0];
+      float s11mi = cal_data[CAL_SHORT][i][1] - cal_data[ETERM_ED][i][1];
+      cal_data[ETERM_ER][i][0] = esr * s11mr - esi * s11mi;
+      cal_data[ETERM_ER][i][1] = esr * s11mi + esi * s11mr;
       cal_status &= ~CALSTAT_SHORT;
     } else {  // Use OPEN standard
-      std_r = cal_data[CAL_OPEN][i][0] - cal_data[ETERM_ED][i][0];
-      std_i = cal_data[CAL_OPEN][i][1] - cal_data[ETERM_ED][i][1];
-      // ER = S_open' * (1 - ES)  
-      cal_data[ETERM_ER][i][0] = std_r * (1.0f - es_r) + std_i * es_i;
-      cal_data[ETERM_ER][i][1] = std_i * (1.0f - es_r) - std_r * es_i;
+      float s11mr = cal_data[CAL_OPEN][i][0] - cal_data[ETERM_ED][i][0];
+      float s11mi = cal_data[CAL_OPEN][i][1] - cal_data[ETERM_ED][i][1];
+      cal_data[ETERM_ER][i][0] = esr * s11mr - esi * s11mi;
+      cal_data[ETERM_ER][i][1] = esr * s11mi + esi * s11mr;
       cal_status &= ~CALSTAT_OPEN;
     }
     

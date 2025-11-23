@@ -50,7 +50,7 @@
 // Allow enter to DFU from menu or command
 #define __DFU_SOFTWARE_MODE__
 // Add RTC clock support
-//#define __USE_RTC__
+#define __USE_RTC__
 // Add RTC backup registers support
 #define __USE_BACKUP__
 // Add SD card support, requires RTC for timestamps
@@ -91,7 +91,7 @@
 #define __USE_DSP__
 #endif
 // Add measure module option (allow made some measure calculations on data)
-//#define __VNA_MEASURE_MODULE__
+#define __VNA_MEASURE_MODULE__
 // Add Z normalization feature
 //#define __VNA_Z_RENORMALIZATION__
 

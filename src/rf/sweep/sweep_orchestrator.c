@@ -707,7 +707,19 @@ uint8_t get_smooth_factor(void) {
 }
 
 int app_measurement_set_frequency(freq_t freq) {
-  return si5351_set_frequency(freq, current_props._power);
+  int delay = si5351_set_frequency(freq, current_props._power);
+  
+  // Add enhanced synchronization delay after frequency change to ensure signal stability
+  // This improves measurement accuracy, especially during frequency transitions
+  if (delay == 0) {
+    delay = DELAY_CHANNEL_CHANGE; // Default delay if not provided by PLL
+  }
+  
+  // Add minimal additional stabilization time after PLL lock
+  // This helps ensure that oscillator has fully settled before measurement begins
+  delay += 500; // Add 500 microseconds for additional settling
+  
+  return delay;
 }
 
 #ifdef __USE_FREQ_TABLE__

@@ -107,25 +107,33 @@ void si5351_bulk_write(const uint8_t* buf, int len) {
   i2c_transfer(SI5351_I2C_ADDR, buf, len);
 }
 
-#if 0
 bool si5351_bulk_read(uint8_t reg, uint8_t* buf, int len) {
   return i2c_receive(SI5351_I2C_ADDR, &reg, 1, buf, len);
 }
-#endif
 
-#if 0
+/*
+ * Improved PLL lock detection with timeout protection
+ */
 static void si5351_wait_pll_lock(void)
 {
-  uint8_t status;
-  int count = 100;
-  do{
-    status=0xFF;
+  uint8_t status = 0xFF;  // Initialize to worst case to force at least one read
+  systime_t timeout = chVTGetSystemTimeX() + MS2ST(100); // Set timeout to 100ms
+  
+  // Wait for both PLLA and PLLB to lock (bits 5 and 6 of register 0 should be 0)
+  do {
     si5351_bulk_read(0, &status, 1);
-    if ((status & 0x60) == 0) // PLLA and PLLB locked
-      return;
-  }while (--count);
+    // Check if both PLLs are locked (register 0, bits 5 and 6 should be 0)
+    if ((status & 0x60) == 0) {  // Both PLLA and PLLB locked
+      break;
+    }
+    // Small delay to avoid excessive bus traffic
+    chThdSleepMilliseconds(1);
+  } while (chVTGetSystemTimeX() < timeout);
+  
+  // Add minimal stabilization time even if lock was detected earlier
+  // This ensures the PLL outputs are fully settled before proceeding
+  chThdSleepMilliseconds(5);
 }
-#endif
 
 static inline void si5351_write(uint8_t reg, uint8_t dat) {
   uint8_t buf[] = {reg, dat};
@@ -1057,13 +1065,16 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
   if (current_band != band) {
     //   si5351_write(SI5351_REG_3_OUTPUT_ENABLE_CONTROL,
     //   SI5351_CLK0_EN|SI5351_CLK1_EN|SI5351_CLK2_EN);
-    if (DELAY_RESET_PLL_BEFORE)
+    if (DELAY_RESET_PLL_BEFORE) {
       si5351_reset_pll(SI5351_PLL_RESET_A | SI5351_PLL_RESET_B);
+      // Improved PLL lock detection - wait for PLLs to stabilize after reset
+      si5351_wait_pll_lock();
+    }
     // Set new gain values
     if (band_s[current_band].l_gain != band_s[band].l_gain ||
         band_s[current_band].r_gain != band_s[band].r_gain)
       tlv320aic3204_set_gain(band_s[band].l_gain, band_s[band].r_gain);
-    // Add delay
+    // Add delay - optimized for band transitions
     if (DELAY_RESET_PLL_BEFORE)
       chThdSleepMicroseconds(DELAY_RESET_PLL_BEFORE);
   }
@@ -1079,16 +1090,23 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
     // 800Hz to 10kHz   PLLN =  8
   case SI5351_FIXED_PLL: // 10kHz to 100MHz  PLLN = 32
     pll_n = band_s[band].pll_n;
-    // Setup CH0 and CH1 constant PLLA freq at band change, and set CH2 freq = CLK2_FREQUENCY
+    // Improved sequence for PLL programming: configure PLLs first, then multisynths
     if (current_band != band) {
+      // Step 1: Configure PLLs - this must be done first to allow proper locking
       si5351_setup_pll(SI5351_REG_PLL_A, pll_n, 0, 1);
       si5351_setup_pll(SI5351_REG_PLL_B, PLL_N_2, 0, 1);
+      
+      // Step 2: Wait for PLLs to lock before configuring multisynths - ensures stability
+      si5351_wait_pll_lock();
+      
+      // Step 3: Configure audio codec channel after PLLs are stable
       si5351_set_frequency_fixedpll(AUDIO_CODEC_CHANNEL, config._xtal_freq * PLL_N_2,
                                     CLK2_FREQUENCY, SI5351_R_DIV_1,
                                     SI5351_CLK_DRIVE_STRENGTH_2MA | SI5351_CLK_PLL_SELECT_B);
     }
     delay = DELAY_BAND_1_2;
     // Calculate and set CH0 and CH1 divider
+    // Improved sequence ordering: ensure offset frequency is set before main frequency
     si5351_set_frequency_fixedpll(OFREQ_CHANNEL, (uint64_t)omul * config._xtal_freq * pll_n, ofreq,
                                   rdiv, ods | SI5351_CLK_PLL_SELECT_A);
     si5351_set_frequency_fixedpll(FREQ_CHANNEL, (uint64_t)mul * config._xtal_freq * pll_n, freq,
