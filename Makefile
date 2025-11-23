@@ -329,9 +329,9 @@ ULIBS = -lm
 # End of user defines
 ##############################################################################
 
-# Host-side unit tests
+# Host-side unit tests  
 HOST_CC ?= gcc
-HOST_CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic
+HOST_CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -O2 -fno-inline-small-functions -ggdb -fomit-frame-pointer -falign-functions=16 -ffast-math -fsingle-precision-constant -fmerge-constants
 HOST_LDFLAGS ?= -lm
 
 TEST_BUILD_DIR := build/tests
