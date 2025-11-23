@@ -20,6 +20,7 @@
  */
 
 #include "hal.h"
+#include "ch.h"
 
 static inline void flash_clear_status_flags(void) {
   uint32_t flags = FLASH_SR_EOP;
@@ -39,7 +40,7 @@ static inline void flash_clear_status_flags(void) {
 
 static inline int flash_wait_for_last_operation(void) {
   // Add a timeout counter to prevent infinite loop
-  volatile uint32_t timeout = 0xFFFFF;  // Set appropriate timeout value
+  volatile uint32_t timeout = 0x1FFFF;  // Reduced timeout to prevent long hangs
   
   while ((FLASH->SR & FLASH_SR_BSY) && (timeout > 0)) {
     timeout--;
@@ -124,9 +125,13 @@ void flash_program_half_word_buffer(uint16_t* dst, uint16_t *data, uint16_t size
   uint32_t primask = flash_enter_critical();
   flash_unlock();
   flash_erase_pages_unlocked((uint32_t)dst, size);
+  flash_exit_critical(primask);
+  
   __IO uint16_t* p = dst;
   for (uint32_t i = 0; i < size / sizeof(uint16_t); i++) {
+    primask = flash_enter_critical();
     if (flash_wait_for_last_operation() != 0) {
+      flash_exit_critical(primask);
       // If waiting fails, try to continue with the next word to avoid hanging
       continue;
     }
@@ -134,10 +139,21 @@ void flash_program_half_word_buffer(uint16_t* dst, uint16_t *data, uint16_t size
     p[i] = data[i];
     if (flash_wait_for_last_operation() != 0) {
       // If programming failed, continue to avoid indefinite hanging
+      FLASH->CR &= ~FLASH_CR_PG;
+      flash_exit_critical(primask);
       continue;
     }
     FLASH->CR &= ~FLASH_CR_PG;
+    flash_exit_critical(primask);
+    
+    // Yield periodically to keep system responsive during large flash operations
+    if ((i & 0xFF) == 0) {  // yield every 256 half-words (~512 bytes)
+      chThdYield();
+    }
   }
+  
+  // Finally, lock the flash again
+  primask = flash_enter_critical();
   flash_lock();
   flash_exit_critical(primask);
 }
