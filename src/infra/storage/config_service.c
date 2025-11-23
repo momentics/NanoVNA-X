@@ -31,6 +31,23 @@
 // Semaphore to protect flash operations from concurrent access
 static semaphore_t flash_operation_semaphore;
 
+// Counter to track if calibration is in progress (multiple operations may be happening during calibration)
+static volatile int8_t calibration_in_progress = 0;
+
+void config_service_start_calibration(void) {
+  chSysLock();
+  calibration_in_progress++;
+  chSysUnlock();
+}
+
+void config_service_end_calibration(void) {
+  chSysLock();
+  if (calibration_in_progress > 0) {
+    calibration_in_progress--;
+  }
+  chSysUnlock();
+}
+
 uint16_t lastsaveid = 0;
 #if SAVEAREA_MAX >= 8
 #error "Increase checksum_ok type for save more cache slots"
@@ -66,8 +83,19 @@ static uint32_t checksum(const void* start, size_t len) {
 }
 
 static int config_save_impl(void) {
-  // Wait for exclusive access to flash operations
-  chSemWait(&flash_operation_semaphore);
+  // Wait for exclusive access to flash operations with timeout to prevent blocking measurements  
+  msg_t msg = MSG_OK;
+  // During calibration, don't wait for semaphore as it could delay critical measurements
+  if (calibration_in_progress > 0) {
+    msg = chSemWaitTimeout(&flash_operation_semaphore, MS2ST(100)); // Very short timeout during calibration
+  } else {
+    msg = chSemWaitTimeout(&flash_operation_semaphore, MS2ST(500)); // 500ms timeout normally
+  }
+  
+  // If we can't get the semaphore within timeout, return error
+  if (msg != MSG_OK) {
+    return -1;  // Failed to get access to flash
+  }
   
   // Apply magic word and calculate checksum
   config.magic = CONFIG_MAGIC;
@@ -100,8 +128,19 @@ static int caldata_save_impl(uint32_t id) {
   if (id >= SAVEAREA_MAX)
     return -1;
 
-  // Wait for exclusive access to flash operations
-  chSemWait(&flash_operation_semaphore);
+  // Wait for exclusive access to flash operations with timeout to prevent blocking measurements
+  msg_t msg = MSG_OK;
+  // During calibration, don't wait long for semaphore as it could delay critical measurements
+  if (calibration_in_progress > 0) {
+    msg = chSemWaitTimeout(&flash_operation_semaphore, MS2ST(100)); // Very short timeout during calibration
+  } else {
+    msg = chSemWaitTimeout(&flash_operation_semaphore, MS2ST(500)); // 500ms timeout normally
+  }
+  
+  // If we can't get the semaphore within timeout, return error
+  if (msg != MSG_OK) {
+    return -1;  // Failed to get access to flash
+  }
   
   // Apply magic word and calculate checksum
   current_props.magic = PROPERTIES_MAGIC;
@@ -152,8 +191,13 @@ static int caldata_recall_impl(uint32_t id) {
 }
 
 static void clear_all_config_prop_data_impl(void) {
-  // Wait for exclusive access to flash operations
-  chSemWait(&flash_operation_semaphore);
+  // Wait for exclusive access to flash operations with timeout
+  msg_t msg = chSemWaitTimeout(&flash_operation_semaphore, MS2ST(2000)); // 2 second timeout for erase operation
+  
+  // If we can't get the semaphore within timeout, return early
+  if (msg != MSG_OK) {
+    return;  // Failed to get access to flash
+  }
   
   lastsaveid = NO_SAVE_SLOT;
   checksum_ok = 0;

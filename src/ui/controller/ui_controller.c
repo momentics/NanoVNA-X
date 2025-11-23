@@ -986,9 +986,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_cal_enh_acb) {
 }
 
 static UI_FUNCTION_CALLBACK(menu_caldone_cb) {
-  // Pause sweep before completing calibration to prevent conflicts during flash operations
-  pause_sweep();
-  
+  // Complete calibration without interfering with measurements
   cal_done();
   
   // For both cases, simply return to the parent menu
@@ -996,9 +994,6 @@ static UI_FUNCTION_CALLBACK(menu_caldone_cb) {
   menu_move_back(false);
   // This allows the user to save calibration separately via CAL -> SAVE CAL
   // which is safer and avoids potential memory allocation issues
-  
-  // Resume sweep if it was active before
-  resume_sweep();
 }
 
 static UI_FUNCTION_CALLBACK(menu_cal_reset_cb) {
@@ -1053,18 +1048,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_recall_acb) {
     return;
   }
   
-  // Pause sweep completely during flash recall to prevent conflicts
-  bool was_sweeping = (sweep_mode & SWEEP_ENABLE) != 0;
-  if (was_sweeping) {
-    pause_sweep();
-  }
-  
   load_properties(data);
-  
-  // Resume sweep if it was running before
-  if (was_sweeping) {
-    resume_sweep();
-  }
 }
 
 static UI_FUNCTION_CALLBACK(menu_recall_submenu_cb) {
@@ -1132,18 +1116,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_save_acb) {
     return;
   }
   
-  // Pause sweep completely during flash save to prevent conflicts
-  bool was_sweeping = (sweep_mode & SWEEP_ENABLE) != 0;
-  if (was_sweeping) {
-    pause_sweep();
-  }
-  
   int result = caldata_save(data);
-  
-  // Resume sweep if it was running before
-  if (was_sweeping) {
-    resume_sweep();
-  }
   
   if (result == 0) {
     menu_move_back(true);
