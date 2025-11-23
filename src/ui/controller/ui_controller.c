@@ -986,27 +986,24 @@ static UI_FUNCTION_ADV_CALLBACK(menu_cal_enh_acb) {
 }
 
 static UI_FUNCTION_CALLBACK(menu_caldone_cb) {
-  // Pause sweep before completing calibration to prevent conflicts during flash operations
-  bool was_sweeping = (sweep_mode & SWEEP_ENABLE) != 0;
-  if (was_sweeping) {
-    pause_sweep();
+  // Temporarily disable sweep during calibration completion to prevent conflicts
+  uint8_t saved_mode = sweep_mode;
+  if (sweep_mode & SWEEP_ENABLE) {
+    sweep_mode &= ~SWEEP_ENABLE;
   }
   
   cal_done();
   
-  // Allow time for any background operations to complete
-  chThdSleepMilliseconds(50);
+  // Restore sweep mode after completion
+  if (saved_mode & SWEEP_ENABLE) {
+    sweep_mode = saved_mode;
+  }
   
   // For both cases, simply return to the parent menu
   // This avoids potential memory allocation issues with menu_build_save_menu()
   menu_move_back(false);
   // This allows the user to save calibration separately via CAL -> SAVE CAL
   // which is safer and avoids potential memory allocation issues
-  
-  // Resume sweep if it was running before
-  if (was_sweeping) {
-    resume_sweep();
-  }
 }
 
 static UI_FUNCTION_CALLBACK(menu_cal_reset_cb) {
@@ -1061,20 +1058,17 @@ static UI_FUNCTION_ADV_CALLBACK(menu_recall_acb) {
     return;
   }
   
-  // Pause sweep during flash recall to prevent conflicts
-  bool was_sweeping = (sweep_mode & SWEEP_ENABLE) != 0;
-  if (was_sweeping) {
-    pause_sweep();
+  // Temporarily disable sweep during flash recall to prevent conflicts
+  uint8_t saved_mode = sweep_mode;
+  if (sweep_mode & SWEEP_ENABLE) {
+    sweep_mode &= ~SWEEP_ENABLE;
   }
   
   load_properties(data);
   
-  // Allow time for flash operations to complete
-  chThdSleepMilliseconds(50);
-  
-  // Resume sweep if it was running before
-  if (was_sweeping) {
-    resume_sweep();
+  // Restore sweep mode after recalling
+  if (saved_mode & SWEEP_ENABLE) {
+    sweep_mode = saved_mode;
   }
 }
 
@@ -1143,20 +1137,17 @@ static UI_FUNCTION_ADV_CALLBACK(menu_save_acb) {
     return;
   }
   
-  // Pause sweep during flash save to prevent conflicts
-  bool was_sweeping = (sweep_mode & SWEEP_ENABLE) != 0;
-  if (was_sweeping) {
-    pause_sweep();
+  // Temporarily disable sweep during flash save to prevent conflicts
+  uint8_t saved_mode = sweep_mode;
+  if (sweep_mode & SWEEP_ENABLE) {
+    sweep_mode &= ~SWEEP_ENABLE;
   }
   
   int result = caldata_save(data);
   
-  // Allow time for flash operations to complete
-  chThdSleepMilliseconds(100);
-  
-  // Resume sweep if it was running before
-  if (was_sweeping) {
-    resume_sweep();
+  // Restore sweep mode after saving
+  if (saved_mode & SWEEP_ENABLE) {
+    sweep_mode = saved_mode;
   }
   
   if (result == 0) {

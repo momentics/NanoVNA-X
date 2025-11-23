@@ -357,6 +357,7 @@ inline void delay_microseconds(uint32_t us) {_delay_8t(us*STM32_CORE_CLOCK/8);}
 inline void delay_milliseconds(uint32_t ms) {_delay_8t(ms*125*STM32_CORE_CLOCK);}
 
 void pause_sweep(void);
+void resume_sweep(void);
 void toggle_sweep(void);
 int  load_properties(uint32_t id);
 
