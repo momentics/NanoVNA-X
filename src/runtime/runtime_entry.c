@@ -1173,6 +1173,11 @@ static void eterm_set(int term, float re, float im) {
   for (i = 0; i < sweep_points; i++) {
     cal_data[term][i][0] = re;
     cal_data[term][i][1] = im;
+    
+    // Yield periodically to keep UI responsive during intensive computation
+    if ((i & 0xF) == 0) {  // yield every 16 iterations
+      chThdYield();
+    }
   }
 }
 
@@ -1205,6 +1210,11 @@ static void eterm_calc_es(void) {
       cal_data[ETERM_ES][i][0] = 0.0f;
       cal_data[ETERM_ES][i][1] = 0.0f;
     }
+    
+    // Yield periodically to keep UI responsive during intensive computation
+    if ((i & 0xF) == 0) {  // yield every 16 iterations
+      chThdYield();
+    }
   }
   cal_status &= ~CALSTAT_OPEN;
   cal_status |= CALSTAT_ES;
@@ -1233,6 +1243,11 @@ static void eterm_calc_er(int sign) {
       cal_data[ETERM_ER][i][1] = std_i - cal_data[ETERM_ES][i][1];
       cal_status &= ~CALSTAT_OPEN;
     }
+    
+    // Yield periodically to keep UI responsive during intensive computation
+    if ((i & 0xF) == 0) {  // yield every 16 iterations
+      chThdYield();
+    }
   }
   cal_status |= CALSTAT_ER;
 }
@@ -1254,6 +1269,11 @@ static void eterm_calc_et(void) {
       // Set to default value if division by zero would occur
       cal_data[ETERM_ET][i][0] = 1.0f;
       cal_data[ETERM_ET][i][1] = 0.0f;
+    }
+    
+    // Yield periodically to keep UI responsive during intensive computation
+    if ((i & 0xF) == 0) {  // yield every 16 iterations
+      chThdYield();
     }
   }
   cal_status &= ~CALSTAT_THRU;
@@ -2412,7 +2432,7 @@ static const VNAShellCommand commands[] = {
 #ifdef __SD_CARD_LOAD__
     {"msg", cmd_msg, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_LOAD},
 #endif
-    {"cal", cmd_cal, CMD_WAIT_MUTEX},
+    {"cal", cmd_cal, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
     {"save", cmd_save, CMD_RUN_IN_LOAD},
     {"recall", cmd_recall, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
     {"trace", cmd_trace, CMD_RUN_IN_LOAD},
