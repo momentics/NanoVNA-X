@@ -1,5 +1,6 @@
 # Build outputs
 /build/
+/NanoVNA-D-1.2.46/
 /build-*/
 *.elf
 *.hex
