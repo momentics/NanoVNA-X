@@ -28,6 +28,8 @@
 #ifndef CHMTX_H
 #define CHMTX_H
 
+#include "ch.h"
+
 #if (CH_CFG_USE_MUTEXES == TRUE) || defined(__DOXYGEN__)
 
 /*===========================================================================*/

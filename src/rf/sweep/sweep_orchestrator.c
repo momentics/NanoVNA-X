@@ -344,10 +344,6 @@ void sweep_service_wait_for_generation(void) {
 }
 
 bool sweep_service_wait_for_capture(void) {
-  if ((__get_PRIMASK() & 1) != 0) {
-    // Interrupts are disabled, this will hang.
-    return false;
-  }
   systime_t start_time = chVTGetSystemTimeX();
   systime_t timeout = MS2ST(1000); // 1 second timeout to prevent infinite wait
   

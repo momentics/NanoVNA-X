@@ -34,7 +34,10 @@
 #include "ui/input/hardware_input.h"
 #include "ui/display/display_presenter.h"
 #include "ui/controller/ui_controller.h"
-#include "platform/boards/board_events.h"
+#include "runtime/runtime_entry.h"
+#include "ui/display/display_presenter.h"
+#include "infra/event/event_bus.h"
+#include "infra/state/state_manager.h"
 
 // Use size optimization (UI not need fast speed, better have smallest size)
 #pragma GCC optimize("Os")
@@ -956,22 +959,10 @@ static bool select_lever_mode(int mode) {
 }
 
 static UI_FUNCTION_ADV_CALLBACK(menu_calop_acb) {
-  static const struct {
-    uint8_t mask, next;
-  } c_list[5] = {
-      [CAL_LOAD] = {CALSTAT_LOAD, 3},   [CAL_OPEN] = {CALSTAT_OPEN, 1},
-      [CAL_SHORT] = {CALSTAT_SHORT, 2}, [CAL_THRU] = {CALSTAT_THRU, 6},
-      [CAL_ISOLN] = {CALSTAT_ISOLN, 4},
-  };
-  if (b) {
-    if (cal_status & c_list[data].mask)
-      b->icon = BUTTON_ICON_CHECK;
-    return;
-  }
-  // Reset the physical button debounce state when advancing through CAL steps
-  ui_input_reset_state();
+  chMtxLock(&ui_mutex);
   cal_collect(data);
-  selection = c_list[data].next;
+  chMtxUnlock(&ui_mutex);
+  request_to_redraw(REDRAW_CAL_STATUS);
 }
 
 static UI_FUNCTION_ADV_CALLBACK(menu_cal_enh_acb) {
