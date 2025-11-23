@@ -231,9 +231,15 @@ void i2s_lld_serve_rx_interrupt(uint32_t flags) {
     return;
   }
   audio_sample_t* p = (flags & STM32_DMA_ISR_TCIF) ? rx_buffer + AUDIO_BUFFER_LEN : rx_buffer;
-  if (wait >= config._bandwidth + 2U) {
+  if (wait > config._bandwidth + 2U) {
+    // More than expected buffers - this shouldn't happen, but handle gracefully
+    --wait_count;
+    return;
+  } else if (wait == config._bandwidth + 2U) {
+    // First buffer after reset - always reset accumulator to clear any initial noise
     reset_dsp_accumerator();
   } else {
+    // Process actual measurement data
     dsp_process(p, AUDIO_BUFFER_LEN);
   }
 #if ENABLED_DUMP_COMMAND
@@ -367,8 +373,8 @@ bool sweep_service_wait_for_capture(void) {
     if (current_time - start_time >= timeout) {
       // Timeout occurred - break to prevent hanging
       // This can happen if I2S interrupts don't fire properly (e.g. USB not connected)
+      // Avoid resetting DSP accumulator here to preserve partially accumulated data
       wait_count = 0;
-      reset_dsp_accumerator();
       return false;
     }
     __WFI();
