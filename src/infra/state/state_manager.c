@@ -182,7 +182,10 @@ void state_manager_mark_dirty(void) {
 
 void state_manager_force_save(void) {
 #ifdef __USE_BACKUP__
-  caldata_save(active_calibration_slot());
+  // Don't save during calibration to avoid conflicts with measurement process
+  if (!calibration_in_progress) {
+    caldata_save(active_calibration_slot());
+  }
   
   sweep_state_dirty = false;
   sweep_state_last_save = chVTGetSystemTimeX();

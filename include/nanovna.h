@@ -284,7 +284,7 @@ typedef uint32_t freq_t;
 #define POINTS_COUNT_DEFAULT   SWEEP_POINTS_MAX
 #endif
 
-extern float measured[2][SWEEP_POINTS_MAX][2];
+extern alignas(4) float measured[2][SWEEP_POINTS_MAX][2];
 
 #define CAL_TYPE_COUNT  5
 #define CAL_LOAD        0
@@ -390,6 +390,9 @@ void send_region(remote_region_t *rd, uint8_t * buf, uint16_t size);
 
 extern  uint8_t sweep_mode;
 extern const char* const info_about[];
+
+// Global flag to indicate when calibration is in critical phase to prevent UI flash operations
+extern volatile bool calibration_in_progress;
 
 /*
  * Measure timings for si5351 generator, after ready

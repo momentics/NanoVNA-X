@@ -986,8 +986,14 @@ static UI_FUNCTION_ADV_CALLBACK(menu_cal_enh_acb) {
 }
 
 static UI_FUNCTION_CALLBACK(menu_caldone_cb) {
+  // Indicate that calibration is in progress
+  calibration_in_progress = true;
+  
   // Complete calibration without interfering with measurements
   cal_done();
+  
+  // Reset the flag (cal_done also sets it to false)
+  calibration_in_progress = false;
   
   // For both cases, simply return to the parent menu
   // This avoids potential memory allocation issues with menu_build_save_menu()
@@ -1113,6 +1119,12 @@ static UI_FUNCTION_ADV_CALLBACK(menu_save_acb) {
                   (float)p->_frequency1);
     else
       b->p1.u = data;
+    return;
+  }
+  
+  // Check if calibration is in progress before attempting to save
+  if (calibration_in_progress) {
+    ui_message_box("BUSY", "Calibration in progress, try again later", 2000);
     return;
   }
   

@@ -31,22 +31,7 @@
 // Semaphore to protect flash operations from concurrent access
 static semaphore_t flash_operation_semaphore;
 
-// Counter to track if calibration is in progress (multiple operations may be happening during calibration)
-static volatile int8_t calibration_in_progress = 0;
 
-void config_service_start_calibration(void) {
-  chSysLock();
-  calibration_in_progress++;
-  chSysUnlock();
-}
-
-void config_service_end_calibration(void) {
-  chSysLock();
-  if (calibration_in_progress > 0) {
-    calibration_in_progress--;
-  }
-  chSysUnlock();
-}
 
 uint16_t lastsaveid = 0;
 #if SAVEAREA_MAX >= 8

@@ -125,7 +125,7 @@ static FATFS fs_volume_instance;
 static FIL fs_file_instance;
 
 static void usb_command_session_started(void) {
-  shell_printf(VNA_SHELL_NEWLINE_STR "NanoVNA Shell" VNA_SHELL_NEWLINE_STR);
+  shell_printf(VNA_SHELL_NEWLINE_STR "NanoVNA-X Shell" VNA_SHELL_NEWLINE_STR);
 }
 
 static void usb_command_session_stopped(void) {}
@@ -210,8 +210,11 @@ static void cmd_dump(int argc, char* argv[]);
 #endif
 
 uint8_t sweep_mode;
-// Sweep measured data
-float measured[2][SWEEP_POINTS_MAX][2];
+
+// Flag to indicate when calibration is in progress to prevent UI flash operations during critical phases
+volatile bool calibration_in_progress = false;
+// Sweep measured data - aligned for DMA operations
+alignas(4) float measured[2][SWEEP_POINTS_MAX][2];
 
 static int16_t battery_last_mv;
 static systime_t battery_next_sample = 0;
@@ -353,7 +356,7 @@ config_t config = {
     ._band_mode = 0,
 };
 
-properties_t current_props;
+alignas(4) properties_t current_props;
 
 int load_properties(uint32_t id) {
   int r = caldata_recall(id);
@@ -1367,6 +1370,9 @@ static void apply_error_term_at(int i)
 #endif
 
 void cal_collect(uint16_t type) {
+  // Mark that calibration is in progress during data collection
+  calibration_in_progress = true;
+  
   uint16_t dst, src;
 
   static const struct {
@@ -1441,6 +1447,9 @@ void cal_collect(uint16_t type) {
 }
 
 void cal_done(void) {
+  // Indicate that calibration critical processing is starting
+  calibration_in_progress = true;
+  
   // Set Load/Ed to default if not calculated
   if (!(cal_status & CALSTAT_LOAD))
     eterm_set(ETERM_ED, 0.0, 0.0);
@@ -1477,6 +1486,9 @@ void cal_done(void) {
   cal_status |= CALSTAT_APPLY;
   lastsaveid = NO_SAVE_SLOT;
   request_to_redraw(REDRAW_BACKUP | REDRAW_CAL_STATUS);
+  
+  // Indicate that calibration processing is complete
+  calibration_in_progress = false;
 }
 
 VNA_SHELL_FUNCTION(cmd_cal) {
