@@ -69,7 +69,7 @@
 // Add RLE8 compression capture image format
 #define __CAPTURE_RLE8__
 // Allow flip display
-#define __FLIP_DISPLAY__
+//#define __FLIP_DISPLAY__
 // Add shadow on text in plot area (improve readable, but little slowdown render)
 #define _USE_SHADOW_TEXT_
 // Faster draw line in cell algorithm (better clipping and faster)
@@ -104,7 +104,7 @@
 // Allow screenshots in TIFF format
 #define __SD_CARD_DUMP_TIFF__
 // Allow dump firmware to SD card
-#define __SD_CARD_DUMP_FIRMWARE__
+//#define __SD_CARD_DUMP_FIRMWARE__
 // Enable SD card file browser, and allow load files from it
 #define __SD_FILE_BROWSER__
 #endif
