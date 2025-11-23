@@ -38,7 +38,7 @@
 void dsp_process(audio_sample_t* capture, size_t length);
 void fetch_amplitude(float* gamma);
 void fetch_amplitude_ref(float* gamma);
-extern void reset_dsp_accumulator(void);
+extern void reset_dsp_accumerator(void);
 
 static int g_failures = 0;
 
@@ -69,7 +69,7 @@ static void snapshot(float* samp_s, float* samp_c, float* ref_s, float* ref_c) {
 }
 
 static void test_dc_signal(void) {
-  reset_dsp_accumulator();
+  reset_dsp_accumerator();
   float capture[2 * AUDIO_SAMPLES_COUNT];
   for (size_t i = 0; i < AUDIO_SAMPLES_COUNT; ++i) {
     capture[i * 2 + 0] = 100.0f; /* reference */
@@ -84,7 +84,7 @@ static void test_dc_signal(void) {
 }
 
 static void test_in_phase_sine(void) {
-  reset_dsp_accumulator();
+  reset_dsp_accumerator();
   float capture[2 * AUDIO_SAMPLES_COUNT];
   for (size_t i = 0; i < AUDIO_SAMPLES_COUNT; ++i) {
     float phase = (2.0f * VNA_PI * i) / AUDIO_SAMPLES_COUNT;
@@ -100,7 +100,7 @@ static void test_in_phase_sine(void) {
 }
 
 static void test_quadrature_sine(void) {
-  reset_dsp_accumulator();
+  reset_dsp_accumerator();
   float capture[2 * AUDIO_SAMPLES_COUNT];
   for (size_t i = 0; i < AUDIO_SAMPLES_COUNT; ++i) {
     float phase = (2.0f * VNA_PI * i) / AUDIO_SAMPLES_COUNT;
