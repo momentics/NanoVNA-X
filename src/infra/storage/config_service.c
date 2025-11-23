@@ -113,20 +113,11 @@ static int caldata_save_impl(uint32_t id) {
   if (id >= SAVEAREA_MAX)
     return -1;
 
-  // Wait for exclusive access to flash operations with timeout to prevent blocking measurements
-  msg_t msg = MSG_OK;
-  // During calibration, don't wait long for semaphore as it could delay critical measurements
-  if (calibration_in_progress > 0) {
-    msg = chSemWaitTimeout(&flash_operation_semaphore, MS2ST(100)); // Very short timeout during calibration
-  } else {
-    msg = chSemWaitTimeout(&flash_operation_semaphore, MS2ST(500)); // 500ms timeout normally
+  // Don't save during critical calibration phase to prevent data corruption
+  if (calibration_in_progress) {
+    return -1;  // Return error to indicate save was denied
   }
-  
-  // If we can't get the semaphore within timeout, return error
-  if (msg != MSG_OK) {
-    return -1;  // Failed to get access to flash
-  }
-  
+
   // Apply magic word and calculate checksum
   current_props.magic = PROPERTIES_MAGIC;
   current_props.checksum =
@@ -136,9 +127,6 @@ static int caldata_save_impl(uint32_t id) {
   uint16_t* dst = (uint16_t*)calibration_slot_area(id);
   flash_program_half_word_buffer(dst, (uint16_t*)&current_props, sizeof(properties_t));
 
-  // Release the semaphore
-  chSemSignal(&flash_operation_semaphore);
-  
   lastsaveid = id;
   return 0;
 }

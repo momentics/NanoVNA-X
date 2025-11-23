@@ -1370,7 +1370,7 @@ static void apply_error_term_at(int i)
 #endif
 
 void cal_collect(uint16_t type) {
-  // Mark that calibration is in progress during data collection
+  // Mark that calibration is in critical phase - starting collection
   calibration_in_progress = true;
   
   uint16_t dst, src;
@@ -1422,7 +1422,7 @@ void cal_collect(uint16_t type) {
   //  if (electrical_delayS21) mask|= SWEEP_APPLY_EDELAY_S21;
   // Measure calibration data
   app_measurement_sweep(false, mask);
-  // Copy calibration data
+  // Copy calibration data - this is critical section that should be protected from flash access
   memcpy(cal_data[dst], measured[src], sizeof measured[0]);
 
   // Made average if need
@@ -1444,6 +1444,9 @@ void cal_collect(uint16_t type) {
 
   config._bandwidth = bw; // restore
   request_to_redraw(REDRAW_CAL_STATUS);
+  
+  // Clear the flag - calibration data collection complete for this specific measurement
+  calibration_in_progress = false;
 }
 
 void cal_done(void) {
