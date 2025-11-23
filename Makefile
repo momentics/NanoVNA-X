@@ -372,7 +372,7 @@ $(TEST_BUILD_DIR)/test_measurement_engine: tests/unit/test_measurement_engine.c 
 	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_shell_service: tests/unit/test_shell_service.c src/interfaces/cli/shell_service.c \
-		src/core/common.c tests/stubs/ch_stubs.c | $(TEST_BUILD_DIR)
+		src/core/common.c | $(TEST_BUILD_DIR)
 	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_display_presenter: tests/unit/test_display_presenter.c \
