@@ -442,76 +442,94 @@ uint16_t app_measurement_get_sweep_mask(void) {
 }
 
 static void apply_ch0_error_term(float data[4], float c_data[CAL_TYPE_COUNT][2]) {
-  float re = data[0];
-  float im = data[1];
-  float c_re = c_data[ETERM_ED][0];
-  float c_im = c_data[ETERM_ED][1];
-  float esr = c_data[ETERM_ES][0];
-  float esi = c_data[ETERM_ES][1];
-  float err = c_data[ETERM_ER][0];
-  float eri = c_data[ETERM_ER][1];
-  float numerator_r = re - c_re;
-  float numerator_i = im - c_im;
-  float denominator_r = 1.0f - esr * numerator_r + esi * numerator_i;
-  float denominator_i = 0.0f - esr * numerator_i - esi * numerator_r;
-  float inv = denominator_r * denominator_r + denominator_i * denominator_i;
-  if (inv != 0.0f) {
-    inv = 1.0f / inv;
+  // S11m' = S11m - Ed
+  // S11a = S11m' / (Er + Es S11m')
+  float s11mr = data[0] - c_data[ETERM_ED][0];
+  float s11mi = data[1] - c_data[ETERM_ED][1];
+  float err = c_data[ETERM_ER][0] + s11mr * c_data[ETERM_ES][0] - s11mi * c_data[ETERM_ES][1];
+  float eri = c_data[ETERM_ER][1] + s11mr * c_data[ETERM_ES][1] + s11mi * c_data[ETERM_ES][0];
+  float sq = err*err + eri*eri;
+  if (sq != 0.0f) {
+    float inv = 1.0f / sq;
+    data[0] = (s11mr * err + s11mi * eri) * inv;
+    data[1] = (s11mi * err - s11mr * eri) * inv;
+  } else {
+    data[0] = 0.0f;
+    data[1] = 0.0f;
   }
-  float denom_conj_r = denominator_r * inv;
-  float denom_conj_i = -denominator_i * inv;
-  data[0] = (numerator_r * denom_conj_r - numerator_i * denom_conj_i) - err;
-  data[1] = (numerator_i * denom_conj_r + numerator_r * denom_conj_i) - eri;
 }
 
 static void apply_ch1_error_term(float data[4], float c_data[CAL_TYPE_COUNT][2]) {
+  // CAUTION: Et is inversed for efficiency
+  // S21a = (S21m - Ex) * Et
   float s21mr = data[2] - c_data[ETERM_EX][0];
   float s21mi = data[3] - c_data[ETERM_EX][1];
-  float esr = 1 - (c_data[ETERM_ES][0] * data[0] - c_data[ETERM_ES][1] * data[1]);
-  float esi = -(c_data[ETERM_ES][1] * data[0] + c_data[ETERM_ES][0] * data[1]);
-  float etr = esr * c_data[ETERM_ET][0] - esi * c_data[ETERM_ET][1];
-  float eti = esr * c_data[ETERM_ET][1] + esi * c_data[ETERM_ET][0];
-  float denom = etr * etr + eti * eti;
-  if (denom != 0.0f) {
-    denom = 1.0f / denom;
+  // Apply transmission tracking correction (ET is inverted for efficiency)
+  data[2] = s21mr * c_data[ETERM_ET][0] - s21mi * c_data[ETERM_ET][1];
+  data[3] = s21mi * c_data[ETERM_ET][0] + s21mr * c_data[ETERM_ET][1];
+  
+  // Enhanced Response: S21a *= 1 - Es * S11a (if enabled)
+  if (cal_status & CALSTAT_ENHANCED_RESPONSE) {
+    float esr = 1.0f - (c_data[ETERM_ES][0] * data[0] - c_data[ETERM_ES][1] * data[1]);
+    float esi = 0.0f - (c_data[ETERM_ES][1] * data[0] + c_data[ETERM_ES][0] * data[1]);
+    float re = data[2];
+    float im = data[3];
+    data[2] = esr * re - esi * im;
+    data[3] = esi * re + esr * im;
   }
-  float et_conj_r = etr * denom;
-  float et_conj_i = -eti * denom;
-  float s21ar = s21mr * et_conj_r - s21mi * et_conj_i;
-  float s21ai = s21mi * et_conj_r + s21mr * et_conj_i;
-  float isoln_r = c_data[CAL_ISOLN][0];
-  float isoln_i = c_data[CAL_ISOLN][1];
-  data[2] = s21ar + isoln_r;
-  data[3] = s21ai + isoln_i;
 }
 
 static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
-  if (idx < 0) {
-    freq_t start = cal_frequency0;
-    freq_t stop = cal_frequency1;
-    uint16_t points = cal_sweep_points;
-    if (points <= 1U || stop == start) {
-      idx = 0;
-    } else {
-      freq_t span = stop - start;
-      // Calculate the position - use float for more accurate interpolation
-      float ratio = (float)(f - start) / (float)span;
-      float interpolated_pos = ratio * (points - 1U);
-      
-      // Bound-check the position
-      if (interpolated_pos < 0.0f) {
-        idx = 0;
-      } else if (interpolated_pos > (points - 1U)) {
-        idx = points - 1U;
-      } else {
-        // Round to nearest integer to reduce interpolation errors
-        idx = (uint16_t)(interpolated_pos + 0.5f);
-      }
+  uint16_t src_points = cal_sweep_points - 1;
+  if (idx >= 0) {
+    // Direct point copy if index provided
+    for (uint16_t eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
+      data[eterm][0] = cal_data[eterm][idx][0];
+      data[eterm][1] = cal_data[eterm][idx][1];
     }
+    return;
   }
+  
+  if (f <= cal_frequency0) {
+    idx = 0;
+    for (uint16_t eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
+      data[eterm][0] = cal_data[eterm][0][0];
+      data[eterm][1] = cal_data[eterm][0][1];
+    }
+    return;
+  }
+  
+  if (f >= cal_frequency1) {
+    idx = src_points;
+    for (uint16_t eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
+      data[eterm][0] = cal_data[eterm][src_points][0];
+      data[eterm][1] = cal_data[eterm][src_points][1];
+    }
+    return;
+  }
+  
+  // Calculate k for linear interpolation
+  freq_t span = cal_frequency1 - cal_frequency0;
+  idx = (uint64_t)(f - cal_frequency0) * (uint64_t)src_points / span;
+  uint64_t v = (uint64_t)span * idx + src_points/2;
+  freq_t src_f0 = cal_frequency0 + (v       ) / src_points;
+  freq_t src_f1 = cal_frequency0 + (v + span) / src_points;
+  
+  freq_t delta = src_f1 - src_f0;
+  // Not need interpolate
+  if (f == src_f0) {
+    for (uint16_t eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
+      data[eterm][0] = cal_data[eterm][idx][0];
+      data[eterm][1] = cal_data[eterm][idx][1];
+    }
+    return;
+  }
+  
+  float k = (delta == 0) ? 0.0f : (float)(f - src_f0) / delta;
+  // Interpolate by k
   for (uint16_t eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
-    data[eterm][0] = cal_data[eterm][idx][0];
-    data[eterm][1] = cal_data[eterm][idx][1];
+    data[eterm][0] = cal_data[eterm][idx][0] + k * (cal_data[eterm][idx+1][0] - cal_data[eterm][idx][0]);
+    data[eterm][1] = cal_data[eterm][idx][1] + k * (cal_data[eterm][idx+1][1] - cal_data[eterm][idx][1]);
   }
 }
 
