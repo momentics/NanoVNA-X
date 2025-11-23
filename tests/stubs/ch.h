@@ -27,6 +27,16 @@
 typedef uint32_t systime_t;
 typedef intptr_t msg_t;
 
+typedef struct {
+  int dummy;
+} mutex_t;
+
+void chMtxObjectInit(mutex_t *mp);
+void chMtxLock(mutex_t *mp);
+void chMtxUnlock(mutex_t *mp);
+
+#define CH_CFG_USE_MUTEXES TRUE
+
 #ifndef CH_CFG_USE_WAITEXIT
 #define CH_CFG_USE_WAITEXIT FALSE
 #endif
