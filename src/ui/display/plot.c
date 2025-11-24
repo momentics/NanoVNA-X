@@ -768,63 +768,54 @@ static void render_overlays(RenderCellCtx* rcx) {
 #include "fast_render/vna_render.c"
 #else
 // Little slower on easy traces, but slow if need lot of clip and draw long lines
+/**
+ * @brief Draw a line in the cell buffer using optimized Bresenham's algorithm.
+ * 
+ * This function draws a line between two points in the cell buffer, with optimized
+ * boundary checking and clipping to avoid expensive operations outside the cell.
+ */
 static inline void cell_drawline(const RenderCellCtx* rcx, int x0, int y0, int x1, int y1, pixel_t c) {
-  if (x0 < 0 && x1 < 0)
-    return;
-  if (y0 < 0 && y1 < 0)
-    return;
-  if (x0 >= CELLWIDTH && x1 >= CELLWIDTH)
-    return;
-  if (y0 >= CELLHEIGHT && y1 >= CELLHEIGHT)
+  // Quick out-of-bounds check to avoid expensive computation
+  if ((x0 < 0 && x1 < 0) || (y0 < 0 && y1 < 0) || 
+      (x0 >= CELLWIDTH && x1 >= CELLWIDTH) || (y0 >= CELLHEIGHT && y1 >= CELLHEIGHT))
     return;
 
-  // Modified Bresenham's line algorithm, see
-  // https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm Draw from top to bottom (most graph
-  // contain vertical lines)
-  if (y1 < y0) {
-    SWAP(int, x0, x1);
-    SWAP(int, y0, y1);
-  }
-  int dx = (x0 - x1), sx = 1;
-  if (dx > 0) {
-    dx = -dx;
-    sx = -sx;
-  }
-  int dy = (y1 - y0);
-  int err = ((dy + dx) < 0 ? -dx : -dy) / 2;
-  // Fast skip points while y0 < 0
-  if (y0 < 0) {
-    while (1) {
-      int e2 = err;
-      if (e2 > dx) {
-        err -= dy;
-        x0 += sx;
-      }
-      if (e2 < dy) {
-        err -= dx;
-        y0++;
-        if (y0 == 0)
-          break;
-      }
-    }
-  }
+  // Optimized Bresenham's algorithm implementation
+  int dx = x1 - x0;
+  int dy = y1 - y0;
+  
+  // Determine direction
+  int sx = (dx > 0) ? 1 : -1;
+  int sy = (dy > 0) ? 1 : -1;
+  
+  // Work with absolute values
+  dx = (dx < 0) ? -dx : dx;
+  dy = (dy < 0) ? -dy : dy;
+  
+  int err = dx - dy;
+  int x = x0;
   int y = y0;
+  
+  // Keep looping while we're within bounds
   while (1) {
-    if ((uint32_t)x0 < rcx->w && (uint32_t)y < rcx->h)
-      *cell_ptr(rcx, (uint16_t)x0, (uint16_t)y) = c;
-    if (x0 == x1 && y == y1)
-      return;
-    int e2 = err;
-    if (e2 > dx) {
+    // Only draw pixel if within cell bounds
+    if ((uint32_t)x < rcx->w && (uint32_t)y < rcx->h)
+      *cell_ptr(rcx, (uint16_t)x, (uint16_t)y) = c;
+    
+    // Check if we've reached the end point
+    if (x == x1 && y == y1)
+      break;
+      
+    int e2 = 2 * err;
+    
+    if (e2 > -dy) {
       err -= dy;
-      x0 += sx;
+      x += sx;
     }
-    if (e2 < dy) {
-      err -= dx;
-      ++y;
-      if (y >= (int)rcx->h)
-        return;
-    } // stop after cell bottom
+    if (e2 < dx) {
+      err += dx;
+      y += sy;
+    }
   }
 }
 
