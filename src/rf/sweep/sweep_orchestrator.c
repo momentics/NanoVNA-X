@@ -479,6 +479,11 @@ static void apply_ch1_error_term(float data[4], float c_data[CAL_TYPE_COUNT][2])
   }
 }
 
+// Helper function declaration
+static bool process_sweep_channel(uint8_t channel, int cycle_delay, int cycle_st_delay,
+                                 bool final_cycle, uint16_t mask, int interpolation_idx,
+                                 freq_t frequency, float *data, float c_data[CAL_TYPE_COUNT][2]);
+
 static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
   uint16_t src_points = cal_sweep_points - 1;
   if (idx >= 0) {
@@ -533,6 +538,10 @@ static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
   }
 }
 
+// Static buffers to reduce stack usage in app_measurement_sweep
+static float sweep_data[4];
+static float sweep_cal_data[CAL_TYPE_COUNT][2];
+
 bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
   if (p_sweep >= sweep_points || !break_on_operation) {
     sweep_reset_progress();
@@ -544,8 +553,6 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
     sweep_led_end();
     return false;
   }
-  float data[4];
-  float c_data[CAL_TYPE_COUNT][2];
   bool completed = false;
   int delay = 0;
   int st_delay = DELAY_SWEEP_START;
@@ -582,61 +589,58 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
       extra_cycles = si5351_take_settling_cycles();
     }
     uint8_t total_cycles = extra_cycles + 1U;
+
+    // Process each cycle - reduced nesting by extracting logic
     for (uint8_t cycle = 0; cycle < total_cycles; cycle++) {
       bool final_cycle = (cycle == total_cycles - 1U);
       int cycle_delay = delay;
       int cycle_st_delay = (cycle == 0U) ? st_delay : 0;
+
+      // Process channel 0 if needed
       if (mask & SWEEP_CH0_MEASURE) {
-        tlv320aic3204_select(0);
-        sweep_service_start_capture(cycle_delay + cycle_st_delay);
-        cycle_delay = DELAY_CHANNEL_CHANGE;
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-          cal_interpolate(interpolation_idx, frequency, c_data);
-        }
-        if (!sweep_service_wait_for_capture()) {
+        if (!process_sweep_channel(0, cycle_delay, cycle_st_delay, final_cycle,
+                                  mask, interpolation_idx, frequency,
+                                  sweep_data, sweep_cal_data)) {
           goto capture_failure;
         }
-        void (*sample_cb)(float*) = sample_func;
-        sample_cb(&data[0]);
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-          apply_ch0_error_term(data, c_data);
-        }
-        if (mask & SWEEP_APPLY_EDELAY_S11) {
-          apply_edelay(electrical_delayS11 * frequency, &data[0]);
-        }
-        measured[0][p_sweep][0] = data[0];
-        measured[0][p_sweep][1] = data[1];
+        // Store results
+        measured[0][p_sweep][0] = sweep_data[0];
+        measured[0][p_sweep][1] = sweep_data[1];
       }
+
+      // Process channel 1 if needed
       if (mask & SWEEP_CH1_MEASURE) {
-        tlv320aic3204_select(1);
-        sweep_service_start_capture(cycle_delay + cycle_st_delay);
-        cycle_delay = DELAY_CHANNEL_CHANGE;
+        // For channel 1, we may need to interpolate again if channel 0 wasn't processed
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION) && (mask & SWEEP_CH0_MEASURE) == 0U) {
-          cal_interpolate(interpolation_idx, frequency, c_data);
+          cal_interpolate(interpolation_idx, frequency, sweep_cal_data);
         }
-        if (!sweep_service_wait_for_capture()) {
+
+        if (!process_sweep_channel(1, cycle_delay, cycle_st_delay, final_cycle,
+                                  mask, interpolation_idx, frequency,
+                                  sweep_data, sweep_cal_data)) {
           goto capture_failure;
         }
-        void (*sample_cb)(float*) = sample_func;
-        sample_cb(&data[2]);
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-          apply_ch1_error_term(data, c_data);
-        }
-        if (mask & SWEEP_APPLY_EDELAY_S21) {
-          apply_edelay(electrical_delayS21 * frequency, &data[2]);
-        }
+
+        // Apply S21 offset if needed
         if (mask & SWEEP_APPLY_S21_OFFSET) {
-          apply_offset(&data[2], offset);
+          apply_offset(&sweep_data[2], offset);
         }
-        measured[1][p_sweep][0] = data[2];
-        measured[1][p_sweep][1] = data[3];
+
+        // Store results
+        measured[1][p_sweep][0] = sweep_data[2];
+        measured[1][p_sweep][1] = sweep_data[3];
       }
     }
+
 #ifdef __VNA_Z_RENORMALIZATION__
     if (mask & SWEEP_USE_RENORMALIZATION) {
-      apply_renormalization(data, mask);
+      // Use the sweep_data buffer for renormalization
+      // Note: This may need to process both channels differently
+      // For now, pass the first two elements for ch0 and next two for ch1
+      apply_renormalization(sweep_data, mask);
     }
 #endif
+
     if (show_progress && sweep_points > 1U) {
       uint16_t current_bar = (uint16_t)(((uint32_t)p_sweep * WIDTH) / (sweep_points - 1U));
       sweep_progress_update(current_bar);
@@ -655,6 +659,47 @@ capture_failure:
   sweep_progress_end();
   sweep_led_end();
   return false;
+}
+
+// Helper function to process a single measurement channel
+static bool process_sweep_channel(uint8_t channel, int cycle_delay, int cycle_st_delay,
+                                 bool final_cycle, uint16_t mask, int interpolation_idx,
+                                 freq_t frequency, float *data, float c_data[CAL_TYPE_COUNT][2]) {
+  tlv320aic3204_select(channel);
+  sweep_service_start_capture(cycle_delay + cycle_st_delay);
+  cycle_delay = DELAY_CHANNEL_CHANGE;
+
+  if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
+    cal_interpolate(interpolation_idx, frequency, c_data);
+  }
+
+  if (!sweep_service_wait_for_capture()) {
+    return false;
+  }
+
+  void (*sample_cb)(float*) = sample_func;
+  // Process correct part of data array for the channel
+  if (channel == 0) {
+    sample_cb(&data[0]);  // Process S11 data[0], data[1]
+  } else {
+    sample_cb(&data[2]);  // Process S21 data[2], data[3]
+  }
+
+  if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
+    if (channel == 0) {
+      apply_ch0_error_term(data, c_data);
+    } else {
+      apply_ch1_error_term(data, c_data);
+    }
+  }
+
+  if (channel == 0 && (mask & SWEEP_APPLY_EDELAY_S11)) {
+    apply_edelay(electrical_delayS11 * frequency, &data[0]);
+  } else if (channel == 1 && (mask & SWEEP_APPLY_EDELAY_S21)) {
+    apply_edelay(electrical_delayS21 * frequency, &data[2]);
+  }
+
+  return true;
 }
 
 void measurement_data_smooth(uint16_t ch_mask) {
