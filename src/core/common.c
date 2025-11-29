@@ -21,6 +21,7 @@
  */
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 #include "hal.h"
 
 // Use macro, std isdigit more big
@@ -199,30 +200,46 @@ int parse_line(char* line, char* args[], int max_cnt) {
   char *lp = line, c;
   const char* brk;
   uint16_t nargs = 0;
+
+  if (max_cnt <= 0)
+    return 0; // Defensive check
+
   while ((c = *lp) != 0) {       // While not end
     if (c != ' ' && c != '\t') { // Skipping white space and tabs.
       if (c == '"') {
-        lp++;
+        lp++; // Skip opening quote
         brk = "\"";
       } // string end is next quote or end
       else {
         brk = " \t";
       } // string end is tab or space or end
-      
+
       if (nargs < max_cnt) {
-        args[nargs] = lp;     // Put pointer in args buffer (if possible)
-        nargs++;             // Substring count
+        args[nargs] = lp; // Store pointer to start of argument
+        nargs++;          // Increment count
       } else {
-        // Exceeded maximum number of arguments - terminate safely
+        // Maximum arguments reached - still need to find end to properly null-terminate
+        char* end_pos = _strpbrk(lp, brk);
+        if (end_pos != NULL && *end_pos != 0) {
+          *end_pos = 0; // Properly terminate the string
+          if (c == '"')
+            end_pos++; // Skip closing quote if it was quoted
+        }
         break;
       }
-      
-      lp = _strpbrk(lp, brk); // search end
-      if (*lp == 0)
-        break; // Stop, end of input string
-      *lp = 0; // Set zero at the end of substring
+
+      lp = _strpbrk(lp, brk); // Find end of current argument
+      if (lp != NULL && *lp != 0) {
+        *lp = 0; // Null-terminate the argument
+        if (c == '"')
+          lp++; // If quoted, move past the closing quote
+        lp++;   // Move past the null terminator
+      } else {
+        break; // End of string, exit loop
+      }
+    } else {
+      lp++; // Move to next character
     }
-    lp++;
   }
   return nargs;
 }
