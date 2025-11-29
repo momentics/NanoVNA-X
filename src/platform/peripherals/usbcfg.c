@@ -16,6 +16,7 @@
 
 #include "hal.h"
 #include "nanovna.h"
+#include "interfaces/cli/shell_service.h"
 
 /* Virtual serial port over USB.*/
 SerialUSBDriver SDU1;
@@ -353,6 +354,8 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
   case USB_EVENT_SUSPEND:
     /* Disconnection event on suspend.*/
     sduDisconnectI(&SDU1);
+    /* Wake up any waiting shell threads to prevent hanging */
+    shell_wake_all_waiting_threads();
     break;
   case USB_EVENT_WAKEUP:
     break;

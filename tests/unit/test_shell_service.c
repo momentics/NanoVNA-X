@@ -145,6 +145,12 @@ msg_t osalThreadDequeueNextI(threads_queue_t* queue, msg_t msg) {
   return msg;
 }
 
+void osalThreadDequeueAllI(threads_queue_t* queue, msg_t msg) {
+  (void)queue;
+  /* For test purposes we don't track all the waiting threads */
+  /* but in real implementation this would wake up all waiting threads */
+}
+
 void sduObjectInit(SerialUSBDriver* driver) {
   (void)driver;
 }
