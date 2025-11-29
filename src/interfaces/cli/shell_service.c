@@ -56,6 +56,7 @@ static inline BaseAsynchronousChannel* shell_current_channel(void) {
 
 #define SHELL_IO_TIMEOUT MS2ST(20)
 #define SHELL_IO_CHUNK_SIZE 64U
+#define SHELL_DEFERRED_EXECUTION_TIMEOUT S2ST(5)  // 5 seconds timeout for deferred execution
 
 static bool shell_io_write(const uint8_t* data, size_t size) {
   BaseAsynchronousChannel* channel = shell_current_channel();
@@ -140,6 +141,12 @@ static void shell_handle_session_transition(bool active) {
       shell_session_start_cb();
     }
   } else if (!active && shell_session_active) {
+    // Disconnection: wake up any waiting threads to prevent hanging
+    osalSysLock();
+    // Wake up all waiting threads with MSG_RESET to unblock them
+    osalThreadDequeueAllI(&shell_thread, MSG_RESET);
+    osalSysUnlock();
+
     shell_session_active = false;
     if (shell_session_stop_cb != NULL) {
       shell_session_stop_cb();
@@ -277,10 +284,16 @@ void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t a
   pending_argc = argc;
   pending_argv = argv;
   osalSysLock();
-  osalThreadEnqueueTimeoutS(&shell_thread, TIME_INFINITE);
+  msg_t msg = osalThreadEnqueueTimeoutS(&shell_thread, SHELL_DEFERRED_EXECUTION_TIMEOUT);
   osalSysUnlock();
   if (shell_event_bus != NULL) {
     event_bus_publish(shell_event_bus, EVENT_USB_COMMAND_PENDING, NULL);
+  }
+  // If timeout occurred or disconnection happened, clean up the pending command
+  if ((msg == MSG_TIMEOUT || msg == MSG_RESET) && pending_command != NULL) {
+    osalSysLock();
+    pending_command = NULL;  // Mark that no command is pending to avoid processing stale data
+    osalSysUnlock();
   }
 }
 
@@ -300,6 +313,13 @@ void shell_service_pending_commands(void) {
     command->sc_function(argc, argv);
 
     osalSysLock();
+    // Check if there are threads waiting before attempting to dequeue
+    // A thread queue is empty if next and prev point to itself
+    if ((shell_thread.next == (thread_t*)&shell_thread) && (shell_thread.prev == (thread_t*)&shell_thread)) {
+      // No threads are waiting, command was likely timed out, just continue to next command
+      osalSysUnlock();
+      continue;
+    }
     osalThreadDequeueNextI(&shell_thread, MSG_OK);
     osalSysUnlock();
   }
