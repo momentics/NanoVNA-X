@@ -54,7 +54,7 @@
 // Add RTC backup registers support
 #define __USE_BACKUP__
 // Add SD card support, requires RTC for timestamps
-//#define __USE_SD_CARD__
+#define __USE_SD_CARD__
 // Use unique serial string for USB
 #define __USB_UID__
 // If enabled serial in halconf.h, possible enable serial console control
@@ -104,7 +104,7 @@
 // Allow screenshots in TIFF format
 #define __SD_CARD_DUMP_TIFF__
 // Allow dump firmware to SD card
-//#define __SD_CARD_DUMP_FIRMWARE__
+#define __SD_CARD_DUMP_FIRMWARE__
 // Enable SD card file browser, and allow load files from it
 #define __SD_FILE_BROWSER__
 #endif
@@ -1136,7 +1136,7 @@ void marker_search_dir(int16_t from, int16_t dir);
 //#define LCD_8BIT_MODE
 #define LCD_16BIT_MODE
 // Default LCD brightness if display support it
-#define DEFAULT_BRIGHTNESS  70
+#define DEFAULT_BRIGHTNESS  80
 // Data size for one pixel data read from display in bytes
 #define LCD_RX_PIXEL_SIZE  3
 #endif
@@ -1149,7 +1149,7 @@ void marker_search_dir(int16_t from, int16_t dir);
 //#define LCD_8BIT_MODE
 #define LCD_16BIT_MODE
 // Default LCD brightness if display support it
-#define DEFAULT_BRIGHTNESS  70
+#define DEFAULT_BRIGHTNESS  80
 // Data size for one pixel data read from display in bytes
 #define LCD_RX_PIXEL_SIZE  2
 #endif
