@@ -64,6 +64,7 @@ void shell_stream_write(const void* buffer, size_t size);
 void shell_update_speed(uint32_t speed);
 void shell_reset_console(void);
 bool shell_check_connect(void);
+void shell_update_vcp_connection_state(bool connected);
 void shell_init_connection(void);
 void shell_restore_stream(void);
 
