@@ -34,6 +34,11 @@
 #include "ui/input/hardware_input.h"
 #include "ui/display/display_presenter.h"
 #include "ui/controller/ui_controller.h"
+#include "ui/ui_internal.h"
+#include "ui/input/ui_touch.h"
+#include "ui/input/ui_keypad.h"
+#include "ui/controller/ui_events.h"
+#include "ui/menus/menu_internal.h"
 #include "platform/boards/board_events.h"
 
 // Use size optimization (UI not need fast speed, better have smallest size)
@@ -53,15 +58,7 @@
 // polling slices comfortably below this bound.
 #define TOUCH_RELEASE_POLL_INTERVAL_MS 2U // 500 Hz release detection
 #define TOUCH_DRAG_POLL_INTERVAL_MS 8U    // 125 Hz drag updates
-static uint8_t touch_status_flag = 0;
-static uint8_t last_touch_status = EVT_TOUCH_NONE;
-static int16_t last_touch_x;
-static int16_t last_touch_y;
 
-static event_bus_t* ui_event_bus = NULL;
-static board_events_t* ui_board_events = NULL;
-static bool ui_board_events_subscribed = false;
-static uint8_t ui_request_flags = UI_CONTROLLER_REQUEST_NONE;
 
 #ifdef lcd_drawstring
 #undef lcd_drawstring
@@ -125,345 +122,22 @@ static uint8_t ui_request_flags = UI_CONTROLLER_REQUEST_NONE;
 #define lcd_set_font(...) display_presenter_set_font(__VA_ARGS__)
 #define lcd_blit_bitmap(...) display_presenter_blit_bitmap(__VA_ARGS__)
 
-static void ui_controller_set_request(uint8_t mask);
-static uint8_t ui_controller_acquire_requests(uint8_t mask);
-static void ui_controller_dispatch_board_events(void);
-static void ui_controller_on_button_event(const board_event_t* event, void* user_data);
-static void ui_controller_on_touch_event(const board_event_t* event, void* user_data);
-static void ui_controller_publish_board_event(board_event_type_t topic, uint16_t channel,
-                                              bool from_isr);
 
-static void ui_on_event(const event_bus_message_t* message, void* user_data);
-
-void ui_attach_event_bus(event_bus_t* bus) {
-  if (ui_event_bus == bus) {
-    return;
-  }
-  ui_event_bus = bus;
-  if (bus != NULL) {
-    event_bus_subscribe(bus, EVENT_SWEEP_STARTED, ui_on_event, NULL);
-    event_bus_subscribe(bus, EVENT_SWEEP_COMPLETED, ui_on_event, NULL);
-    event_bus_subscribe(bus, EVENT_STORAGE_UPDATED, ui_on_event, NULL);
-  }
-}
-
-static void ui_on_event(const event_bus_message_t* message, void* user_data) {
-  (void)user_data;
-  if (message == NULL) {
-    return;
-  }
-  switch (message->topic) {
-  case EVENT_SWEEP_STARTED:
-    request_to_redraw(REDRAW_BATTERY);
-    break;
-  case EVENT_SWEEP_COMPLETED:
-    request_to_redraw(REDRAW_PLOT | REDRAW_BATTERY);
-    break;
-  case EVENT_STORAGE_UPDATED:
-    request_to_redraw(REDRAW_CAL_STATUS);
-    break;
-  default:
-    break;
-  }
-}
-
-static void ui_controller_set_request(uint8_t mask) {
-  chSysLock();
-  ui_request_flags |= mask;
-  chSysUnlock();
-}
-
-static uint8_t ui_controller_acquire_requests(uint8_t mask) {
-  chSysLock();
-  uint8_t pending = ui_request_flags & mask;
-  ui_request_flags &= (uint8_t)~pending;
-  chSysUnlock();
-  return pending;
-}
-
-uint8_t ui_controller_pending_requests(void) {
-  uint8_t flags;
-  chSysLock();
-  flags = ui_request_flags;
-  chSysUnlock();
-  if (ui_board_events != NULL) {
-    uint32_t pending_mask = board_events_pending_mask(ui_board_events);
-    if (pending_mask & (1U << BOARD_EVENT_BUTTON)) {
-      flags |= UI_CONTROLLER_REQUEST_LEVER;
-    }
-    if (pending_mask & (1U << BOARD_EVENT_TOUCH)) {
-      flags |= UI_CONTROLLER_REQUEST_TOUCH;
-    }
-  }
-  return flags;
-}
-
-void ui_controller_release_requests(uint8_t mask) {
-  chSysLock();
-  ui_request_flags &= (uint8_t)~mask;
-  chSysUnlock();
-}
-
-void ui_controller_request_console_break(void) {
-  ui_controller_set_request(UI_CONTROLLER_REQUEST_CONSOLE);
-}
-
-static void ui_controller_dispatch_board_events(void) {
-  if (ui_board_events == NULL) {
-    return;
-  }
-  while (board_events_dispatch(ui_board_events)) {
-  }
-}
-
-static void ui_controller_on_button_event(const board_event_t* event, void* user_data) {
-  (void)user_data;
-  (void)event;
-  ui_controller_set_request(UI_CONTROLLER_REQUEST_LEVER);
-}
-
-static void ui_controller_on_touch_event(const board_event_t* event, void* user_data) {
-  (void)user_data;
-  (void)event;
-  ui_controller_set_request(UI_CONTROLLER_REQUEST_TOUCH);
-}
-
-void ui_controller_configure(const ui_controller_port_t* port) {
-  if (port == NULL) {
-    display_presenter_bind(NULL);
-    ui_board_events = NULL;
-    ui_board_events_subscribed = false;
-    ui_attach_event_bus(NULL);
-    return;
-  }
-  display_presenter_bind(port->display);
-  ui_attach_event_bus(port->config_events);
-  ui_board_events = port->board_events;
-  if (ui_board_events != NULL && !ui_board_events_subscribed) {
-    board_events_subscribe(ui_board_events, BOARD_EVENT_BUTTON, ui_controller_on_button_event, NULL);
-    board_events_subscribe(ui_board_events, BOARD_EVENT_TOUCH, ui_controller_on_touch_event, NULL);
-    ui_board_events_subscribed = true;
-  }
-}
-
-static void ui_controller_publish_board_event(board_event_type_t topic, uint16_t channel,
-                                              bool from_isr) {
-  if (ui_board_events == NULL) {
-    return;
-  }
-  board_event_t event = {.topic = topic};
-  if (topic == BOARD_EVENT_BUTTON) {
-    event.data.button.channel = channel;
-  } else {
-    event.data.button.channel = channel;
-  }
-  if (from_isr) {
-    board_events_publish_from_isr(ui_board_events, &event);
-  } else {
-    board_events_publish(ui_board_events, &event);
-  }
-}
 
 //==============================================
 static uint16_t menu_button_height;
 
-enum {
-  UI_NORMAL,
-  UI_MENU,
-  UI_KEYPAD,
-#ifdef __SD_FILE_BROWSER__
-  UI_BROWSER,
-#endif
-};
-
-typedef struct {
-  uint8_t bg;
-  uint8_t fg;
-  uint8_t border;
-  int8_t icon;
-  union {
-    int32_t i;
-    uint32_t u;
-    float f;
-    const char* text;
-  } p1; // void data for label printf
-  char label[32];
-} button_t;
-
 static uint8_t keyboard_temp; // Used for SD card keyboard workflows
 
 #ifdef __USE_SD_CARD__
-enum {
-  FMT_S1P_FILE = 0,
-  FMT_S2P_FILE,
-  FMT_BMP_FILE,
-#ifdef __SD_CARD_DUMP_TIFF__
-  FMT_TIF_FILE,
-#endif
-  FMT_CAL_FILE,
-#ifdef __SD_CARD_DUMP_FIRMWARE__
-  FMT_BIN_FILE,
-#endif
-#ifdef __SD_CARD_LOAD__
-  FMT_CMD_FILE,
-#endif
-};
+
 #endif
 
-// Keypad structures
-// Enum for keypads_list
-enum {
-  KM_START = 0,
-  KM_STOP,
-  KM_CENTER,
-  KM_SPAN,
-  KM_CW,
-  KM_STEP,
-  KM_VAR, // frequency input
-  KM_POINTS,
-  KM_TOP,
-  KM_nTOP,
-  KM_BOTTOM,
-  KM_nBOTTOM,
-  KM_SCALE,
-  KM_nSCALE,
-  KM_REFPOS,
-  KM_EDELAY,
-  KM_VAR_DELAY,
-  KM_S21OFFSET,
-  KM_VELOCITY_FACTOR,
-#ifdef __S11_CABLE_MEASURE__
-  KM_ACTUAL_CABLE_LEN,
-#endif
-  KM_XTAL,
-  KM_THRESHOLD,
-  KM_VBAT,
-#ifdef __S21_MEASURE__
-  KM_MEASURE_R,
-#endif
-#ifdef __VNA_Z_RENORMALIZATION__
-  KM_Z_PORT,
-  KM_CAL_LOAD_R,
-#endif
-#ifdef __USE_RTC__
-  KM_RTC_DATE,
-  KM_RTC_TIME,
-  KM_RTC_CAL,
-#endif
-#ifdef __USE_SD_CARD__
-  KM_S1P_NAME,
-  KM_S2P_NAME,
-  KM_BMP_NAME,
-#ifdef __SD_CARD_DUMP_TIFF__
-  KM_TIF_NAME,
-#endif
-  KM_CAL_NAME,
-#ifdef __SD_CARD_DUMP_FIRMWARE__
-  KM_BIN_NAME,
-#endif
-#endif
-  KM_NONE
-};
 
-typedef struct {
-  uint16_t x_offs;
-  uint16_t y_offs;
-  uint16_t width;
-  uint16_t height;
-} keypad_pos_t;
 
-typedef struct {
-  uint8_t size, type;
-  struct {
-    uint8_t pos;
-    uint8_t c;
-  } buttons[];
-} keypads_t;
-
-typedef void (*keyboard_cb_t)(uint16_t data, button_t* b);
-#define UI_KEYBOARD_CALLBACK(ui_kb_function_name)                                                  \
-  void ui_kb_function_name(uint16_t data, button_t* b)
-
-typedef struct {
-  uint8_t keypad_type;
-  uint8_t data;
-  const char* name;
-  const keyboard_cb_t cb;
-} __attribute__((packed)) keypads_list;
-
-// Max keyboard input length
-#define NUMINPUT_LEN 12
-#define TXTINPUT_LEN (8)
-
-#if NUMINPUT_LEN + 2 > TXTINPUT_LEN + 1
-static char kp_buf[NUMINPUT_LEN +
-                   2]; // !!!!!! WARNING size must be + 2 from NUMINPUT_LEN or TXTINPUT_LEN + 1
-#else
-static char kp_buf[TXTINPUT_LEN +
-                   1]; // !!!!!! WARNING size must be + 2 from NUMINPUT_LEN or TXTINPUT_LEN + 1
-#endif
-static uint8_t ui_mode = UI_NORMAL;
-static const keypads_t* keypads;
-static uint8_t keypad_mode;
+uint8_t ui_mode = UI_NORMAL;
 static uint8_t menu_current_level = 0;
-static int8_t selection;
-
-// UI menu structure
-// Type of menu item:
-enum {
-  MT_NEXT = 0,    // reference is next menu or 0 if end
-  MT_SUBMENU,     // reference is submenu button
-  MT_CALLBACK,    // reference is pointer to: void ui_function_name(uint16_t data)
-  MT_ADV_CALLBACK // reference is pointer to: void ui_function_name(uint16_t data, button_t *b)
-};
-
-// Button definition (used in MT_ADV_CALLBACK for custom)
-#define BUTTON_ICON_NONE -1
-#define BUTTON_ICON_NOCHECK 0
-#define BUTTON_ICON_CHECK 1
-#define BUTTON_ICON_GROUP 2
-#define BUTTON_ICON_GROUP_CHECKED 3
-#define BUTTON_ICON_CHECK_AUTO 4
-#define BUTTON_ICON_CHECK_MANUAL 5
-
-#define BUTTON_BORDER_WIDTH_MASK 0x07
-
-// Define mask for draw border (if 1 use light color, if 0 dark)
-#define BUTTON_BORDER_NO_FILL 0x08
-#define BUTTON_BORDER_TOP 0x10
-#define BUTTON_BORDER_BOTTOM 0x20
-#define BUTTON_BORDER_LEFT 0x40
-#define BUTTON_BORDER_RIGHT 0x80
-
-#define BUTTON_BORDER_FLAT 0x00
-#define BUTTON_BORDER_RISE (BUTTON_BORDER_TOP | BUTTON_BORDER_RIGHT)
-#define BUTTON_BORDER_FALLING (BUTTON_BORDER_BOTTOM | BUTTON_BORDER_LEFT)
-
-// Call back functions for MT_CALLBACK type
-typedef void (*menuaction_cb_t)(uint16_t data);
-#define UI_FUNCTION_CALLBACK(ui_function_name) void ui_function_name(uint16_t data)
-
-typedef void (*menuaction_acb_t)(uint16_t data, button_t* b);
-#define UI_FUNCTION_ADV_CALLBACK(ui_function_name) void ui_function_name(uint16_t data, button_t* b)
-
-// Set structure align as WORD (save flash memory)
-typedef struct {
-  uint8_t type;
-  uint8_t data;
-  const char* label;
-  const void* reference;
-} __attribute__((packed)) menuitem_t;
-
-typedef struct {
-  uint8_t type;
-  uint8_t data;
-} menu_descriptor_t;
-
-typedef struct {
-  uint16_t value;
-  const char* label;
-  int8_t icon;
-} option_desc_t;
+int8_t selection;
 
 static menuitem_t* ui_menu_list(const menu_descriptor_t* descriptors, size_t count,
                                 const char* label, const void* reference,
@@ -511,11 +185,12 @@ static void ui_cycle_option(uint16_t* dst, const option_desc_t* list, size_t cou
 
 static void ui_mode_normal(void);
 static void ui_mode_menu(void);
-static void ui_mode_keypad(int _keypad_mode);
+
+
 
 static void menu_draw(uint32_t mask);
-static void menu_move_back(bool leave_ui);
-static void menu_push_submenu(const menuitem_t* submenu);
+void menu_move_back(bool leave_ui);
+void menu_push_submenu(const menuitem_t* submenu);
 static void menu_set_submenu(const menuitem_t* submenu);
 static const menuitem_t* menu_build_save_menu(void);
 static const menuitem_t* menu_build_recall_menu(void);
@@ -555,161 +230,15 @@ static void bubble_sort(uint16_t *v, int n) {
 }
 #endif
 
-#define SOFTWARE_TOUCH
-//*******************************************************************************
-// Software Touch module
-//*******************************************************************************
-#ifdef SOFTWARE_TOUCH
-static int touch_measure_y(void) {
-  // drive low to high on X line (At this state after touch_prepare_sense)
-  //  palSetPadMode(GPIOB, GPIOB_XN, PAL_MODE_OUTPUT_PUSHPULL); //
-  //  palSetPadMode(GPIOA, GPIOA_XP, PAL_MODE_OUTPUT_PUSHPULL); //
-  // drive low to high on X line (coordinates from top to bottom)
-  palClearPad(GPIOB, GPIOB_XN);
-  //  palSetPad(GPIOA, GPIOA_XP);
-
-  // open Y line (At this state after touch_prepare_sense)
-  //  palSetPadMode(GPIOB, GPIOB_YN, PAL_MODE_INPUT);        // Hi-z mode
-  palSetPadMode(GPIOA, GPIOA_YP, PAL_MODE_INPUT_ANALOG); // <- ADC_TOUCH_Y channel
-
-  //  chThdSleepMilliseconds(3);
-  return adc_single_read(ADC_TOUCH_Y);
-}
-
-static int touch_measure_x(void) {
-  // drive high to low on Y line (coordinates from left to right)
-  palSetPad(GPIOB, GPIOB_YN);
-  palClearPad(GPIOA, GPIOA_YP);
-  // Set Y line as output
-  palSetPadMode(GPIOB, GPIOB_YN, PAL_MODE_OUTPUT_PUSHPULL);
-  palSetPadMode(GPIOA, GPIOA_YP, PAL_MODE_OUTPUT_PUSHPULL);
-  // Set X line as input
-  palSetPadMode(GPIOB, GPIOB_XN, PAL_MODE_INPUT);        // Hi-z mode
-  palSetPadMode(GPIOA, GPIOA_XP, PAL_MODE_INPUT_ANALOG); // <- ADC_TOUCH_X channel
-                                                         //  chThdSleepMilliseconds(3);
-  return adc_single_read(ADC_TOUCH_X);
-}
-// Manually measure touch event
-static inline int touch_status(void) {
-  return adc_single_read(ADC_TOUCH_Y) > TOUCH_THRESHOLD;
-}
-
-static void touch_prepare_sense(void) {
-  // Set Y line as input
-  palSetPadMode(GPIOB, GPIOB_YN, PAL_MODE_INPUT);          // Hi-z mode
-  palSetPadMode(GPIOA, GPIOA_YP, PAL_MODE_INPUT_PULLDOWN); // Use pull
-  // drive high on X line (for touch sense on Y)
-  palSetPad(GPIOB, GPIOB_XN);
-  palSetPad(GPIOA, GPIOA_XP);
-  // force high X line
-  palSetPadMode(GPIOB, GPIOB_XN, PAL_MODE_OUTPUT_PUSHPULL);
-  palSetPadMode(GPIOA, GPIOA_XP, PAL_MODE_OUTPUT_PUSHPULL);
-  //  chThdSleepMilliseconds(10); // Wait 10ms for denounce touch
-}
-
-#ifdef __REMOTE_DESKTOP__
-static uint8_t touch_remote = REMOTE_NONE;
-void remote_touch_set(uint16_t state, int16_t x, int16_t y) {
-  touch_remote = state;
-  if (x != -1)
-    last_touch_x = x;
-  if (y != -1)
-    last_touch_y = y;
-  ui_controller_publish_board_event(BOARD_EVENT_TOUCH, 0, false);
-}
-#endif
-
-static void touch_start_watchdog(void) {
-  if (touch_status_flag & TOUCH_INTERRUPT_ENABLED)
-    return;
-  touch_status_flag ^= TOUCH_INTERRUPT_ENABLED;
-  adc_start_analog_watchdog();
-#ifdef __REMOTE_DESKTOP__
-  touch_remote = REMOTE_NONE;
-#endif
-}
-
-static void touch_stop_watchdog(void) {
-  if (!(touch_status_flag & TOUCH_INTERRUPT_ENABLED))
-    return;
-  touch_status_flag ^= TOUCH_INTERRUPT_ENABLED;
-  adc_stop_analog_watchdog();
-}
-
-// Touch panel timer check (check press frequency 20Hz)
-#if HAL_USE_GPT == TRUE
-static const GPTConfig gpt3cfg = {1000,   // 1kHz timer clock.
-                                  NULL,   // Timer callback.
-                                  0x0020, // CR2:MMS=02 to output TRGO
-                                  0};
-
-static void touch_init_timers(void) {
-  gptStart(&GPTD3, &gpt3cfg);     // Init timer 3
-  gptStartContinuous(&GPTD3, 10); // Start timer 10ms period (use 1kHz clock)
-}
-#else
-static void touch_init_timers(void) {
-  board_init_timers();
-  board_start_timer(TIM3, 10); // Start timer 10ms period (use 1kHz clock)
-}
-#endif
-
-//
-// Touch init function init timer 3 trigger adc for check touch interrupt, and run measure
-//
-static void touch_init(void) {
-  // Prepare pin for measure touch event
-  touch_prepare_sense();
-  // Start touch interrupt, used timer_3 ADC check threshold:
-  touch_init_timers();
-  touch_start_watchdog(); // Start ADC watchdog (measure by timer 3 interval and trigger interrupt
-                          // if touch pressed)
-}
-
-// Main software touch function, should:
-// set last_touch_x and last_touch_x
-// return touch status
-static int touch_check(void) {
-  touch_stop_watchdog();
-
-  int stat = touch_status();
-  if (stat) {
-    int y = touch_measure_y();
-    int x = touch_measure_x();
-    touch_prepare_sense();
-    if (touch_status()) {
-      last_touch_x = x;
-      last_touch_y = y;
-    }
-#ifdef __REMOTE_DESKTOP__
-    touch_remote = REMOTE_NONE;
-  } else {
-    stat = touch_remote == REMOTE_PRESS;
-#endif
-  }
-
-  if (stat != last_touch_status) {
-    last_touch_status = stat;
-    return stat ? EVT_TOUCH_PRESSED : EVT_TOUCH_RELEASED;
-  }
-  return stat ? EVT_TOUCH_DOWN : EVT_TOUCH_NONE;
-}
-//*******************************************************************************
-// End Software Touch module
-//*******************************************************************************
-#endif // end SOFTWARE_TOUCH
+// Touch module moved to ui/input/ui_touch.c
 
 //*******************************************************************************
 //                           UI functions
 //*******************************************************************************
-static inline void touch_wait_release(void) {
-  while (touch_check() != EVT_TOUCH_RELEASED) {
-    chThdSleepMilliseconds(TOUCH_RELEASE_POLL_INTERVAL_MS);
-  }
-}
+
 
 // Draw button function
-static void ui_draw_button(uint16_t x, uint16_t y, uint16_t w, uint16_t h, button_t* b) {
+void ui_draw_button(uint16_t x, uint16_t y, uint16_t w, uint16_t h, button_t* b) {
   uint16_t type = b->border;
   uint16_t bw = type & BUTTON_BORDER_WIDTH_MASK;
   // Draw border if width > 0
@@ -776,8 +305,7 @@ static void get_touch_point(uint16_t x, uint16_t y, const char* name, int16_t* d
              name);
   // Wait release, and fill data
   touch_wait_release();
-  data[0] = last_touch_x;
-  data[1] = last_touch_y;
+  touch_get_last_position(&data[0], &data[1]);
 }
 
 void ui_touch_cal_exec(void) {
@@ -797,6 +325,9 @@ void ui_touch_cal_exec(void) {
 }
 
 static void touch_position(int* x, int* y) {
+  int16_t last_touch_x, last_touch_y;
+  touch_get_last_position(&last_touch_x, &last_touch_y);
+
 #ifdef __REMOTE_DESKTOP__
   if (touch_remote != REMOTE_NONE) {
     *x = last_touch_x;
@@ -955,91 +486,7 @@ static bool select_lever_mode(int mode) {
   return true;
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_calop_acb) {
-  static const struct {
-    uint8_t mask, next;
-  } c_list[5] = {
-      [CAL_LOAD] = {CALSTAT_LOAD, 3},   [CAL_OPEN] = {CALSTAT_OPEN, 1},
-      [CAL_SHORT] = {CALSTAT_SHORT, 2}, [CAL_THRU] = {CALSTAT_THRU, 6},
-      [CAL_ISOLN] = {CALSTAT_ISOLN, 4},
-  };
-  if (b) {
-    if (cal_status & c_list[data].mask)
-      b->icon = BUTTON_ICON_CHECK;
-    return;
-  }
-  // Reset the physical button debounce state when advancing through CAL steps
-  ui_input_reset_state();
-  cal_collect(data);
-  selection = c_list[data].next;
-}
 
-static UI_FUNCTION_ADV_CALLBACK(menu_cal_enh_acb) {
-  (void)data;
-  if (b) {
-    b->icon = (cal_status & CALSTAT_ENHANCED_RESPONSE) ? BUTTON_ICON_CHECK : BUTTON_ICON_NOCHECK;
-    return;
-  }
-  // toggle applying correction
-  cal_status ^= CALSTAT_ENHANCED_RESPONSE;
-  request_to_redraw(REDRAW_CAL_STATUS);
-}
-
-static UI_FUNCTION_CALLBACK(menu_caldone_cb) {
-  // Indicate that calibration is in progress
-  calibration_in_progress = true;
-  
-  // Complete calibration without interfering with measurements
-  cal_done();
-  
-  // Reset the flag (cal_done also sets it to false)
-  calibration_in_progress = false;
-  
-  // For both cases, simply return to the parent menu
-  // This avoids potential memory allocation issues with menu_build_save_menu()
-  menu_move_back(false);
-  // This allows the user to save calibration separately via CAL -> SAVE CAL
-  // which is safer and avoids potential memory allocation issues
-}
-
-static UI_FUNCTION_CALLBACK(menu_cal_reset_cb) {
-  (void)data;
-  // RESET
-  cal_status &= CALSTAT_ENHANCED_RESPONSE; // leave ER state
-  lastsaveid = NO_SAVE_SLOT;
-  // set_power(SI5351_CLK_DRIVE_STRENGTH_AUTO);
-  request_to_redraw(REDRAW_CAL_STATUS);
-}
-
-static UI_FUNCTION_ADV_CALLBACK(menu_cal_range_acb) {
-  (void)data;
-  bool calibrated = cal_status & (CALSTAT_ES | CALSTAT_ER | CALSTAT_ET | CALSTAT_ED | CALSTAT_EX |
-                                  CALSTAT_OPEN | CALSTAT_SHORT | CALSTAT_THRU);
-  if (!calibrated)
-    return;
-  if (b) {
-    b->bg = (cal_status & CALSTAT_INTERPOLATED) ? LCD_INTERP_CAL_COLOR : LCD_MENU_COLOR;
-    plot_printf(b->label, sizeof(b->label), "CAL: %dp\n %.6F" S_Hz "\n %.6F" S_Hz, cal_sweep_points,
-                (float)cal_frequency0, (float)cal_frequency1);
-    return;
-  }
-  // Reset range to calibration
-  if (cal_status & CALSTAT_INTERPOLATED) {
-    reset_sweep_frequency();
-    set_power(cal_power);
-  }
-}
-
-static UI_FUNCTION_ADV_CALLBACK(menu_cal_apply_acb) {
-  (void)data;
-  if (b) {
-    b->icon = (cal_status & CALSTAT_APPLY) ? BUTTON_ICON_CHECK : BUTTON_ICON_NOCHECK;
-    return;
-  }
-  // toggle applying correction
-  cal_status ^= CALSTAT_APPLY;
-  request_to_redraw(REDRAW_CAL_STATUS);
-}
 
 static UI_FUNCTION_ADV_CALLBACK(menu_recall_acb) {
   if (b) {
@@ -1057,7 +504,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_recall_acb) {
   load_properties(data);
 }
 
-static UI_FUNCTION_CALLBACK(menu_recall_submenu_cb) {
+UI_FUNCTION_CALLBACK(menu_recall_submenu_cb) {
   (void)data;
   menu_push_submenu(menu_build_recall_menu());
 }
@@ -1073,7 +520,7 @@ enum {
 #endif
 };
 
-static UI_FUNCTION_CALLBACK(menu_config_cb) {
+UI_FUNCTION_CALLBACK(menu_config_cb) {
   switch (data) {
   case MENU_CONFIG_TOUCH_CAL:
     ui_touch_cal_exec();
@@ -1139,7 +586,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_save_acb) {
   }
 }
 
-static UI_FUNCTION_CALLBACK(menu_save_submenu_cb) {
+UI_FUNCTION_CALLBACK(menu_save_submenu_cb) {
   (void)data;
   menu_push_submenu(menu_build_save_menu());
 }
@@ -1416,7 +863,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_points_acb) {
   set_sweep_points(p_count);
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_power_sel_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_power_sel_acb) {
   (void)data;
   if (b) {
     if (current_props._power != SI5351_CLK_DRIVE_STRENGTH_AUTO)
@@ -1437,7 +884,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_power_acb) {
 }
 
 // Process keyboard button callback, and run keyboard function
-static void ui_keyboard_cb(uint16_t data, button_t* b);
+
 static UI_FUNCTION_ADV_CALLBACK(menu_keyboard_acb) {
   if (data == KM_VAR &&
       lever_mode == LM_EDELAY) // JOG STEP button auto set (e-delay or frequency step)
@@ -2164,7 +1611,7 @@ static FRESULT ui_create_file(char* fs_filename) {
   return res;
 }
 
-static void ui_save_file(char* name, uint8_t format) {
+void ui_save_file(char* name, uint8_t format) {
   char fs_filename[FF_LFN_BUF];
   file_save_cb_t save = file_opt[format].save;
   if (save == NULL)
@@ -2265,7 +1712,7 @@ static UI_FUNCTION_CALLBACK(menu_back_cb) {
 }
 
 // Back button submenu list
-static const menuitem_t menu_back[] = {
+const menuitem_t menu_back[] = {
     {MT_CALLBACK, 0, S_LARROW " BACK", menu_back_cb}, {MT_NEXT, 0, NULL, NULL} // sentinel
 };
 
@@ -2299,17 +1746,7 @@ static const menuitem_t menu_sdcard[] = {
 };
 #endif
 
-static const menuitem_t menu_calop[] = {
-    {MT_ADV_CALLBACK, CAL_OPEN, "OPEN", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_SHORT, "SHORT", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_LOAD, "LOAD", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_ISOLN, "ISOLN", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_THRU, "THRU", menu_calop_acb},
-    //{ MT_ADV_CALLBACK, KM_EDELAY, "E-DELAY", menu_keyboard_acb },
-    {MT_CALLBACK, 0, "DONE", menu_caldone_cb},
-    {MT_CALLBACK, 1, "DONE IN RAM", menu_caldone_cb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
+
 
 static const menu_descriptor_t menu_state_slots_desc[] = {
     {MT_ADV_CALLBACK, 0},
@@ -2343,43 +1780,15 @@ const menuitem_t menu_state_io[] = {
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
-const menuitem_t menu_cal_wizard[] = {
-    {MT_ADV_CALLBACK, CAL_OPEN, "OPEN", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_SHORT, "SHORT", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_LOAD, "LOAD", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_ISOLN, "ISOLN", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_THRU, "THRU", menu_calop_acb},
-    {MT_CALLBACK, 0, "DONE", menu_caldone_cb},
-    {MT_CALLBACK, 1, "DONE IN RAM", menu_caldone_cb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
-
-const menuitem_t menu_cal_options[] = {
-    {MT_ADV_CALLBACK, 0, "CAL RANGE", menu_cal_range_acb},
-    {MT_ADV_CALLBACK, 0, "CAL POWER", menu_power_sel_acb},
-    {MT_ADV_CALLBACK, 0, "ENHANCED\nRESPONSE", menu_cal_enh_acb},
-#ifdef __VNA_Z_RENORMALIZATION__
-    {MT_ADV_CALLBACK, KM_CAL_LOAD_R, "LOAD STD\n " R_LINK_COLOR "%bF" S_OHM, menu_keyboard_acb},
-#endif
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
-
-const menuitem_t menu_cal_management[] = {
-    {MT_ADV_CALLBACK, 0, "CAL APPLY", menu_cal_apply_acb},
-    {MT_CALLBACK, 0, "CAL RESET", menu_cal_reset_cb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
 
 
 
-const menuitem_t menu_cal_menu[] = {
-    {MT_SUBMENU, 0, "CAL WIZARD", menu_cal_wizard},
-    {MT_SUBMENU, 0, "CAL OPTIONS", menu_cal_options},
-    {MT_SUBMENU, 0, "CAL MANAGE", menu_cal_management},
-    {MT_CALLBACK, 0, "SAVE CAL", menu_save_submenu_cb},
-    {MT_CALLBACK, 0, "RECALL CAL", menu_recall_submenu_cb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
+
+
+
+
+
+
 
 const menuitem_t menu_trace[] = {
     {MT_ADV_CALLBACK, 0, "TRACE %d", menu_trace_acb},
@@ -3048,7 +2457,7 @@ static int current_menu_get_count(void) {
   return i;
 }
 
-static int get_lines_count(const char* label) {
+int get_lines_count(const char* label) {
   int n = 1;
   while (*label)
     if (*label++ == '\n')
@@ -3069,7 +2478,7 @@ static void ensure_selection(void) {
   menu_button_height = MENU_BUTTON_HEIGHT(i);
 }
 
-static void menu_move_back(bool leave_ui) {
+void menu_move_back(bool leave_ui) {
   if (menu_current_level == 0)
     return;
   menu_current_level--;
@@ -3083,7 +2492,7 @@ static void menu_set_submenu(const menuitem_t* submenu) {
   ensure_selection();
 }
 
-static void menu_push_submenu(const menuitem_t* submenu) {
+void menu_push_submenu(const menuitem_t* submenu) {
   if (menu_current_level < MENU_STACK_DEPTH_MAX - 1)
     menu_current_level++;
   menu_set_submenu(submenu);
@@ -3274,720 +2683,23 @@ static void ui_menu_touch(int touch_x, int touch_y) {
 //=====================================================================================================
 //                                      KEYBOARD functions
 //=====================================================================================================
-enum { NUM_KEYBOARD, TXT_KEYBOARD };
 
-// Keyboard size and position data
-static const keypad_pos_t key_pos[] = {
-    [NUM_KEYBOARD] = {KP_X_OFFSET, KP_Y_OFFSET, KP_WIDTH, KP_HEIGHT},
-    [TXT_KEYBOARD] = {KPF_X_OFFSET, KPF_Y_OFFSET, KPF_WIDTH, KPF_HEIGHT}};
 
-static const keypads_t keypads_freq[] = {
-    {16, NUM_KEYBOARD},               // 16 buttons NUM keyboard (4x4 size)
-    {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9 G
-    {0x02, KP_1},                     // 4 5 6 M
-    {0x12, KP_2},                     // 1 2 3 k
-    {0x22, KP_3},                     // 0 . < x
-    {0x01, KP_4},       {0x11, KP_5}, {0x21, KP_6}, {0x00, KP_7},  {0x10, KP_8}, {0x20, KP_9},
-    {0x30, KP_G},       {0x31, KP_M}, {0x32, KP_k}, {0x33, KP_X1}, {0x23, KP_BS}};
 
-static const keypads_t keypads_ufloat[] = {
-    //
-    {16, NUM_KEYBOARD},               // 13 + 3 buttons NUM keyboard (4x4 size)
-    {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9
-    {0x02, KP_1},                     // 4 5 6
-    {0x12, KP_2},                     // 1 2 3
-    {0x22, KP_3},                     // 0 . < x
-    {0x01, KP_4},       {0x11, KP_5},     {0x21, KP_6},     {0x00, KP_7},
-    {0x10, KP_8},       {0x20, KP_9},     {0x33, KP_ENTER}, {0x23, KP_BS},
-    {0x30, KP_EMPTY},   {0x31, KP_EMPTY}, {0x32, KP_EMPTY},
-};
 
-static const keypads_t keypads_percent[] = {
-    //
-    {16, NUM_KEYBOARD},               // 13 + 3 buttons NUM keyboard (4x4 size)
-    {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9
-    {0x02, KP_1},                     // 4 5 6
-    {0x12, KP_2},                     // 1 2 3
-    {0x22, KP_3},                     // 0 . < %
-    {0x01, KP_4},       {0x11, KP_5},     {0x21, KP_6},       {0x00, KP_7},
-    {0x10, KP_8},       {0x20, KP_9},     {0x33, KP_PERCENT}, {0x23, KP_BS},
-    {0x30, KP_EMPTY},   {0x31, KP_EMPTY}, {0x32, KP_EMPTY},
-};
 
-static const keypads_t keypads_float[] = {
-    {16, NUM_KEYBOARD},               // 14 + 2 buttons NUM keyboard (4x4 size)
-    {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9
-    {0x02, KP_1},                     // 4 5 6
-    {0x12, KP_2},                     // 1 2 3 -
-    {0x22, KP_3},                     // 0 . < x
-    {0x01, KP_4},       {0x11, KP_5},     {0x21, KP_6},     {0x00, KP_7},
-    {0x10, KP_8},       {0x20, KP_9},     {0x32, KP_MINUS}, {0x33, KP_ENTER},
-    {0x23, KP_BS},      {0x30, KP_EMPTY}, {0x31, KP_EMPTY},
-};
 
-static const keypads_t keypads_mfloat[] = {{16, NUM_KEYBOARD}, // 16 buttons NUM keyboard (4x4 size)
-                                           {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9 u
-                                           {0x02, KP_1},                     // 4 5 6 m
-                                           {0x12, KP_2},                     // 1 2 3 -
-                                           {0x22, KP_3},                     // 0 . < x
-                                           {0x01, KP_4},       {0x11, KP_5}, {0x21, KP_6},
-                                           {0x00, KP_7},       {0x10, KP_8}, {0x20, KP_9},
-                                           {0x30, KP_u},       {0x31, KP_m}, {0x32, KP_MINUS},
-                                           {0x33, KP_ENTER},   {0x23, KP_BS}};
 
-static const keypads_t keypads_mkufloat[] = {
-    {16, NUM_KEYBOARD},               // 15 + 1 buttons NUM keyboard (4x4 size)
-    {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9
-    {0x02, KP_1},                     // 4 5 6 m
-    {0x12, KP_2},                     // 1 2 3 k
-    {0x22, KP_3},                     // 0 . < x
-    {0x01, KP_4},       {0x11, KP_5}, {0x21, KP_6},  {0x00, KP_7},  {0x10, KP_8},     {0x20, KP_9},
-    {0x31, KP_m},       {0x32, KP_k}, {0x33, KP_X1}, {0x23, KP_BS}, {0x30, KP_EMPTY},
-};
 
-static const keypads_t keypads_nfloat[] = {
-    {16, NUM_KEYBOARD},               // 16 buttons NUM keyboard (4x4 size)
-    {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9 u
-    {0x02, KP_1},                     // 4 5 6 n
-    {0x12, KP_2},                     // 1 2 3 p
-    {0x22, KP_3},                     // 0 . < -
-    {0x01, KP_4},       {0x11, KP_5}, {0x21, KP_6}, {0x00, KP_7},     {0x10, KP_8}, {0x20, KP_9},
-    {0x30, KP_u},       {0x31, KP_n}, {0x32, KP_p}, {0x33, KP_MINUS}, {0x23, KP_BS}};
 
-#if 0
-//  ABCD keyboard
-static const keypads_t keypads_text[] = {
-  {40, TXT_KEYBOARD },   // 40 buttons TXT keyboard (10x4 size)
-  {0x00, '0'}, {0x10, '1'}, {0x20, '2'}, {0x30, '3'}, {0x40, '4'}, {0x50, '5'}, {0x60, '6'}, {0x70, '7'}, {0x80, '8'}, {0x90, '9'},
-  {0x01, 'A'}, {0x11, 'B'}, {0x21, 'C'}, {0x31, 'D'}, {0x41, 'E'}, {0x51, 'F'}, {0x61, 'G'}, {0x71, 'H'}, {0x81, 'I'}, {0x91, 'J'},
-  {0x02, 'K'}, {0x12, 'L'}, {0x22, 'M'}, {0x32, 'N'}, {0x42, 'O'}, {0x52, 'P'}, {0x62, 'Q'}, {0x72, 'R'}, {0x82, 'S'}, {0x92, 'T'},
-  {0x03, 'U'}, {0x13, 'V'}, {0x23, 'W'}, {0x33, 'X'}, {0x43, 'Y'}, {0x53, 'Z'}, {0x63, '_'}, {0x73, '-'}, {0x83, S_LARROW[0]}, {0x93, S_ENTER[0]},
-};
-#else
-// QWERTY keyboard
-static const keypads_t keypads_text[] = {
-    {40, TXT_KEYBOARD}, // 40 buttons TXT keyboard (10x4 size)
-    {0x00, '1'},        {0x10, '2'}, {0x20, '3'}, {0x30, '4'},         {0x40, '5'},
-    {0x50, '6'},        {0x60, '7'}, {0x70, '8'}, {0x80, '9'},         {0x90, '0'},
-    {0x01, 'Q'},        {0x11, 'W'}, {0x21, 'E'}, {0x31, 'R'},         {0x41, 'T'},
-    {0x51, 'Y'},        {0x61, 'U'}, {0x71, 'I'}, {0x81, 'O'},         {0x91, 'P'},
-    {0x02, 'A'},        {0x12, 'S'}, {0x22, 'D'}, {0x32, 'F'},         {0x42, 'G'},
-    {0x52, 'H'},        {0x62, 'J'}, {0x72, 'K'}, {0x82, 'L'},         {0x92, '_'},
-    {0x03, '-'},        {0x13, 'Z'}, {0x23, 'X'}, {0x33, 'C'},         {0x43, 'V'},
-    {0x53, 'B'},        {0x63, 'N'}, {0x73, 'M'}, {0x83, S_LARROW[0]}, {0x93, S_ENTER[0]},
-};
-#endif
 
-enum {
-  KEYPAD_FREQ,
-  KEYPAD_UFLOAT,
-  KEYPAD_PERCENT,
-  KEYPAD_FLOAT,
-  KEYPAD_MFLOAT,
-  KEYPAD_MKUFLOAT,
-  KEYPAD_NFLOAT,
-  KEYPAD_TEXT
-};
-static const keypads_t* keypad_type_list[] = {
-    [KEYPAD_FREQ] = keypads_freq,         // frequency input
-    [KEYPAD_UFLOAT] = keypads_ufloat,     // unsigned float input
-    [KEYPAD_PERCENT] = keypads_percent,   // unsigned float input in percent
-    [KEYPAD_FLOAT] = keypads_float,       //   signed float input
-    [KEYPAD_MFLOAT] = keypads_mfloat,     //   signed milli/micro float input
-    [KEYPAD_MKUFLOAT] = keypads_mkufloat, // unsigned milli/kilo float input
-    [KEYPAD_NFLOAT] = keypads_nfloat,     //   signed micro/nano/pico float input
-    [KEYPAD_TEXT] = keypads_text          // text input
-};
 
-// Get value from keyboard functions
-float keyboard_get_float(void) {
-  return my_atof(kp_buf);
-}
-freq_t keyboard_get_freq(void) {
-  return my_atoui(kp_buf);
-}
-uint32_t keyboard_get_uint(void) {
-  return my_atoui(kp_buf);
-}
-int32_t keyboard_get_int(void) {
-  return my_atoi(kp_buf);
-}
 
-// Keyboard call back functions, allow get value for Keyboard menu button (see menu_keyboard_acb)
-// and apply on finish input
-UI_KEYBOARD_CALLBACK(input_freq) {
-  if (b) {
-    if (data == ST_VAR && var_freq)
-      plot_printf(b->label, sizeof(b->label), "JOG STEP\n " R_LINK_COLOR "%.3q" S_Hz, var_freq);
-    if (data == ST_STEP)
-      b->p1.f = (float)get_sweep_frequency(ST_SPAN) / (sweep_points - 1);
-    return;
-  }
-  set_sweep_frequency(data, keyboard_get_freq());
-}
-
-UI_KEYBOARD_CALLBACK(input_var_delay) {
-  (void)data;
-  if (b) {
-    if (current_props._var_delay)
-      plot_printf(b->label, sizeof(b->label), "JOG STEP\n " R_LINK_COLOR "%F" S_SECOND,
-                  current_props._var_delay);
-    return;
-  }
-  current_props._var_delay = keyboard_get_float();
-}
-
-// Call back functions for MT_CALLBACK type
-UI_KEYBOARD_CALLBACK(input_points) {
-  (void)data;
-  if (b) {
-    b->p1.u = sweep_points;
-    return;
-  }
-  set_sweep_points(keyboard_get_uint());
-}
-
-UI_KEYBOARD_CALLBACK(input_amplitude) {
-  int type = trace[current_trace].type;
-  float scale = get_trace_scale(current_trace);
-  float ref = get_trace_refpos(current_trace);
-  float bot = (0 - ref) * scale;
-  float top = (NGRIDY - ref) * scale;
-
-  if (b) {
-    float val = data == 0 ? top : bot;
-    if (type == TRC_SWR)
-      val += 1.0f;
-    plot_printf(b->label, sizeof(b->label), "%s\n " R_LINK_COLOR "%.4F%s",
-                data == 0 ? "TOP" : "BOTTOM", val, trace_info_list[type].symbol);
-    return;
-  }
-  float value = keyboard_get_float();
-  if (type == TRC_SWR)
-    value -= 1.0f; // Hack for SWR trace!
-  if (data == 0)
-    top = value; // top value input
-  else
-    bot = value; // bottom value input
-  scale = (top - bot) / NGRIDY;
-  ref = (top == bot) ? -value : -bot / scale;
-  set_trace_scale(current_trace, scale);
-  set_trace_refpos(current_trace, ref);
-}
-
-UI_KEYBOARD_CALLBACK(input_scale) {
-  (void)data;
-  if (b)
-    return;
-  set_trace_scale(current_trace, keyboard_get_float());
-}
-
-UI_KEYBOARD_CALLBACK(input_ref) {
-  (void)data;
-  if (b)
-    return;
-  set_trace_refpos(current_trace, keyboard_get_float());
-}
-
-UI_KEYBOARD_CALLBACK(input_edelay) {
-  (void)data;
-  if (current_trace == TRACE_INVALID)
-    return;
-  int ch = trace[current_trace].channel;
-  if (b) {
-    plot_printf(b->label, sizeof(b->label), "E-DELAY S%d1\n " R_LINK_COLOR "%.7F" S_SECOND, ch + 1,
-                current_props._electrical_delay[ch]);
-    return;
-  }
-  set_electrical_delay(ch, keyboard_get_float());
-}
-
-UI_KEYBOARD_CALLBACK(input_s21_offset) {
-  (void)data;
-  if (b) {
-    b->p1.f = s21_offset;
-    return;
-  }
-  set_s21_offset(keyboard_get_float());
-}
-
-UI_KEYBOARD_CALLBACK(input_velocity) {
-  (void)data;
-  if (b) {
-    b->p1.u = velocity_factor;
-    return;
-  }
-  velocity_factor = keyboard_get_uint();
-}
-
-#ifdef __S11_CABLE_MEASURE__
-extern float real_cable_len;
-UI_KEYBOARD_CALLBACK(input_cable_len) {
-  (void)data;
-  if (b) {
-    if (real_cable_len == 0.0f)
-      return;
-    plot_printf(b->label, sizeof(b->label), "%s\n " R_LINK_COLOR "%.4F%s", "CABLE LENGTH",
-                real_cable_len, S_METRE);
-    return;
-  }
-  real_cable_len = keyboard_get_float();
-}
-#endif
-
-UI_KEYBOARD_CALLBACK(input_xtal) {
-  (void)data;
-  if (b) {
-    b->p1.u = config._xtal_freq;
-    return;
-  }
-  si5351_set_tcxo(keyboard_get_uint());
-}
-
-UI_KEYBOARD_CALLBACK(input_harmonic) {
-  (void)data;
-  if (b) {
-    b->p1.u = config._harmonic_freq_threshold;
-    return;
-  }
-  uint32_t value = keyboard_get_uint();
-  config._harmonic_freq_threshold = clamp_harmonic_threshold(value);
-  config_service_notify_configuration_changed();
-}
-
-UI_KEYBOARD_CALLBACK(input_vbat) {
-  (void)data;
-  if (b) {
-    b->p1.u = config._vbat_offset;
-    return;
-  }
-  config._vbat_offset = keyboard_get_uint();
-  config_service_notify_configuration_changed();
-}
-
-#ifdef __S21_MEASURE__
-UI_KEYBOARD_CALLBACK(input_measure_r) {
-  (void)data;
-  if (b) {
-    b->p1.f = config._measure_r;
-    return;
-  }
-  config._measure_r = keyboard_get_float();
-  config_service_notify_configuration_changed();
-}
-#endif
-
-#ifdef __VNA_Z_RENORMALIZATION__
-UI_KEYBOARD_CALLBACK(input_portz) {
-  if (b) {
-    b->p1.f = data ? current_props._cal_load_r : current_props._portz;
-    return;
-  }
-  if (data)
-    current_props._cal_load_r = keyboard_get_float();
-  else
-    current_props._portz = keyboard_get_float();
-}
-#endif
-
-#ifdef __USE_RTC__
-UI_KEYBOARD_CALLBACK(input_date_time) {
-  if (b)
-    return;
-  int i = 0;
-  uint32_t dt_buf[2];
-  dt_buf[0] = rtc_get_tr_bcd(); // TR should be read first for sync
-  dt_buf[1] = rtc_get_dr_bcd(); // DR should be read second
-  //            0    1   2       4      5     6
-  // time[] ={sec, min, hr, 0, day, month, year, 0}
-  uint8_t* time = (uint8_t*)dt_buf;
-  for (; i < 6 && kp_buf[i] != 0; i++)
-    kp_buf[i] -= '0';
-  for (; i < 6; i++)
-    kp_buf[i] = 0;
-  for (i = 0; i < 3; i++)
-    kp_buf[i] = (kp_buf[2 * i] << 4) | kp_buf[2 * i + 1]; // BCD format
-  if (data == KM_RTC_DATE) {
-    // Month limit 1 - 12 (in BCD)
-    if (kp_buf[1] < 1)
-      kp_buf[1] = 1;
-    else if (kp_buf[1] > 0x12)
-      kp_buf[1] = 0x12;
-    // Day limit (depend from month):
-    uint8_t day_max = 28 + ((0b11101100000000000010111110111011001100 >> (kp_buf[1] << 1)) & 3);
-    day_max = ((day_max / 10) << 4) | (day_max % 10); // to BCD
-    if (kp_buf[2] < 1)
-      kp_buf[2] = 1;
-    else if (kp_buf[2] > day_max)
-      kp_buf[2] = day_max;
-    time[6] = kp_buf[0]; // year
-    time[5] = kp_buf[1]; // month
-    time[4] = kp_buf[2]; // day
-  } else {
-    // Hour limit 0 - 23, min limit 0 - 59, sec limit 0 - 59 (in BCD)
-    if (kp_buf[0] > 0x23)
-      kp_buf[0] = 0x23;
-    if (kp_buf[1] > 0x59)
-      kp_buf[1] = 0x59;
-    if (kp_buf[2] > 0x59)
-      kp_buf[2] = 0x59;
-    time[2] = kp_buf[0]; // hour
-    time[1] = kp_buf[1]; // min
-    time[0] = kp_buf[2]; // sec
-  }
-  rtc_set_time(dt_buf[1], dt_buf[0]);
-}
-
-UI_KEYBOARD_CALLBACK(input_rtc_cal) {
-  (void)data;
-  if (b) {
-    b->p1.f = rtc_get_cal();
-    return;
-  }
-  rtc_set_cal(keyboard_get_float());
-}
-#endif
-
-#ifdef __USE_SD_CARD__
-UI_KEYBOARD_CALLBACK(input_filename) {
-  if (b)
-    return;
-  ui_save_file(kp_buf, data);
-}
-#endif
-
-const keypads_list keypads_mode_tbl[KM_NONE] = {
-    //                      key format     data for cb    text at bottom        callback function
-    [KM_START] = {KEYPAD_FREQ, ST_START, "START", input_freq},          // start
-    [KM_STOP] = {KEYPAD_FREQ, ST_STOP, "STOP", input_freq},             // stop
-    [KM_CENTER] = {KEYPAD_FREQ, ST_CENTER, "CENTER", input_freq},       // center
-    [KM_SPAN] = {KEYPAD_FREQ, ST_SPAN, "SPAN", input_freq},             // span
-    [KM_CW] = {KEYPAD_FREQ, ST_CW, "CW FREQ", input_freq},              // cw freq
-    [KM_STEP] = {KEYPAD_FREQ, ST_STEP, "FREQ STEP", input_freq},        // freq as point step
-    [KM_VAR] = {KEYPAD_FREQ, ST_VAR, "JOG STEP", input_freq},           // VAR freq step
-    [KM_POINTS] = {KEYPAD_UFLOAT, 0, "POINTS", input_points},           // Points num
-    [KM_TOP] = {KEYPAD_MFLOAT, 0, "TOP", input_amplitude},              // top graph value
-    [KM_nTOP] = {KEYPAD_NFLOAT, 0, "TOP", input_amplitude},             // top graph value
-    [KM_BOTTOM] = {KEYPAD_MFLOAT, 1, "BOTTOM", input_amplitude},        // bottom graph value
-    [KM_nBOTTOM] = {KEYPAD_NFLOAT, 1, "BOTTOM", input_amplitude},       // bottom graph value
-    [KM_SCALE] = {KEYPAD_UFLOAT, KM_SCALE, "SCALE", input_scale},       // scale
-    [KM_nSCALE] = {KEYPAD_NFLOAT, KM_nSCALE, "SCALE", input_scale},     // nano / pico scale value
-    [KM_REFPOS] = {KEYPAD_FLOAT, 0, "REFPOS", input_ref},               // refpos
-    [KM_EDELAY] = {KEYPAD_NFLOAT, 0, "E-DELAY", input_edelay},          // electrical delay
-    [KM_VAR_DELAY] = {KEYPAD_NFLOAT, 0, "JOG STEP", input_var_delay},   // VAR electrical delay
-    [KM_S21OFFSET] = {KEYPAD_FLOAT, 0, "S21 OFFSET", input_s21_offset}, // S21 level offset
-    [KM_VELOCITY_FACTOR] = {KEYPAD_PERCENT, 0, "VELOCITY%%", input_velocity}, // velocity factor
-#ifdef __S11_CABLE_MEASURE__
-    [KM_ACTUAL_CABLE_LEN] = {KEYPAD_MKUFLOAT, 0, "CABLE LENGTH",
-                             input_cable_len}, // real cable length input for VF calculation
-#endif
-    [KM_XTAL] = {KEYPAD_FREQ, 0, "TCXO 26M" S_Hz, input_xtal},      // XTAL frequency
-    [KM_THRESHOLD] = {KEYPAD_FREQ, 0, "THRESHOLD", input_harmonic}, // Harmonic threshold frequency
-    [KM_VBAT] = {KEYPAD_UFLOAT, 0, "BAT OFFSET", input_vbat},       // Vbat offset input in mV
-#ifdef __S21_MEASURE__
-    [KM_MEASURE_R] = {KEYPAD_UFLOAT, 0, "MEASURE Rl", input_measure_r}, // CH0 port impedance in Om
-#endif
-#ifdef __VNA_Z_RENORMALIZATION__
-    [KM_Z_PORT] = {KEYPAD_UFLOAT, 0, "PORT Z 50" S_RARROW,
-                   input_portz}, // Port Z renormalization impedance
-    [KM_CAL_LOAD_R] = {KEYPAD_UFLOAT, 1, "STANDARD\n LOAD R",
-                       input_portz}, // Calibration standard load R
-#endif
-#ifdef __USE_RTC__
-    [KM_RTC_DATE] = {KEYPAD_UFLOAT, KM_RTC_DATE, "SET DATE\nYY MM DD", input_date_time}, // Date
-    [KM_RTC_TIME] = {KEYPAD_UFLOAT, KM_RTC_TIME, "SET TIME\nHH MM SS", input_date_time}, // Time
-    [KM_RTC_CAL] = {KEYPAD_FLOAT, 0, "RTC CAL", input_rtc_cal}, // RTC calibration in ppm
-#endif
-#ifdef __USE_SD_CARD__
-    [KM_S1P_NAME] = {KEYPAD_TEXT, FMT_S1P_FILE, "S1P", input_filename},
-    [KM_S2P_NAME] = {KEYPAD_TEXT, FMT_S2P_FILE, "S2P", input_filename},
-    [KM_BMP_NAME] = {KEYPAD_TEXT, FMT_BMP_FILE, "BMP", input_filename},
-#ifdef __SD_CARD_DUMP_TIFF__
-    [KM_TIF_NAME] = {KEYPAD_TEXT, FMT_TIF_FILE, "TIF", input_filename},
-#endif
-    [KM_CAL_NAME] = {KEYPAD_TEXT, FMT_CAL_FILE, "CAL", input_filename},
-#ifdef __SD_CARD_DUMP_FIRMWARE__
-    [KM_BIN_NAME] = {KEYPAD_TEXT, FMT_BIN_FILE, "BIN", input_filename},
-#endif
-#endif
-};
-
-// Keyboard callback function for UI button
-void ui_keyboard_cb(uint16_t data, button_t* b) {
-  const keyboard_cb_t cb = keypads_mode_tbl[data].cb;
-  if (cb)
-    cb(keypads_mode_tbl[data].data, b);
-}
-
-static void keypad_draw_button(int id) {
-  if (id < 0)
-    return;
-  button_t button;
-  button.fg = LCD_MENU_TEXT_COLOR;
-
-  if (id == selection) {
-    button.bg = LCD_MENU_ACTIVE_COLOR;
-    button.border = KEYBOARD_BUTTON_BORDER | BUTTON_BORDER_FALLING;
-  } else {
-    button.bg = LCD_MENU_COLOR;
-    button.border = KEYBOARD_BUTTON_BORDER | BUTTON_BORDER_RISE;
-  }
-
-  const keypad_pos_t* p = &key_pos[keypads->type];
-  int x = p->x_offs + (keypads->buttons[id].pos >> 4) * p->width;
-  int y = p->y_offs + (keypads->buttons[id].pos & 0xF) * p->height;
-  ui_draw_button(x, y, p->width, p->height, &button);
-  uint8_t ch = keypads->buttons[id].c;
-  if (ch == KP_EMPTY)
-    return;
-  if (keypads->type == NUM_KEYBOARD) {
-    lcd_drawfont(ch, x + (KP_WIDTH - NUM_FONT_GET_WIDTH) / 2,
-                 y + (KP_HEIGHT - NUM_FONT_GET_HEIGHT) / 2);
-  } else {
-#if 0
-    lcd_drawchar(ch,
-                     x + (KPF_WIDTH - FONT_WIDTH) / 2,
-                     y + (KPF_HEIGHT - FONT_GET_HEIGHT) / 2);
-#else
-    lcd_drawchar_size(ch, x + KPF_WIDTH / 2 - FONT_WIDTH + 1, y + KPF_HEIGHT / 2 - FONT_GET_HEIGHT,
-                      2);
-#endif
-  }
-}
-
-static void draw_keypad(void) {
-  for (int i = 0; i < keypads->size; i++)
-    keypad_draw_button(i);
-}
-
-static int period_pos(void) {
-  int j;
-  for (j = 0; kp_buf[j] && kp_buf[j] != '.'; j++)
-    ;
-  return j;
-}
-
-static void draw_numeric_area_frame(void) {
-  lcd_set_colors(LCD_INPUT_TEXT_COLOR, LCD_INPUT_BG_COLOR);
-  lcd_fill(0, LCD_HEIGHT - NUM_INPUT_HEIGHT, LCD_WIDTH, NUM_INPUT_HEIGHT);
-  const char* label = keypads_mode_tbl[keypad_mode].name;
-  int lines = get_lines_count(label);
-  lcd_drawstring(10, LCD_HEIGHT - (FONT_STR_HEIGHT * lines + NUM_INPUT_HEIGHT) / 2, label);
-}
-
-static void draw_numeric_input(const char* buf) {
-  uint16_t x = 14 + FONT_STR_WIDTH(12), space;
-  uint16_t y = LCD_HEIGHT - (NUM_FONT_GET_HEIGHT + NUM_INPUT_HEIGHT) / 2;
-  uint16_t xsim;
-#ifdef __USE_RTC__
-  if ((1 << keypad_mode) & ((1 << KM_RTC_DATE) | (1 << KM_RTC_TIME)))
-    xsim = 0b01010100;
-  else
-#endif
-    xsim = (0b00100100100100100 >> (2 - (period_pos() % 3))) & (~1);
-  lcd_set_colors(LCD_INPUT_TEXT_COLOR, LCD_INPUT_BG_COLOR);
-  while (*buf) {
-    int c = *buf++;
-    if (c == '.') {
-      c = KP_PERIOD;
-      xsim <<= 4;
-    } else if (c == '-') {
-      c = KP_MINUS;
-      xsim &= ~3;
-    } else if (c >= '0' && c <= '9')
-      c -= '0';
-    else
-      continue;
-    // Add space before char
-    space = 2 + 10 * (xsim & 1);
-    xsim >>= 1;
-    lcd_fill(x, y, space, NUM_FONT_GET_HEIGHT);
-    x += space;
-    lcd_drawfont(c, x, y);
-    x += NUM_FONT_GET_WIDTH;
-  }
-  lcd_fill(x, y, NUM_FONT_GET_WIDTH + 2 + 10, NUM_FONT_GET_HEIGHT);
-}
-
-static void draw_text_input(const char* buf) {
-  lcd_set_colors(LCD_INPUT_TEXT_COLOR, LCD_INPUT_BG_COLOR);
-#if 0
-  uint16_t x = 14 + FONT_STR_WIDTH(5);
-  uint16_t y = LCD_HEIGHT-(FONT_GET_HEIGHT + NUM_INPUT_HEIGHT)/2;
-  lcd_fill(x, y, FONT_STR_WIDTH(20), FONT_GET_HEIGHT);
-  lcd_printf(x, y, buf);
-#else
-  int n = 2;
-  uint16_t x = 14 + FONT_STR_WIDTH(5);
-  uint16_t y = LCD_HEIGHT - (FONT_GET_HEIGHT * n + NUM_INPUT_HEIGHT) / 2;
-  lcd_fill(x, y, FONT_STR_WIDTH(20) * n, FONT_GET_HEIGHT * n);
-  lcd_drawstring_size(buf, x, y, n);
-#endif
-}
-
-//=====================================================================================================
-//                                     Keyboard UI processing
-//=====================================================================================================
-enum { K_CONTINUE = 0, K_DONE, K_CANCEL };
-static int num_keypad_click(int c, int kp_index) {
-  if (c >= KP_k && c <= KP_PERCENT) {
-    if (kp_index == 0)
-      return K_CANCEL;
-    if (c >= KP_k && c <= KP_G) { // Apply k, M, G input (add zeroes and shift . right)
-      uint16_t scale = c - KP_k + 1;
-      scale += (scale << 1);
-      int i = period_pos();
-      if (scale + i > NUMINPUT_LEN)
-        scale = NUMINPUT_LEN - i;
-      do {
-        char v = kp_buf[i + 1];
-        if (v == 0 || kp_buf[i] == 0) {
-          v = '0';
-          kp_buf[i + 2] = 0;
-        }
-        kp_buf[i + 1] = kp_buf[i];
-        kp_buf[i++] = v;
-      } while (--scale);
-    } else if (c >= KP_m &&
-               c <= KP_p) { // Apply m, u, n, p input (add format at end for atof function)
-      const char prefix[] = {'m', 'u', 'n', 'p'};
-      kp_buf[kp_index] = prefix[c - KP_m];
-      kp_buf[kp_index + 1] = 0;
-    }
-    return K_DONE;
-  }
-#ifdef __USE_RTC__
-  int maxlength = (1 << keypad_mode) & ((1 << KM_RTC_DATE) | (1 << KM_RTC_TIME)) ? 6 : NUMINPUT_LEN;
-#else
-  int maxlength = NUMINPUT_LEN;
-#endif
-  if (c == KP_BS) {
-    if (kp_index == 0)
-      return K_CANCEL;
-    --kp_index;
-  } else if (c == KP_MINUS) {
-    int i;
-    if (kp_buf[0] == '-') {
-      for (i = 0; i < NUMINPUT_LEN; i++)
-        kp_buf[i] = kp_buf[i + 1];
-      --kp_index;
-    } else {
-      for (i = NUMINPUT_LEN; i > 0; i--)
-        kp_buf[i] = kp_buf[i - 1];
-      kp_buf[0] = '-';
-      if (kp_index < maxlength)
-        ++kp_index;
-    }
-  } else if (kp_index < maxlength) {
-    if (c <= KP_9)
-      kp_buf[kp_index++] = '0' + c;
-    else if (c == KP_PERIOD && kp_index == period_pos() &&
-             maxlength == NUMINPUT_LEN) // append period if there are no period and for num input
-                                        // (skip for date/time)
-      kp_buf[kp_index++] = '.';
-  }
-  kp_buf[kp_index] = '\0';
-  draw_numeric_input(kp_buf);
-  return K_CONTINUE;
-}
-
-static int txt_keypad_click(int c, int kp_index) {
-  if (c == S_ENTER[0]) { // Enter
-    return kp_index == 0 ? K_CANCEL : K_DONE;
-  }
-  if (c == S_LARROW[0]) { // Backspace
-    if (kp_index == 0)
-      return K_CANCEL;
-    --kp_index;
-  } else if (kp_index < TXTINPUT_LEN) { // any other text input
-    kp_buf[kp_index++] = c;
-  }
-  kp_buf[kp_index] = '\0';
-  draw_text_input(kp_buf);
-  return K_CONTINUE;
-}
-
-static void ui_mode_keypad(int mode) {
-  if (ui_mode == UI_KEYPAD)
-    return;
-  ui_mode = UI_KEYPAD;
-  set_area_size(0, 0);
-  // keypads array
-  keypad_mode = mode;
-  keypads = keypad_type_list[keypads_mode_tbl[mode].keypad_type];
-  selection = -1;
-  kp_buf[0] = 0;
-  //  menu_draw(-1);
-  draw_keypad();
-  draw_numeric_area_frame();
-}
-
-static void keypad_click(int key) {
-  int c = keypads->buttons[key].c; // !!! Use key + 1 (zero key index used or size define)
-  int index = strlen(kp_buf);
-  int result =
-      keypads->type == NUM_KEYBOARD ? num_keypad_click(c, index) : txt_keypad_click(c, index);
-  if (result == K_DONE)
-    ui_keyboard_cb(keypad_mode, NULL); // apply input done
-  // Exit loop on done or cancel
-  if (result != K_CONTINUE)
-    ui_mode_normal();
-}
-
-static void ui_keypad_touch(int touch_x, int touch_y) {
-  const keypad_pos_t* p = &key_pos[keypads->type];
-  if (touch_x < p->x_offs || touch_y < p->y_offs)
-    return;
-  // Calculate key position from touch x and y
-  touch_x -= p->x_offs;
-  touch_x /= p->width;
-  touch_y -= p->y_offs;
-  touch_y /= p->height;
-  uint8_t pos = (touch_y & 0x0F) | (touch_x << 4);
-  for (int i = 0; i < keypads->size; i++) {
-    if (keypads->buttons[i].pos != pos)
-      continue;
-    if (keypads->buttons[i].c == KP_EMPTY)
-      break;
-    int old = selection;
-    keypad_draw_button(selection = i); // draw new focus
-    keypad_draw_button(old);           // Erase old focus
-    touch_wait_release();
-    selection = -1;
-    keypad_draw_button(i); // erase new focus
-    keypad_click(i);       // Process input
-    return;
-  }
-  return;
-}
-
-static void ui_keypad_lever(uint16_t status) {
-  if (status == EVT_BUTTON_SINGLE_CLICK) {
-    if (selection >= 0) // Process input
-      keypad_click(selection);
-    return;
-  }
-  int keypads_last_index = keypads->size - 1;
-  do {
-    int old = selection;
-    do {
-      if ((status & EVT_DOWN) && --selection < 0)
-        selection = keypads_last_index;
-      if ((status & EVT_UP) && ++selection > keypads_last_index)
-        selection = 0;
-    } while (keypads->buttons[selection].c == KP_EMPTY); // Skip empty
-    keypad_draw_button(old);
-    keypad_draw_button(selection);
-    chThdSleepMilliseconds(100);
-  } while ((status = ui_input_wait_release()) != 0);
-}
-//==================================== end keyboard input
-//=============================================
 
 //=====================================================================================================
 //                                 Normal plot functions
 //=====================================================================================================
-static void ui_mode_normal(void) {
+void ui_mode_normal(void) {
   if (ui_mode == UI_NORMAL)
     return;
 

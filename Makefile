@@ -235,10 +235,15 @@ TCPPSRC =
 
 # List ASM source files here
 ASMSRC = $(STARTUPASM) $(PORTASM) $(OSALASM)
+CSRC += src/ui/input/ui_touch.c
+CSRC += src/ui/input/ui_keypad.c
+CSRC += src/ui/controller/ui_events.c
+CSRC += src/ui/menus/menu_calibration.c
 
 INCDIR = $(STARTUPINC) $(KERNINC) $(PORTINC) $(OSALINC) \
          $(HALINC) $(PLATFORMINC) $(BOARDINC)  \
-         $(STREAMSINC) $(PROJ)/third_party/FatFs
+         $(STREAMSINC) $(PROJ)/third_party/FatFs \
+         src
 
 #
 # Project, sources and paths

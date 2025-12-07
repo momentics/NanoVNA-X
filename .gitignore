@@ -23,3 +23,4 @@ TAGS
 .idea/
 .vscode/
 *.swp
+build_log_before.txt
