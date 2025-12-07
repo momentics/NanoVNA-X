@@ -329,7 +329,7 @@ static void touch_position(int* x, int* y) {
   touch_get_last_position(&last_touch_x, &last_touch_y);
 
 #ifdef __REMOTE_DESKTOP__
-  if (touch_remote != REMOTE_NONE) {
+  if (touch_is_remote()) {
     *x = last_touch_x;
     *y = last_touch_y;
     return;

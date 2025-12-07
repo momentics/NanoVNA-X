@@ -169,3 +169,11 @@ void touch_get_last_position(int16_t *x, int16_t *y) {
     if(x) *x = last_touch_x;
     if(y) *y = last_touch_y;
 }
+
+int touch_is_remote(void) {
+#ifdef __REMOTE_DESKTOP__
+  return touch_remote != REMOTE_NONE;
+#else
+  return 0;
+#endif
+}
