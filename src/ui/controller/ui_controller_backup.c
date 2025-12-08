@@ -941,6 +941,66 @@ UI_FUNCTION_ADV_CALLBACK(menu_smooth_acb) {
   // Logic to turn off smooth? Needs verification if config._smooth exists
 }
 
+
+#define UI_MARKER_EDELAY 6
+UI_FUNCTION_CALLBACK(menu_marker_op_cb) {
+  freq_t freq = get_marker_frequency(active_marker);
+  if (freq == 0)
+    return; // no active marker
+  switch (data) {
+  case ST_START:
+  case ST_STOP:
+  case ST_CENTER:
+    set_sweep_frequency(data, freq);
+    break;
+  case ST_SPAN:
+    if (previous_marker == MARKER_INVALID || active_marker == previous_marker) {
+      // if only 1 marker is active, keep center freq and make span the marker comes to the edge
+      freq_t center = get_sweep_frequency(ST_CENTER);
+      freq_t span = center > freq ? center - freq : freq - center;
+      set_sweep_frequency(ST_SPAN, span * 2);
+    } else {
+      // if 2 or more marker active, set start and stop freq to each marker
+      freq_t freq2 = get_marker_frequency(previous_marker);
+      if (freq2 == 0)
+        return;
+      if (freq > freq2)
+        SWAP(freq_t, freq2, freq);
+      set_sweep_frequency(ST_START, freq);
+      set_sweep_frequency(ST_STOP, freq2);
+    }
+    break;
+  case UI_MARKER_EDELAY:
+    if (current_trace != TRACE_INVALID) {
+      int ch = trace[current_trace].channel;
+      float (*array)[2] = measured[ch];
+      int index = markers[active_marker].index;
+      float v = groupdelay_from_array(index, array[index]);
+      set_electrical_delay(ch, current_props._electrical_delay[ch] + v);
+    }
+    break;
+  }
+  ui_mode_normal();
+}
+
+UI_FUNCTION_CALLBACK(menu_marker_search_dir_cb) {
+  marker_search_dir(markers[active_marker].index,
+                    data == MK_SEARCH_RIGHT ? MK_SEARCH_RIGHT : MK_SEARCH_LEFT);
+  props_mode &= ~TD_MARKER_TRACK;
+#ifdef UI_USE_LEVELER_SEARCH_MODE
+  select_lever_mode(LM_SEARCH);
+#endif
+}
+
+UI_FUNCTION_ADV_CALLBACK(menu_marker_tracking_acb) {
+  (void)data;
+  if (b) {
+    b->icon = (props_mode & TD_MARKER_TRACK) ? BUTTON_ICON_CHECK : BUTTON_ICON_NOCHECK;
+    return;
+  }
+  props_mode ^= TD_MARKER_TRACK;
+}
+
 #ifdef __VNA_MEASURE_MODULE__
 extern const menuitem_t* const menu_measure_list[];
 UI_FUNCTION_ADV_CALLBACK(menu_measure_acb) {
@@ -957,6 +1017,75 @@ UI_FUNCTION_CALLBACK(menu_measure_cb) {
   menu_push_submenu(menu_measure_list[current_props._measure]);
 }
 #endif
+
+static void active_marker_check(void) {
+  int i;
+  // Auto select active marker if disabled
+  if (active_marker == MARKER_INVALID)
+    for (i = 0; i < MARKERS_MAX; i++)
+      if (markers[i].enabled)
+        active_marker = i;
+  // Auto select previous marker if disabled
+  if (previous_marker == active_marker)
+    previous_marker = MARKER_INVALID;
+  if (previous_marker == MARKER_INVALID) {
+    for (i = 0; i < MARKERS_MAX; i++)
+      if (markers[i].enabled && i != active_marker)
+        previous_marker = i;
+  }
+}
+
+UI_FUNCTION_ADV_CALLBACK(menu_marker_sel_acb) {
+  // if (data >= MARKERS_MAX) return;
+  int mk = data;
+  if (b) {
+    if (mk == active_marker)
+      b->icon = BUTTON_ICON_CHECK_AUTO;
+    else if (markers[mk].enabled)
+      b->icon = BUTTON_ICON_CHECK;
+    b->p1.u = mk + 1;
+    return;
+  }
+  // Marker select click
+  if (markers[mk].enabled) {          // Marker enabled
+    if (mk == active_marker) {        // If active marker:
+      markers[mk].enabled = FALSE;    //  disable it
+      mk = previous_marker;           //  set select from previous marker
+      active_marker = MARKER_INVALID; //  invalidate active
+      request_to_redraw(REDRAW_AREA);
+    }
+  } else {
+    markers[mk].enabled = TRUE; // Enable marker
+  }
+  previous_marker = active_marker; // set previous marker as current active
+  active_marker = mk;              // set new active marker
+  active_marker_check();
+  request_to_redraw(REDRAW_MARKER);
+}
+
+UI_FUNCTION_CALLBACK(menu_marker_select_cb) {
+  (void)data;
+  menu_push_submenu(menu_build_marker_select_menu());
+}
+
+UI_FUNCTION_CALLBACK(menu_marker_disable_all_cb) {
+  (void)data;
+  for (int i = 0; i < MARKERS_MAX; i++)
+    markers[i].enabled = FALSE; // all off
+  previous_marker = MARKER_INVALID;
+  active_marker = MARKER_INVALID;
+  request_to_redraw(REDRAW_AREA);
+}
+
+UI_FUNCTION_ADV_CALLBACK(menu_marker_delta_acb) {
+  (void)data;
+  if (b) {
+    b->icon = props_mode & TD_MARKER_DELTA ? BUTTON_ICON_CHECK : BUTTON_ICON_NOCHECK;
+    return;
+  }
+  props_mode ^= TD_MARKER_DELTA;
+  request_to_redraw(REDRAW_MARKER);
+}
 
 #ifdef __USE_SERIAL_CONSOLE__
 UI_FUNCTION_ADV_CALLBACK(menu_serial_speed_acb) {
@@ -1095,7 +1224,7 @@ static const char s1_file_param[] = "%u % f % f\r\n";
 static const char s2_file_header[] = "!File created by NanoVNA\r\n"
                                      "# Hz S RI R 50\r\n";
 
-static const char s2_file_param[] = "%u % f % f % f % f 0 0 0 0\r\r\n";
+static const char s2_file_param[] = "%u % f % f % f % f 0 0 0 0\r\n";
 
 static FILE_SAVE_CALLBACK(save_snp) {
   const char* s_file_format;
@@ -1718,6 +1847,53 @@ const menuitem_t menu_stimulus[] = {
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
+static const menu_descriptor_t menu_marker_sel_desc[] = {
+    {MT_ADV_CALLBACK, 0},
+#if MARKERS_MAX >= 2
+    {MT_ADV_CALLBACK, 1},
+#endif
+#if MARKERS_MAX >= 3
+    {MT_ADV_CALLBACK, 2},
+#endif
+#if MARKERS_MAX >= 4
+    {MT_ADV_CALLBACK, 3},
+#endif
+#if MARKERS_MAX >= 5
+    {MT_ADV_CALLBACK, 4},
+#endif
+#if MARKERS_MAX >= 6
+    {MT_ADV_CALLBACK, 5},
+#endif
+#if MARKERS_MAX >= 7
+    {MT_ADV_CALLBACK, 6},
+#endif
+#if MARKERS_MAX >= 8
+    {MT_ADV_CALLBACK, 7},
+#endif
+};
+
+static const menu_descriptor_t menu_marker_s21smith_desc[] = {
+    {MT_ADV_CALLBACK, MS_LIN},
+    {MT_ADV_CALLBACK, MS_LOG},
+    {MT_ADV_CALLBACK, MS_REIM},
+    {MT_ADV_CALLBACK, MS_SHUNT_RX},
+    {MT_ADV_CALLBACK, MS_SHUNT_RLC},
+    {MT_ADV_CALLBACK, MS_SERIES_RX},
+    {MT_ADV_CALLBACK, MS_SERIES_RLC},
+};
+
+static const menu_descriptor_t menu_marker_s11smith_desc[] = {
+    {MT_ADV_CALLBACK, MS_LIN},
+    {MT_ADV_CALLBACK, MS_LOG},
+    {MT_ADV_CALLBACK, MS_REIM},
+    {MT_ADV_CALLBACK, MS_RX},
+    {MT_ADV_CALLBACK, MS_RLC},
+    {MT_ADV_CALLBACK, MS_GB},
+    {MT_ADV_CALLBACK, MS_GLC},
+    {MT_ADV_CALLBACK, MS_RpXp},
+    {MT_ADV_CALLBACK, MS_RpLC},
+};
+
 static const menu_descriptor_t menu_serial_speed_desc[] = {
     {MT_ADV_CALLBACK, 0},
     {MT_ADV_CALLBACK, 1},
@@ -1735,7 +1911,9 @@ enum {
   MENU_DYNAMIC_SAVE_SIZE = MENU_STATE_SD_ENTRY + ARRAY_COUNT(menu_state_slots_desc) + 1,
   MENU_DYNAMIC_BANDWIDTH_SIZE = ARRAY_COUNT(menu_bandwidth_desc) + 1,
   MENU_DYNAMIC_POINTS_SIZE = 1 + ARRAY_COUNT(menu_points_desc) + 1,
-  MENU_DYNAMIC_MARKER_SIZE = 20,
+  MENU_DYNAMIC_MARKER_SEL_SIZE = ARRAY_COUNT(menu_marker_sel_desc) + 3,
+  MENU_DYNAMIC_MARKER_S11_SIZE = ARRAY_COUNT(menu_marker_s11smith_desc) + 1,
+  MENU_DYNAMIC_MARKER_S21_SIZE = ARRAY_COUNT(menu_marker_s21smith_desc) + 1,
   MENU_DYNAMIC_SERIAL_SPEED_SIZE = ARRAY_COUNT(menu_serial_speed_desc) + 1,
   MENU_DYNAMIC_POWER_SIZE = 1 + ARRAY_COUNT(menu_power_desc) + 1,
 #ifdef __USE_SMOOTH__
@@ -1748,9 +1926,11 @@ enum {
   MENU_MAX(MENU_DYNAMIC_SAVE_SIZE,                                                                                    \
            MENU_MAX(MENU_DYNAMIC_BANDWIDTH_SIZE,                                                                      \
                    MENU_MAX(MENU_DYNAMIC_POINTS_SIZE,                                                                 \
-                            MENU_MAX(MENU_DYNAMIC_MARKER_SIZE,                                                 \
-                                                        MENU_MAX(MENU_DYNAMIC_SERIAL_SPEED_SIZE,                       \
-                                                                 MENU_DYNAMIC_POWER_SIZE)))))
+                            MENU_MAX(MENU_DYNAMIC_MARKER_SEL_SIZE,                                                    \
+                                     MENU_MAX(MENU_DYNAMIC_MARKER_S11_SIZE,                                           \
+                                              MENU_MAX(MENU_DYNAMIC_MARKER_S21_SIZE,                                  \
+                                                       MENU_MAX(MENU_DYNAMIC_SERIAL_SPEED_SIZE,                       \
+                                                                MENU_DYNAMIC_POWER_SIZE)))))))
 #ifdef __USE_SMOOTH__
 #define MENU_DYNAMIC_BUFFER_SIZE MENU_MAX(MENU_DYNAMIC_BUFFER_BASE, MENU_DYNAMIC_SMOOTH_SIZE)
 #else
@@ -1759,7 +1939,7 @@ enum {
 
 static menuitem_t* menu_dynamic_buffer;
 
-menuitem_t* menu_dynamic_acquire(void) {
+static menuitem_t* menu_dynamic_acquire(void) {
   if (menu_dynamic_buffer == NULL) {
     menu_dynamic_buffer =
         chCoreAllocAligned(MENU_DYNAMIC_BUFFER_SIZE * sizeof(menuitem_t), PORT_NATURAL_ALIGN);
@@ -1815,7 +1995,24 @@ const menuitem_t* menu_build_points_menu(void) {
   return menu_dynamic_buffer;
 }
 
+const menuitem_t* menu_build_marker_select_menu(void) {
+  menuitem_t* cursor = menu_dynamic_acquire();
+  cursor = ui_menu_list(menu_marker_sel_desc, ARRAY_COUNT(menu_marker_sel_desc), "MARKER %d",
+                        menu_marker_sel_acb, cursor);
+  *cursor++ = (menuitem_t){MT_CALLBACK, 0, "ALL OFF", menu_marker_disable_all_cb};
+  *cursor++ = (menuitem_t){MT_ADV_CALLBACK, 0, "DELTA", menu_marker_delta_acb};
+  menu_set_next(cursor, menu_back);
+  return menu_dynamic_buffer;
+}
 
+const menuitem_t* menu_build_marker_smith_menu(uint8_t channel) {
+  menuitem_t* cursor = menu_dynamic_acquire();
+  const menu_descriptor_t* desc = channel == 0 ? menu_marker_s11smith_desc : menu_marker_s21smith_desc;
+  size_t count = channel == 0 ? ARRAY_COUNT(menu_marker_s11smith_desc) : ARRAY_COUNT(menu_marker_s21smith_desc);
+  cursor = ui_menu_list(desc, count, "%s", menu_marker_smith_acb, cursor);
+  menu_set_next(cursor, menu_back);
+  return menu_dynamic_buffer;
+}
 
 #ifdef __USE_SERIAL_CONSOLE__
 static const menuitem_t* menu_build_serial_speed_menu(void) {
@@ -1937,7 +2134,20 @@ const menuitem_t* const menu_measure_list[] = {
 };
 #endif
 
-
+const menuitem_t menu_marker[] = {
+    {MT_CALLBACK, 0, "SELECT\nMARKER", menu_marker_select_cb},
+    {MT_ADV_CALLBACK, 0, "TRACKING", menu_marker_tracking_acb},
+    {MT_ADV_CALLBACK, VNA_MODE_SEARCH, "SEARCH\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
+    {MT_CALLBACK, MK_SEARCH_LEFT, "SEARCH\n " S_LARROW "LEFT", menu_marker_search_dir_cb},
+    {MT_CALLBACK, MK_SEARCH_RIGHT, "SEARCH\n " S_RARROW "RIGHT", menu_marker_search_dir_cb},
+    {MT_CALLBACK, ST_START, "MOVE\nSTART", menu_marker_op_cb},
+    {MT_CALLBACK, ST_STOP, "MOVE\nSTOP", menu_marker_op_cb},
+    {MT_CALLBACK, ST_CENTER, "MOVE\nCENTER", menu_marker_op_cb},
+    {MT_CALLBACK, ST_SPAN, "MOVE\nSPAN", menu_marker_op_cb},
+    {MT_CALLBACK, UI_MARKER_EDELAY, "MARKER\nE-DELAY", menu_marker_op_cb},
+    {MT_ADV_CALLBACK, 0, "DELTA", menu_marker_delta_acb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
 
 #ifdef __DFU_SOFTWARE_MODE__
 const menuitem_t menu_dfu[] = {

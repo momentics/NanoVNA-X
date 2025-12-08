@@ -4,8 +4,8 @@
 
 12-point calibration is an extended form of SOLT (Short-Open-Load-Through) calibration that includes an additional parameter Isolation (ISOLN), resulting in 12 error coefficients. This methodology allows compensation for errors caused by the non-ideal nature of the measurement system and provides more accurate S-parameter measurement results.
 
-* [12-Point Calibration Guide (English)](doc/calibration_12_point.md)
-* [12-точечная калибровка (Russian)](doc/calibration_12_point_RU.md)
+* [12-Point Calibration Guide (English)](calibration_12_point.md)
+* [12-точечная калибровка (Russian)](calibration_12_point_RU.md)
 
 ## Preparation for Calibration
 

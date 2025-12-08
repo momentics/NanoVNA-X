@@ -21,7 +21,7 @@ USE_OPT = -Os -fno-inline-small-functions -ggdb -fomit-frame-pointer -falign-fun
  endif
 endif
 # additional options, use math optimisations
-USE_OPT+= -ffast-math -fsingle-precision-constant -fmerge-constants
+USE_OPT+= -ffast-math -fsingle-precision-constant -fmerge-constants -Wno-error=unused-function
 
 # C specific options here (added to USE_OPT).
 ifeq ($(USE_COPT),)
@@ -238,8 +238,9 @@ ASMSRC = $(STARTUPASM) $(PORTASM) $(OSALASM)
 CSRC += src/ui/input/ui_touch.c
 CSRC += src/ui/input/ui_keypad.c
 CSRC += src/ui/controller/ui_events.c
-CSRC += src/ui/menus/menu_calibration.c
-CSRC += src/ui/menus/menu_display.c
+CSRC += src/ui/menus/menu_calibration.c \
+       src/ui/menus/menu_display.c \
+       src/ui/menus/menu_marker.c
 
 INCDIR = $(STARTUPINC) $(KERNINC) $(PORTINC) $(OSALINC) \
          $(HALINC) $(PLATFORMINC) $(BOARDINC)  \

@@ -4,8 +4,8 @@
 
 12-точечная калибровка - это расширенная форма калибровки SOLT (Short-Open-Load-Through), включающая дополнительный параметр Isolation (ISOLN), что дает 12 калибровочных коэффициентов ошибок. Эта методика позволяет компенсировать ошибки, вызванные неидеальностью измерительной системы, и обеспечивает более точные результаты измерений параметров S-параметров устройств.
 
-* [12-Point Calibration Guide (English)](doc/calibration_12_point.md)
-* [12-точечная калибровка (Russian)](doc/calibration_12_point_RU.md)
+* [12-Point Calibration Guide (English)](calibration_12_point.md)
+* [12-точечная калибровка (Russian)](calibration_12_point_RU.md)
 
 ## Подготовка к калибровке
 

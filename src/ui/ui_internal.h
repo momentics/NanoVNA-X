@@ -181,6 +181,7 @@ extern int8_t selection;
 void ui_save_file(char* name, uint8_t format);
 void ui_draw_button(uint16_t x, uint16_t y, uint16_t w, uint16_t h, button_t* b);
 int get_lines_count(const char* label);
+float groupdelay_from_array(int i, const float* v);
 
 #ifdef __USE_SD_CARD__
 enum {
