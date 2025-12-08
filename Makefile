@@ -241,7 +241,10 @@ CSRC += src/ui/controller/ui_events.c
 CSRC += src/ui/menus/menu_calibration.c \
        src/ui/menus/menu_display.c \
        src/ui/menus/menu_marker.c \
-       src/ui/menus/menu_measure.c
+       src/ui/menus/menu_measure.c \
+       src/ui/display/plot_grid.c \
+       src/ui/display/plot_trace.c \
+       src/ui/display/plot_marker.c
 
 INCDIR = $(STARTUPINC) $(KERNINC) $(PORTINC) $(OSALINC) \
          $(HALINC) $(PLATFORMINC) $(BOARDINC)  \
