@@ -66,7 +66,7 @@ typedef void (*menuaction_cb_t)(uint16_t data);
 typedef void (*menuaction_acb_t)(uint16_t data, button_t* b);
 #define UI_FUNCTION_ADV_CALLBACK(ui_function_name) void ui_function_name(uint16_t data, button_t* b)
 
-void ui_mode_normal(void);
+
 
 // Set structure align as WORD (save flash memory)
 typedef struct {
@@ -80,6 +80,11 @@ typedef struct {
   uint8_t type;
   uint8_t data;
 } menu_descriptor_t;
+
+void ui_mode_normal(void);
+void ui_message_box(const char* header, const char* text, uint32_t delay);
+void menu_move_back(bool leave_ui);
+void menu_push_submenu(const menuitem_t* submenu);
 
 typedef struct {
   uint16_t value;
@@ -176,6 +181,7 @@ typedef struct {
 // Provide extern access to these for split files if needed
 extern uint8_t ui_mode;
 extern int8_t selection;
+extern uint8_t keyboard_temp;
 
 
 void ui_save_file(char* name, uint8_t format);
@@ -184,6 +190,29 @@ int get_lines_count(const char* label);
 float groupdelay_from_array(int i, const float* v);
 
 #ifdef __USE_SD_CARD__
+// Save file callback
+typedef FRESULT (*file_save_cb_t)(FIL* f, uint8_t format);
+#define FILE_SAVE_CALLBACK(save_function_name) FRESULT save_function_name(FIL* f, uint8_t format)
+
+// Load file callback
+typedef const char* (*file_load_cb_t)(FIL* f, FILINFO* fno, uint8_t format);
+#define FILE_LOAD_CALLBACK(load_function_name)                                                     \
+  const char* load_function_name(FIL* f, FILINFO* fno, uint8_t format)
+
+typedef struct {
+  const char* ext;
+  file_save_cb_t save;
+#ifdef __SD_FILE_BROWSER__
+  file_load_cb_t load;
+#endif
+  uint32_t opt;
+} file_opt_t;
+
+#define FILE_OPT_REDRAW (1 << 0)
+#define FILE_OPT_CONTINUE (1 << 1)
+
+extern const file_opt_t file_opt[];
+
 enum {
   FMT_S1P_FILE = 0,
   FMT_S2P_FILE,

@@ -20,6 +20,28 @@
  */
 #include "nanovna.h"
 #include "ui/input/hardware_input.h"
+#include "ui/ui_internal.h"
+#include "ui/input/ui_touch.h"
+#include "ui/input/ui_keypad.h"
+#include "ui/controller/vna_browser.h"
+#include "ui/display/display_presenter.h"
+
+// Needed for lcd_printf, lcd_fill, etc. if they are macros in ui_controller.c or display_presenter.h
+// Check if they are macros. They were macros in ui_controller.c
+
+// lcd_drawstring is already defined in nanovna.h as lcd_printf or similar if needed.
+// But wait, nanovna.h says #define lcd_drawstring lcd_printf
+// vna_browser.c tried to use display_presenter implementation.
+// If I remove this define, it will use lcd_printf which uses display_presenter_printf.
+// That is fine.
+
+#define lcd_drawstring_size(...) display_presenter_drawstring_size(__VA_ARGS__)
+#define lcd_printf(...) display_presenter_printf(__VA_ARGS__)
+#define lcd_clear_screen() display_presenter_fill(0, 0, LCD_WIDTH, LCD_HEIGHT)
+#define lcd_fill(x, y, w, h) display_presenter_fill(x, y, w, h)
+#define lcd_set_colors(fg, bg) display_presenter_set_colors(fg, bg)
+#define lcd_set_background(bg) display_presenter_set_colors(0, bg)
+
 static uint16_t file_count;
 static uint16_t page_count;
 static uint16_t current_page;
@@ -328,7 +350,7 @@ void ui_mode_browser(int mode) {
 }
 
 // Process UI input for browser
-static void ui_browser_touch(int touch_x, int touch_y) {
+void ui_browser_touch(int touch_x, int touch_y) {
   browser_btn_t btn;
   int old = selection;
   int max = browser_get_max();
@@ -347,7 +369,7 @@ static void ui_browser_touch(int touch_x, int touch_y) {
   }
 }
 
-static void ui_browser_lever(uint16_t status) {
+void ui_browser_lever(uint16_t status) {
   if (status == EVT_BUTTON_SINGLE_CLICK) {
     if (selection >= 0)
       browser_key_press(selection); // Process click

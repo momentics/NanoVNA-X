@@ -6,12 +6,76 @@
 #include "nanovna.h"
 #include "ui/input/ui_touch.h"
 #include "hal.h"
+#include <string.h>
 
 // Touch screen status constants
-#define EVT_TOUCH_NONE 0
-#define EVT_TOUCH_DOWN 1
-#define EVT_TOUCH_PRESSED 2
-#define EVT_TOUCH_RELEASED 3
+// Touch screen status constants are in ui_touch.h
+#define TOUCH_INTERRUPT_ENABLED 1
+
+// Helper for CALIBRATION_OFFSET
+#define CALIBRATION_OFFSET 20
+
+void touch_position(int* x, int* y) {
+  int16_t last_touch_x, last_touch_y;
+  touch_get_last_position(&last_touch_x, &last_touch_y);
+
+#ifdef __REMOTE_DESKTOP__
+  if (touch_is_remote()) {
+    *x = last_touch_x;
+    *y = last_touch_y;
+    return;
+  }
+#endif
+
+  static int16_t cal_cache[4] = {0};
+  static int32_t scale_x = 0;
+  static int32_t scale_y = 0;
+  static bool scale_ready = false;
+
+  if (!scale_ready) {
+    scale_x = 1 << 16;
+    scale_y = 1 << 16;
+    scale_ready = true;
+  }
+
+  // Check if calibration data has changed and recalculate scales if needed
+  if (memcmp(cal_cache, config._touch_cal, sizeof(cal_cache)) != 0) {
+    memcpy(cal_cache, config._touch_cal, sizeof(cal_cache));
+
+    int32_t denom_x = config._touch_cal[2] - config._touch_cal[0];
+    int32_t denom_y = config._touch_cal[3] - config._touch_cal[1];
+
+    if (denom_x != 0 && denom_y != 0) {
+      scale_x = ((int32_t)(LCD_WIDTH - 1 - 2 * CALIBRATION_OFFSET) << 16) / denom_x;
+      scale_y = ((int32_t)(LCD_HEIGHT - 1 - 2 * CALIBRATION_OFFSET) << 16) / denom_y;
+    } else {
+      scale_x = 1 << 16;
+      scale_y = 1 << 16;
+    }
+  }
+
+  int tx, ty;
+  tx = (int)(((int64_t)scale_x * (last_touch_x - config._touch_cal[0])) >> 16) + CALIBRATION_OFFSET;
+  if (tx < 0)
+    tx = 0;
+  else if (tx >= LCD_WIDTH)
+    tx = LCD_WIDTH - 1;
+
+  ty = (int)(((int64_t)scale_y * (last_touch_y - config._touch_cal[1])) >> 16) + CALIBRATION_OFFSET;
+  if (ty < 0)
+    ty = 0;
+  else if (ty >= LCD_HEIGHT)
+    ty = LCD_HEIGHT - 1;
+
+#ifdef __FLIP_DISPLAY__
+  if (VNA_MODE(VNA_MODE_FLIP_DISPLAY)) {
+    tx = LCD_WIDTH - 1 - tx;
+    ty = LCD_HEIGHT - 1 - ty;
+  }
+#endif
+  *x = tx;
+  *y = ty;
+}
 
 #define TOUCH_INTERRUPT_ENABLED 1
 

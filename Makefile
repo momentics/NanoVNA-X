@@ -238,11 +238,13 @@ ASMSRC = $(STARTUPASM) $(PORTASM) $(OSALASM)
 CSRC += src/ui/input/ui_touch.c
 CSRC += src/ui/input/ui_keypad.c
 CSRC += src/ui/controller/ui_events.c
+CSRC += src/ui/controller/vna_browser.c
 CSRC += src/ui/menus/menu_calibration.c \
        src/ui/menus/menu_display.c \
        src/ui/menus/menu_marker.c \
        src/ui/menus/menu_measure.c \
        src/ui/menus/menu_stimulus.c \
+       src/ui/menus/menu_storage.c \
        src/ui/display/plot_grid.c \
        src/ui/display/plot_trace.c \
        src/ui/display/plot_marker.c
