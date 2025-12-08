@@ -664,19 +664,11 @@ static int txt_keypad_click(int c, int kp_index) {
   return K_CONTINUE;
 }
 
-static void ui_mode_normal(void) {
-   // defined in ui_controller.c, we need to call it.
-   // extern in ui_controller.h? No.
-   // We set ui_mode = UI_NORMAL.
-   // But we need to redraw.
-   // ui_process in ui_controller handles transition?
-   // Only if we set ui_mode.
-   // But ui_controller.c has logic "if (ui_mode == UI_NORMAL) return".
    // We need to call a function to request normal mode.
    // ui_controller.h?
    // extern void ui_mode_normal(void); (it's static in ui_controller)
    // We should expose ui_mode_normal in ui_internal.h
-}
+
 // wait, ui_mode_normal is static in ui_controller.c
 // I should expose it.
 

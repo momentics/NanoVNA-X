@@ -17,3 +17,12 @@ UI_FUNCTION_CALLBACK(menu_config_cb); // Check if needed? menu_system uses it.
 
 // Calibration Menu (menu_calibration.c)
 extern const menuitem_t menu_cal_menu[];
+
+// Display Menu (menu_display.c)
+extern const menuitem_t menu_display[];
+extern const menuitem_t menu_marker[];
+
+// Smith helper from ui_controller.c
+const menuitem_t* menu_build_marker_smith_menu(uint8_t channel);
+uint8_t get_smith_format(void);
+void menu_auto_scale_cb(uint16_t data);

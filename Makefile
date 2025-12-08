@@ -239,6 +239,7 @@ CSRC += src/ui/input/ui_touch.c
 CSRC += src/ui/input/ui_keypad.c
 CSRC += src/ui/controller/ui_events.c
 CSRC += src/ui/menus/menu_calibration.c
+CSRC += src/ui/menus/menu_display.c
 
 INCDIR = $(STARTUPINC) $(KERNINC) $(PORTINC) $(OSALINC) \
          $(HALINC) $(PLATFORMINC) $(BOARDINC)  \

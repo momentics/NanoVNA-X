@@ -35,6 +35,8 @@ static UI_FUNCTION_ADV_CALLBACK(menu_cal_enh_acb) {
 }
 
 static UI_FUNCTION_CALLBACK(menu_caldone_cb) {
+  (void)data;
+  ui_mode_normal();
   // Indicate that calibration is in progress
   calibration_in_progress = true;
   

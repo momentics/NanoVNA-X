@@ -43,6 +43,8 @@ enum {
 #define BUTTON_ICON_GROUP_CHECKED 3
 #define BUTTON_ICON_CHECK_AUTO 4
 #define BUTTON_ICON_CHECK_MANUAL 5
+#define BUTTON_ICON_PAUSE 6
+#define BUTTON_ICON_PLAY 7
 
 #define BUTTON_BORDER_WIDTH_MASK 0x07
 
@@ -63,6 +65,8 @@ typedef void (*menuaction_cb_t)(uint16_t data);
 
 typedef void (*menuaction_acb_t)(uint16_t data, button_t* b);
 #define UI_FUNCTION_ADV_CALLBACK(ui_function_name) void ui_function_name(uint16_t data, button_t* b)
+
+void ui_mode_normal(void);
 
 // Set structure align as WORD (save flash memory)
 typedef struct {

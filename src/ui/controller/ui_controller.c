@@ -125,9 +125,9 @@
 
 
 //==============================================
-static uint16_t menu_button_height;
 
-static uint8_t keyboard_temp; // Used for SD card keyboard workflows
+
+uint8_t keyboard_temp; // Used for SD card keyboard workflows
 
 #ifdef __USE_SD_CARD__
 
@@ -136,10 +136,16 @@ static uint8_t keyboard_temp; // Used for SD card keyboard workflows
 
 
 uint8_t ui_mode = UI_NORMAL;
-static uint8_t menu_current_level = 0;
+
 int8_t selection;
 
-static menuitem_t* ui_menu_list(const menu_descriptor_t* descriptors, size_t count,
+extern const menuitem_t menu_clear[];
+UI_FUNCTION_ADV_CALLBACK(menu_band_sel_acb);
+
+static uint8_t menu_current_level;
+static uint8_t menu_button_height;
+
+menuitem_t* ui_menu_list(const menu_descriptor_t* descriptors, size_t count,
                                 const char* label, const void* reference,
                                 menuitem_t* out) {
   if (descriptors == NULL || out == NULL)
@@ -154,7 +160,7 @@ static menuitem_t* ui_menu_list(const menu_descriptor_t* descriptors, size_t cou
   return out;
 }
 
-static void menu_set_next(menuitem_t* entry, const menuitem_t* next) {
+void menu_set_next(menuitem_t* entry, const menuitem_t* next) {
   if (entry == NULL)
     return;
   entry->type = MT_NEXT;
@@ -183,7 +189,7 @@ static void ui_cycle_option(uint16_t* dst, const option_desc_t* list, size_t cou
   *dst = list[idx].value;
 }
 
-static void ui_mode_normal(void);
+void ui_mode_normal(void);
 static void ui_mode_menu(void);
 
 
@@ -192,16 +198,16 @@ static void menu_draw(uint32_t mask);
 void menu_move_back(bool leave_ui);
 void menu_push_submenu(const menuitem_t* submenu);
 static void menu_set_submenu(const menuitem_t* submenu);
-static const menuitem_t* menu_build_save_menu(void);
-static const menuitem_t* menu_build_recall_menu(void);
-static const menuitem_t* menu_build_bandwidth_menu(void);
-static const menuitem_t* menu_build_points_menu(void);
-static const menuitem_t* menu_build_marker_select_menu(void);
-static const menuitem_t* menu_build_marker_smith_menu(uint8_t channel);
-static const menuitem_t* menu_build_serial_speed_menu(void);
-static const menuitem_t* menu_build_power_menu(void);
+const menuitem_t* menu_build_save_menu(void);
+const menuitem_t* menu_build_recall_menu(void);
+const menuitem_t* menu_build_bandwidth_menu(void);
+const menuitem_t* menu_build_points_menu(void);
+const menuitem_t* menu_build_marker_select_menu(void);
+
+
+const menuitem_t* menu_build_power_menu(void);
 #ifdef __USE_SMOOTH__
-static const menuitem_t* menu_build_smooth_menu(void);
+const menuitem_t* menu_build_smooth_menu(void);
 #endif
 
 // Icons for UI
@@ -488,7 +494,7 @@ static bool select_lever_mode(int mode) {
 
 
 
-static UI_FUNCTION_ADV_CALLBACK(menu_recall_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_recall_acb) {
   if (b) {
     const properties_t* p = get_properties(data);
     if (p)
@@ -552,13 +558,13 @@ UI_FUNCTION_CALLBACK(menu_config_cb) {
 }
 
 #ifdef __DFU_SOFTWARE_MODE__
-static UI_FUNCTION_CALLBACK(menu_dfu_cb) {
+UI_FUNCTION_CALLBACK(menu_dfu_cb) {
   (void)data;
   ui_enter_dfu();
 }
 #endif
 
-static UI_FUNCTION_ADV_CALLBACK(menu_save_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_save_acb) {
   if (b) {
     const properties_t* p = get_properties(data);
     if (p)
@@ -591,44 +597,14 @@ UI_FUNCTION_CALLBACK(menu_save_submenu_cb) {
   menu_push_submenu(menu_build_save_menu());
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_trace_acb) {
-  if (b) {
-    if (trace[data].enabled) {
-      b->bg = LCD_TRACE_1_COLOR + data;
-      if (data == selection)
-        b->bg = LCD_MENU_ACTIVE_COLOR;
-      if (current_trace == data)
-        b->icon = BUTTON_ICON_CHECK;
-    }
-    b->p1.u = data;
-    return;
-  }
 
-  if (trace[data].enabled && data != current_trace) // for enabled trace and not current trace
-    set_active_trace(data);                         // make active
-  else                                              //
-    set_trace_enable(data, !trace[data].enabled);   // toggle trace enable
-}
-
-extern const menuitem_t menu_trace[];
-static UI_FUNCTION_ADV_CALLBACK(menu_traces_acb) {
-  (void)data;
-  if (b) {
-    if (current_trace == TRACE_INVALID)
-      return;
-    b->bg = LCD_TRACE_1_COLOR + current_trace;
-    //    b->p1.u = current_trace;
-    return;
-  }
-  menu_push_submenu(menu_trace);
-}
 
 extern const menuitem_t menu_marker[];
-static uint8_t get_smith_format(void) {
+uint8_t get_smith_format(void) {
   return (current_trace != TRACE_INVALID) ? trace[current_trace].smith_format : 0;
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_marker_smith_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_marker_smith_acb) {
   if (b) {
     b->icon = get_smith_format() == data ? BUTTON_ICON_GROUP_CHECKED : BUTTON_ICON_GROUP;
     b->p1.text = get_smith_format_names(data);
@@ -642,50 +618,9 @@ static UI_FUNCTION_ADV_CALLBACK(menu_marker_smith_acb) {
 
 #define F_S11 0x00
 #define F_S21 0x80
-static UI_FUNCTION_ADV_CALLBACK(menu_format_acb) {
-  if (current_trace == TRACE_INVALID)
-    return; // Not apply any for invalid traces
-  uint16_t format = data & (~F_S21);
-  uint16_t channel = data & F_S21 ? 1 : 0;
-  if (b) {
-    if (trace[current_trace].type == format && trace[current_trace].channel == channel)
-      b->icon = BUTTON_ICON_CHECK;
-    if (format == TRC_SMITH) {
-      uint8_t marker_smith_format = get_smith_format();
-      if ((channel == 0 && !S11_SMITH_VALUE(marker_smith_format)) ||
-          (channel == 1 && !S21_SMITH_VALUE(marker_smith_format)))
-        return;
-      plot_printf(b->label, sizeof(b->label), "%s\n" R_LINK_COLOR "%s",
-                  get_trace_typename(TRC_SMITH, marker_smith_format),
-                  get_smith_format_names(marker_smith_format));
-    } else
-      b->p1.text = get_trace_typename(format, -1);
-    return;
-  }
 
-  if (format == TRC_SMITH && trace[current_trace].type == TRC_SMITH &&
-      trace[current_trace].channel == channel)
-    menu_push_submenu(menu_build_marker_smith_menu(channel));
-  else
-    set_trace_type(current_trace, format, channel);
-}
 
-static UI_FUNCTION_ADV_CALLBACK(menu_channel_acb) {
-  (void)data;
-  if (current_trace == TRACE_INVALID) {
-    if (b)
-      b->p1.text = "";
-    return;
-  }
-  int ch = trace[current_trace].channel;
-  if (b) {
-    b->p1.text = ch == 0 ? "S11 (REFL)" : "S21 (THRU)";
-    return;
-  }
-  // Change channel only if trace type available for this
-  if ((1 << (trace[current_trace].type)) & S11_AND_S21_TYPE_MASK)
-    set_trace_channel(current_trace, ch ^ 1);
-}
+
 
 static const option_desc_t transform_window_options[] = {
     {TD_WINDOW_MINIMUM, "MINIMUM", BUTTON_ICON_NONE},
@@ -693,7 +628,7 @@ static const option_desc_t transform_window_options[] = {
     {TD_WINDOW_MAXIMUM, "MAXIMUM", BUTTON_ICON_NONE},
 };
 
-static UI_FUNCTION_ADV_CALLBACK(menu_transform_window_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_transform_window_acb) {
   (void)data;  // Suppress unused parameter warning
   uint16_t window = props_mode & TD_WINDOW;
   ui_cycle_option(&window, transform_window_options, ARRAY_COUNT(transform_window_options), b);
@@ -707,7 +642,7 @@ static const option_desc_t transform_state_options[] = {
     {DOMAIN_TIME, "ON", BUTTON_ICON_CHECK},
 };
 
-static UI_FUNCTION_ADV_CALLBACK(menu_transform_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_transform_acb) {
   (void)data;
   uint16_t state = props_mode & DOMAIN_TIME;
   ui_cycle_option(&state, transform_state_options, ARRAY_COUNT(transform_state_options), b);
@@ -718,7 +653,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_transform_acb) {
   request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_transform_filter_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_transform_filter_acb) {
   if (b) {
     b->icon = (props_mode & TD_FUNC) == data ? BUTTON_ICON_GROUP_CHECKED : BUTTON_ICON_GROUP;
     return;
@@ -726,7 +661,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_transform_filter_acb) {
   props_mode = (props_mode & ~TD_FUNC) | data;
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_bandwidth_sel_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_bandwidth_sel_acb) {
   (void)data;
   if (b) {
     b->p1.u = get_bandwidth_frequency(config._bandwidth);
@@ -735,7 +670,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_bandwidth_sel_acb) {
   menu_push_submenu(menu_build_bandwidth_menu());
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_bandwidth_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_bandwidth_acb) {
   if (b) {
     b->icon = config._bandwidth == data ? BUTTON_ICON_GROUP_CHECKED : BUTTON_ICON_GROUP;
     b->p1.u = get_bandwidth_frequency(data);
@@ -813,7 +748,7 @@ void apply_vna_mode(uint16_t idx, vna_mode_ops operation) {
   }
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_vna_mode_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_vna_mode_acb) {
   if (b) {
     const char* t = vna_mode_data[data].text;
     if (t == 0)
@@ -826,16 +761,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_vna_mode_acb) {
 }
 
 #ifdef __USE_SMOOTH__
-static UI_FUNCTION_ADV_CALLBACK(menu_smooth_acb) {
-  if (b) {
-    b->icon = get_smooth_factor() == data ? BUTTON_ICON_GROUP_CHECKED : BUTTON_ICON_GROUP;
-    b->p1.u = data;
-    return;
-  }
-  set_smooth_factor(data);
-}
-
-static UI_FUNCTION_ADV_CALLBACK(menu_smooth_sel_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_smooth_sel_acb) {
   (void)data;
   if (b)
     return;
@@ -843,7 +769,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_smooth_sel_acb) {
 }
 #endif
 
-static UI_FUNCTION_ADV_CALLBACK(menu_points_sel_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_points_sel_acb) {
   (void)data;
   if (b) {
     b->p1.u = sweep_points;
@@ -853,7 +779,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_points_sel_acb) {
 }
 
 static const uint16_t point_counts_set[POINTS_SET_COUNT] = POINTS_SET;
-static UI_FUNCTION_ADV_CALLBACK(menu_points_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_points_acb) {
   uint16_t p_count = point_counts_set[data];
   if (b) {
     b->icon = sweep_points == p_count ? BUTTON_ICON_GROUP_CHECKED : BUTTON_ICON_GROUP;
@@ -874,7 +800,7 @@ UI_FUNCTION_ADV_CALLBACK(menu_power_sel_acb) {
   menu_push_submenu(menu_build_power_menu());
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_power_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_power_acb) {
   if (b) {
     b->icon = current_props._power == data ? BUTTON_ICON_GROUP_CHECKED : BUTTON_ICON_GROUP;
     b->p1.u = 2 + data * 2;
@@ -885,7 +811,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_power_acb) {
 
 // Process keyboard button callback, and run keyboard function
 
-static UI_FUNCTION_ADV_CALLBACK(menu_keyboard_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_keyboard_acb) {
   if (data == KM_VAR &&
       lever_mode == LM_EDELAY) // JOG STEP button auto set (e-delay or frequency step)
     data = KM_VAR_DELAY;
@@ -897,7 +823,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_keyboard_acb) {
 }
 
 // Custom keyboard menu button callback (depend from current trace)
-static UI_FUNCTION_ADV_CALLBACK(menu_scale_keyboard_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_scale_keyboard_acb) {
   // Not apply amplitude / scale / ref for invalid or polar graph
   if (current_trace == TRACE_INVALID)
     return;
@@ -916,7 +842,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_scale_keyboard_acb) {
 // Calculate reference and scale values depend from max and min trace values (aligning with
 // 'beautiful' borders)
 //
-static UI_FUNCTION_CALLBACK(menu_auto_scale_cb) {
+UI_FUNCTION_CALLBACK(menu_auto_scale_cb) {
   (void)data;
   if (current_trace == TRACE_INVALID || sweep_points == 0)
     return;
@@ -994,18 +920,30 @@ static UI_FUNCTION_CALLBACK(menu_auto_scale_cb) {
   ui_mode_normal();
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_pause_acb) {
+
+
+UI_FUNCTION_ADV_CALLBACK(menu_pause_acb) {
   (void)data;
   if (b) {
-    b->p1.text = (sweep_mode & SWEEP_ENABLE) ? "PAUSE" : "RESUME";
-    b->icon = (sweep_mode & SWEEP_ENABLE) ? BUTTON_ICON_NOCHECK : BUTTON_ICON_CHECK;
+    b->icon = (sweep_mode & SWEEP_ENABLE) ? BUTTON_ICON_PAUSE : BUTTON_ICON_PLAY;
     return;
   }
   toggle_sweep();
 }
 
+UI_FUNCTION_ADV_CALLBACK(menu_smooth_acb) {
+  (void)data;
+  if (b) {
+     // Check logic for smooth off? For now simple check
+     // If complex, just return none
+     return;
+  }
+  // Logic to turn off smooth? Needs verification if config._smooth exists
+}
+
+
 #define UI_MARKER_EDELAY 6
-static UI_FUNCTION_CALLBACK(menu_marker_op_cb) {
+UI_FUNCTION_CALLBACK(menu_marker_op_cb) {
   freq_t freq = get_marker_frequency(active_marker);
   if (freq == 0)
     return; // no active marker
@@ -1045,7 +983,7 @@ static UI_FUNCTION_CALLBACK(menu_marker_op_cb) {
   ui_mode_normal();
 }
 
-static UI_FUNCTION_CALLBACK(menu_marker_search_dir_cb) {
+UI_FUNCTION_CALLBACK(menu_marker_search_dir_cb) {
   marker_search_dir(markers[active_marker].index,
                     data == MK_SEARCH_RIGHT ? MK_SEARCH_RIGHT : MK_SEARCH_LEFT);
   props_mode &= ~TD_MARKER_TRACK;
@@ -1054,7 +992,7 @@ static UI_FUNCTION_CALLBACK(menu_marker_search_dir_cb) {
 #endif
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_marker_tracking_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_marker_tracking_acb) {
   (void)data;
   if (b) {
     b->icon = (props_mode & TD_MARKER_TRACK) ? BUTTON_ICON_CHECK : BUTTON_ICON_NOCHECK;
@@ -1065,7 +1003,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_marker_tracking_acb) {
 
 #ifdef __VNA_MEASURE_MODULE__
 extern const menuitem_t* const menu_measure_list[];
-static UI_FUNCTION_ADV_CALLBACK(menu_measure_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_measure_acb) {
   if (b) {
     b->icon = current_props._measure == data ? BUTTON_ICON_GROUP_CHECKED : BUTTON_ICON_GROUP;
     return;
@@ -1074,7 +1012,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_measure_acb) {
   menu_set_submenu(menu_measure_list[current_props._measure]);
 }
 
-static UI_FUNCTION_CALLBACK(menu_measure_cb) {
+UI_FUNCTION_CALLBACK(menu_measure_cb) {
   (void)data;
   menu_push_submenu(menu_measure_list[current_props._measure]);
 }
@@ -1097,7 +1035,7 @@ static void active_marker_check(void) {
   }
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_marker_sel_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_marker_sel_acb) {
   // if (data >= MARKERS_MAX) return;
   int mk = data;
   if (b) {
@@ -1125,12 +1063,12 @@ static UI_FUNCTION_ADV_CALLBACK(menu_marker_sel_acb) {
   request_to_redraw(REDRAW_MARKER);
 }
 
-static UI_FUNCTION_CALLBACK(menu_marker_select_cb) {
+UI_FUNCTION_CALLBACK(menu_marker_select_cb) {
   (void)data;
   menu_push_submenu(menu_build_marker_select_menu());
 }
 
-static UI_FUNCTION_CALLBACK(menu_marker_disable_all_cb) {
+UI_FUNCTION_CALLBACK(menu_marker_disable_all_cb) {
   (void)data;
   for (int i = 0; i < MARKERS_MAX; i++)
     markers[i].enabled = FALSE; // all off
@@ -1139,7 +1077,7 @@ static UI_FUNCTION_CALLBACK(menu_marker_disable_all_cb) {
   request_to_redraw(REDRAW_AREA);
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_marker_delta_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_marker_delta_acb) {
   (void)data;
   if (b) {
     b->icon = props_mode & TD_MARKER_DELTA ? BUTTON_ICON_CHECK : BUTTON_ICON_NOCHECK;
@@ -1150,7 +1088,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_marker_delta_acb) {
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
-static UI_FUNCTION_ADV_CALLBACK(menu_serial_speed_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_serial_speed_acb) {
   static const uint32_t usart_speed[] = {19200,  38400,  57600,   115200,  230400,
                                          460800, 921600, 1843200, 2000000, 3000000};
   uint32_t speed = usart_speed[data];
@@ -1162,18 +1100,16 @@ static UI_FUNCTION_ADV_CALLBACK(menu_serial_speed_acb) {
   shell_update_speed(speed);
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_serial_speed_sel_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_serial_speed_sel_acb) {
   (void)data;
   if (b) {
     b->p1.u = config._serial_speed;
     return;
   }
   menu_push_submenu(menu_build_serial_speed_menu());
-}
 #endif
-
 #ifdef USE_VARIABLE_OFFSET_MENU
-static UI_FUNCTION_ADV_CALLBACK(menu_offset_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_offset_acb) {
   int32_t offset = (data + 1) * FREQUENCY_OFFSET_STEP;
   if (b) {
     b->icon = IF_OFFSET == offset ? BUTTON_ICON_GROUP_CHECKED : BUTTON_ICON_GROUP;
@@ -1183,8 +1119,19 @@ static UI_FUNCTION_ADV_CALLBACK(menu_offset_acb) {
   si5351_set_frequency_offset(offset);
 }
 
-const menuitem_t menu_offset[];
-static UI_FUNCTION_ADV_CALLBACK(menu_offset_sel_acb) {
+const menuitem_t menu_offset[] = {
+    {MT_ADV_CALLBACK, 0, "%d" S_Hz, menu_offset_acb},
+    {MT_ADV_CALLBACK, 1, "%d" S_Hz, menu_offset_acb},
+    {MT_ADV_CALLBACK, 2, "%d" S_Hz, menu_offset_acb},
+    {MT_ADV_CALLBACK, 3, "%d" S_Hz, menu_offset_acb},
+    {MT_ADV_CALLBACK, 4, "%d" S_Hz, menu_offset_acb},
+    {MT_ADV_CALLBACK, 5, "%d" S_Hz, menu_offset_acb},
+    {MT_ADV_CALLBACK, 6, "%d" S_Hz, menu_offset_acb},
+    {MT_ADV_CALLBACK, 7, "%d" S_Hz, menu_offset_acb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+
+UI_FUNCTION_ADV_CALLBACK(menu_offset_sel_acb) {
   (void)data;
   if (b) {
     b->p1.i = IF_OFFSET;
@@ -1194,13 +1141,27 @@ static UI_FUNCTION_ADV_CALLBACK(menu_offset_sel_acb) {
 }
 #endif
 
+const menuitem_t menu_device1[] = {
+    {MT_ADV_CALLBACK, 0, "MODE\n " R_LINK_COLOR "%s", menu_band_sel_acb},
+#ifdef __DIGIT_SEPARATOR__
+    {MT_ADV_CALLBACK, VNA_MODE_SEPARATOR, "SEPARATOR\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
+#endif
+#ifdef __USB_UID__
+    {MT_ADV_CALLBACK, VNA_MODE_USB_UID, "USB DEVICE\nUID", menu_vna_mode_acb},
+#endif
+    {MT_SUBMENU, 0, "CLEAR CONFIG", menu_clear},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+
+
+
 #ifdef __LCD_BRIGHTNESS__
 // Brightness control range 0 - 100
 void lcd_set_brightness(uint16_t b) {
   dac_setvalue_ch2(700 + b * (4000 - 700) / 100);
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_brightness_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_brightness_acb) {
   (void)data;
   if (b) {
     b->p1.u = config._brightness;
@@ -1547,7 +1508,7 @@ static FRESULT sd_card_format(void) {
   return f_mount(fs, "", 1);
 }
 
-static UI_FUNCTION_CALLBACK(menu_sdcard_format_cb) {
+UI_FUNCTION_CALLBACK(menu_sdcard_format_cb) {
   (void)data;
   bool resume = (sweep_mode & SWEEP_ENABLE) != 0;
   if (resume)
@@ -1656,13 +1617,13 @@ static uint16_t fix_screenshot_format(uint16_t data) {
 #ifdef __SD_FILE_BROWSER__
 #include "vna_browser.c"
 
-static UI_FUNCTION_CALLBACK(menu_sdcard_browse_cb) {
+UI_FUNCTION_CALLBACK(menu_sdcard_browse_cb) {
   data = fix_screenshot_format(data);
   ui_mode_browser(data);
 }
 #endif
 
-static UI_FUNCTION_CALLBACK(menu_sdcard_cb) {
+UI_FUNCTION_CALLBACK(menu_sdcard_cb) {
   keyboard_temp = (sweep_mode & SWEEP_ENABLE) ? 1 : 0;
   if (keyboard_temp)
     toggle_sweep();
@@ -1680,7 +1641,7 @@ static const option_desc_t band_mode_options[] = {
     {2, "SWC5351", BUTTON_ICON_NONE},
 };
 
-static UI_FUNCTION_ADV_CALLBACK(menu_band_sel_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_band_sel_acb) {
   (void)data;
   uint16_t mode = config._band_mode;
   ui_cycle_option(&mode, band_mode_options, ARRAY_COUNT(band_mode_options), b);
@@ -1693,20 +1654,13 @@ static UI_FUNCTION_ADV_CALLBACK(menu_band_sel_acb) {
   config_service_notify_configuration_changed();
 }
 
-#if STORED_TRACES > 0
-static UI_FUNCTION_ADV_CALLBACK(menu_stored_trace_acb) {
-  if (b) {
-    b->p1.text = get_stored_traces() & (1 << data) ? "CLEAR" : "STORE";
-    return;
-  }
-  toggle_stored_trace(data);
-}
-#endif
+
+
 
 //=====================================================================================================
 //                                 UI menus
 //=====================================================================================================
-static UI_FUNCTION_CALLBACK(menu_back_cb) {
+UI_FUNCTION_CALLBACK(menu_back_cb) {
   (void)data;
   menu_move_back(false);
 }
@@ -1790,98 +1744,7 @@ const menuitem_t menu_state_io[] = {
 
 
 
-const menuitem_t menu_trace[] = {
-    {MT_ADV_CALLBACK, 0, "TRACE %d", menu_trace_acb},
-    {MT_ADV_CALLBACK, 1, "TRACE %d", menu_trace_acb},
-    {MT_ADV_CALLBACK, 2, "TRACE %d", menu_trace_acb},
-    {MT_ADV_CALLBACK, 3, "TRACE %d", menu_trace_acb},
-#if STORED_TRACES == 1
-    {MT_ADV_CALLBACK, 0, "%s TRACE", menu_stored_trace_acb},
-#elif STORED_TRACES > 1
-    {MT_ADV_CALLBACK, 0, "%s TRACE A", menu_stored_trace_acb},
-    {MT_ADV_CALLBACK, 1, "%s TRACE B", menu_stored_trace_acb},
-#if STORED_TRACES > 2
-    {MT_ADV_CALLBACK, 2, "%s TRACE C", menu_stored_trace_acb},
-#endif
-#endif
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
 
-const menuitem_t menu_format4[] = {
-    {MT_ADV_CALLBACK, F_S21 | TRC_Rser, "SERIES R", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_Xser, "SERIES X", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_Zser, "SERIES |Z|", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_Rsh, "SHUNT R", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_Xsh, "SHUNT X", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_Zsh, "SHUNT |Z|", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_Qs21, "Q FACTOR", menu_format_acb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
-
-const menuitem_t menu_formatS21[] = {
-    {MT_ADV_CALLBACK, F_S21 | TRC_LOGMAG, "LOGMAG", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_PHASE, "PHASE", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_DELAY, "DELAY", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_SMITH, "SMITH", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_POLAR, "POLAR", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_LINEAR, "LINEAR", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_REAL, "REAL", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_IMAG, "IMAG", menu_format_acb},
-    {MT_SUBMENU, 0, S_RARROW " MORE", menu_format4},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
-
-const menuitem_t menu_format3[] = {
-    {MT_ADV_CALLBACK, F_S11 | TRC_ZPHASE, "Z PHASE", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_Cs, "SERIES C", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_Ls, "SERIES L", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_Rp, "PARALLEL R", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_Xp, "PARALLEL X", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_Cp, "PARALLEL C", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_Lp, "PARALLEL L", menu_format_acb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
-
-const menuitem_t menu_format2[] = {
-    {MT_ADV_CALLBACK, F_S11 | TRC_POLAR, "POLAR", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_LINEAR, "LINEAR", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_REAL, "REAL", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_IMAG, "IMAG", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_Q, "Q FACTOR", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_G, "CONDUCTANCE", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_B, "SUSCEPTANCE", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_Y, "|Y|", menu_format_acb},
-    {MT_SUBMENU, 0, S_RARROW " MORE", menu_format3},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
-
-const menuitem_t menu_formatS11[] = {
-    {MT_ADV_CALLBACK, F_S11 | TRC_LOGMAG, "LOGMAG", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_PHASE, "PHASE", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_DELAY, "DELAY", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_SMITH, "SMITH", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_SWR, "SWR", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_R, "RESISTANCE", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_X, "REACTANCE", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_Z, "|Z|", menu_format_acb},
-    {MT_SUBMENU, 0, S_RARROW " MORE", menu_format2},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
-
-const menuitem_t menu_scale[] = {
-    {MT_CALLBACK, 0, "AUTO SCALE", menu_auto_scale_cb},
-    {MT_ADV_CALLBACK, KM_TOP, "TOP", menu_scale_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_BOTTOM, "BOTTOM", menu_scale_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_SCALE, "SCALE/DIV", menu_scale_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_REFPOS, "REFERENCE\nPOSITION", menu_scale_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_EDELAY, "E-DELAY", menu_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_S21OFFSET, "S21 OFFSET\n " R_LINK_COLOR "%b.3F" S_dB, menu_keyboard_acb},
-#ifdef __USE_GRID_VALUES__
-    {MT_ADV_CALLBACK, VNA_MODE_SHOW_GRID, "SHOW GRID\nVALUES", menu_vna_mode_acb},
-    {MT_ADV_CALLBACK, VNA_MODE_DOT_GRID, "DOT GRID", menu_vna_mode_acb},
-#endif
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
 
 const menuitem_t menu_transform[] = {
     {MT_ADV_CALLBACK, 0, "TRANSFORM\n%s", menu_transform_acb},
@@ -1938,15 +1801,7 @@ static const menu_descriptor_t menu_smooth_desc[] = {
 };
 #endif
 
-const menuitem_t menu_display[] = {
-    {MT_ADV_CALLBACK, 0, "TRACES", menu_traces_acb},
-    {MT_SUBMENU, 0, "FORMAT\nS11", menu_formatS11},
-    {MT_SUBMENU, 0, "FORMAT\nS21", menu_formatS21},
-    {MT_ADV_CALLBACK, 0, "CHANNEL\n " R_LINK_COLOR "%s", menu_channel_acb},
-    {MT_SUBMENU, 0, "SCALE", menu_scale},
-    {MT_SUBMENU, 0, "MARKERS", menu_marker},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
+
 
 const menuitem_t menu_measure_tools[] = {
     {MT_SUBMENU, 0, "TRANSFORM", menu_transform},
@@ -2096,7 +1951,7 @@ static menuitem_t* menu_dynamic_acquire(void) {
 #undef MENU_DYNAMIC_BUFFER_BASE
 #undef MENU_MAX
 
-static const menuitem_t* menu_build_save_menu(void) {
+const menuitem_t* menu_build_save_menu(void) {
   menuitem_t* cursor = menu_dynamic_acquire();
 #ifdef __SD_FILE_BROWSER__
   *cursor++ =
@@ -2108,7 +1963,7 @@ static const menuitem_t* menu_build_save_menu(void) {
   return menu_dynamic_buffer;
 }
 
-static const menuitem_t* menu_build_recall_menu(void) {
+const menuitem_t* menu_build_recall_menu(void) {
   menuitem_t* cursor = menu_dynamic_acquire();
 #ifdef __SD_FILE_BROWSER__
   *cursor++ = (menuitem_t){MT_CALLBACK, FMT_CAL_FILE, "LOAD FROM\n SD CARD",
@@ -2120,7 +1975,7 @@ static const menuitem_t* menu_build_recall_menu(void) {
   return menu_dynamic_buffer;
 }
 
-static const menuitem_t* menu_build_bandwidth_menu(void) {
+const menuitem_t* menu_build_bandwidth_menu(void) {
   menuitem_t* cursor = menu_dynamic_acquire();
   cursor = ui_menu_list(menu_bandwidth_desc, ARRAY_COUNT(menu_bandwidth_desc), "%u " S_Hz,
                         menu_bandwidth_acb, cursor);
@@ -2128,7 +1983,7 @@ static const menuitem_t* menu_build_bandwidth_menu(void) {
   return menu_dynamic_buffer;
 }
 
-static const menuitem_t* menu_build_points_menu(void) {
+const menuitem_t* menu_build_points_menu(void) {
   menuitem_t* cursor = menu_dynamic_acquire();
   *cursor++ = (menuitem_t){MT_ADV_CALLBACK,
                            KM_POINTS,
@@ -2140,7 +1995,7 @@ static const menuitem_t* menu_build_points_menu(void) {
   return menu_dynamic_buffer;
 }
 
-static const menuitem_t* menu_build_marker_select_menu(void) {
+const menuitem_t* menu_build_marker_select_menu(void) {
   menuitem_t* cursor = menu_dynamic_acquire();
   cursor = ui_menu_list(menu_marker_sel_desc, ARRAY_COUNT(menu_marker_sel_desc), "MARKER %d",
                         menu_marker_sel_acb, cursor);
@@ -2150,7 +2005,7 @@ static const menuitem_t* menu_build_marker_select_menu(void) {
   return menu_dynamic_buffer;
 }
 
-static const menuitem_t* menu_build_marker_smith_menu(uint8_t channel) {
+const menuitem_t* menu_build_marker_smith_menu(uint8_t channel) {
   menuitem_t* cursor = menu_dynamic_acquire();
   const menu_descriptor_t* desc = channel == 0 ? menu_marker_s11smith_desc : menu_marker_s21smith_desc;
   size_t count = channel == 0 ? ARRAY_COUNT(menu_marker_s11smith_desc) : ARRAY_COUNT(menu_marker_s21smith_desc);
@@ -2169,7 +2024,7 @@ static const menuitem_t* menu_build_serial_speed_menu(void) {
 }
 #endif
 
-static const menuitem_t* menu_build_power_menu(void) {
+const menuitem_t* menu_build_power_menu(void) {
   menuitem_t* cursor = menu_dynamic_acquire();
   *cursor++ =
       (menuitem_t){MT_ADV_CALLBACK, SI5351_CLK_DRIVE_STRENGTH_AUTO, "AUTO", menu_power_acb};
@@ -2180,7 +2035,7 @@ static const menuitem_t* menu_build_power_menu(void) {
 }
 
 #ifdef __USE_SMOOTH__
-static const menuitem_t* menu_build_smooth_menu(void) {
+const menuitem_t* menu_build_smooth_menu(void) {
   menuitem_t* cursor = menu_dynamic_acquire();
   *cursor++ = (menuitem_t){MT_ADV_CALLBACK, VNA_MODE_SMOOTH, "SMOOTH\n " R_LINK_COLOR "%s avg",
                            menu_vna_mode_acb};
@@ -2315,34 +2170,10 @@ const menuitem_t menu_clear[] = {
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
-#ifdef USE_VARIABLE_OFFSET_MENU
-const menuitem_t menu_offset[] = {
-    {MT_ADV_CALLBACK, 0, "%d" S_Hz, menu_offset_acb},
-    {MT_ADV_CALLBACK, 1, "%d" S_Hz, menu_offset_acb},
-    {MT_ADV_CALLBACK, 2, "%d" S_Hz, menu_offset_acb},
-    {MT_ADV_CALLBACK, 3, "%d" S_Hz, menu_offset_acb},
-    {MT_ADV_CALLBACK, 4, "%d" S_Hz, menu_offset_acb},
-    {MT_ADV_CALLBACK, 5, "%d" S_Hz, menu_offset_acb},
-    {MT_ADV_CALLBACK, 6, "%d" S_Hz, menu_offset_acb},
-    {MT_ADV_CALLBACK, 7, "%d" S_Hz, menu_offset_acb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
-#endif
 
-const menuitem_t menu_device1[] = {
-    {MT_ADV_CALLBACK, 0, "MODE\n " R_LINK_COLOR "%s", menu_band_sel_acb},
-#ifdef __DIGIT_SEPARATOR__
-    {MT_ADV_CALLBACK, VNA_MODE_SEPARATOR, "SEPARATOR\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
-#endif
-#ifdef __USB_UID__
-    {MT_ADV_CALLBACK, VNA_MODE_USB_UID, "USB DEVICE\nUID", menu_vna_mode_acb},
-#endif
-    {MT_SUBMENU, 0, "CLEAR CONFIG", menu_clear},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
 
 #ifdef __USE_RTC__
-static UI_FUNCTION_ADV_CALLBACK(menu_rtc_out_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_rtc_out_acb) {
   (void)data;
   if (b) {
     if (rtc_clock_output_enabled()) {

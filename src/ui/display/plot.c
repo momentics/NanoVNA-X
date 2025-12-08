@@ -1022,7 +1022,7 @@ static inline void clear_markmap(void) {
 /*
  * Force full screen update
  */
-static inline void force_set_markmap(void) {
+void force_set_markmap(void) {
   int n = MAX_MARKMAP_Y - 1;
   do {
     markmap[n] = (map_t)-1;
@@ -2338,7 +2338,7 @@ void draw_all(void) {
 //**************************************************************************************
 //            Set update mask for next screen update
 //**************************************************************************************
-void request_to_redraw(uint16_t mask) {
+void request_to_redraw(uint32_t mask) {
   redraw_request |= mask;
 }
 
