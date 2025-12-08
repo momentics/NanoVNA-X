@@ -769,25 +769,7 @@ UI_FUNCTION_ADV_CALLBACK(menu_smooth_sel_acb) {
 }
 #endif
 
-UI_FUNCTION_ADV_CALLBACK(menu_points_sel_acb) {
-  (void)data;
-  if (b) {
-    b->p1.u = sweep_points;
-    return;
-  }
-  menu_push_submenu(menu_build_points_menu());
-}
 
-static const uint16_t point_counts_set[POINTS_SET_COUNT] = POINTS_SET;
-UI_FUNCTION_ADV_CALLBACK(menu_points_acb) {
-  uint16_t p_count = point_counts_set[data];
-  if (b) {
-    b->icon = sweep_points == p_count ? BUTTON_ICON_GROUP_CHECKED : BUTTON_ICON_GROUP;
-    b->p1.u = p_count;
-    return;
-  }
-  set_sweep_points(p_count);
-}
 
 UI_FUNCTION_ADV_CALLBACK(menu_power_sel_acb) {
   (void)data;
@@ -1673,37 +1655,7 @@ const menuitem_t menu_measure_tools[] = {
      menu_keyboard_acb},
 #endif
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
-
-static const menu_descriptor_t menu_points_desc[] = {
-    {MT_ADV_CALLBACK, 0},
-#if POINTS_SET_COUNT > 1
-    {MT_ADV_CALLBACK, 1},
-#endif
-#if POINTS_SET_COUNT > 2
-    {MT_ADV_CALLBACK, 2},
-#endif
-#if POINTS_SET_COUNT > 3
-    {MT_ADV_CALLBACK, 3},
-#endif
-#if POINTS_SET_COUNT > 4
-    {MT_ADV_CALLBACK, 4},
-#endif
-};
-
-const menuitem_t menu_stimulus[] = {
-    {MT_ADV_CALLBACK, KM_START, "START", menu_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_STOP, "STOP", menu_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_CENTER, "CENTER", menu_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_SPAN, "SPAN", menu_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_CW, "CW FREQ", menu_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_STEP, "FREQ STEP\n " R_LINK_COLOR "%bF" S_Hz, menu_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_VAR, "JOG STEP\n " R_LINK_COLOR "AUTO", menu_keyboard_acb},
-    {MT_ADV_CALLBACK, 0, "MORE PTS\n " R_LINK_COLOR "%u", menu_points_sel_acb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
-
-static const menu_descriptor_t menu_serial_speed_desc[] = {
+};static const menu_descriptor_t menu_serial_speed_desc[] = {
     {MT_ADV_CALLBACK, 0},
     {MT_ADV_CALLBACK, 1},
     {MT_ADV_CALLBACK, 2},
@@ -1719,7 +1671,7 @@ static const menu_descriptor_t menu_serial_speed_desc[] = {
 enum {
   MENU_DYNAMIC_SAVE_SIZE = MENU_STATE_SD_ENTRY + ARRAY_COUNT(menu_state_slots_desc) + 1,
   MENU_DYNAMIC_BANDWIDTH_SIZE = ARRAY_COUNT(menu_bandwidth_desc) + 1,
-  MENU_DYNAMIC_POINTS_SIZE = 1 + ARRAY_COUNT(menu_points_desc) + 1,
+  MENU_DYNAMIC_POINTS_SIZE = 20,
   MENU_DYNAMIC_MARKER_SIZE = 20,
   MENU_DYNAMIC_SERIAL_SPEED_SIZE = ARRAY_COUNT(menu_serial_speed_desc) + 1,
   MENU_DYNAMIC_POWER_SIZE = 1 + ARRAY_COUNT(menu_power_desc) + 1,
@@ -1788,17 +1740,7 @@ const menuitem_t* menu_build_bandwidth_menu(void) {
   return menu_dynamic_buffer;
 }
 
-const menuitem_t* menu_build_points_menu(void) {
-  menuitem_t* cursor = menu_dynamic_acquire();
-  *cursor++ = (menuitem_t){MT_ADV_CALLBACK,
-                           KM_POINTS,
-                           "SET POINTS\n " R_LINK_COLOR "%d",
-                           (const void*)menu_keyboard_acb};
-  cursor = ui_menu_list(menu_points_desc, ARRAY_COUNT(menu_points_desc), "%d point",
-                        menu_points_acb, cursor);
-  menu_set_next(cursor, menu_back);
-  return menu_dynamic_buffer;
-}
+
 
 
 

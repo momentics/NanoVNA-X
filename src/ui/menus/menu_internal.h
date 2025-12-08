@@ -46,6 +46,7 @@ extern const menuitem_t menu_cal_menu[];
 // Display Menu (menu_display.c)
 extern const menuitem_t menu_display[];
 extern const menuitem_t menu_marker[];
+extern const menuitem_t menu_stimulus[];
 const menuitem_t* menu_build_marker_select_menu(void);
 
 // Smith helper from ui_controller.c
