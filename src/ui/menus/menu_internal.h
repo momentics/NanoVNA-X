@@ -12,6 +12,7 @@
 
 void menu_move_back(bool leave_ui);
 void menu_push_submenu(const menuitem_t* submenu);
+void menu_set_submenu(const menuitem_t* submenu);
 menuitem_t* ui_menu_list(const menu_descriptor_t* descriptors, size_t count,
                          const char* label, const void* reference,
                          menuitem_t* out);
@@ -26,6 +27,9 @@ UI_FUNCTION_CALLBACK(menu_config_cb);
 UI_FUNCTION_ADV_CALLBACK(menu_band_sel_acb);
 UI_FUNCTION_ADV_CALLBACK(menu_bandwidth_sel_acb);
 UI_FUNCTION_ADV_CALLBACK(menu_points_sel_acb);
+UI_FUNCTION_ADV_CALLBACK(menu_keyboard_acb);
+UI_FUNCTION_CALLBACK(menu_measure_cb);
+UI_FUNCTION_ADV_CALLBACK(menu_measure_acb);
 
 const menuitem_t* menu_build_bandwidth_menu(void);
 const menuitem_t* menu_build_points_menu(void);
