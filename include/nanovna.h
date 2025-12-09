@@ -50,6 +50,7 @@
 
 #include "core/globals.h"
 #include "ui/ui_style.h"
+#include "ui/core/ui_core.h"
 
 // Optional sweep point (in UI menu)
 #if SWEEP_POINTS_MAX >=401

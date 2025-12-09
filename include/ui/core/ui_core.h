@@ -15,6 +15,16 @@ enum {
 #endif
 };
 
+// Touch Events
+#define EVT_TOUCH_NONE 0
+#define EVT_TOUCH_DOWN 1
+#define EVT_TOUCH_PRESSED 2
+#define EVT_TOUCH_RELEASED 3
+
+// Cooperative polling budgets
+#define TOUCH_RELEASE_POLL_INTERVAL_MS 2U // 500 Hz release detection
+#define TOUCH_DRAG_POLL_INTERVAL_MS 8U    // 125 Hz drag updates
+
 // File Formats (moved from ui_controller.c)
 #ifdef __USE_SD_CARD__
 enum {
@@ -105,4 +115,6 @@ void ui_keyboard_cb(uint16_t data, button_t* b);
 void menu_sdcard_cb(uint16_t data);
 void menu_stored_trace_acb(uint16_t data, button_t* b);
 void menu_vna_mode_acb(uint16_t data, button_t* b);
+bool select_lever_mode(int mode);
+void apply_vna_mode(uint16_t idx, vna_mode_ops operation);
 

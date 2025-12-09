@@ -196,6 +196,10 @@ CSRC = $(STARTUPSRC) \
        src/ui/menus/menu_main.c \
        src/ui/menus/menu_cal.c \
        src/ui/menus/menu_display.c \
+       src/ui/menus/menu_marker.c \
+       src/ui/menus/menu_stimulus.c \
+       src/ui/menus/menu_system.c \
+       src/ui/menus/menu_storage.c \
        src/platform/peripherals/lcd.c \
        src/ui/display/display_presenter.c \
        src/platform/boards/board_events.c \

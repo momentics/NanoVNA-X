@@ -11,19 +11,12 @@
 #include "../resources/icons/icons_menu.h"
 #include "platform/boards/board_events.h"
 
-// Touch screen
-#define EVT_TOUCH_NONE 0
-#define EVT_TOUCH_DOWN 1
-#define EVT_TOUCH_PRESSED 2
-#define EVT_TOUCH_RELEASED 3
+#include "platform/boards/board_events.h"
 
 #include "infra/storage/config_service.h"
 
-#define TOUCH_INTERRUPT_ENABLED 1
 
-// Cooperative polling budgets
-#define TOUCH_RELEASE_POLL_INTERVAL_MS 2U // 500 Hz release detection
-#define TOUCH_DRAG_POLL_INTERVAL_MS 8U    // 125 Hz drag updates
+#define TOUCH_INTERRUPT_ENABLED 1
 
 static uint8_t touch_status_flag = 0;
 // static uint8_t last_touch_status = EVT_TOUCH_NONE;

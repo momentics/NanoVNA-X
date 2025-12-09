@@ -2,7 +2,8 @@
 #include "ui/menus/menu_display.h"
 #include "ui/core/ui_menu_engine.h"
 #include "ui/core/ui_core.h"
-#include "ui/core/ui_keypad.h"
+#include "ui/core/ui_keypad.h" // For KM_* definitions
+#include "infra/storage/config_service.h"
 
 // ===================================
 // Callbacks
@@ -178,6 +179,121 @@ static UI_FUNCTION_CALLBACK(menu_auto_scale_cb) {
 // Menus
 // ===================================
 
+// Keyboard Callbacks
+
+UI_KEYBOARD_CALLBACK(input_amplitude) {
+  int type = trace[current_trace].type;
+  float scale = get_trace_scale(current_trace);
+  float ref = get_trace_refpos(current_trace);
+  float bot = (0 - ref) * scale;
+  float top = (NGRIDY - ref) * scale;
+
+  if (b) {
+    float val = data == 0 ? top : bot;
+    if (type == TRC_SWR)
+      val += 1.0f;
+    plot_printf(b->label, sizeof(b->label), "%s\n " R_LINK_COLOR "%.4F%s",
+                data == 0 ? "TOP" : "BOTTOM", val, trace_info_list[type].symbol);
+    return;
+  }
+  float value = keyboard_get_float();
+  if (type == TRC_SWR)
+    value -= 1.0f; // Hack for SWR trace!
+  if (data == 0)
+    top = value; // top value input
+  else
+    bot = value; // bottom value input
+  scale = (top - bot) / NGRIDY;
+  ref = (top == bot) ? -value : -bot / scale;
+  set_trace_scale(current_trace, scale);
+  set_trace_refpos(current_trace, ref);
+}
+
+UI_KEYBOARD_CALLBACK(input_scale) {
+  (void)data;
+  if (b)
+    return;
+  set_trace_scale(current_trace, keyboard_get_float());
+}
+
+UI_KEYBOARD_CALLBACK(input_ref) {
+  (void)data;
+  if (b)
+    return;
+  set_trace_refpos(current_trace, keyboard_get_float());
+}
+
+UI_KEYBOARD_CALLBACK(input_edelay) {
+  (void)data;
+  if (current_trace == TRACE_INVALID)
+    return;
+  int ch = trace[current_trace].channel;
+  if (b) {
+    plot_printf(b->label, sizeof(b->label), "E-DELAY S%d1\n " R_LINK_COLOR "%.7F" S_SECOND, ch + 1,
+                current_props._electrical_delay[ch]);
+    return;
+  }
+  set_electrical_delay(ch, keyboard_get_float());
+}
+
+UI_KEYBOARD_CALLBACK(input_s21_offset) {
+  (void)data;
+  if (b) {
+    b->p1.f = s21_offset;
+    return;
+  }
+  set_s21_offset(keyboard_get_float());
+}
+
+UI_KEYBOARD_CALLBACK(input_velocity) {
+  (void)data;
+  if (b) {
+    b->p1.u = velocity_factor;
+    return;
+  }
+  velocity_factor = keyboard_get_uint();
+}
+
+#ifdef __S11_CABLE_MEASURE__
+extern float real_cable_len;
+UI_KEYBOARD_CALLBACK(input_cable_len) {
+  (void)data;
+  if (b) {
+    if (real_cable_len == 0.0f)
+      return;
+    plot_printf(b->label, sizeof(b->label), "%s\n " R_LINK_COLOR "%.4F%s", "CABLE LENGTH",
+                real_cable_len, S_METRE);
+    return;
+  }
+  real_cable_len = keyboard_get_float();
+}
+#endif
+
+#ifdef __S21_MEASURE__
+UI_KEYBOARD_CALLBACK(input_measure_r) {
+  (void)data;
+  if (b) {
+    b->p1.f = config._measure_r;
+    return;
+  }
+  config._measure_r = keyboard_get_float();
+  config_service_notify_configuration_changed();
+}
+#endif
+
+#ifdef __VNA_Z_RENORMALIZATION__
+UI_KEYBOARD_CALLBACK(input_portz) {
+  if (b) {
+    b->p1.f = data ? current_props._cal_load_r : current_props._portz;
+    return;
+  }
+  if (data)
+    current_props._cal_load_r = keyboard_get_float();
+  else
+    current_props._portz = keyboard_get_float();
+}
+#endif
+
 const menuitem_t menu_scale[] = {
     {MT_CALLBACK, 0, "AUTO SCALE", menu_auto_scale_cb},
     {MT_ADV_CALLBACK, KM_TOP, "TOP", menu_scale_keyboard_acb},
@@ -325,5 +441,274 @@ const menuitem_t menu_display[] = {
     {MT_ADV_CALLBACK, 0, "CHANNEL\n " R_LINK_COLOR "%s", menu_channel_acb},
     {MT_SUBMENU, 0, "SCALE", menu_scale},
     {MT_SUBMENU, 0, "MARKERS", menu_marker},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+
+// ===================================
+// Transform Logic
+// ===================================
+static const option_desc_t transform_window_options[] = {
+    {TD_WINDOW_MINIMUM, "MINIMUM", BUTTON_ICON_NONE},
+    {TD_WINDOW_NORMAL, "NORMAL", BUTTON_ICON_NONE},
+    {TD_WINDOW_MAXIMUM, "MAXIMUM", BUTTON_ICON_NONE},
+};
+
+static UI_FUNCTION_ADV_CALLBACK(menu_transform_window_acb) {
+  (void)data;  // Suppress unused parameter warning
+  uint16_t window = props_mode & TD_WINDOW;
+  ui_cycle_option(&window, transform_window_options, ARRAY_COUNT(transform_window_options), b);
+  if (b)
+    return;
+  props_mode = (props_mode & (uint16_t)~TD_WINDOW) | window;
+}
+
+static const option_desc_t transform_state_options[] = {
+    {0, "OFF", BUTTON_ICON_NOCHECK},
+    {DOMAIN_TIME, "ON", BUTTON_ICON_CHECK},
+};
+
+static UI_FUNCTION_ADV_CALLBACK(menu_transform_acb) {
+  (void)data;
+  uint16_t state = props_mode & DOMAIN_TIME;
+  ui_cycle_option(&state, transform_state_options, ARRAY_COUNT(transform_state_options), b);
+  if (b)
+    return;
+  props_mode = (props_mode & (uint16_t)~DOMAIN_TIME) | state;
+  select_lever_mode(LM_MARKER);
+  request_to_redraw(REDRAW_FREQUENCY | REDRAW_AREA);
+}
+
+static UI_FUNCTION_ADV_CALLBACK(menu_transform_filter_acb) {
+  if (b) {
+    b->icon = (props_mode & TD_FUNC) == data ? BUTTON_ICON_GROUP_CHECKED : BUTTON_ICON_GROUP;
+    return;
+  }
+  props_mode = (props_mode & ~TD_FUNC) | data;
+}
+
+const menuitem_t menu_transform[] = {
+    {MT_ADV_CALLBACK, 0, "TRANSFORM\n%s", menu_transform_acb},
+    {MT_ADV_CALLBACK, TD_FUNC_LOWPASS_IMPULSE, "LOW PASS\nIMPULSE", menu_transform_filter_acb},
+    {MT_ADV_CALLBACK, TD_FUNC_LOWPASS_STEP, "LOW PASS\nSTEP", menu_transform_filter_acb},
+    {MT_ADV_CALLBACK, TD_FUNC_BANDPASS, "BANDPASS", menu_transform_filter_acb},
+    {MT_ADV_CALLBACK, 0, "WINDOW\n " R_LINK_COLOR "%s", menu_transform_window_acb},
+    {MT_ADV_CALLBACK, KM_VELOCITY_FACTOR, "VELOCITY F.\n " R_LINK_COLOR "%d%%%%",
+     menu_keyboard_acb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+
+// ===================================
+// Bandwidth & Smooth Logic
+// ===================================
+static const menu_descriptor_t menu_bandwidth_desc[] = {
+#ifdef BANDWIDTH_8000
+    {MT_ADV_CALLBACK, BANDWIDTH_8000},
+#endif
+#ifdef BANDWIDTH_4000
+    {MT_ADV_CALLBACK, BANDWIDTH_4000},
+#endif
+#ifdef BANDWIDTH_2000
+    {MT_ADV_CALLBACK, BANDWIDTH_2000},
+#endif
+#ifdef BANDWIDTH_1000
+    {MT_ADV_CALLBACK, BANDWIDTH_1000},
+#endif
+#ifdef BANDWIDTH_333
+    {MT_ADV_CALLBACK, BANDWIDTH_333},
+#endif
+#ifdef BANDWIDTH_100
+    {MT_ADV_CALLBACK, BANDWIDTH_100},
+#endif
+#ifdef BANDWIDTH_30
+    {MT_ADV_CALLBACK, BANDWIDTH_30},
+#endif
+#ifdef BANDWIDTH_10
+    {MT_ADV_CALLBACK, BANDWIDTH_10},
+#endif
+};
+
+static UI_FUNCTION_ADV_CALLBACK(menu_bandwidth_acb) {
+  if (b) {
+    b->icon = config._bandwidth == data ? BUTTON_ICON_GROUP_CHECKED : BUTTON_ICON_GROUP;
+    b->p1.u = get_bandwidth_frequency(data);
+    return;
+  }
+  set_bandwidth(data);
+}
+
+static const menuitem_t* menu_build_bandwidth_menu(void) {
+  menuitem_t* cursor = menu_dynamic_acquire();
+  const menuitem_t* base = cursor;
+  cursor = ui_menu_list(menu_bandwidth_desc, ARRAY_COUNT(menu_bandwidth_desc), "%u " S_Hz,
+                        menu_bandwidth_acb, cursor);
+  menu_set_next(cursor, menu_back);
+  return base;
+}
+
+static UI_FUNCTION_ADV_CALLBACK(menu_bandwidth_sel_acb) {
+  (void)data;
+  if (b) {
+    b->p1.u = get_bandwidth_frequency(config._bandwidth);
+    return;
+  }
+  menu_push_submenu(menu_build_bandwidth_menu());
+}
+
+#ifdef __USE_SMOOTH__
+static const menu_descriptor_t menu_smooth_desc[] = {
+    {MT_ADV_CALLBACK, 1},
+    {MT_ADV_CALLBACK, 2},
+    {MT_ADV_CALLBACK, 4},
+    {MT_ADV_CALLBACK, 5},
+    {MT_ADV_CALLBACK, 6},
+};
+
+static UI_FUNCTION_ADV_CALLBACK(menu_smooth_acb) {
+  if (b) {
+    b->icon = get_smooth_factor() == data ? BUTTON_ICON_GROUP_CHECKED : BUTTON_ICON_GROUP;
+    b->p1.u = data;
+    return;
+  }
+  set_smooth_factor(data);
+}
+
+static const menuitem_t* menu_build_smooth_menu(void) {
+  menuitem_t* cursor = menu_dynamic_acquire();
+  const menuitem_t* base = cursor;
+  *cursor++ = (menuitem_t){MT_ADV_CALLBACK, VNA_MODE_SMOOTH, "SMOOTH\n " R_LINK_COLOR "%s avg",
+                           menu_vna_mode_acb};
+  *cursor++ = (menuitem_t){MT_ADV_CALLBACK, 0, "SMOOTH\nOFF", menu_smooth_acb};
+  cursor = ui_menu_list(menu_smooth_desc, ARRAY_COUNT(menu_smooth_desc), "x%d", menu_smooth_acb,
+                        cursor);
+  menu_set_next(cursor, menu_back);
+  return base;
+}
+
+static UI_FUNCTION_ADV_CALLBACK(menu_smooth_sel_acb) {
+  (void)data;
+  if (b)
+    return;
+  menu_push_submenu(menu_build_smooth_menu());
+}
+#endif
+
+// ===================================
+// Measure Logic
+// ===================================
+#ifdef __VNA_MEASURE_MODULE__
+extern const menuitem_t* const menu_measure_list[];
+static UI_FUNCTION_ADV_CALLBACK(menu_measure_acb) {
+  if (b) {
+    b->icon = current_props._measure == data ? BUTTON_ICON_GROUP_CHECKED : BUTTON_ICON_GROUP;
+    return;
+  }
+  plot_set_measure_mode(data);
+  menu_set_submenu(menu_measure_list[current_props._measure]);
+}
+
+static UI_FUNCTION_CALLBACK(menu_measure_cb) {
+  (void)data;
+  menu_push_submenu(menu_measure_list[current_props._measure]);
+}
+
+// Select menu depend from measure mode
+#ifdef __USE_LC_MATCHING__
+const menuitem_t menu_measure_lc[] = {
+    {MT_ADV_CALLBACK, MEASURE_NONE, "OFF", menu_measure_acb},
+    {MT_ADV_CALLBACK, MEASURE_LC_MATH, "L/C MATCH", menu_measure_acb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+#endif
+
+#ifdef __S11_CABLE_MEASURE__
+const menuitem_t menu_measure_cable[] = {
+    {MT_ADV_CALLBACK, MEASURE_NONE, "OFF", menu_measure_acb},
+    {MT_ADV_CALLBACK, MEASURE_S11_CABLE, "CABLE\n (S11)", menu_measure_acb},
+    {MT_ADV_CALLBACK, KM_VELOCITY_FACTOR, "VELOCITY F.\n " R_LINK_COLOR "%d%%%%",
+     menu_keyboard_acb},
+    {MT_ADV_CALLBACK, KM_ACTUAL_CABLE_LEN, "CABLE LENGTH", menu_keyboard_acb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+#endif
+
+#ifdef __S11_RESONANCE_MEASURE__
+const menuitem_t menu_measure_resonance[] = {
+    {MT_ADV_CALLBACK, MEASURE_NONE, "OFF", menu_measure_acb},
+    {MT_ADV_CALLBACK, MEASURE_S11_RESONANCE, "RESONANCE\n (S11)", menu_measure_acb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+#endif
+
+#ifdef __S21_MEASURE__
+const menuitem_t menu_measure_s21[] = {
+    {MT_ADV_CALLBACK, MEASURE_NONE, "OFF", menu_measure_acb},
+    {MT_ADV_CALLBACK, MEASURE_SHUNT_LC, "SHUNT LC\n (S21)", menu_measure_acb},
+    {MT_ADV_CALLBACK, MEASURE_SERIES_LC, "SERIES LC\n (S21)", menu_measure_acb},
+    {MT_ADV_CALLBACK, MEASURE_SERIES_XTAL, "SERIES\nXTAL (S21)", menu_measure_acb},
+    {MT_ADV_CALLBACK, KM_MEASURE_R, " Rl = " R_LINK_COLOR "%b.4F" S_OHM, menu_keyboard_acb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+
+const menuitem_t menu_measure_filter[] = {
+    {MT_ADV_CALLBACK, MEASURE_NONE, "OFF", menu_measure_acb},
+    {MT_ADV_CALLBACK, MEASURE_FILTER, "FILTER\n (S21)", menu_measure_acb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+#endif
+
+const menuitem_t menu_measure[] = {
+    {MT_ADV_CALLBACK, MEASURE_NONE, "OFF", menu_measure_acb},
+#ifdef __USE_LC_MATCHING__
+    {MT_ADV_CALLBACK, MEASURE_LC_MATH, "L/C MATCH", menu_measure_acb},
+#endif
+#ifdef __S11_CABLE_MEASURE__
+    {MT_ADV_CALLBACK, MEASURE_S11_CABLE, "CABLE\n (S11)", menu_measure_acb},
+#endif
+#ifdef __S11_RESONANCE_MEASURE__
+    {MT_ADV_CALLBACK, MEASURE_S11_RESONANCE, "RESONANCE\n (S11)", menu_measure_acb},
+#endif
+#ifdef __S21_MEASURE__
+    {MT_ADV_CALLBACK, MEASURE_SHUNT_LC, "SHUNT LC\n (S21)", menu_measure_acb},
+    {MT_ADV_CALLBACK, MEASURE_SERIES_LC, "SERIES LC\n (S21)", menu_measure_acb},
+    {MT_ADV_CALLBACK, MEASURE_SERIES_XTAL, "SERIES\nXTAL (S21)", menu_measure_acb},
+    {MT_ADV_CALLBACK, MEASURE_FILTER, "FILTER\n (S21)", menu_measure_acb},
+#endif
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+
+// Dynamic menu selector depend from measure mode
+const menuitem_t* const menu_measure_list[] = {
+    [MEASURE_NONE] = menu_measure,
+#ifdef __USE_LC_MATCHING__
+    [MEASURE_LC_MATH] = menu_measure_lc,
+#endif
+#ifdef __S21_MEASURE__
+    [MEASURE_SHUNT_LC] = menu_measure_s21,
+    [MEASURE_SERIES_LC] = menu_measure_s21,
+    [MEASURE_SERIES_XTAL] = menu_measure_s21,
+    [MEASURE_FILTER] = menu_measure_filter,
+#endif
+#ifdef __S11_CABLE_MEASURE__
+    [MEASURE_S11_CABLE] = menu_measure_cable,
+#endif
+#ifdef __S11_RESONANCE_MEASURE__
+    [MEASURE_S11_RESONANCE] = menu_measure_resonance,
+#endif
+};
+#endif
+
+const menuitem_t menu_measure_tools[] = {
+    {MT_SUBMENU, 0, "TRANSFORM", menu_transform},
+#ifdef __USE_SMOOTH__
+    {MT_ADV_CALLBACK, 0, "DATA\nSMOOTH", menu_smooth_sel_acb},
+#endif
+#ifdef __VNA_MEASURE_MODULE__
+    {MT_CALLBACK, 0, "MEASURE", menu_measure_cb},
+#endif
+    {MT_ADV_CALLBACK, 0, "IF BANDWIDTH\n " R_LINK_COLOR "%u" S_Hz, menu_bandwidth_sel_acb},
+#ifdef __VNA_Z_RENORMALIZATION__
+    {MT_ADV_CALLBACK, KM_Z_PORT, "PORT-Z\n " R_LINK_COLOR "50 " S_RARROW " %bF" S_OHM,
+     menu_keyboard_acb},
+#endif
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };

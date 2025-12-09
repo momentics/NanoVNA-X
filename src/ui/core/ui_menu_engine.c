@@ -6,7 +6,6 @@
 #include "ui/core/ui_keypad.h"
 #include "ui/display/display_presenter.h"
 #include "ui/input/hardware_input.h"
-#include "ui/core/ui_keypad.h" // Wait, duplicate? No, just add once.
 
 // Bring in macros for drawing (or include a common ui_draw.h if I created one)
 // For now, reuse the macros as localized here.
@@ -285,7 +284,7 @@ void ui_mode_menu(void) {
 
 static UI_FUNCTION_CALLBACK(menu_back_cb) {
   (void)data;
-  menu_move_back(true);
+  menu_move_back(false);
 }
 
 const menuitem_t menu_back[] = {

@@ -1,8 +1,9 @@
-#ifndef __UI_MENU_STIMULUS_H__
-#define __UI_MENU_STIMULUS_H__
+#pragma once
 
 #include "ui/ui_menu.h"
 
-extern const menuitem_t menu_stimulus[];
+void input_freq(uint16_t data, button_t* b);
+void input_var_delay(uint16_t data, button_t* b);
+void input_points(uint16_t data, button_t* b);
 
-#endif // __UI_MENU_STIMULUS_H__
+extern const menuitem_t menu_stimulus[];
