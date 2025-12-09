@@ -1071,8 +1071,8 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
       si5351_wait_pll_lock();
     }
     // Set new gain values
-    if (band_s[current_band].l_gain != band_s[band].l_gain ||
-        band_s[current_band].r_gain != band_s[band].r_gain)
+    if (current_band != 0 && (band_s[current_band].l_gain != band_s[band].l_gain ||
+        band_s[current_band].r_gain != band_s[band].r_gain))
       tlv320aic3204_set_gain(band_s[band].l_gain, band_s[band].r_gain);
     // Add delay - optimized for band transitions
     if (DELAY_RESET_PLL_BEFORE)
