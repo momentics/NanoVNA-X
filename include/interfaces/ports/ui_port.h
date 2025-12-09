@@ -42,4 +42,5 @@ struct ui_module_port {
 };
 
 extern const ui_module_port_api_t ui_port_api;
+extern const ui_module_port_t ui_port;
 
