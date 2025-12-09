@@ -190,6 +190,9 @@ CSRC = $(STARTUPSRC) \
        src/processing/vna_math.c \
        src/ui/display/plot.c \
        src/ui/controller/ui_controller.c \
+       src/ui/core/ui_core.c \
+       src/ui/core/ui_menu_engine.c \
+       src/ui/core/ui_keypad.c \
        src/platform/peripherals/lcd.c \
        src/ui/display/display_presenter.c \
        src/platform/boards/board_events.c \

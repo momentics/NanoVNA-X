@@ -27,221 +27,7 @@
 #include <stdint.h>
 
 // Define LCD display driver and size
-#if defined(NANOVNA_F303)
-#define LCD_DRIVER_ST7796S
-#define LCD_480x320
-#else
-// Used auto detect from ILI9341 or ST7789
-#define LCD_DRIVER_ILI9341
-#define LCD_DRIVER_ST7789
-#define LCD_320x240
-#endif
-
-// Enable DMA mode for send data to LCD (Need enable HAL_USE_SPI in halconf.h)
-#define __USE_DISPLAY_DMA__
-// LCD or hardware allow change brightness, add menu item for this
-#if defined(NANOVNA_F303)
-#define __LCD_BRIGHTNESS__
-#else
-//#define __LCD_BRIGHTNESS__
-#endif
-// Use DAC (in H4 used for brightness used DAC, so need enable __LCD_BRIGHTNESS__ for it)
-//#define __VNA_ENABLE_DAC__
-// Allow enter to DFU from menu or command
-#define __DFU_SOFTWARE_MODE__
-// Add RTC clock support
-#define __USE_RTC__
-// Add RTC backup registers support
-#define __USE_BACKUP__
-// Add SD card support, requires RTC for timestamps
-#define __USE_SD_CARD__
-// Use unique serial string for USB
-#define __USB_UID__
-// If enabled serial in halconf.h, possible enable serial console control
-//#define __USE_SERIAL_CONSOLE__
-// Add show y grid line values option
-#define __USE_GRID_VALUES__
-// Add remote desktop option
-#define __REMOTE_DESKTOP__
-#if !defined(NANOVNA_F303)
-#undef __REMOTE_DESKTOP__
-#endif
-// Add RLE8 compression capture image format
-// #define __CAPTURE_RLE8__
-// Allow flip display
-//#define __FLIP_DISPLAY__
-// Add shadow on text in plot area (improve readable, but little slowdown render)
-#define _USE_SHADOW_TEXT_
-// Faster draw line in cell algorithm (better clipping and faster)
-// #define __VNA_FAST_LINES__
-// Use build in table for sin/cos calculation, allow save a lot of flash space (this table also use for FFT), max sin/cos error = 4e-7
-#define __VNA_USE_MATH_TABLES__
-// Use custom fast/compact approximation for some math functions in calculations (vna_ ...), use it carefully
-#define __USE_VNA_MATH__
-// Use cache for window function used by FFT (but need FFT_SIZE*sizeof(float) RAM)
-//#define USE_FFT_WINDOW_BUFFER
-// Enable data smooth option
-#define __USE_SMOOTH__
-// Enable optional change digit separator for locales (dot or comma, need for correct work some external software)
-#define __DIGIT_SEPARATOR__
-// Use table for frequency list (if disabled use real time calc)
-//#define __USE_FREQ_TABLE__
-// Enable DSP instruction (support only by Cortex M4 and higher)
-#ifdef ARM_MATH_CM4
-#define __USE_DSP__
-#endif
-// Add measure module option (allow made some measure calculations on data)
-#define __VNA_MEASURE_MODULE__
-// Add Z normalization feature
-//#define __VNA_Z_RENORMALIZATION__
-
-/*
- * Submodules defines
- */
-#ifdef __USE_SD_CARD__
-// Allow run commands from SD card (config.ini in root)
-#define __SD_CARD_LOAD__
-// Allow screenshots in TIFF format
-//#define __SD_CARD_DUMP_TIFF__
-// Allow dump firmware to SD card
-#define __SD_CARD_DUMP_FIRMWARE__
-// Enable SD card file browser, and allow load files from it
-#define __SD_FILE_BROWSER__
-#endif
-
-// If measure module enabled, add submodules
-#ifdef __VNA_MEASURE_MODULE__
-// Add LC match function
-#define __USE_LC_MATCHING__
-// Enable Series measure option
-#define __S21_MEASURE__
-// Enable S11 cable measure option
-#define __S11_CABLE_MEASURE__
-// Enable S11 resonance search option
-#define __S11_RESONANCE_MEASURE__
-#endif
-
-/*
- * Hardware depends options for VNA
- */
-#if defined(NANOVNA_F303)
-// Define ADC sample rate in kilobyte (can be 48k, 96k, 192k, 384k)
-//#define AUDIO_ADC_FREQ_K        768
-//#define AUDIO_ADC_FREQ_K        384
-#define AUDIO_ADC_FREQ_K        192
-//#define AUDIO_ADC_FREQ_K        96
-//#define AUDIO_ADC_FREQ_K        48
-
-// Define sample count for one step measure
-#define AUDIO_SAMPLES_COUNT   (48)
-//#define AUDIO_SAMPLES_COUNT   (96)
-//#define AUDIO_SAMPLES_COUNT   (192)
-
-// Frequency offset, depend from AUDIO_ADC_FREQ settings (need aligned table)
-// Use real time build table (undef for use constant, see comments)
-// Constant tables build only for AUDIO_SAMPLES_COUNT = 48
-#define USE_VARIABLE_OFFSET
-
-// Maximum sweep point count (limit by flash and RAM size)
-#define SWEEP_POINTS_MAX         401
-
-#define AUDIO_ADC_FREQ_K1        384
-#else
-//#define AUDIO_ADC_FREQ_K        768
-//#define AUDIO_ADC_FREQ_K        384
-#define AUDIO_ADC_FREQ_K        192
-//#define AUDIO_ADC_FREQ_K        96
-//#define AUDIO_ADC_FREQ_K        48
-
-// Define sample count for one step measure
-#define AUDIO_SAMPLES_COUNT   (48)
-//#define AUDIO_SAMPLES_COUNT   (96)
-//#define AUDIO_SAMPLES_COUNT   (192)
-
-// Frequency offset, depend from AUDIO_ADC_FREQ settings (need aligned table)
-// Use real time build table (undef for use constant, see comments)
-// Constant tables build only for AUDIO_SAMPLES_COUNT = 48
-#define USE_VARIABLE_OFFSET
-
-// Maximum sweep point count (limit by flash and RAM size)
-#define SWEEP_POINTS_MAX         101
-#endif
-// Minimum sweep point count
-#define SWEEP_POINTS_MIN         21
-
-// Dirty hack for H4 ADC speed in version screen (Need for correct work NanoVNA-App)
-#ifndef AUDIO_ADC_FREQ_K1
-#define AUDIO_ADC_FREQ_K1        AUDIO_ADC_FREQ_K
-#endif
-
-/*
- * main.c
- */
-// Minimum frequency set
-#define FREQUENCY_MIN            600
-// Maximum frequency set
-#define FREQUENCY_MAX            900000000U
-// Frequency threshold (max frequency for si5351, harmonic mode after)
-#define FREQUENCY_THRESHOLD      300000100U
-// XTAL frequency on si5351
-#define XTALFREQ                 26000000U
-// Define i2c bus speed, add predefined for 400k, 600k, 900k
-#define STM32_I2C_SPEED          900
-// Define default src impedance for xtal calculations
-#define MEASURE_DEFAULT_R        50.0f
-
-// Add IF select menu in expert settings
-#ifdef USE_VARIABLE_OFFSET
-#define USE_VARIABLE_OFFSET_MENU
-#endif
-
-#if AUDIO_ADC_FREQ_K == 768
-#define FREQUENCY_OFFSET_STEP    16000
-// For 768k ADC    (16k step for 48 samples)
-#define FREQUENCY_IF_K          8    // only  96 samples and variable table
-//#define FREQUENCY_IF_K         12  // only 192 samples and variable table
-//#define FREQUENCY_IF_K         16
-//#define FREQUENCY_IF_K         32
-//#define FREQUENCY_IF_K         48
-//#define FREQUENCY_IF_K         64
-
-#elif AUDIO_ADC_FREQ_K == 384
-#define FREQUENCY_OFFSET_STEP    4000
-// For 384k ADC    (8k step for 48 samples)
-//#define FREQUENCY_IF_K          8
-#define FREQUENCY_IF_K         12  // only 96 samples and variable table
-//#define FREQUENCY_IF_K         16
-//#define FREQUENCY_IF_K         20  // only 96 samples and variable table
-//#define FREQUENCY_IF_K         24
-//#define FREQUENCY_IF_K         32
-
-#elif AUDIO_ADC_FREQ_K == 192
-#define FREQUENCY_OFFSET_STEP    4000
-// For 192k ADC (sin_cos table in dsp.c generated for 8k, 12k, 16k, 20k, 24k if change need create new table )
-//#define FREQUENCY_IF_K          8
-#define FREQUENCY_IF_K         12
-//#define FREQUENCY_IF_K         16
-//#define FREQUENCY_IF_K         20
-//#define FREQUENCY_IF_K         24
-//#define FREQUENCY_IF_K         28
-
-#elif AUDIO_ADC_FREQ_K == 96
-#define FREQUENCY_OFFSET_STEP    2000
-// For 96k ADC (sin_cos table in dsp.c generated for 6k, 8k, 10k, 12k if change need create new table )
-//#define FREQUENCY_IF_K          6
-//#define FREQUENCY_IF_K          8
-//#define FREQUENCY_IF_K         10
-#define FREQUENCY_IF_K         12
-
-#elif AUDIO_ADC_FREQ_K == 48
-#define FREQUENCY_OFFSET_STEP    1000
-// For 48k ADC (sin_cos table in dsp.c generated for 3k, 4k, 5k, 6k, if change need create new table )
-//#define FREQUENCY_IF_K          3
-//#define FREQUENCY_IF_K          4
-//#define FREQUENCY_IF_K          5
-#define FREQUENCY_IF_K          6
-//#define FREQUENCY_IF_K          7
-#endif
+#include "core/config_macros.h"
 
 /*
  * CPU Hardware depend functions declaration
@@ -262,8 +48,8 @@
 #define VNA_PI                   3.14159265358979323846f
 #define VNA_TWOPI                6.28318530717958647692f
 
-// Define frequency range (can be unsigned)
-typedef uint32_t freq_t;
+#include "core/globals.h"
+#include "ui/ui_style.h"
 
 // Optional sweep point (in UI menu)
 #if SWEEP_POINTS_MAX >=401
@@ -284,34 +70,9 @@ typedef uint32_t freq_t;
 #define POINTS_COUNT_DEFAULT   SWEEP_POINTS_MAX
 #endif
 
-extern alignas(4) float measured[2][SWEEP_POINTS_MAX][2];
 
-#define CAL_TYPE_COUNT  5
-#define CAL_LOAD        0
-#define CAL_OPEN        1
-#define CAL_SHORT       2
-#define CAL_THRU        3
-#define CAL_ISOLN       4
 
-#define CALSTAT_LOAD (1<<0)
-#define CALSTAT_OPEN (1<<1)
-#define CALSTAT_SHORT (1<<2)
-#define CALSTAT_THRU (1<<3)
-#define CALSTAT_ISOLN (1<<4)
-#define CALSTAT_ES (1<<5)
-#define CALSTAT_ER (1<<6)
-#define CALSTAT_ET (1<<7)
-#define CALSTAT_ED CALSTAT_LOAD
-#define CALSTAT_EX CALSTAT_ISOLN
-#define CALSTAT_APPLY (1<<8)
-#define CALSTAT_INTERPOLATED (1<<9)
-#define CALSTAT_ENHANCED_RESPONSE (1<<10)
 
-#define ETERM_ED 0 /* error term directivity */
-#define ETERM_ES 1 /* error term source match */
-#define ETERM_ER 2 /* error term refrection tracking */
-#define ETERM_ET 3 /* error term transmission tracking */
-#define ETERM_EX 4 /* error term isolation */
 
 #if   SWEEP_POINTS_MAX <= 256
 #define FFT_SIZE   256
@@ -322,10 +83,7 @@ extern alignas(4) float measured[2][SWEEP_POINTS_MAX][2];
 void cal_collect(uint16_t type);
 void cal_done(void);
 
-#define MAX_FREQ_TYPE 5
-enum stimulus_type {
-  ST_START=0, ST_STOP, ST_CENTER, ST_CW, ST_SPAN, ST_STEP, ST_VAR
-};
+
 
 freq_t get_frequency(uint16_t idx);
 freq_t get_frequency_step(void);
@@ -368,16 +126,7 @@ void set_sweep_points(uint16_t points);
 
 #ifdef __REMOTE_DESKTOP__
 // State flags for remote touch state
-#define REMOTE_NONE     0
-#define REMOTE_PRESS    1
-#define REMOTE_RELEASE  2
-typedef struct {
-  char new_str[6];
-  int16_t x;
-  int16_t y;
-  int16_t w;
-  int16_t h;
-} remote_region_t;
+
 void remote_touch_set(uint16_t state, int16_t x, int16_t y);
 void send_region(remote_region_t *rd, uint8_t * buf, uint16_t size);
 #endif
@@ -388,11 +137,10 @@ void send_region(remote_region_t *rd, uint8_t * buf, uint16_t size);
 #define SWEEP_REMOTE  0x40
 #define SWEEP_UI_MODE 0x80
 
-extern  uint8_t sweep_mode;
-extern const char* const info_about[];
+
 
 // Global flag to indicate when calibration is in critical phase to prevent UI flash operations
-extern volatile bool calibration_in_progress;
+
 
 /*
  * Measure timings for si5351 generator, after ready
@@ -831,232 +579,9 @@ enum {
 #define S_PPM      "ppm"   //
 
 // Max palette indexes in config
-#define MAX_PALETTE     32
 
-// trace 
-#define MAX_TRACE_TYPE 30
-enum trace_type {
-  TRC_LOGMAG=0, TRC_PHASE, TRC_DELAY, TRC_SMITH, TRC_POLAR, TRC_LINEAR, TRC_SWR, TRC_REAL, TRC_IMAG,
-  TRC_R, TRC_X, TRC_Z, TRC_ZPHASE,
-  TRC_G, TRC_B, TRC_Y, TRC_Rp, TRC_Xp,
-  TRC_Cs, TRC_Ls,
-  TRC_Cp, TRC_Lp,
-  TRC_Q,
-  TRC_Rser, TRC_Xser, TRC_Zser,
-  TRC_Rsh, TRC_Xsh, TRC_Zsh,
-  TRC_Qs21
-};
 
-// Mask for define rectangular plot
-#define RECTANGULAR_GRID_MASK ((1<<TRC_LOGMAG)|(1<<TRC_PHASE)|(1<<TRC_DELAY)|(1<<TRC_LINEAR)|(1<<TRC_SWR)|(1<<TRC_REAL)|(1<<TRC_IMAG)\
-                              |(1<<TRC_R)|(1<<TRC_X)|(1<<TRC_Z)|(1<<TRC_ZPHASE)\
-                              |(1<<TRC_G)|(1<<TRC_B)|(1<<TRC_Y)|(1<<TRC_Rp)|(1<<TRC_Xp)\
-                              |(1<<TRC_Cs)|(1<<TRC_Ls)\
-                              |(1<<TRC_Cp)|(1<<TRC_Lp)\
-                              |(1<<TRC_Q)\
-                              |(1<<TRC_Rser)|(1<<TRC_Xser)|(1<<TRC_Zser)\
-                              |(1<<TRC_Rsh)|(1<<TRC_Xsh)|(1<<TRC_Zsh)\
-                              |(1<<TRC_Qs21))
 
-// complex graph type (polar / smith / admit)
-#define ROUND_GRID_MASK       ((1<<TRC_POLAR)|(1<<TRC_SMITH))
-// Scale / Amplitude input in nano/pico values graph type
-#define NANO_TYPE_MASK        ((1<<TRC_DELAY)|(1<<TRC_Cs)|(1<<TRC_Ls)|(1<<TRC_Cp)|(1<<TRC_Lp))
-// Universal trace type for both channels
-#define S11_AND_S21_TYPE_MASK ((1<<TRC_LOGMAG)|(1<<TRC_PHASE)|(1<<TRC_DELAY)|(1<<TRC_LINEAR)|(1<<TRC_REAL)|(1<<TRC_IMAG)|(1<<TRC_POLAR)|(1<<TRC_SMITH))
-
-// Trace info description structure
-typedef float (*get_value_cb_t)(int idx, const float *v); // get value callback
-typedef struct trace_info {
-  const char *name;            // Trace name
-  const char *format;          // trace value printf format for marker output
-  const char *dformat;         // delta value printf format
-  const char *symbol;          // value symbol
-  float refpos;                // default refpos
-  float scale_unit;            // default scale
-  get_value_cb_t get_value_cb; // get value callback (can be NULL, in this case need add custom calculations)
-} trace_info_t;
-// Trace render options in plot.c
-extern const trace_info_t trace_info_list[MAX_TRACE_TYPE];
-
-// marker smith value format
-enum {MS_LIN, MS_LOG, MS_REIM, MS_RX, MS_RLC, MS_GB, MS_GLC, MS_RpXp, MS_RpLC, MS_SHUNT_RX, MS_SHUNT_RLC, MS_SERIES_RX, MS_SERIES_RLC, MS_END};
-#define ADMIT_MARKER_VALUE(v)    ((1<<(v))&((1<<MS_GB)|(1<<MS_GLC)|(1<<MS_RpXp)|(1<<MS_RpLC)))
-#define LC_MARKER_VALUE(v)       ((1<<(v))&((1<<MS_RLC)|(1<<MS_GLC)|(1<<MS_RpLC)|(1<<MS_SHUNT_RLC)|(1<<MS_SERIES_RLC)))
-
-#define S11_SMITH_VALUE(v)       ((1<<(v))&((1<<MS_LIN)|(1<<MS_LOG)|(1<<MS_REIM)|(1<<MS_RX)|(1<<MS_RLC)|(1<<MS_GB)|(1<<MS_GLC)|(1<<MS_RpXp)|(1<<MS_RpLC)))
-#define S21_SMITH_VALUE(v)       ((1<<(v))&((1<<MS_LIN)|(1<<MS_LOG)|(1<<MS_REIM)|(1<<MS_SHUNT_RX)|(1<<MS_SHUNT_RLC)|(1<<MS_SERIES_RX)|(1<<MS_SERIES_RLC)))
-
-typedef struct {
-  const char *name;         // Trace name
-  const char *format;       // trace value printf format for marker output
-  get_value_cb_t get_re_cb; // get real value callback
-  get_value_cb_t get_im_cb; // get imag value callback (can be NULL, in this case need add custom calculations)
-} marker_info_t;
-extern const marker_info_t marker_info_list[MS_END];
-
-// lever_mode
-enum {LM_MARKER, LM_SEARCH, LM_FREQ_0, LM_FREQ_1, LM_EDELAY};
-
-#define MARKER_INVALID       -1
-#define TRACE_INVALID        -1
-
-// properties flags
-#define DOMAIN_MODE             (1<<0)
-#define DOMAIN_FREQ             (0<<0)
-#define DOMAIN_TIME             (1<<0)
-// Time domain function
-#define TD_FUNC                 (0b11<<1)
-#define TD_FUNC_BANDPASS        (0b00<<1)
-#define TD_FUNC_LOWPASS_IMPULSE (0b01<<1)
-#define TD_FUNC_LOWPASS_STEP    (0b10<<1)
-// Time domain window
-#define TD_WINDOW               (0b11<<3)
-#define TD_WINDOW_NORMAL        (0b00<<3)
-#define TD_WINDOW_MINIMUM       (0b01<<3)
-#define TD_WINDOW_MAXIMUM       (0b10<<3)
-// Sweep mode
-#define TD_START_STOP           (0<<0)
-#define TD_CENTER_SPAN          (1<<6)
-// Marker track
-#define TD_MARKER_TRACK         (1<<7)
-// Marker delta
-#define TD_MARKER_DELTA         (1<<8)
-// Marker delta
-//#define TD_MARKER_LOCK          (1<<9) // reserved
-
-//
-// config.vna_mode flags (16 bit field)
-//
-enum {
-  VNA_MODE_AUTO_NAME = 0,// Auto name for files
-#ifdef __USE_SMOOTH__
-  VNA_MODE_SMOOTH,       // Smooth function (0: Geom, 1: Arith)
-#endif
-#ifdef __USE_SERIAL_CONSOLE__
-  VNA_MODE_CONNECTION,   // Connection flag (0: USB, 1: SERIAL)
-#endif
-  VNA_MODE_SEARCH,       // Marker search mode (0: max, 1: min)
-  VNA_MODE_SHOW_GRID,    // Show grid values
-  VNA_MODE_DOT_GRID,     // Dotted grid lines
-#ifdef __USE_BACKUP__
-  VNA_MODE_BACKUP,       // Made backup settings (save some settings after power off)
-#endif
-#ifdef __FLIP_DISPLAY__
-  VNA_MODE_FLIP_DISPLAY, // Flip display
-#endif
-#ifdef __DIGIT_SEPARATOR__
-  VNA_MODE_SEPARATOR,    // Comma or dot digit separator (0: dot, 1: comma)
-#endif
-#ifdef __SD_CARD_DUMP_TIFF__
-  VNA_MODE_TIFF,         // Save screenshot format (0: bmp, 1: tiff)
-#endif
-#ifdef __USB_UID__
-  VNA_MODE_USB_UID       // Use unique serial string for USB
-#endif
-};
-
-// Update config._vna_mode flags function
-typedef enum {VNA_MODE_CLR = 0, VNA_MODE_SET, VNA_MODE_TOGGLE} vna_mode_ops;
-void apply_vna_mode(uint16_t idx, vna_mode_ops operation);
-
-#ifdef __VNA_MEASURE_MODULE__
-// Measure option mode
-enum {
-  MEASURE_NONE = 0,
-#ifdef __USE_LC_MATCHING__
-  MEASURE_LC_MATH,
-#endif
-#ifdef __S21_MEASURE__
-  MEASURE_SHUNT_LC,
-  MEASURE_SERIES_LC,
-  MEASURE_SERIES_XTAL,
-  MEASURE_FILTER,
-#endif
-#ifdef __S11_CABLE_MEASURE__
-  MEASURE_S11_CABLE,
-#endif
-#ifdef __S11_RESONANCE_MEASURE__
-  MEASURE_S11_RESONANCE,
-#endif
-  MEASURE_END
-};
-#endif
-
-#define STORED_TRACES  1
-#define TRACES_MAX     4
-
-typedef struct trace {
-  uint8_t enabled;
-  uint8_t type;
-  uint8_t channel;
-  uint8_t smith_format;
-  float scale;
-  float refpos;
-} trace_t;
-
-// marker 1 to 8
-#define MARKERS_MAX 8
-typedef struct marker {
-  uint8_t  enabled;
-  uint8_t  reserved;
-  uint16_t index;
-  freq_t   frequency;
-} marker_t;
-
-typedef struct config {
-  uint32_t magic;
-  uint32_t _harmonic_freq_threshold;
-  int32_t  _IF_freq;
-  int16_t  _touch_cal[4];
-  uint16_t _vna_mode;
-  uint16_t _dac_value;
-  uint16_t _vbat_offset;
-  uint16_t _bandwidth;
-  uint8_t  _lever_mode;
-  uint8_t  _brightness;
-  uint16_t _lcd_palette[MAX_PALETTE];
-  uint32_t _serial_speed;
-  uint32_t _xtal_freq;
-  float    _measure_r;
-  uint8_t  _band_mode;
-  uint8_t  _reserved[3];
-  uint32_t checksum;
-} config_t;
-
-typedef struct properties {
-  uint32_t magic;
-  freq_t   _frequency0;          // sweep start frequency
-  freq_t   _frequency1;          // sweep stop frequency
-  freq_t   _cal_frequency0;      // calibration start frequency
-  freq_t   _cal_frequency1;      // calibration stop frequency
-  freq_t   _var_freq;            // frequency step by leveler (0 for auto)
-  uint16_t _mode;                // timed domain option flag and some others flags
-  uint16_t _sweep_points;        // points used in measure sweep
-  int8_t   _current_trace;       // 0..(TRACES_MAX -1) (TRACE_INVALID  for disabled)
-  int8_t   _active_marker;       // 0..(MARKERS_MAX-1) (MARKER_INVALID for disabled)
-  int8_t   _previous_marker;     // 0..(MARKERS_MAX-1) (MARKER_INVALID for disabled)
-  uint8_t  _power;               // 0 ... 3 current output power settings
-  uint8_t  _cal_power;           // 0 ... 3 Power used in calibration
-  uint8_t  _measure;             // additional trace data calculations
-  uint16_t _cal_sweep_points;    // points used in calibration
-  uint16_t _cal_status;          // calibration data collected flags
-  trace_t  _trace[TRACES_MAX];
-  marker_t _markers[MARKERS_MAX];
-  uint8_t  _reserved;
-  uint8_t  _velocity_factor;     // 0 .. 100 %
-  float    _electrical_delay[2]; // delays for S11 and S21 traces in seconds
-  float    _var_delay;           // electrical delay step by leveler
-  float    _s21_offset;          // additional external attenuator for S21 measures
-  float    _portz;               // Used for port-z renormalization
-  float    _cal_load_r;          // Used as calibration standard LOAD R value (calculated in renormalization procedure)
-  uint32_t _reserved1[5];
-  float    _cal_data[CAL_TYPE_COUNT][SWEEP_POINTS_MAX][2]; // Put at the end for faster access to others data from struct
-  uint32_t checksum;
-} properties_t;
-
-extern config_t config;
-extern properties_t current_props;
 
 void set_trace_type(int t, int type, int channel);
 void set_trace_channel(int t, int channel);
@@ -1117,144 +642,7 @@ void marker_search_dir(int16_t from, int16_t dir);
 /*
  * ili9341.c
  */
-// Set display buffers count for cell render (if use 2 and DMA, possible send data and prepare new in some time)
-#ifdef __USE_DISPLAY_DMA__
-// Cell size = sizeof(spi_buffer), but need wait while cell data send to LCD
-//#define DISPLAY_CELL_BUFFER_COUNT     1
-// Cell size = sizeof(spi_buffer)/2, while one cell send to LCD by DMA, CPU render to next cell
-#define DISPLAY_CELL_BUFFER_COUNT     2
-#else
-// Always one if no DMA mode
-#define DISPLAY_CELL_BUFFER_COUNT     1
-#endif
 
-// Custom display driver panel definitions for ILI9341
-#if defined(LCD_DRIVER_ILI9341) || defined(LCD_DRIVER_ST7789)
-// LCD touch settings
-#define DEFAULT_TOUCH_CONFIG {530, 795, 3460, 3350}    // 2.8 inch LCD panel
-// Define LCD pixel format (8 or 16 bit)
-//#define LCD_8BIT_MODE
-#define LCD_16BIT_MODE
-// Default LCD brightness if display support it
-#define DEFAULT_BRIGHTNESS  80
-// Data size for one pixel data read from display in bytes
-#define LCD_RX_PIXEL_SIZE  3
-#endif
-
-// Custom display driver panel definitions for ST7796S
-#ifdef LCD_DRIVER_ST7796S
-// LCD touch settings
-#define DEFAULT_TOUCH_CONFIG {380, 665, 3600, 3450 }  // 4.0 inch LCD panel
-// Define LCD pixel format (8 or 16 bit)
-//#define LCD_8BIT_MODE
-#define LCD_16BIT_MODE
-// Default LCD brightness if display support it
-#define DEFAULT_BRIGHTNESS  80
-// Data size for one pixel data read from display in bytes
-#define LCD_RX_PIXEL_SIZE  2
-#endif
-
-// For 8 bit color displays pixel data definitions
-#ifdef LCD_8BIT_MODE
-typedef uint8_t pixel_t;
-//  8-bit RRRGGGBB
-//#define RGB332(r,g,b)  ( (((r)&0xE0)>>0) | (((g)&0xE0)>>3) | (((b)&0xC0)>>5))
-#define RGB565(r,g,b)  ( (((r)&0xE0)>>0) | (((g)&0xE0)>>3) | (((b)&0xC0)>>6))
-#define RGBHEX(hex)    ( (((hex)&0xE00000)>>16) | (((hex)&0x00E000)>>11) | (((hex)&0x0000C0)>>6) )
-#define HEXRGB(hex)    ( (((hex)<<16)&0xE00000) | (((hex)<<11)&0x00E000) | (((hex)<<6)&0x0000C0) )
-#define LCD_PIXEL_SIZE        1
-// Cell size, depends from spi_buffer size, CELLWIDTH*CELLHEIGHT*sizeof(pixel) <= sizeof(spi_buffer)
-#define CELLWIDTH  (64/DISPLAY_CELL_BUFFER_COUNT)
-#define CELLHEIGHT (64)
-#endif
-
-// For 16 bit color displays pixel data definitions
-#ifdef LCD_16BIT_MODE
-typedef uint16_t pixel_t;
-// SPI bus revert byte order
-// 16-bit gggBBBbb RRRrrGGG
-#define RGB565(r,g,b)  ( (((g)&0x1c)<<11) | (((b)&0xf8)<<5) | ((r)&0xf8) | (((g)&0xe0)>>5) )
-#define RGBHEX(hex) ( (((hex)&0x001c00)<<3) | (((hex)&0x0000f8)<<5) | (((hex)&0xf80000)>>16) | (((hex)&0x00e000)>>13) )
-#define HEXRGB(hex) ( (((hex)>>3)&0x001c00) | (((hex)>>5)&0x0000f8) | (((hex)<<16)&0xf80000) | (((hex)<<13)&0x00e000) )
-#define LCD_PIXEL_SIZE        2
-// Cell size, depends from spi_buffer size, CELLWIDTH*CELLHEIGHT*sizeof(pixel) <= sizeof(spi_buffer)
-#define CELLWIDTH  (64 / DISPLAY_CELL_BUFFER_COUNT)
-#define CELLHEIGHT (16)
-#endif
-
-// Define size of screen buffer in pixel_t (need for cell w * h * count)
-#define SPI_BUFFER_SIZE             (CELLWIDTH * CELLHEIGHT * DISPLAY_CELL_BUFFER_COUNT)
-
-#ifndef SPI_BUFFER_SIZE
-#error "Define LCD pixel format"
-#endif
-
-enum {
-  LCD_BG_COLOR = 0,       // background
-  LCD_FG_COLOR,           // foreground (in most cases text on background)
-  LCD_GRID_COLOR,         // grid lines color
-  LCD_MENU_COLOR,         // UI menu color
-  LCD_MENU_TEXT_COLOR,    // UI menu text color
-  LCD_MENU_ACTIVE_COLOR,  // UI selected menu color
-  LCD_TRACE_1_COLOR,      // Trace 1 color
-  LCD_TRACE_2_COLOR,      // Trace 2 color
-  LCD_TRACE_3_COLOR,      // Trace 3 color
-  LCD_TRACE_4_COLOR,      // Trace 4 color
-  LCD_TRACE_5_COLOR,      // Stored trace A color
-  LCD_TRACE_6_COLOR,      // Stored trace B color
-  LCD_NORMAL_BAT_COLOR,   // Normal battery icon color
-  LCD_LOW_BAT_COLOR,      // Low battery icon color
-  LCD_SPEC_INPUT_COLOR,   // Not used, for future
-  LCD_RISE_EDGE_COLOR,    // UI menu button rise edge color
-  LCD_FALLEN_EDGE_COLOR,  // UI menu button fallen edge color
-  LCD_SWEEP_LINE_COLOR,   // Sweep line color
-  LCD_BW_TEXT_COLOR,      // Bandwidth text color
-  LCD_INPUT_TEXT_COLOR,   // Keyboard Input text color
-  LCD_INPUT_BG_COLOR,     // Keyboard Input text background color
-  LCD_MEASURE_COLOR,      // Measure text color
-  LCD_GRID_VALUE_COLOR,   // Not used, for future
-  LCD_INTERP_CAL_COLOR,   // Calibration state on interpolation color
-  LCD_DISABLE_CAL_COLOR,  // Calibration state on disable color
-  LCD_LINK_COLOR,         // UI menu button text for values color
-  LCD_TXT_SHADOW_COLOR,   // Plot area text border color
-};
-
-#define LCD_DEFAULT_PALETTE {\
-[LCD_BG_COLOR         ] = RGB565(  0,  0,  0), \
-[LCD_FG_COLOR         ] = RGB565(255,255,255), \
-[LCD_GRID_COLOR       ] = RGB565(128,128,128), \
-[LCD_MENU_COLOR       ] = RGB565(230,230,230), \
-[LCD_MENU_TEXT_COLOR  ] = RGB565(  0,  0,  0), \
-[LCD_MENU_ACTIVE_COLOR] = RGB565(210,210,210), \
-[LCD_TRACE_1_COLOR    ] = RGB565(255,255,  0), \
-[LCD_TRACE_2_COLOR    ] = RGB565(  0,255,255), \
-[LCD_TRACE_3_COLOR    ] = RGB565(  0,255,  0), \
-[LCD_TRACE_4_COLOR    ] = RGB565(255,  0,255), \
-[LCD_TRACE_5_COLOR    ] = RGB565(255,  0,  0), \
-[LCD_TRACE_6_COLOR    ] = RGB565(  0,  0,255), \
-[LCD_NORMAL_BAT_COLOR ] = RGB565( 31,227,  0), \
-[LCD_LOW_BAT_COLOR    ] = RGB565(255,  0,  0), \
-[LCD_SPEC_INPUT_COLOR ] = RGB565(128,255,128), \
-[LCD_RISE_EDGE_COLOR  ] = RGB565(255,255,255), \
-[LCD_FALLEN_EDGE_COLOR] = RGB565(128,128,128), \
-[LCD_SWEEP_LINE_COLOR ] = RGB565(  0,  0,255), \
-[LCD_BW_TEXT_COLOR    ] = RGB565(196,196,196), \
-[LCD_INPUT_TEXT_COLOR ] = RGB565(  0,  0,  0), \
-[LCD_INPUT_BG_COLOR   ] = RGB565(255,255,255), \
-[LCD_MEASURE_COLOR    ] = RGB565(255,255,255), \
-[LCD_GRID_VALUE_COLOR ] = RGB565( 96, 96, 96), \
-[LCD_INTERP_CAL_COLOR ] = RGB565( 31,227,  0), \
-[LCD_DISABLE_CAL_COLOR] = RGB565(255,  0,  0), \
-[LCD_LINK_COLOR       ] = RGB565(  0,  0,192), \
-[LCD_TXT_SHADOW_COLOR ] = RGB565(  0,  0,  0), \
-}
-
-#define GET_PALTETTE_COLOR(idx)  config._lcd_palette[idx]
-
-extern pixel_t foreground_color;
-extern pixel_t background_color;
-
-extern alignas(4) pixel_t spi_buffer[SPI_BUFFER_SIZE];
 
 typedef struct {
   uint8_t transparent : 1;
@@ -1328,7 +716,7 @@ void test_log(void);
 #define PROPERTIES_MAGIC  0x434f4e54 // Properties magic value (allow reset on new properties version)
 
 #define NO_SAVE_SLOT      ((uint16_t)(-1))
-extern uint16_t lastsaveid;
+
 
 #define frequency0          current_props._frequency0
 #define frequency1          current_props._frequency1

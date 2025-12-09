@@ -328,7 +328,7 @@ void ui_mode_browser(int mode) {
 }
 
 // Process UI input for browser
-static void ui_browser_touch(int touch_x, int touch_y) {
+void ui_browser_touch(int touch_x, int touch_y) {
   browser_btn_t btn;
   int old = selection;
   int max = browser_get_max();
@@ -347,7 +347,7 @@ static void ui_browser_touch(int touch_x, int touch_y) {
   }
 }
 
-static void ui_browser_lever(uint16_t status) {
+void ui_browser_lever(uint16_t status) {
   if (status == EVT_BUTTON_SINGLE_CLICK) {
     if (selection >= 0)
       browser_key_press(selection); // Process click
