@@ -277,7 +277,8 @@ void menu_invoke(int item) {
 void ui_mode_menu(void) {
   if (ui_mode == UI_MENU)
     return;
-  // set_area_size(0, 0); // Removed to allow plot update in background
+  // Reduce plot area to avoid overwriting the menu
+  set_area_size(LCD_WIDTH - MENU_BUTTON_WIDTH, AREA_HEIGHT_NORMAL);
   ui_mode = UI_MENU;
   menu_draw(-1);
 }
