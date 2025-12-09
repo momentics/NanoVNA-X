@@ -804,12 +804,9 @@ int runtime_main(void) {
    */
   tlv320aic3204_init();
   chThdSleepMilliseconds(200); // Wait for aic codec start
-                               /*
-                                * I2S Initialize
-                                */
-                                /*
-                                * I2S Initialize
-                                */
+  /*
+   * I2S Initialize
+   */
   init_i2s((void*)sweep_service_rx_buffer(),
            (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
 
@@ -821,7 +818,10 @@ int runtime_main(void) {
   disk_initialize(0);
 #endif
 
-
+  /*
+   * I2C bus run on work speed
+   */
+  i2c_set_timings(STM32_I2C_TIMINGR);
 
   /*
    * Startup sweep thread
