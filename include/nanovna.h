@@ -182,7 +182,7 @@
 // Maximum frequency set
 #define FREQUENCY_MAX            2700000000U
 // Frequency threshold (max frequency for si5351, harmonic mode after)
-#define FREQUENCY_THRESHOLD      300000100U
+#define FREQUENCY_THRESHOLD      290000000U
 // XTAL frequency on si5351
 #define XTALFREQ                 26000000U
 // Define i2c bus speed, add predefined for 400k, 600k, 900k
