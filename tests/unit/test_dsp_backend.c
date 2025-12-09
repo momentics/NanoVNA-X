@@ -114,10 +114,49 @@ static void test_quadrature_sine(void) {
   expect_close(0.0f, r_c, 2e3f, "quadrature ref cos accumulate ~0");
 }
 
+static void test_calculate_gamma_sign(void) {
+  // Test that calculate_gamma produces correct sign for imaginary part.
+  
+  // Define helper prototype
+  extern void set_dsp_accumulator(float ss, float sc, float rs, float rc);
+  extern void calculate_gamma(float* gamma);
+  float gamma[2];
+
+  // Case 1: S=1 (Real), R=1 (Real). Gamma=1.
+  // Real S (sc) = 1e9, Imag S (ss) = 0.
+  // Real R (rc) = 1e9, Imag R (rs) = 0.
+  set_dsp_accumulator(0.0f, 1e9f, 0.0f, 1e9f);
+  calculate_gamma(gamma);
+  expect_close(1.0f, gamma[0], 0.001f, "Real part S=1,R=1");
+  expect_close(0.0f, gamma[1], 0.001f, "Imag part S=1,R=1");
+
+  // Case 2: S=j (Imag), R=1 (Real). Gamma=j.
+  // Real S (sc) = 0, Imag S (ss) = 1e9.
+  // Real R (rc) = 1e9, Imag R (rs) = 0.
+  // Expected: Real=0, Imag=1.
+  set_dsp_accumulator(1e9f, 0.0f, 0.0f, 1e9f);
+  calculate_gamma(gamma);
+  expect_close(0.0f, gamma[0], 0.001f, "Real part S=j,R=1");
+  
+  // This is where we expect failure if the bug exists.
+  // Current code: Imag = (sc*rs - ss*rc)/rr = (0*0 - 1*1)/1 = -1.
+  // Correct code: Imag = (ss*rc - sc*rs)/rr = (1*1 - 0*0)/1 = 1.
+  if (gamma[1] < 0.5f) {
+      fprintf(stderr, "[FAIL] Imag part expected 1.0, got %f. Confirmed Sign Inversion Bug.\n", gamma[1]);
+      g_failures++;
+  } else {
+      // If it passes here, then maybe my understanding of ss/sc mapping is wrong, 
+      // but let's see the result.
+      expect_close(1.0f, gamma[1], 0.001f, "Imag part S=j,R=1");
+  }
+}
+
+
 int main(void) {
   test_dc_signal();
   test_in_phase_sine();
   test_quadrature_sine();
+  test_calculate_gamma_sign();
 
   if (g_failures == 0) {
     puts("[PASS] tests/unit/test_dsp_backend");

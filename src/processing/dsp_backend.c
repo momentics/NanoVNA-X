@@ -275,7 +275,7 @@ void calculate_gamma(float* gamma) {
   // Complex division: (samp_real + j*samp_imag) / (ref_real + j*ref_imag)
   // = [(samp_real*ref_real + samp_imag*ref_imag) + j*(samp_imag*ref_real - samp_real*ref_imag)] / |ref|^2
   gamma[0] = (ss * rs + sc * rc) / rr; // Real part: (samp_real*ref_real + samp_imag*ref_imag) / |ref|^2
-  gamma[1] = (sc * rs - ss * rc) / rr; // Imaginary part: (samp_imag*ref_real - samp_real*ref_imag) / |ref|^2
+  gamma[1] = (ss * rc - sc * rs) / rr; // Imaginary part: (samp_imag*ref_real - samp_real*ref_imag) / |ref|^2
 #else
   measure_t rs_rc = (measure_t)rs_acc / rc_acc;
   measure_t sc_rc = (measure_t)sc_acc / rc_acc;
@@ -310,3 +310,13 @@ void reset_dsp_accumerator(void) {
   acc_samp_c = 0;
   dsp_exit_critical(primask);
 }
+
+#ifdef NANOVNA_HOST_TEST
+void set_dsp_accumulator(acc_t ss, acc_t sc, acc_t rs, acc_t rc) {
+  acc_samp_s = ss;
+  acc_samp_c = sc;
+  acc_ref_s = rs;
+  acc_ref_c = rc;
+}
+#endif
+
