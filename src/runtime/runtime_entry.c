@@ -744,13 +744,15 @@ int runtime_main(void) {
   /*
    * I2C bus run on work speed
    */
-  i2c_set_timings(STM32_I2C_TIMINGR);
+  // i2c_set_timings(STM32_I2C_TIMINGR); // Moved down to be after clock enable
 
   platform_init();
   const PlatformDrivers* drivers = platform_get_drivers();
   if (drivers != NULL) {
     if (drivers->init) {
       drivers->init();
+      // Apply work speed timings immediately after init (which enables clock)
+      i2c_set_timings(STM32_I2C_TIMINGR);
     }
     if (drivers->display && drivers->display->init) {
       drivers->display->init();
