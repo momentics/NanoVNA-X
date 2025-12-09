@@ -741,10 +741,7 @@ int runtime_main(void) {
   sweep_mode = SWEEP_ENABLE;
   battery_last_mv = INT16_MIN;
 
-  /*
-   * I2C bus run on work speed
-   */
-  // i2c_set_timings(STM32_I2C_TIMINGR); // Moved down to be after clock enable
+
 
   platform_init();
   const PlatformDrivers* drivers = platform_get_drivers();
@@ -810,11 +807,9 @@ int runtime_main(void) {
                                /*
                                 * I2S Initialize
                                 */
-  /*
-   * I2C bus run on work speed
-   */
-  i2c_set_timings(STM32_I2C_TIMINGR);
-
+                                /*
+                                * I2S Initialize
+                                */
   init_i2s((void*)sweep_service_rx_buffer(),
            (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
 
