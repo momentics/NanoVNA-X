@@ -41,7 +41,7 @@
 #undef __REMOTE_DESKTOP__
 #endif
 // Add RLE8 compression capture image format
-// #define __CAPTURE_RLE8__
+#define __CAPTURE_RLE8__
 // Allow flip display
 //#define __FLIP_DISPLAY__
 // Add shadow on text in plot area (improve readable, but little slowdown render)
@@ -76,7 +76,7 @@
 // Allow run commands from SD card (config.ini in root)
 #define __SD_CARD_LOAD__
 // Allow screenshots in TIFF format
-//#define __SD_CARD_DUMP_TIFF__
+#define __SD_CARD_DUMP_TIFF__
 // Allow dump firmware to SD card
 #define __SD_CARD_DUMP_FIRMWARE__
 // Enable SD card file browser, and allow load files from it
