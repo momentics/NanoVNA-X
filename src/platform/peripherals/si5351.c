@@ -1067,6 +1067,8 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
     //   SI5351_CLK0_EN|SI5351_CLK1_EN|SI5351_CLK2_EN);
     if (DELAY_RESET_PLL_BEFORE) {
       si5351_reset_pll(SI5351_PLL_RESET_A | SI5351_PLL_RESET_B);
+      // Improved PLL lock detection - wait for PLLs to stabilize after reset
+      si5351_wait_pll_lock();
     }
     // Set new gain values
     if (band_s[current_band].l_gain != band_s[band].l_gain ||
@@ -1090,8 +1092,14 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
     pll_n = band_s[band].pll_n;
     // Improved sequence for PLL programming: configure PLLs first, then multisynths
     if (current_band != band) {
+      // Step 1: Configure PLLs - this must be done first to allow proper locking
       si5351_setup_pll(SI5351_REG_PLL_A, pll_n, 0, 1);
       si5351_setup_pll(SI5351_REG_PLL_B, PLL_N_2, 0, 1);
+      
+      // Step 2: Wait for PLLs to lock before configuring multisynths - ensures stability
+      si5351_wait_pll_lock();
+      
+      // Step 3: Configure audio codec channel after PLLs are stable
       si5351_set_frequency_fixedpll(AUDIO_CODEC_CHANNEL, config._xtal_freq * PLL_N_2, CLK2_FREQUENCY, SI5351_R_DIV_1, SI5351_CLK_DRIVE_STRENGTH_2MA | SI5351_CLK_PLL_SELECT_B);
     }
     delay = DELAY_BAND_1_2;

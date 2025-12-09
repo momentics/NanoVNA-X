@@ -750,11 +750,11 @@ int runtime_main(void) {
     if (drivers->display && drivers->display->init) {
       drivers->display->init();
     }
-    if (drivers->adc && drivers->adc->init) {
-      drivers->adc->init();
-    }
     if (drivers->generator && drivers->generator->init) {
       drivers->generator->init();
+    }
+    if (drivers->adc && drivers->adc->init) {
+      drivers->adc->init();
     }
     if (drivers->storage && drivers->storage->init) {
       drivers->storage->init();
