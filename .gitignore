@@ -10,6 +10,7 @@
 *.o
 *.d
 
+
 # Generated resources
 *.png
 .dep/
