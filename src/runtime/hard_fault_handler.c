@@ -19,7 +19,7 @@ typedef struct {
 __attribute__((noreturn)) void
 hard_fault_handler_c(uint32_t* sp, const hard_fault_extra_registers_t* extra, uint32_t exc_return);
 
-__attribute__((naked)) void HardFault_Handler(void) {
+__attribute__((naked, used)) void HardFault_Handler(void) {
   __asm volatile("mov r2, lr\n"
                  "movs r3, #4\n"
                  "tst r3, r2\n"
@@ -44,6 +44,10 @@ __attribute__((naked)) void HardFault_Handler(void) {
                  "bl hard_fault_handler_c\n"
                  "add sp, #32\n"
                  "b .\n");
+}
+
+void hard_fault_handler_init(void) {
+  // Dummy function to force linker to keep this object file
 }
 
 __attribute__((used)) void hard_fault_handler_c(uint32_t* sp, const hard_fault_extra_registers_t* extra,
