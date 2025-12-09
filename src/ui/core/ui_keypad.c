@@ -35,18 +35,19 @@ static const keypad_pos_t key_pos[] = {
     [TXT_KEYBOARD] = {KPF_X_OFFSET, KPF_Y_OFFSET, KPF_WIDTH, KPF_HEIGHT}};
 
 // Key definitions
-#define KP_EMPTY 0
-#define KP_0 1
-#define KP_1 2
-#define KP_2 3
-#define KP_3 4
-#define KP_4 5
-#define KP_5 6
-#define KP_6 7
-#define KP_7 8
-#define KP_8 9
-#define KP_9 10
-#define KP_PERIOD 11
+#define KP_EMPTY 0xFF
+#define KP_0 0
+#define KP_1 1
+#define KP_2 2
+#define KP_3 3
+#define KP_4 4
+#define KP_5 5
+#define KP_6 6
+#define KP_7 7
+#define KP_8 8
+#define KP_9 9
+#define KP_PERIOD 10
+// Index 11 is unused/mystery
 #define KP_MINUS 12
 #define KP_BS 13
 #define KP_k 14
@@ -57,8 +58,8 @@ static const keypad_pos_t key_pos[] = {
 #define KP_n 19
 #define KP_p 20
 #define KP_X1 21
-#define KP_PERCENT 22
-#define KP_ENTER 23
+#define KP_ENTER 22
+#define KP_PERCENT 23
 
 typedef struct {
   uint8_t size, type;
