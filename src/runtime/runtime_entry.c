@@ -794,12 +794,6 @@ int runtime_main(void) {
   si5351_set_frequency_offset(IF_OFFSET);
 #endif
   /*
-   * Init Shell console connection data
-   */
-  shell_register_commands(commands);
-  shell_init_connection();
-
-  /*
    * tlv320aic Initialize (audio codec)
    */
   tlv320aic3204_init();
@@ -827,6 +821,13 @@ int runtime_main(void) {
    * Startup sweep thread
    */
   chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO - 1, Thread1, NULL);
+
+  /*
+   * Init Shell console connection data
+   * Moved to end to prevent interference with boot process
+   */
+  shell_register_commands(commands);
+  shell_init_connection();
 
   while (1) {
     if (!shell_check_connect()) {
