@@ -277,7 +277,7 @@ void menu_invoke(int item) {
 void ui_mode_menu(void) {
   if (ui_mode == UI_MENU)
     return;
-  set_area_size(0, 0); // Assuming set_area_size handles extern/linkage or is macro
+  // set_area_size(0, 0); // Removed to allow plot update in background
   ui_mode = UI_MENU;
   menu_draw(-1);
 }
