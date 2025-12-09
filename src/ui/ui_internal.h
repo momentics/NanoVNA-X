@@ -173,10 +173,7 @@ typedef struct {
 } __attribute__((packed)) keypads_list;
 
 // Request flags
-#define UI_CONTROLLER_REQUEST_NONE    0x00
-#define UI_CONTROLLER_REQUEST_LEVER   0x01
-#define UI_CONTROLLER_REQUEST_TOUCH   0x02
-#define UI_CONTROLLER_REQUEST_CONSOLE 0x04
+
 
 // Provide extern access to these for split files if needed
 extern uint8_t ui_mode;

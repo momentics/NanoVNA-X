@@ -107,3 +107,63 @@ const menuitem_t* const menu_measure_list[] = {
 #endif
 };
 #endif
+#ifdef BANDWIDTH_8000
+static const menu_descriptor_t menu_bandwidth_desc[] = {
+#ifdef BANDWIDTH_8000
+    {MT_ADV_CALLBACK, BANDWIDTH_8000},
+#endif
+#ifdef BANDWIDTH_4000
+    {MT_ADV_CALLBACK, BANDWIDTH_4000},
+#endif
+#ifdef BANDWIDTH_2000
+    {MT_ADV_CALLBACK, BANDWIDTH_2000},
+#endif
+#ifdef BANDWIDTH_1000
+    {MT_ADV_CALLBACK, BANDWIDTH_1000},
+#endif
+#ifdef BANDWIDTH_333
+    {MT_ADV_CALLBACK, BANDWIDTH_333},
+#endif
+#ifdef BANDWIDTH_100
+    {MT_ADV_CALLBACK, BANDWIDTH_100},
+#endif
+#ifdef BANDWIDTH_30
+    {MT_ADV_CALLBACK, BANDWIDTH_30},
+#endif
+#ifdef BANDWIDTH_10
+    {MT_ADV_CALLBACK, BANDWIDTH_10},
+#endif
+};
+#endif
+
+UI_FUNCTION_ADV_CALLBACK(menu_bandwidth_acb) {
+  if (b) {
+    b->icon = config._bandwidth == data ? BUTTON_ICON_GROUP_CHECKED : BUTTON_ICON_GROUP;
+    b->p1.u = get_bandwidth_frequency(data);
+    return;
+  }
+  set_bandwidth(data);
+}
+
+// Explicit prototype if header fail
+menuitem_t* menu_dynamic_acquire(void);
+
+const menuitem_t* menu_build_bandwidth_menu(void) {
+  menuitem_t* buffer = menu_dynamic_acquire();
+  menuitem_t* cursor = buffer;
+#ifdef BANDWIDTH_8000
+  cursor = ui_menu_list(menu_bandwidth_desc, ARRAY_COUNT(menu_bandwidth_desc), "%u " S_Hz,
+                        menu_bandwidth_acb, cursor);
+#endif
+  menu_set_next(cursor, menu_back);
+  return buffer;
+}
+
+UI_FUNCTION_ADV_CALLBACK(menu_bandwidth_sel_acb) {
+  (void)data;
+  if (b) {
+    b->p1.u = get_bandwidth_frequency(config._bandwidth);
+    return;
+  }
+  menu_push_submenu(menu_build_bandwidth_menu());
+}

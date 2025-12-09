@@ -37,7 +37,6 @@ const menuitem_t* menu_build_save_menu(void);
 const menuitem_t* menu_build_recall_menu(void);
 const menuitem_t* menu_build_smooth_menu(void);
 const menuitem_t* menu_build_power_menu(void);
-const menuitem_t* menu_build_serial_speed_menu(void);
 // menu_cal_options used menu_power_sel_acb.
 
 // Calibration Menu (menu_calibration.c)
@@ -49,6 +48,8 @@ extern const menuitem_t menu_marker[];
 extern const menuitem_t menu_stimulus[];
 extern const menuitem_t menu_state_io[];
 extern const menuitem_t menu_sdcard[];
+extern const menuitem_t menu_system[];
+
 const menuitem_t* menu_build_marker_select_menu(void);
 
 // Smith helper from ui_controller.c
@@ -57,6 +58,10 @@ uint8_t get_smith_format(void);
 void menu_auto_scale_cb(uint16_t data);
 UI_FUNCTION_ADV_CALLBACK(menu_marker_smith_acb);
 UI_FUNCTION_ADV_CALLBACK(menu_vna_mode_acb);
+
+// Shared helpers
+void ui_cycle_option(uint16_t* dst, const option_desc_t* list, size_t count, button_t* b);
+bool select_lever_mode(int mode);
 
 // Dynamic Menu Support
 menuitem_t* menu_dynamic_acquire(void);

@@ -57,7 +57,7 @@ static int marker_area_max(void) {
 }
 
 void render_markers_in_cell(RenderCellCtx* rcx) {
-  uint32_t trace_mask = 0;
+
   // TODO: Gather trace mask logic is in plot_grid.c helper.
   // Maybe we should just iterate traces here.
   // The original function (710-744) iterates traces to draw markers.

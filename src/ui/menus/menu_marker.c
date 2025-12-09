@@ -166,6 +166,22 @@ const menuitem_t* menu_build_marker_select_menu(void) {
   return base;
 }
 
+uint8_t get_smith_format(void) {
+  return (current_trace != TRACE_INVALID) ? trace[current_trace].smith_format : 0;
+}
+
+UI_FUNCTION_ADV_CALLBACK(menu_marker_smith_acb) {
+  if (b) {
+    b->icon = get_smith_format() == data ? BUTTON_ICON_GROUP_CHECKED : BUTTON_ICON_GROUP;
+    b->p1.text = get_smith_format_names(data);
+    return;
+  }
+  if (current_trace == TRACE_INVALID)
+    return;
+  trace[current_trace].smith_format = data;
+  request_to_redraw(REDRAW_AREA | REDRAW_MARKER);
+}
+
 static const menu_descriptor_t menu_marker_s21smith_desc[] = {
     {MT_ADV_CALLBACK, MS_LIN},
     {MT_ADV_CALLBACK, MS_LOG},
