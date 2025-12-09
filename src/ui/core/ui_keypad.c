@@ -47,19 +47,18 @@ static const keypad_pos_t key_pos[] = {
 #define KP_8 8
 #define KP_9 9
 #define KP_PERIOD 10
-// Index 11 is unused/mystery
-#define KP_MINUS 12
-#define KP_BS 13
-#define KP_k 14
-#define KP_M 15
-#define KP_G 16
-#define KP_m 17
-#define KP_u 18
-#define KP_n 19
-#define KP_p 20
-#define KP_X1 21
-#define KP_ENTER 22
-#define KP_PERCENT 23
+#define KP_MINUS 11
+#define KP_BS 12
+#define KP_k 13
+#define KP_M 14
+#define KP_G 15
+#define KP_m 16
+#define KP_u 17
+#define KP_n 18
+#define KP_p 19
+#define KP_X1 20
+#define KP_ENTER 21
+#define KP_PERCENT 22
 
 typedef struct {
   uint8_t size, type;
