@@ -244,7 +244,7 @@ UI_FUNCTION_ADV_CALLBACK(menu_offset_sel_acb) {
 
 // Brightness logic
 #ifdef __LCD_BRIGHTNESS__
-static void lcd_set_brightness(uint16_t b) {
+void lcd_set_brightness(uint16_t b) {
   dac_setvalue_ch2(700 + b * (4000 - 700) / 100);
 }
 

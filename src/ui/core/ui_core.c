@@ -10,6 +10,7 @@
 #include "ui/input/hardware_input.h"
 #include "../resources/icons/icons_menu.h"
 #include "platform/boards/board_events.h"
+#include "ui/menus/menu_system.h" // For lcd_set_brightness
 
 #include "platform/boards/board_events.h"
 
