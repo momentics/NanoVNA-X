@@ -167,7 +167,7 @@
 #define LCD_PIXEL_SIZE        2
 // Cell size, depends from spi_buffer size, CELLWIDTH*CELLHEIGHT*sizeof(pixel) <= sizeof(spi_buffer)
 #define CELLWIDTH  (64 / DISPLAY_CELL_BUFFER_COUNT)
-#define CELLHEIGHT (32)
+#define CELLHEIGHT (16)
 #endif
 
 // Define size of screen buffer in pixel_t (need for cell w * h * count)
