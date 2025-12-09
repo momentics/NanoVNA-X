@@ -12,6 +12,7 @@
 #include "interfaces/ports/ui_port.h"
 #include "infra/state/state_manager.h"
 #include "platform/peripherals/usbcfg.h"
+#include "runtime/calibration_logic.h"
 
 // Defines moved from runtime_entry.c
 #define VNA_SHELL_FUNCTION(command_name) static void command_name(int argc, char* argv[])

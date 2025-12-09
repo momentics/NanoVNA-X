@@ -207,7 +207,7 @@ const menuitem_t* menu_build_smooth_menu(void);
 #endif
 
 // Icons for UI
-#include "../resources/icons/icons_menu.h"
+#include "ui/resources/icons/icons_menu.h"
 
 #if 0
 static void btn_wait(void) {

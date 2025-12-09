@@ -21,6 +21,11 @@
 #pragma once
 
 #include "nanovna.h"
+#include <stdint.h>
+#include <stdbool.h>
+
+
+
 
 int runtime_main(void);
 
@@ -40,14 +45,6 @@ void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforce_order
 void set_sweep_frequency(uint16_t type, freq_t freq);
 void reset_sweep_frequency(void);
 
-void eterm_set(int term, float re, float im);
-void eterm_copy(int dst, int src);
-void eterm_calc_es(void);
-void eterm_calc_er(int sign);
-void eterm_calc_et(void);
-
-void cal_collect(uint16_t type);
-void cal_done(void);
 
 #ifdef __LCD_BRIGHTNESS__
 void set_brightness(uint8_t brightness);

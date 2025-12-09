@@ -23,7 +23,7 @@
 //                    Icons used in UI
 //****************************************************************
 
-#include "icons_menu.h"
+#include "ui/resources/icons/icons_menu.h"
 
 // Touch test icon on screen
 #if LCD_WIDTH < 800

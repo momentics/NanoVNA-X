@@ -1,5 +1,5 @@
 #include "nanovna.h"
-#include "menu_internal.h"
+#include "ui/menus/menu_internal.h"
 #include "ui/ui_internal.h"
 
 // Forward declaration if not in headers

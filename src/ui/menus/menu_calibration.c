@@ -1,6 +1,8 @@
 #include "nanovna.h"
 #include "hal.h"
+#include "ui/ui_internal.h"
 #include "ui/menus/menu_internal.h"
+#include "runtime/calibration_logic.h"
 #include "ui/input/hardware_input.h"
 #include "chprintf.h"
 
@@ -92,17 +94,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_cal_apply_acb) {
   request_to_redraw(REDRAW_CAL_STATUS);
 }
 
-static const menuitem_t menu_calop[] = {
-    {MT_ADV_CALLBACK, CAL_OPEN, "OPEN", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_SHORT, "SHORT", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_LOAD, "LOAD", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_ISOLN, "ISOLN", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_THRU, "THRU", menu_calop_acb},
-    //{ MT_ADV_CALLBACK, KM_EDELAY, "E-DELAY", menu_keyboard_acb },
-    {MT_CALLBACK, 0, "DONE", menu_caldone_cb},
-    {MT_CALLBACK, 1, "DONE IN RAM", menu_caldone_cb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
+
 
 const menuitem_t menu_cal_wizard[] = {
     {MT_ADV_CALLBACK, CAL_OPEN, "OPEN", menu_calop_acb},

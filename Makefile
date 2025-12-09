@@ -250,7 +250,8 @@ CSRC += src/ui/menus/menu_calibration.c \
        src/ui/display/plot_trace.c \
        src/ui/display/plot_marker.c \
        src/runtime/shell_commands.c \
-       src/runtime/hard_fault_handler.c
+       src/runtime/hard_fault_handler.c \
+       src/runtime/calibration_logic.c
 
 INCDIR = $(STARTUPINC) $(KERNINC) $(PORTINC) $(OSALINC) \
          $(HALINC) $(PLATFORMINC) $(BOARDINC)  \
