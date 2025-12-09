@@ -102,7 +102,7 @@
 // Allow run commands from SD card (config.ini in root)
 #define __SD_CARD_LOAD__
 // Allow screenshots in TIFF format
-#define __SD_CARD_DUMP_TIFF__
+//#define __SD_CARD_DUMP_TIFF__
 // Allow dump firmware to SD card
 #define __SD_CARD_DUMP_FIRMWARE__
 // Enable SD card file browser, and allow load files from it
@@ -1179,7 +1179,7 @@ typedef uint16_t pixel_t;
 #define LCD_PIXEL_SIZE        2
 // Cell size, depends from spi_buffer size, CELLWIDTH*CELLHEIGHT*sizeof(pixel) <= sizeof(spi_buffer)
 #define CELLWIDTH  (64 / DISPLAY_CELL_BUFFER_COUNT)
-#define CELLHEIGHT (32)
+#define CELLHEIGHT (16)
 #endif
 
 // Define size of screen buffer in pixel_t (need for cell w * h * count)
@@ -1312,8 +1312,8 @@ void     lcd_set_flip(bool flip);
 #include "ff.h"
 #include "diskio.h"
 
-#if SPI_BUFFER_SIZE < 2048
-#error "SPI_BUFFER_SIZE for SD card support need size >= 2048"
+#if SPI_BUFFER_SIZE < 1024
+#error "SPI_BUFFER_SIZE for SD card support need size >= 1024"
 #endif
 
 FATFS *filesystem_volume(void);

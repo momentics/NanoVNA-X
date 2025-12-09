@@ -2673,15 +2673,9 @@ enum {
 #define MENU_DYNAMIC_BUFFER_SIZE MENU_DYNAMIC_BUFFER_BASE
 #endif
 
-static menuitem_t* menu_dynamic_buffer;
+static menuitem_t menu_dynamic_buffer[MENU_DYNAMIC_BUFFER_SIZE];
 
 static menuitem_t* menu_dynamic_acquire(void) {
-  if (menu_dynamic_buffer == NULL) {
-    menu_dynamic_buffer =
-        chCoreAllocAligned(MENU_DYNAMIC_BUFFER_SIZE * sizeof(menuitem_t), PORT_NATURAL_ALIGN);
-    if (menu_dynamic_buffer == NULL)
-      chSysHalt("menu buffer");
-  }
   return menu_dynamic_buffer;
 }
 #undef MENU_DYNAMIC_BUFFER_BASE
