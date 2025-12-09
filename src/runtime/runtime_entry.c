@@ -741,6 +741,11 @@ int runtime_main(void) {
   sweep_mode = SWEEP_ENABLE;
   battery_last_mv = INT16_MIN;
 
+  /*
+   * I2C bus run on work speed
+   */
+  i2c_set_timings(STM32_I2C_TIMINGR);
+
   platform_init();
   const PlatformDrivers* drivers = platform_get_drivers();
   if (drivers != NULL) {
@@ -816,10 +821,7 @@ int runtime_main(void) {
   disk_initialize(0);
 #endif
 
-  /*
-   * I2C bus run on work speed
-   */
-  i2c_set_timings(STM32_I2C_TIMINGR);
+
 
   /*
    * Startup sweep thread
