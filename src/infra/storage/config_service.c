@@ -118,6 +118,11 @@ static int caldata_save_impl(uint32_t id) {
     return -1;  // Return error to indicate save was denied
   }
 
+  // Wait for exclusive access to flash operations
+  msg_t msg = chSemWaitTimeout(&flash_operation_semaphore, MS2ST(500));
+  if (msg != MSG_OK)
+    return -1;
+
   // Apply magic word and calculate checksum
   current_props.magic = PROPERTIES_MAGIC;
   current_props.checksum =
@@ -128,6 +133,8 @@ static int caldata_save_impl(uint32_t id) {
   flash_program_half_word_buffer(dst, (uint16_t*)&current_props, sizeof(properties_t));
 
   lastsaveid = id;
+  
+  chSemSignal(&flash_operation_semaphore);
   return 0;
 }
 
@@ -150,9 +157,16 @@ static int caldata_recall_impl(uint32_t id) {
   lastsaveid = NO_SAVE_SLOT;
   if (id == NO_SAVE_SLOT)
     return 0;
+
+  // Wait for exclusive access to flash operations (read consistency)
+  msg_t msg = chSemWaitTimeout(&flash_operation_semaphore, MS2ST(500));
+  if (msg != MSG_OK)
+    return -1;
+
   // point to saved area on the flash memory
   const properties_t* src = get_properties(id);
   if (src == NULL) {
+    chSemSignal(&flash_operation_semaphore);
     //  load_default_properties();
     return 1;
   }
@@ -160,6 +174,8 @@ static int caldata_recall_impl(uint32_t id) {
   lastsaveid = id;
   // duplicated saved data onto sram to be able to modify marker/trace
   memcpy(&current_props, src, sizeof(properties_t));
+  
+  chSemSignal(&flash_operation_semaphore);
   return 0;
 }
 
