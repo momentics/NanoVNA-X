@@ -79,9 +79,6 @@ void shell_register_session_stop_callback(shell_session_callback_t callback);
 int vna_shell_read_line(char* line, int max_size);
 void vna_shell_execute_cmd_line(char* line);
 
-void shell_wake_all_waiting_threads(void);
-
-
 #ifdef __cplusplus
 }
 #endif

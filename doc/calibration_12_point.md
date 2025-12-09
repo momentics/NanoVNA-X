@@ -31,25 +31,25 @@
 ## Calibration SOLT (Order in menu: OPEN-SHORT-LOAD-ISOLN-THRU)
 
 ### Step 1: OPEN Calibration
-1. Ensure nothing is connected to port CH0 (air connector)
+1. Ensure nothing is connected to port CH0 (OPEN)
 2. Go to menu: `CAL` -> `OPEN`
 3. Wait for the standard measurement to complete
 4. Verify that the "O" indicator in the status bar is active
 
 ### Step 2: SHORT Calibration
-1. Connect the short circuit standard to port CH0
+1. Connect the SHORT standard to port CH0
 2. Go to menu: `CAL` -> `SHORT`
 3. Wait for the standard measurement to complete
 4. Verify that the "S" indicator in the status bar is active
 
 ### Step 3: LOAD Calibration
-1. Connect the 50-Ohm load standard to port CH0 (or CH1 depending on measurement)
+1. Connect the LOAD standard to port CH0 (or CH1 depending on measurement)
 2. Go to menu: `CAL` -> `LOAD`
 3. Wait for the standard measurement to complete
 4. Verify that the "L" indicator in the status bar is active (checked with a tick)
 
 ### Step 4: ISOLN Calibration (Isolation)
-1. Ensure nothing is connected to both ports CH0 and CH1
+1. Ensure nothing is connected to both ports CH0 and CH1 (OPEN both ports)
 2. Go to menu: `CAL` -> `ISOLN`
 3. Wait for the background noise/leakage measurement to complete
 4. Verify that the "X" indicator in the status bar is active
@@ -57,7 +57,7 @@
 Important! ISOLN measures cross-coupling between ports and background noise, which is especially important for accurate S21 measurements.
 
 ### Step 5: THRU Calibration
-1. Connect the through standard (THRU) between ports CH0 and CH1
+1. Connect the THRU standard between ports CH0 and CH1
 2. Go to menu: `CAL` -> `THRU`
 3. Wait for the standard measurement to complete
 4. Verify that the "T" indicator in the status bar is active

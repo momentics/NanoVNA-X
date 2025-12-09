@@ -42,7 +42,7 @@
 #endif
 
 // Include platform-specific sin table
-#include "processing/sin_tables.h"
+#include "sin_tables.h"
 
 #ifdef NANOVNA_F303
 // Use F303-specific table

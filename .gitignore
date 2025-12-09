@@ -1,6 +1,6 @@
 # Build outputs
 /build/
-/NanoVNA-D-1.2.46/
+/NanoVNA-D/
 /build-*/
 *.elf
 *.hex
@@ -23,4 +23,3 @@ TAGS
 .idea/
 .vscode/
 *.swp
-build_log_before.txt

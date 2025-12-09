@@ -1100,12 +1100,17 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
       si5351_wait_pll_lock();
       
       // Step 3: Configure audio codec channel after PLLs are stable
-      si5351_set_frequency_fixedpll(AUDIO_CODEC_CHANNEL, config._xtal_freq * PLL_N_2, CLK2_FREQUENCY, SI5351_R_DIV_1, SI5351_CLK_DRIVE_STRENGTH_2MA | SI5351_CLK_PLL_SELECT_B);
+      si5351_set_frequency_fixedpll(AUDIO_CODEC_CHANNEL, config._xtal_freq * PLL_N_2,
+                                    CLK2_FREQUENCY, SI5351_R_DIV_1,
+                                    SI5351_CLK_DRIVE_STRENGTH_2MA | SI5351_CLK_PLL_SELECT_B);
     }
     delay = DELAY_BAND_1_2;
     // Calculate and set CH0 and CH1 divider
-    si5351_set_frequency_fixedpll(OFREQ_CHANNEL, (uint64_t)omul * config._xtal_freq * pll_n, ofreq, rdiv, ods | SI5351_CLK_PLL_SELECT_A);
-    si5351_set_frequency_fixedpll( FREQ_CHANNEL, (uint64_t) mul * config._xtal_freq * pll_n,  freq, rdiv,  ds | SI5351_CLK_PLL_SELECT_A);
+    // Improved sequence ordering: ensure offset frequency is set before main frequency
+    si5351_set_frequency_fixedpll(OFREQ_CHANNEL, (uint64_t)omul * config._xtal_freq * pll_n, ofreq,
+                                  rdiv, ods | SI5351_CLK_PLL_SELECT_A);
+    si5351_set_frequency_fixedpll(FREQ_CHANNEL, (uint64_t)mul * config._xtal_freq * pll_n, freq,
+                                  rdiv, ds | SI5351_CLK_PLL_SELECT_A);
     break;
 #if 0
     case SI5351_MIXED:

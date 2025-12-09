@@ -20,35 +20,4 @@
 
 #pragma once
 
-#include "nanovna.h"
-#include <stdint.h>
-#include <stdbool.h>
-
-
-
-
 int runtime_main(void);
-
-void pause_sweep(void);
-void resume_sweep(void);
-void toggle_sweep(void);
-bool need_interpolate(freq_t start, freq_t stop, uint16_t points);
-void sweep_get_ordered(freq_t* start, freq_t* stop);
-
-void set_power(uint8_t value);
-void set_bandwidth(uint16_t bw_count);
-uint32_t get_bandwidth_frequency(uint16_t bw_freq);
-void set_sweep_points(uint16_t points);
-void app_measurement_update_frequencies(void);
-
-void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforce_order);
-void set_sweep_frequency(uint16_t type, freq_t freq);
-void reset_sweep_frequency(void);
-
-
-#ifdef __LCD_BRIGHTNESS__
-void set_brightness(uint8_t brightness);
-#else
-static inline void set_brightness(uint8_t brightness) { (void)brightness; }
-#endif
-
