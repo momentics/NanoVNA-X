@@ -3,8 +3,10 @@
 #include "nanovna.h"
 #include "ui/core/ui_core.h"
 #include "ui/core/ui_menu_engine.h"
+#include "ui/core/ui_keypad.h"
 #include "ui/display/display_presenter.h"
 #include "ui/input/hardware_input.h"
+#include "ui/core/ui_keypad.h" // Wait, duplicate? No, just add once.
 
 // Bring in macros for drawing (or include a common ui_draw.h if I created one)
 // For now, reuse the macros as localized here.
@@ -279,6 +281,38 @@ void ui_mode_menu(void) {
   set_area_size(0, 0); // Assuming set_area_size handles extern/linkage or is macro
   ui_mode = UI_MENU;
   menu_draw(-1);
+}
+
+static UI_FUNCTION_CALLBACK(menu_back_cb) {
+  (void)data;
+  menu_move_back(true);
+}
+
+const menuitem_t menu_back[] = {
+    {MT_CALLBACK, 0, S_LARROW " BACK", menu_back_cb},
+    {MT_NEXT, 0, NULL, NULL} // sentinel
+};
+
+// Generic Menu Callbacks
+UI_FUNCTION_ADV_CALLBACK(menu_keyboard_acb) {
+  if (data == KM_VAR &&
+      lever_mode == LM_EDELAY) // JOG STEP button auto set (e-delay or frequency step)
+    data = KM_VAR_DELAY;
+  if (b) {
+    ui_keyboard_cb(data, b);
+    return;
+  }
+  ui_mode_keypad(data);
+}
+
+// ===================================
+// Dynamic Menu Buffer
+// ===================================
+#define MENU_DYNAMIC_BUFFER_SIZE 64
+static menuitem_t menu_dynamic_buffer[MENU_DYNAMIC_BUFFER_SIZE];
+
+menuitem_t* menu_dynamic_acquire(void) {
+  return menu_dynamic_buffer;
 }
 
 // ===================================

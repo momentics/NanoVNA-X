@@ -26,6 +26,7 @@
 #include "hal.h"
 #include "infra/event/event_bus.h"
 #include "infra/storage/config_service.h"
+#include "ui/menus/menu_main.h"
 #include "chprintf.h"
 #include "chmemcore.h"
 #include <stddef.h>
@@ -59,23 +60,6 @@
 
 static uint8_t keyboard_temp; // Used for SD card keyboard workflows
 
-#ifdef __USE_SD_CARD__
-enum {
-  FMT_S1P_FILE = 0,
-  FMT_S2P_FILE,
-  FMT_BMP_FILE,
-#ifdef __SD_CARD_DUMP_TIFF__
-  FMT_TIF_FILE,
-#endif
-  FMT_CAL_FILE,
-#ifdef __SD_CARD_DUMP_FIRMWARE__
-  FMT_BIN_FILE,
-#endif
-#ifdef __SD_CARD_LOAD__
-  FMT_CMD_FILE,
-#endif
-};
-#endif
 
 //==============================================
 // menu_button_height removed
@@ -83,16 +67,15 @@ enum {
 
 // Menu structs moved to UI headers
 
-// Menu helpers moved
-
-static const menuitem_t* menu_build_save_menu(void);
-static const menuitem_t* menu_build_recall_menu(void);
+// Menu helpers moved (declarations necessary for forward references)
 static const menuitem_t* menu_build_bandwidth_menu(void);
 static const menuitem_t* menu_build_points_menu(void);
 static const menuitem_t* menu_build_marker_select_menu(void);
-static const menuitem_t* menu_build_marker_smith_menu(uint8_t channel);
 static const menuitem_t* menu_build_smooth_menu(void);
-static const menuitem_t* menu_build_power_menu(void);
+#ifdef __USE_SERIAL_CONSOLE__
+static const menuitem_t* menu_build_serial_speed_menu(void);
+#endif
+
 
 // Icons for UI
 #include "../resources/icons/icons_menu.h"
@@ -202,112 +185,13 @@ static bool select_lever_mode(int mode) {
   return true;
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_calop_acb) {
-  static const struct {
-    uint8_t mask, next;
-  } c_list[5] = {
-      [CAL_LOAD] = {CALSTAT_LOAD, 3},   [CAL_OPEN] = {CALSTAT_OPEN, 1},
-      [CAL_SHORT] = {CALSTAT_SHORT, 2}, [CAL_THRU] = {CALSTAT_THRU, 6},
-      [CAL_ISOLN] = {CALSTAT_ISOLN, 4},
-  };
-  if (b) {
-    if (cal_status & c_list[data].mask)
-      b->icon = BUTTON_ICON_CHECK;
-    return;
-  }
-  // Reset the physical button debounce state when advancing through CAL steps
-  ui_input_reset_state();
-  cal_collect(data);
-  selection = c_list[data].next;
-}
 
-static UI_FUNCTION_ADV_CALLBACK(menu_cal_enh_acb) {
-  (void)data;
-  if (b) {
-    b->icon = (cal_status & CALSTAT_ENHANCED_RESPONSE) ? BUTTON_ICON_CHECK : BUTTON_ICON_NOCHECK;
-    return;
-  }
-  // toggle applying correction
-  cal_status ^= CALSTAT_ENHANCED_RESPONSE;
-  request_to_redraw(REDRAW_CAL_STATUS);
-}
 
-static UI_FUNCTION_CALLBACK(menu_caldone_cb) {
-  // Indicate that calibration is in progress
-  calibration_in_progress = true;
-  
-  // Complete calibration without interfering with measurements
-  cal_done();
-  
-  // Reset the flag (cal_done also sets it to false)
-  calibration_in_progress = false;
-  
-  // For both cases, simply return to the parent menu
-  // This avoids potential memory allocation issues with menu_build_save_menu()
-  menu_move_back(false);
-  // This allows the user to save calibration separately via CAL -> SAVE CAL
-  // which is safer and avoids potential memory allocation issues
-}
 
-static UI_FUNCTION_CALLBACK(menu_cal_reset_cb) {
-  (void)data;
-  // RESET
-  cal_status &= CALSTAT_ENHANCED_RESPONSE; // leave ER state
-  lastsaveid = NO_SAVE_SLOT;
-  // set_power(SI5351_CLK_DRIVE_STRENGTH_AUTO);
-  request_to_redraw(REDRAW_CAL_STATUS);
-}
 
-static UI_FUNCTION_ADV_CALLBACK(menu_cal_range_acb) {
-  (void)data;
-  bool calibrated = cal_status & (CALSTAT_ES | CALSTAT_ER | CALSTAT_ET | CALSTAT_ED | CALSTAT_EX |
-                                  CALSTAT_OPEN | CALSTAT_SHORT | CALSTAT_THRU);
-  if (!calibrated)
-    return;
-  if (b) {
-    b->bg = (cal_status & CALSTAT_INTERPOLATED) ? LCD_INTERP_CAL_COLOR : LCD_MENU_COLOR;
-    plot_printf(b->label, sizeof(b->label), "CAL: %dp\n %.6F" S_Hz "\n %.6F" S_Hz, cal_sweep_points,
-                (float)cal_frequency0, (float)cal_frequency1);
-    return;
-  }
-  // Reset range to calibration
-  if (cal_status & CALSTAT_INTERPOLATED) {
-    reset_sweep_frequency();
-    set_power(cal_power);
-  }
-}
 
-static UI_FUNCTION_ADV_CALLBACK(menu_cal_apply_acb) {
-  (void)data;
-  if (b) {
-    b->icon = (cal_status & CALSTAT_APPLY) ? BUTTON_ICON_CHECK : BUTTON_ICON_NOCHECK;
-    return;
-  }
-  // toggle applying correction
-  cal_status ^= CALSTAT_APPLY;
-  request_to_redraw(REDRAW_CAL_STATUS);
-}
 
-static UI_FUNCTION_ADV_CALLBACK(menu_recall_acb) {
-  if (b) {
-    const properties_t* p = get_properties(data);
-    if (p)
-      plot_printf(b->label, sizeof(b->label), "%.6F" S_Hz "\n%.6F" S_Hz, (float)p->_frequency0,
-                  (float)p->_frequency1);
-    else
-      b->p1.u = data;
-    if (lastsaveid == data)
-      b->icon = BUTTON_ICON_CHECK;
-    return;
-  }
-  
-  load_properties(data);
-}
 
-static UI_FUNCTION_CALLBACK(menu_recall_submenu_cb) {
-  (void)data;
-  menu_push_submenu(menu_build_recall_menu());
-}
 
 enum {
   MENU_CONFIG_TOUCH_CAL = 0,
@@ -358,134 +242,14 @@ static UI_FUNCTION_CALLBACK(menu_dfu_cb) {
 }
 #endif
 
-static UI_FUNCTION_ADV_CALLBACK(menu_save_acb) {
-  if (b) {
-    const properties_t* p = get_properties(data);
-    if (p)
-      plot_printf(b->label, sizeof(b->label), "%.6F" S_Hz "\n%.6F" S_Hz, (float)p->_frequency0,
-                  (float)p->_frequency1);
-    else
-      b->p1.u = data;
-    return;
-  }
-  
-  // Check if calibration is in progress before attempting to save
-  if (calibration_in_progress) {
-    ui_message_box("BUSY", "Calibration in progress, try again later", 2000);
-    return;
-  }
-  
-  int result = caldata_save(data);
-  
-  if (result == 0) {
-    menu_move_back(true);
-    request_to_redraw(REDRAW_BACKUP | REDRAW_CAL_STATUS);
-  } else {
-    // Show error if save failed
-    ui_message_box("SAVE ERROR", "Failed to save calibration", 1000);
-  }
-}
 
-static UI_FUNCTION_CALLBACK(menu_save_submenu_cb) {
-  (void)data;
-  menu_push_submenu(menu_build_save_menu());
-}
-
-static UI_FUNCTION_ADV_CALLBACK(menu_trace_acb) {
-  if (b) {
-    if (trace[data].enabled) {
-      b->bg = LCD_TRACE_1_COLOR + data;
-      if (data == selection)
-        b->bg = LCD_MENU_ACTIVE_COLOR;
-      if (current_trace == data)
-        b->icon = BUTTON_ICON_CHECK;
-    }
-    b->p1.u = data;
-    return;
-  }
-
-  if (trace[data].enabled && data != current_trace) // for enabled trace and not current trace
-    set_active_trace(data);                         // make active
-  else                                              //
-    set_trace_enable(data, !trace[data].enabled);   // toggle trace enable
-}
 
 extern const menuitem_t menu_trace[];
-static UI_FUNCTION_ADV_CALLBACK(menu_traces_acb) {
-  (void)data;
-  if (b) {
-    if (current_trace == TRACE_INVALID)
-      return;
-    b->bg = LCD_TRACE_1_COLOR + current_trace;
-    //    b->p1.u = current_trace;
-    return;
-  }
-  menu_push_submenu(menu_trace);
-}
 
 extern const menuitem_t menu_marker[];
-static uint8_t get_smith_format(void) {
-  return (current_trace != TRACE_INVALID) ? trace[current_trace].smith_format : 0;
-}
 
-static UI_FUNCTION_ADV_CALLBACK(menu_marker_smith_acb) {
-  if (b) {
-    b->icon = get_smith_format() == data ? BUTTON_ICON_GROUP_CHECKED : BUTTON_ICON_GROUP;
-    b->p1.text = get_smith_format_names(data);
-    return;
-  }
-  if (current_trace == TRACE_INVALID)
-    return;
-  trace[current_trace].smith_format = data;
-  request_to_redraw(REDRAW_AREA | REDRAW_MARKER);
-}
 
-#define F_S11 0x00
-#define F_S21 0x80
-static UI_FUNCTION_ADV_CALLBACK(menu_format_acb) {
-  if (current_trace == TRACE_INVALID)
-    return; // Not apply any for invalid traces
-  uint16_t format = data & (~F_S21);
-  uint16_t channel = data & F_S21 ? 1 : 0;
-  if (b) {
-    if (trace[current_trace].type == format && trace[current_trace].channel == channel)
-      b->icon = BUTTON_ICON_CHECK;
-    if (format == TRC_SMITH) {
-      uint8_t marker_smith_format = get_smith_format();
-      if ((channel == 0 && !S11_SMITH_VALUE(marker_smith_format)) ||
-          (channel == 1 && !S21_SMITH_VALUE(marker_smith_format)))
-        return;
-      plot_printf(b->label, sizeof(b->label), "%s\n" R_LINK_COLOR "%s",
-                  get_trace_typename(TRC_SMITH, marker_smith_format),
-                  get_smith_format_names(marker_smith_format));
-    } else
-      b->p1.text = get_trace_typename(format, -1);
-    return;
-  }
 
-  if (format == TRC_SMITH && trace[current_trace].type == TRC_SMITH &&
-      trace[current_trace].channel == channel)
-    menu_push_submenu(menu_build_marker_smith_menu(channel));
-  else
-    set_trace_type(current_trace, format, channel);
-}
-
-static UI_FUNCTION_ADV_CALLBACK(menu_channel_acb) {
-  (void)data;
-  if (current_trace == TRACE_INVALID) {
-    if (b)
-      b->p1.text = "";
-    return;
-  }
-  int ch = trace[current_trace].channel;
-  if (b) {
-    b->p1.text = ch == 0 ? "S11 (REFL)" : "S21 (THRU)";
-    return;
-  }
-  // Change channel only if trace type available for this
-  if ((1 << (trace[current_trace].type)) & S11_AND_S21_TYPE_MASK)
-    set_trace_channel(current_trace, ch ^ 1);
-}
 
 static const option_desc_t transform_window_options[] = {
     {TD_WINDOW_MINIMUM, "MINIMUM", BUTTON_ICON_NONE},
@@ -613,7 +377,7 @@ void apply_vna_mode(uint16_t idx, vna_mode_ops operation) {
   }
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_vna_mode_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_vna_mode_acb) {
   if (b) {
     const char* t = vna_mode_data[data].text;
     if (t == 0)
@@ -663,146 +427,14 @@ static UI_FUNCTION_ADV_CALLBACK(menu_points_acb) {
   set_sweep_points(p_count);
 }
 
-static UI_FUNCTION_ADV_CALLBACK(menu_power_sel_acb) {
-  (void)data;
-  if (b) {
-    if (current_props._power != SI5351_CLK_DRIVE_STRENGTH_AUTO)
-      plot_printf(b->label, sizeof(b->label), "POWER" R_LINK_COLOR "  %um" S_AMPER,
-                  2 + current_props._power * 2);
-    return;
-  }
-  menu_push_submenu(menu_build_power_menu());
-}
 
-static UI_FUNCTION_ADV_CALLBACK(menu_power_acb) {
-  if (b) {
-    b->icon = current_props._power == data ? BUTTON_ICON_GROUP_CHECKED : BUTTON_ICON_GROUP;
-    b->p1.u = 2 + data * 2;
-    return;
-  }
-  set_power(data);
-}
 
 // Process keyboard button callback, and run keyboard function
 // ui_keyboard_cb prototype removed (impl is below)
-static UI_FUNCTION_ADV_CALLBACK(menu_keyboard_acb) {
-  if (data == KM_VAR &&
-      lever_mode == LM_EDELAY) // JOG STEP button auto set (e-delay or frequency step)
-    data = KM_VAR_DELAY;
-  if (b) {
-    ui_keyboard_cb(data, b);
-    return;
-  }
-  ui_mode_keypad(data);
-}
 
 // Custom keyboard menu button callback (depend from current trace)
-static UI_FUNCTION_ADV_CALLBACK(menu_scale_keyboard_acb) {
-  // Not apply amplitude / scale / ref for invalid or polar graph
-  if (current_trace == TRACE_INVALID)
-    return;
-  uint32_t type_mask = 1 << trace[current_trace].type;
-  if ((type_mask & ROUND_GRID_MASK) && data != KM_SCALE)
-    return;
-  // Nano scale values
-  uint32_t nano_keyb_type = (1 << KM_TOP) | (1 << KM_BOTTOM) | (1 << KM_SCALE);
-  if ((type_mask & NANO_TYPE_MASK) && ((1 << data) & nano_keyb_type))
-    data++;
-  menu_keyboard_acb(data, b);
-}
 
-//
-// Auto scale active trace
-// Calculate reference and scale values depend from max and min trace values (aligning with
-// 'beautiful' borders)
-//
-static UI_FUNCTION_CALLBACK(menu_auto_scale_cb) {
-  (void)data;
-  if (current_trace == TRACE_INVALID || sweep_points == 0)
-    return;
-  int type = trace[current_trace].type;
-  get_value_cb_t c = trace_info_list[type].get_value_cb; // Get callback for value calculation
-  if (c == NULL)
-    return; // No callback, skip
 
-  float (*array)[2] = measured[trace[current_trace].channel];
-  float min_val, max_val;
-
-  // Initialize with the first point
-  float v = c(0, array[0]);
-  if (vna_fabsf(v) == infinityf())
-    return;
-  min_val = max_val = v;
-
-  // Find min and max in one pass with fewer comparisons
-  int i;
-  for (i = 1; i < sweep_points - 1; i += 2) {
-    float v1 = c(i, array[i]);
-    float v2 = c(i + 1, array[i + 1]);
-    if (vna_fabsf(v1) == infinityf() || vna_fabsf(v2) == infinityf())
-      return;
-
-    if (v1 < v2) {
-      if (v1 < min_val)
-        min_val = v1;
-      if (v2 > max_val)
-        max_val = v2;
-    } else {
-      if (v2 < min_val)
-        min_val = v2;
-      if (v1 > max_val)
-        max_val = v1;
-    }
-  }
-
-  // Process the last element if the number of points is odd
-  if (i < sweep_points) {
-    v = c(i, array[i]);
-    if (vna_fabsf(v) == infinityf())
-      return;
-    if (v < min_val)
-      min_val = v;
-    if (v > max_val)
-      max_val = v;
-  }
-
-  const float N = NGRIDY;                 // Grid count
-  float delta = max_val - min_val;        // delta
-  float mid = (max_val + min_val) * 0.5f; // middle point (align around it)
-  if (min_val != max_val)
-    delta *= 1.1f; // if max != min use 5% margins
-  else if (min_val == 0.0f)
-    delta = 2.0f; // on zero use fixed delta
-  else
-    delta = vna_fabsf(min_val) * 1.2f;  // use 10% margin from value
-  float nice_step = 1.0f, temp = delta; // Search best step
-  while (temp < 1.0f) {
-    temp *= 10.0f;
-    nice_step *= 0.1f;
-  }
-  while (temp >= 10.0f) {
-    temp *= 0.1f;
-    nice_step *= 10.0f;
-  }
-  delta *= 2.0f / N;
-  while (delta < nice_step)
-    nice_step /= 2.0f; // Search substep (grid scale)
-  if (type == TRC_SWR)
-    mid -= 1.0f; // Hack for SWR trace!
-  set_trace_scale(current_trace, nice_step);
-  set_trace_refpos(current_trace, (N / 2.0f) - ((int32_t)(mid / nice_step + 0.5f)));
-  ui_mode_normal();
-}
-
-static UI_FUNCTION_ADV_CALLBACK(menu_pause_acb) {
-  (void)data;
-  if (b) {
-    b->p1.text = (sweep_mode & SWEEP_ENABLE) ? "PAUSE" : "RESUME";
-    b->icon = (sweep_mode & SWEEP_ENABLE) ? BUTTON_ICON_NOCHECK : BUTTON_ICON_CHECK;
-    return;
-  }
-  toggle_sweep();
-}
 
 #define UI_MARKER_EDELAY 6
 static UI_FUNCTION_CALLBACK(menu_marker_op_cb) {
@@ -1462,7 +1094,7 @@ static UI_FUNCTION_CALLBACK(menu_sdcard_browse_cb) {
 }
 #endif
 
-static UI_FUNCTION_CALLBACK(menu_sdcard_cb) {
+UI_FUNCTION_CALLBACK(menu_sdcard_cb) {
   keyboard_temp = (sweep_mode & SWEEP_ENABLE) ? 1 : 0;
   if (keyboard_temp)
     toggle_sweep();
@@ -1494,7 +1126,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_band_sel_acb) {
 }
 
 #if STORED_TRACES > 0
-static UI_FUNCTION_ADV_CALLBACK(menu_stored_trace_acb) {
+UI_FUNCTION_ADV_CALLBACK(menu_stored_trace_acb) {
   if (b) {
     b->p1.text = get_stored_traces() & (1 << data) ? "CLEAR" : "STORE";
     return;
@@ -1506,15 +1138,6 @@ static UI_FUNCTION_ADV_CALLBACK(menu_stored_trace_acb) {
 //=====================================================================================================
 //                                 UI menus
 //=====================================================================================================
-static UI_FUNCTION_CALLBACK(menu_back_cb) {
-  (void)data;
-  menu_move_back(false);
-}
-
-// Back button submenu list
-static const menuitem_t menu_back[] = {
-    {MT_CALLBACK, 0, S_LARROW " BACK", menu_back_cb}, {MT_NEXT, 0, NULL, NULL} // sentinel
-};
 
 #ifdef __USE_SD_CARD__
 #ifdef __SD_FILE_BROWSER__
@@ -1527,7 +1150,7 @@ static const menuitem_t menu_sdcard_browse[] = {
 };
 #endif
 
-static const menuitem_t menu_sdcard[] = {
+const menuitem_t menu_sdcard[] = {
 #ifdef __SD_FILE_BROWSER__
     {MT_SUBMENU, 0, "LOAD", menu_sdcard_browse},
 #endif
@@ -1546,35 +1169,6 @@ static const menuitem_t menu_sdcard[] = {
 };
 #endif
 
-static const menuitem_t menu_calop[] = {
-    {MT_ADV_CALLBACK, CAL_OPEN, "OPEN", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_SHORT, "SHORT", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_LOAD, "LOAD", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_ISOLN, "ISOLN", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_THRU, "THRU", menu_calop_acb},
-    //{ MT_ADV_CALLBACK, KM_EDELAY, "E-DELAY", menu_keyboard_acb },
-    {MT_CALLBACK, 0, "DONE", menu_caldone_cb},
-    {MT_CALLBACK, 1, "DONE IN RAM", menu_caldone_cb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
-
-static const menu_descriptor_t menu_state_slots_desc[] = {
-    {MT_ADV_CALLBACK, 0},
-    {MT_ADV_CALLBACK, 1},
-    {MT_ADV_CALLBACK, 2},
-#if SAVEAREA_MAX > 3
-    {MT_ADV_CALLBACK, 3},
-#endif
-#if SAVEAREA_MAX > 4
-    {MT_ADV_CALLBACK, 4},
-#endif
-#if SAVEAREA_MAX > 5
-    {MT_ADV_CALLBACK, 5},
-#endif
-#if SAVEAREA_MAX > 6
-    {MT_ADV_CALLBACK, 6},
-#endif
-};
 
 #if defined(__SD_FILE_BROWSER__)
 #define MENU_STATE_SD_ENTRY 1
@@ -1584,142 +1178,13 @@ static const menu_descriptor_t menu_state_slots_desc[] = {
 
 
 
-const menuitem_t menu_state_io[] = {
-    {MT_CALLBACK, 0, "SAVE CAL", menu_save_submenu_cb},
-    {MT_CALLBACK, 0, "RECALL CAL", menu_recall_submenu_cb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
-
-const menuitem_t menu_cal_wizard[] = {
-    {MT_ADV_CALLBACK, CAL_OPEN, "OPEN", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_SHORT, "SHORT", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_LOAD, "LOAD", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_ISOLN, "ISOLN", menu_calop_acb},
-    {MT_ADV_CALLBACK, CAL_THRU, "THRU", menu_calop_acb},
-    {MT_CALLBACK, 0, "DONE", menu_caldone_cb},
-    {MT_CALLBACK, 1, "DONE IN RAM", menu_caldone_cb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
-
-const menuitem_t menu_cal_options[] = {
-    {MT_ADV_CALLBACK, 0, "CAL RANGE", menu_cal_range_acb},
-    {MT_ADV_CALLBACK, 0, "CAL POWER", menu_power_sel_acb},
-    {MT_ADV_CALLBACK, 0, "ENHANCED\nRESPONSE", menu_cal_enh_acb},
-#ifdef __VNA_Z_RENORMALIZATION__
-    {MT_ADV_CALLBACK, KM_CAL_LOAD_R, "LOAD STD\n " R_LINK_COLOR "%bF" S_OHM, menu_keyboard_acb},
-#endif
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
-
-const menuitem_t menu_cal_management[] = {
-    {MT_ADV_CALLBACK, 0, "CAL APPLY", menu_cal_apply_acb},
-    {MT_CALLBACK, 0, "CAL RESET", menu_cal_reset_cb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
 
 
 
-const menuitem_t menu_cal_menu[] = {
-    {MT_SUBMENU, 0, "CAL WIZARD", menu_cal_wizard},
-    {MT_SUBMENU, 0, "CAL OPTIONS", menu_cal_options},
-    {MT_SUBMENU, 0, "CAL MANAGE", menu_cal_management},
-    {MT_CALLBACK, 0, "SAVE CAL", menu_save_submenu_cb},
-    {MT_CALLBACK, 0, "RECALL CAL", menu_recall_submenu_cb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
 
-const menuitem_t menu_trace[] = {
-    {MT_ADV_CALLBACK, 0, "TRACE %d", menu_trace_acb},
-    {MT_ADV_CALLBACK, 1, "TRACE %d", menu_trace_acb},
-    {MT_ADV_CALLBACK, 2, "TRACE %d", menu_trace_acb},
-    {MT_ADV_CALLBACK, 3, "TRACE %d", menu_trace_acb},
-#if STORED_TRACES == 1
-    {MT_ADV_CALLBACK, 0, "%s TRACE", menu_stored_trace_acb},
-#elif STORED_TRACES > 1
-    {MT_ADV_CALLBACK, 0, "%s TRACE A", menu_stored_trace_acb},
-    {MT_ADV_CALLBACK, 1, "%s TRACE B", menu_stored_trace_acb},
-#if STORED_TRACES > 2
-    {MT_ADV_CALLBACK, 2, "%s TRACE C", menu_stored_trace_acb},
-#endif
-#endif
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
 
-const menuitem_t menu_format4[] = {
-    {MT_ADV_CALLBACK, F_S21 | TRC_Rser, "SERIES R", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_Xser, "SERIES X", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_Zser, "SERIES |Z|", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_Rsh, "SHUNT R", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_Xsh, "SHUNT X", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_Zsh, "SHUNT |Z|", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_Qs21, "Q FACTOR", menu_format_acb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
 
-const menuitem_t menu_formatS21[] = {
-    {MT_ADV_CALLBACK, F_S21 | TRC_LOGMAG, "LOGMAG", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_PHASE, "PHASE", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_DELAY, "DELAY", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_SMITH, "SMITH", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_POLAR, "POLAR", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_LINEAR, "LINEAR", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_REAL, "REAL", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S21 | TRC_IMAG, "IMAG", menu_format_acb},
-    {MT_SUBMENU, 0, S_RARROW " MORE", menu_format4},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
 
-const menuitem_t menu_format3[] = {
-    {MT_ADV_CALLBACK, F_S11 | TRC_ZPHASE, "Z PHASE", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_Cs, "SERIES C", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_Ls, "SERIES L", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_Rp, "PARALLEL R", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_Xp, "PARALLEL X", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_Cp, "PARALLEL C", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_Lp, "PARALLEL L", menu_format_acb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
-
-const menuitem_t menu_format2[] = {
-    {MT_ADV_CALLBACK, F_S11 | TRC_POLAR, "POLAR", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_LINEAR, "LINEAR", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_REAL, "REAL", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_IMAG, "IMAG", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_Q, "Q FACTOR", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_G, "CONDUCTANCE", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_B, "SUSCEPTANCE", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_Y, "|Y|", menu_format_acb},
-    {MT_SUBMENU, 0, S_RARROW " MORE", menu_format3},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
-
-const menuitem_t menu_formatS11[] = {
-    {MT_ADV_CALLBACK, F_S11 | TRC_LOGMAG, "LOGMAG", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_PHASE, "PHASE", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_DELAY, "DELAY", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_SMITH, "SMITH", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_SWR, "SWR", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_R, "RESISTANCE", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_X, "REACTANCE", menu_format_acb},
-    {MT_ADV_CALLBACK, F_S11 | TRC_Z, "|Z|", menu_format_acb},
-    {MT_SUBMENU, 0, S_RARROW " MORE", menu_format2},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
-
-const menuitem_t menu_scale[] = {
-    {MT_CALLBACK, 0, "AUTO SCALE", menu_auto_scale_cb},
-    {MT_ADV_CALLBACK, KM_TOP, "TOP", menu_scale_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_BOTTOM, "BOTTOM", menu_scale_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_SCALE, "SCALE/DIV", menu_scale_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_REFPOS, "REFERENCE\nPOSITION", menu_scale_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_EDELAY, "E-DELAY", menu_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_S21OFFSET, "S21 OFFSET\n " R_LINK_COLOR "%b.3F" S_dB, menu_keyboard_acb},
-#ifdef __USE_GRID_VALUES__
-    {MT_ADV_CALLBACK, VNA_MODE_SHOW_GRID, "SHOW GRID\nVALUES", menu_vna_mode_acb},
-    {MT_ADV_CALLBACK, VNA_MODE_DOT_GRID, "DOT GRID", menu_vna_mode_acb},
-#endif
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
 
 const menuitem_t menu_transform[] = {
     {MT_ADV_CALLBACK, 0, "TRANSFORM\n%s", menu_transform_acb},
@@ -1759,12 +1224,6 @@ static const menu_descriptor_t menu_bandwidth_desc[] = {
 #endif
 };
 
-static const menu_descriptor_t menu_power_desc[] = {
-    {MT_ADV_CALLBACK, SI5351_CLK_DRIVE_STRENGTH_2MA},
-    {MT_ADV_CALLBACK, SI5351_CLK_DRIVE_STRENGTH_4MA},
-    {MT_ADV_CALLBACK, SI5351_CLK_DRIVE_STRENGTH_6MA},
-    {MT_ADV_CALLBACK, SI5351_CLK_DRIVE_STRENGTH_8MA},
-};
 
 #ifdef __USE_SMOOTH__
 static const menu_descriptor_t menu_smooth_desc[] = {
@@ -1776,15 +1235,6 @@ static const menu_descriptor_t menu_smooth_desc[] = {
 };
 #endif
 
-const menuitem_t menu_display[] = {
-    {MT_ADV_CALLBACK, 0, "TRACES", menu_traces_acb},
-    {MT_SUBMENU, 0, "FORMAT\nS11", menu_formatS11},
-    {MT_SUBMENU, 0, "FORMAT\nS21", menu_formatS21},
-    {MT_ADV_CALLBACK, 0, "CHANNEL\n " R_LINK_COLOR "%s", menu_channel_acb},
-    {MT_SUBMENU, 0, "SCALE", menu_scale},
-    {MT_SUBMENU, 0, "MARKERS", menu_marker},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
-};
 
 const menuitem_t menu_measure_tools[] = {
     {MT_SUBMENU, 0, "TRANSFORM", menu_transform},
@@ -1855,28 +1305,8 @@ static const menu_descriptor_t menu_marker_sel_desc[] = {
 #endif
 };
 
-static const menu_descriptor_t menu_marker_s21smith_desc[] = {
-    {MT_ADV_CALLBACK, MS_LIN},
-    {MT_ADV_CALLBACK, MS_LOG},
-    {MT_ADV_CALLBACK, MS_REIM},
-    {MT_ADV_CALLBACK, MS_SHUNT_RX},
-    {MT_ADV_CALLBACK, MS_SHUNT_RLC},
-    {MT_ADV_CALLBACK, MS_SERIES_RX},
-    {MT_ADV_CALLBACK, MS_SERIES_RLC},
-};
 
-static const menu_descriptor_t menu_marker_s11smith_desc[] = {
-    {MT_ADV_CALLBACK, MS_LIN},
-    {MT_ADV_CALLBACK, MS_LOG},
-    {MT_ADV_CALLBACK, MS_REIM},
-    {MT_ADV_CALLBACK, MS_RX},
-    {MT_ADV_CALLBACK, MS_RLC},
-    {MT_ADV_CALLBACK, MS_GB},
-    {MT_ADV_CALLBACK, MS_GLC},
-    {MT_ADV_CALLBACK, MS_RpXp},
-    {MT_ADV_CALLBACK, MS_RpLC},
-};
-
+#ifdef __USE_SERIAL_CONSOLE__
 static const menu_descriptor_t menu_serial_speed_desc[] = {
     {MT_ADV_CALLBACK, 0},
     {MT_ADV_CALLBACK, 1},
@@ -1889,79 +1319,23 @@ static const menu_descriptor_t menu_serial_speed_desc[] = {
     {MT_ADV_CALLBACK, 8},
     {MT_ADV_CALLBACK, 9},
 };
-
-enum {
-  MENU_DYNAMIC_SAVE_SIZE = MENU_STATE_SD_ENTRY + ARRAY_COUNT(menu_state_slots_desc) + 1,
-  MENU_DYNAMIC_BANDWIDTH_SIZE = ARRAY_COUNT(menu_bandwidth_desc) + 1,
-  MENU_DYNAMIC_POINTS_SIZE = 1 + ARRAY_COUNT(menu_points_desc) + 1,
-  MENU_DYNAMIC_MARKER_SEL_SIZE = ARRAY_COUNT(menu_marker_sel_desc) + 3,
-  MENU_DYNAMIC_MARKER_S11_SIZE = ARRAY_COUNT(menu_marker_s11smith_desc) + 1,
-  MENU_DYNAMIC_MARKER_S21_SIZE = ARRAY_COUNT(menu_marker_s21smith_desc) + 1,
-  MENU_DYNAMIC_SERIAL_SPEED_SIZE = ARRAY_COUNT(menu_serial_speed_desc) + 1,
-  MENU_DYNAMIC_POWER_SIZE = 1 + ARRAY_COUNT(menu_power_desc) + 1,
-#ifdef __USE_SMOOTH__
-  MENU_DYNAMIC_SMOOTH_SIZE = 2 + ARRAY_COUNT(menu_smooth_desc) + 1,
-#endif
-};
-
-#define MENU_MAX(a, b) ((a) > (b) ? (a) : (b))
-#define MENU_DYNAMIC_BUFFER_BASE                                                                                      \
-  MENU_MAX(MENU_DYNAMIC_SAVE_SIZE,                                                                                    \
-           MENU_MAX(MENU_DYNAMIC_BANDWIDTH_SIZE,                                                                      \
-                   MENU_MAX(MENU_DYNAMIC_POINTS_SIZE,                                                                 \
-                            MENU_MAX(MENU_DYNAMIC_MARKER_SEL_SIZE,                                                    \
-                                     MENU_MAX(MENU_DYNAMIC_MARKER_S11_SIZE,                                           \
-                                              MENU_MAX(MENU_DYNAMIC_MARKER_S21_SIZE,                                  \
-                                                       MENU_MAX(MENU_DYNAMIC_SERIAL_SPEED_SIZE,                       \
-                                                                MENU_DYNAMIC_POWER_SIZE)))))))
-#ifdef __USE_SMOOTH__
-#define MENU_DYNAMIC_BUFFER_SIZE MENU_MAX(MENU_DYNAMIC_BUFFER_BASE, MENU_DYNAMIC_SMOOTH_SIZE)
-#else
-#define MENU_DYNAMIC_BUFFER_SIZE MENU_DYNAMIC_BUFFER_BASE
 #endif
 
-static menuitem_t menu_dynamic_buffer[MENU_DYNAMIC_BUFFER_SIZE];
 
-static menuitem_t* menu_dynamic_acquire(void) {
-  return menu_dynamic_buffer;
-}
-#undef MENU_DYNAMIC_BUFFER_BASE
-#undef MENU_MAX
 
-static const menuitem_t* menu_build_save_menu(void) {
-  menuitem_t* cursor = menu_dynamic_acquire();
-#ifdef __SD_FILE_BROWSER__
-  *cursor++ =
-      (menuitem_t){MT_CALLBACK, FMT_CAL_FILE, "SAVE TO\n SD CARD", menu_sdcard_cb};
-#endif
-  cursor = ui_menu_list(menu_state_slots_desc, ARRAY_COUNT(menu_state_slots_desc), "Empty %d",
-                        menu_save_acb, cursor);
-  menu_set_next(cursor, menu_back);
-  return menu_dynamic_buffer;
-}
-
-static const menuitem_t* menu_build_recall_menu(void) {
-  menuitem_t* cursor = menu_dynamic_acquire();
-#ifdef __SD_FILE_BROWSER__
-  *cursor++ = (menuitem_t){MT_CALLBACK, FMT_CAL_FILE, "LOAD FROM\n SD CARD",
-                           menu_sdcard_browse_cb};
-#endif
-  cursor = ui_menu_list(menu_state_slots_desc, ARRAY_COUNT(menu_state_slots_desc), "Empty %d",
-                        menu_recall_acb, cursor);
-  menu_set_next(cursor, menu_back);
-  return menu_dynamic_buffer;
-}
 
 static const menuitem_t* menu_build_bandwidth_menu(void) {
   menuitem_t* cursor = menu_dynamic_acquire();
+  const menuitem_t* base = cursor;
   cursor = ui_menu_list(menu_bandwidth_desc, ARRAY_COUNT(menu_bandwidth_desc), "%u " S_Hz,
                         menu_bandwidth_acb, cursor);
   menu_set_next(cursor, menu_back);
-  return menu_dynamic_buffer;
+  return base;
 }
 
 static const menuitem_t* menu_build_points_menu(void) {
   menuitem_t* cursor = menu_dynamic_acquire();
+  const menuitem_t* base = cursor;
   *cursor++ = (menuitem_t){MT_ADV_CALLBACK,
                            KM_POINTS,
                            "SET POINTS\n " R_LINK_COLOR "%d",
@@ -1969,58 +1343,44 @@ static const menuitem_t* menu_build_points_menu(void) {
   cursor = ui_menu_list(menu_points_desc, ARRAY_COUNT(menu_points_desc), "%d point",
                         menu_points_acb, cursor);
   menu_set_next(cursor, menu_back);
-  return menu_dynamic_buffer;
+  return base;
 }
 
 static const menuitem_t* menu_build_marker_select_menu(void) {
   menuitem_t* cursor = menu_dynamic_acquire();
+  const menuitem_t* base = cursor;
   cursor = ui_menu_list(menu_marker_sel_desc, ARRAY_COUNT(menu_marker_sel_desc), "MARKER %d",
                         menu_marker_sel_acb, cursor);
   *cursor++ = (menuitem_t){MT_CALLBACK, 0, "ALL OFF", menu_marker_disable_all_cb};
   *cursor++ = (menuitem_t){MT_ADV_CALLBACK, 0, "DELTA", menu_marker_delta_acb};
   menu_set_next(cursor, menu_back);
-  return menu_dynamic_buffer;
+  return base;
 }
 
-static const menuitem_t* menu_build_marker_smith_menu(uint8_t channel) {
-  menuitem_t* cursor = menu_dynamic_acquire();
-  const menu_descriptor_t* desc = channel == 0 ? menu_marker_s11smith_desc : menu_marker_s21smith_desc;
-  size_t count = channel == 0 ? ARRAY_COUNT(menu_marker_s11smith_desc) : ARRAY_COUNT(menu_marker_s21smith_desc);
-  cursor = ui_menu_list(desc, count, "%s", menu_marker_smith_acb, cursor);
-  menu_set_next(cursor, menu_back);
-  return menu_dynamic_buffer;
-}
 
 #ifdef __USE_SERIAL_CONSOLE__
 static const menuitem_t* menu_build_serial_speed_menu(void) {
   menuitem_t* cursor = menu_dynamic_acquire();
+  const menuitem_t* base = cursor;
   cursor = ui_menu_list(menu_serial_speed_desc, ARRAY_COUNT(menu_serial_speed_desc), "%u",
                         menu_serial_speed_acb, cursor);
   menu_set_next(cursor, menu_back);
-  return menu_dynamic_buffer;
+  return base;
 }
 #endif
 
-static const menuitem_t* menu_build_power_menu(void) {
-  menuitem_t* cursor = menu_dynamic_acquire();
-  *cursor++ =
-      (menuitem_t){MT_ADV_CALLBACK, SI5351_CLK_DRIVE_STRENGTH_AUTO, "AUTO", menu_power_acb};
-  cursor = ui_menu_list(menu_power_desc, ARRAY_COUNT(menu_power_desc), "%u m" S_AMPER,
-                        menu_power_acb, cursor);
-  menu_set_next(cursor, menu_back);
-  return menu_dynamic_buffer;
-}
 
 #ifdef __USE_SMOOTH__
 static const menuitem_t* menu_build_smooth_menu(void) {
   menuitem_t* cursor = menu_dynamic_acquire();
+  const menuitem_t* base = cursor;
   *cursor++ = (menuitem_t){MT_ADV_CALLBACK, VNA_MODE_SMOOTH, "SMOOTH\n " R_LINK_COLOR "%s avg",
                            menu_vna_mode_acb};
   *cursor++ = (menuitem_t){MT_ADV_CALLBACK, 0, "SMOOTH\nOFF", menu_smooth_acb};
   cursor = ui_menu_list(menu_smooth_desc, ARRAY_COUNT(menu_smooth_desc), "x%d", menu_smooth_acb,
                         cursor);
   menu_set_next(cursor, menu_back);
-  return menu_dynamic_buffer;
+  return base;
 }
 #endif
 
@@ -2239,18 +1599,6 @@ const menuitem_t menu_system[] = {
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
-const menuitem_t menu_top[] = {
-    {MT_SUBMENU, 0, "CAL", menu_cal_menu},
-    {MT_SUBMENU, 0, "STIMULUS", menu_stimulus},
-    {MT_SUBMENU, 0, "DISPLAY", menu_display},
-    {MT_SUBMENU, 0, "MEASURE", menu_measure_tools},
-#ifdef __USE_SD_CARD__
-    {MT_SUBMENU, 0, "SD CARD", menu_sdcard},
-#endif
-    {MT_SUBMENU, 0, "SYSTEM", menu_system},
-    {MT_ADV_CALLBACK, 0, "%s\nSWEEP", menu_pause_acb},
-    {MT_NEXT, 0, NULL, NULL} // sentinel
-};
 
 // Menu engine moved to ui/core/ui_menu_engine.c
 

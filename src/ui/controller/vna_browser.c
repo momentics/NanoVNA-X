@@ -20,6 +20,9 @@
  */
 #include "nanovna.h"
 #include "ui/input/hardware_input.h"
+#include "ui/core/ui_menu_engine.h"
+#include "ui/menus/menu_main.h"
+
 static uint16_t file_count;
 static uint16_t page_count;
 static uint16_t current_page;
