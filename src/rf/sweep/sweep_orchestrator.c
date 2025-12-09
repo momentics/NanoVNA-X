@@ -531,6 +531,38 @@ static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
   }
   
   float k = (delta == 0) ? 0.0f : (float)(f - src_f0) / delta;
+
+  // avoid glitch between freqs in different harmonics mode
+  uint32_t hf0 = si5351_get_harmonic_lvl(src_f0);
+  if (hf0 != si5351_get_harmonic_lvl(src_f1)) {
+    // f in prev harmonic, need extrapolate from prev 2 points
+    if (hf0 == si5351_get_harmonic_lvl(f)){
+      if (idx < 1) {
+         // point limit, direct copy (matches copy logic above)
+        for (uint16_t eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
+          data[eterm][0] = cal_data[eterm][idx][0];
+          data[eterm][1] = cal_data[eterm][idx][1];
+        }
+        return;
+      }
+      idx--;
+      k+= 1.0f;
+    }
+    // f in next harmonic, need extrapolate from next 2 points
+    else {
+      if (idx >= src_points - 1) {
+        // point limit (cannot extrapolate from next), direct copy current
+        for (uint16_t eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
+          data[eterm][0] = cal_data[eterm][idx][0];
+          data[eterm][1] = cal_data[eterm][idx][1];
+        }
+        return;
+      }
+      idx++;
+      k-= 1.0f;
+    }
+  }
+
   // Interpolate by k
   for (uint16_t eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
     data[eterm][0] = cal_data[eterm][idx][0] + k * (cal_data[eterm][idx+1][0] - cal_data[eterm][idx][0]);
