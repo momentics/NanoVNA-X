@@ -48,11 +48,11 @@ static void sanitize_rf_preferences(void) {
 static void load_default_properties(void) {
   current_props.magic = PROPERTIES_MAGIC;
   current_props._frequency0 = 50000;
-  current_props._frequency1 = 2700000000U;
+  current_props._frequency1 = 900000000U;
   current_props._var_freq = 0;
   current_props._sweep_points = POINTS_COUNT_DEFAULT;
   current_props._cal_frequency0 = 50000;
-  current_props._cal_frequency1 = 2700000000U;
+  current_props._cal_frequency1 = 900000000U;
   current_props._cal_sweep_points = POINTS_COUNT_DEFAULT;
   current_props._cal_status = 0;
   current_props._trace[0] = (trace_t){true, TRC_LOGMAG, 0, MS_RX, 10.0f, NGRIDY - 1};

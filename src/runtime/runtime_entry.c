@@ -489,9 +489,9 @@ VNA_SHELL_FUNCTION(cmd_freq) {
     return;
   }
   uint32_t freq = my_atoui(argv[0]);
-  // Validate frequency range: 50kHz to 2.7GHz (2700000000 Hz)
-  if (freq < 50000 || freq > 2700000000U) {
-    shell_printf("error: frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, freq);
+  // Validate frequency range: 50kHz to 900MHz (900000000 Hz)
+  if (freq < 50000 || freq > 900000000U) {
+    shell_printf("error: frequency out of range (50kHz-900MHz): %lu Hz" VNA_SHELL_NEWLINE_STR, freq);
     return;
   }
   pause_sweep();
@@ -859,12 +859,12 @@ VNA_SHELL_FUNCTION(cmd_scan) {
 
   start = my_atoui(argv[0]);
   stop = my_atoui(argv[1]);
-  // Validate frequency range: 50kHz to 2.7GHz
-  if (start == 0 || stop == 0 || start > stop || start < 50000 || stop > 2700000000U) {
-    if (start < 50000 || start > 2700000000U) {
-      shell_printf("start frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, start);
-    } else if (stop < 50000 || stop > 2700000000U) {
-      shell_printf("stop frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, stop);
+  // Validate frequency range: 50kHz to 900MHz
+  if (start == 0 || stop == 0 || start > stop || start < 50000 || stop > 900000000U) {
+    if (start < 50000 || start > 900000000U) {
+      shell_printf("Start frequency %lu out of range" VNA_SHELL_NEWLINE_STR, start);
+    } else if (stop < 50000 || stop > 900000000U) {
+      shell_printf("stop frequency out of range (50kHz-900MHz): %lu Hz" VNA_SHELL_NEWLINE_STR, stop);
     } else {
       shell_printf("frequency range is invalid" VNA_SHELL_NEWLINE_STR);
     }
@@ -1158,8 +1158,8 @@ VNA_SHELL_FUNCTION(cmd_sweep) {
     // Validate frequency range when setting specific frequency types
     if ((type == ST_START || type == ST_STOP || type == ST_CENTER || 
          type == ST_SPAN || type == ST_CW || type == ST_STEP || type == ST_VAR) && 
-        (value1 < 50000 || value1 > 2700000000U)) {
-      shell_printf("error: frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, value1);
+        (value1 < 50000 || value1 > 900000000U)) {
+      shell_printf("error: frequency out of range (50kHz-900MHz): %lu Hz" VNA_SHELL_NEWLINE_STR, value1);
       return;
     }
     set_sweep_frequency_internal(type, value1, enforce);
@@ -1167,12 +1167,12 @@ VNA_SHELL_FUNCTION(cmd_sweep) {
   }
   //  Parse sweep {start(Hz)} [stop(Hz)]
   // Validate frequency ranges for start and stop frequencies
-  if (value0 && (value0 < 50000 || value0 > 2700000000U)) {
-    shell_printf("error: start frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, value0);
+  if (value0 && (value0 < 50000 || value0 > 900000000U)) {
+    shell_printf("error: start frequency out of range (50kHz-900MHz): %lu Hz" VNA_SHELL_NEWLINE_STR, value0);
     return;
   }
-  if (value1 && (value1 < 50000 || value1 > 2700000000U)) {
-    shell_printf("error: stop frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR, value1);
+  if (value1 && (value1 < 50000 || value1 > 900000000U)) {
+    shell_printf("error: stop frequency out of range (50kHz-900MHz): %lu Hz" VNA_SHELL_NEWLINE_STR, value1);
     return;
   }
   if (value0)
