@@ -751,17 +751,15 @@ int runtime_main(void) {
   if (drivers != NULL) {
     if (drivers->init) {
       drivers->init();
-      // Apply work speed timings immediately after init (which enables clock)
-      i2c_set_timings(STM32_I2C_TIMINGR);
     }
     if (drivers->display && drivers->display->init) {
       drivers->display->init();
     }
-    if (drivers->generator && drivers->generator->init) {
-      drivers->generator->init();
-    }
     if (drivers->adc && drivers->adc->init) {
       drivers->adc->init();
+    }
+    if (drivers->generator && drivers->generator->init) {
+      drivers->generator->init();
     }
     if (drivers->storage && drivers->storage->init) {
       drivers->storage->init();
@@ -812,6 +810,11 @@ int runtime_main(void) {
                                /*
                                 * I2S Initialize
                                 */
+  /*
+   * I2C bus run on work speed
+   */
+  i2c_set_timings(STM32_I2C_TIMINGR);
+
   init_i2s((void*)sweep_service_rx_buffer(),
            (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
 
