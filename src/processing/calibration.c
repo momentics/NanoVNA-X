@@ -10,9 +10,8 @@ static void eterm_calc_es(void);
 static void eterm_calc_er(int sign);
 static void eterm_calc_et(void);
 
-static bool need_interpolate(freq_t start, freq_t stop, uint16_t points) {
-  return start != cal_frequency0 || stop != cal_frequency1 || points != cal_sweep_points;
-}
+// need_interpolate is now extern in nanovna.h
+
 
 static void eterm_set(int term, float re, float im) {
   int i;
@@ -71,7 +70,6 @@ static void eterm_calc_er(int sign) {
   int i;
   for (i = 0; i < sweep_points; i++) {
     // Er = sign*(1-sign*Es)S11ms'
-    float s11sr, s11si;
     float esr = cal_data[ETERM_ES][i][0];
     float esi = cal_data[ETERM_ES][i][1];
     if (sign > 0) {

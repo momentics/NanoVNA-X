@@ -183,6 +183,7 @@ CSRC = $(STARTUPSRC) \
        src/runtime/runtime_entry.c \
        src/rf/sweep/sweep_orchestrator.c \
        src/interfaces/cli/shell_service.c \
+       src/interfaces/cli/shell_commands.c \
        src/core/common.c \
        src/platform/peripherals/si5351.c \
        src/platform/peripherals/tlv320aic3204.c \

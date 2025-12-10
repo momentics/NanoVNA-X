@@ -242,9 +242,17 @@ void tlv320aic3204_set_gain(uint8_t lgain, uint8_t rgain);
 void tlv320aic3204_select(uint8_t channel);
 void tlv320aic3204_write_reg(uint8_t page, uint8_t reg, uint8_t data);
 
-/*
- * vna_math.c
- */
+
+// Common utilities
+int32_t my_atoi(const char* p);
+uint32_t my_atoui(const char* p);
+float my_atof(const char* p);
+int get_str_index(const char* v, const char* list);
+int parse_line(char* line, char* args[], int max_cnt);
+void swap_bytes(uint16_t* buf, int size);
+int packbits(char* source, char* dest, int size);
+void _delay_8t(uint32_t cycles);
+
 #include "processing/vna_math.h"
 
 /*
@@ -596,7 +604,46 @@ const char *get_trace_chname(int t);
 void  set_electrical_delay(int ch, float seconds);
 float get_electrical_delay(void);
 void set_s21_offset(float offset);
+// Port declarations
+// Forward declarations to avoid circular dependencies
+struct processing_port;
+struct ui_module_port;
+struct usb_command_server_port;
+
+extern const struct processing_port processing_port;
+extern const struct ui_module_port ui_port;
+extern const struct usb_command_server_port usb_port;
+
+extern const char* const info_about[];
+
+extern properties_t current_props;
+extern config_t config;
+
 float groupdelay_from_array(int i, const float *v);
+
+// Runtime control functions exposed for shell
+void pause_sweep(void);
+void resume_sweep(void);
+void toggle_sweep(void);
+void set_power(uint8_t value);
+void set_bandwidth(uint16_t bw_count);
+uint32_t get_bandwidth_frequency(uint16_t bw_freq);
+void set_sweep_points(uint16_t points);
+void set_sweep_frequency(uint16_t type, freq_t freq);
+void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforce_order); // Exposed
+void reset_sweep_frequency(void);
+void app_measurement_update_frequencies(void);
+bool need_interpolate(freq_t start, freq_t stop, uint16_t points);
+void sweep_get_ordered(freq_t* start, freq_t* stop);
+int load_properties(uint32_t id);
+void set_marker_index(int m, int idx);
+
+// Stat helper
+struct stat_t {
+  int16_t rms[2];
+  int16_t ave[2];
+};
+
 
 void plot_init(void);
 void update_grid(freq_t fstart, freq_t fstop);
