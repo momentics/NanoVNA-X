@@ -188,6 +188,7 @@ CSRC = $(STARTUPSRC) \
        src/platform/peripherals/tlv320aic3204.c \
        src/processing/dsp_backend.c \
        src/processing/vna_math.c \
+       src/processing/calibration.c \
        src/ui/display/plot.c \
        src/ui/controller/ui_controller.c \
        src/ui/core/ui_core.c \

@@ -51,6 +51,7 @@
 #include "core/globals.h"
 #include "ui/ui_style.h"
 #include "ui/core/ui_core.h"
+#include "processing/calibration.h"
 
 // Optional sweep point (in UI menu)
 #if SWEEP_POINTS_MAX >=401
@@ -81,8 +82,8 @@
 #define FFT_SIZE   512
 #endif
 
-void cal_collect(uint16_t type);
-void cal_done(void);
+
+
 
 
 
