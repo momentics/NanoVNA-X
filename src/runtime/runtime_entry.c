@@ -519,6 +519,7 @@ void set_s21_offset(float offset) {
 void set_marker_index(int m, int idx) {
   if (idx < 0) idx = 0;
   if (idx >= sweep_points) idx = sweep_points - 1;
+  if (markers[m].enabled) request_to_draw_marker(markers[m].index);
   markers[m].index = idx;
   markers[m].frequency = get_frequency(idx);
   request_to_redraw(REDRAW_MARKER);
