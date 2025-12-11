@@ -129,6 +129,9 @@ void chThdSleepMilliseconds(uint32_t ms) {
   (void)ms;
 }
 
+void pause_sweep(void) {}
+
+
 void osalSysLock(void) {}
 void osalSysUnlock(void) {}
 void osalThreadQueueObjectInit(threads_queue_t* queue) {
