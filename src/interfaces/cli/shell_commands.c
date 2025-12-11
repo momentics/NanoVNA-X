@@ -233,17 +233,11 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   if (need_interpolate(start, stop, sweep_points))
     sweep_ch |= SWEEP_USE_INTERPOLATION;
 
-  // Avoid race condition: Ensure background sweep is paused before we modify global state
-  pause_sweep();
-  chThdSleepMilliseconds(10); // Give background thread time to exit simple loop
-
   set_sweep_points(points);
   app_measurement_set_frequencies(start, stop, points);
 
   if (sweep_ch & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE))
     app_measurement_sweep(false, sweep_ch);
-  
-  // We already paused
   
   if (mask) {
     if (mask & SCAN_MASK_BINARY) {
@@ -693,23 +687,58 @@ VNA_SHELL_FUNCTION(cmd_touch) {}
 VNA_SHELL_FUNCTION(cmd_release) {}
 VNA_SHELL_FUNCTION(cmd_vbat) { shell_printf("%d m" S_VOLT VNA_SHELL_NEWLINE_STR, adc_vbat_read()); }
 VNA_SHELL_FUNCTION(cmd_tcxo) {}
-VNA_SHELL_FUNCTION(cmd_reset) { NVIC_SystemReset(); }
+
 VNA_SHELL_FUNCTION(cmd_smooth) {}
 VNA_SHELL_FUNCTION(cmd_config) {}
 VNA_SHELL_FUNCTION(cmd_usart_cfg) {}
 VNA_SHELL_FUNCTION(cmd_usart) {}
 VNA_SHELL_FUNCTION(cmd_vbat_offset) {}
-VNA_SHELL_FUNCTION(cmd_help) {}
-VNA_SHELL_FUNCTION(cmd_info) {}
+VNA_SHELL_FUNCTION(cmd_help) {
+  const VNAShellCommand* cmd = commands;
+  while (cmd->sc_name != NULL) {
+    shell_printf("%s" VNA_SHELL_NEWLINE_STR, cmd->sc_name);
+    cmd++;
+  }
+}
+VNA_SHELL_FUNCTION(cmd_info) {
+  shell_printf("NanoVNA-X" VNA_SHELL_NEWLINE_STR);
+  shell_printf("Version: %s" VNA_SHELL_NEWLINE_STR, NANOVNA_VERSION_STRING);
+  shell_printf("Build Time: " __DATE__ " " __TIME__ VNA_SHELL_NEWLINE_STR);
+  // Add device ID if available
+}
 VNA_SHELL_FUNCTION(cmd_version) { shell_printf("%s" VNA_SHELL_NEWLINE_STR, NANOVNA_VERSION_STRING); }
-VNA_SHELL_FUNCTION(cmd_color) {}
-VNA_SHELL_FUNCTION(cmd_i2c) {}
-VNA_SHELL_FUNCTION(cmd_si5351reg) {}
-VNA_SHELL_FUNCTION(cmd_lcd) {}
-VNA_SHELL_FUNCTION(cmd_threads) {}
+VNA_SHELL_FUNCTION(cmd_color) {
+  if (argc == 0) {
+      // List colors?
+      return;
+  }
+  // Implement color setting logic if UI style allows
+}
+VNA_SHELL_FUNCTION(cmd_i2c) {} // Keep empty if debug
+VNA_SHELL_FUNCTION(cmd_si5351reg) {} // Keep empty if debug
+VNA_SHELL_FUNCTION(cmd_lcd) {
+    // shell_printf("LCD ID: %04x" VNA_SHELL_NEWLINE_STR, lcd_read_id());
+}
+VNA_SHELL_FUNCTION(cmd_threads) {
+#if defined(VNA_SHELL_THREAD) || 1
+    // Requires ChibiOS registry access, skip for now to avoid compile error
+    shell_printf("Threads command not fully implemented" VNA_SHELL_NEWLINE_STR);
+#endif
+}
 VNA_SHELL_FUNCTION(cmd_si5351time) {}
 VNA_SHELL_FUNCTION(cmd_i2ctime) {}
-VNA_SHELL_FUNCTION(cmd_band) {}
+VNA_SHELL_FUNCTION(cmd_band) {
+    if (argc > 0) {
+        int band = my_atoi(argv[0]);
+        // Implement band switch if applicable
+        (void)band;
+    }
+}
+VNA_SHELL_FUNCTION(cmd_reset) {
+    shell_printf("Resetting..." VNA_SHELL_NEWLINE_STR);
+    chThdSleepMilliseconds(100);
+    NVIC_SystemReset();
+}
 
 const VNAShellCommand commands[] = {
     {"scan", cmd_scan, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
