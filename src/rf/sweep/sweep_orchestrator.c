@@ -745,6 +745,10 @@ static bool process_sweep_channel(uint8_t channel, int cycle_delay, int cycle_st
   return true;
 }
 
+void app_measurement_reset(void) {
+  sweep_reset_progress();
+}
+
 void measurement_data_smooth(uint16_t ch_mask) {
   if (smooth_factor == 0U) {
     return;

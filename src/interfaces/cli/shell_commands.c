@@ -195,8 +195,9 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     restore_config = true;
   if (argc >= 3) {
     points = my_atoui(argv[2]);
-    if (points == 0 || points > SWEEP_POINTS_MAX) {
-      shell_printf("sweep points exceeds range " define_to_STR(SWEEP_POINTS_MAX) VNA_SHELL_NEWLINE_STR);
+    if (points <= 1 || points > SWEEP_POINTS_MAX) {
+      shell_printf("sweep points must be between 2 and " define_to_STR(SWEEP_POINTS_MAX)
+                       VNA_SHELL_NEWLINE_STR);
       return;
     }
     set_sweep_points(points);
@@ -236,8 +237,10 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   set_sweep_points(points);
   app_measurement_set_frequencies(start, stop, points);
 
-  if (sweep_ch & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE))
+  if (sweep_ch & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE)) {
+    app_measurement_reset();
     app_measurement_sweep(false, sweep_ch);
+  }
   pause_sweep();
   
   if (mask) {
