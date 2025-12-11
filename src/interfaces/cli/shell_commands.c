@@ -378,7 +378,8 @@ VNA_SHELL_FUNCTION(cmd_data) {
   if (sel < 2) {
       // Use runtime_entry.c logic
     sweep_service_snapshot_t snapshot;
-    sweep_service_wait_for_generation();
+    if (sweep_mode & SWEEP_ENABLE)
+        sweep_service_wait_for_generation();
     while (true) {
       if (!sweep_service_snapshot_acquire((uint8_t)sel, &snapshot)) {
         chThdSleepMilliseconds(1);

@@ -281,3 +281,13 @@ void render_rectangular_grid_layer(RenderCellCtx* rcx, pixel_t color) {
       *cell_ptr(rcx, x, y) = color;
   }
 }
+
+void render_round_grid_layer(RenderCellCtx* rcx, pixel_t color, uint32_t trace_mask, bool smith_impedance) {
+  if (trace_mask & (1 << TRC_SMITH)) {
+    render_smith_grid_cell(rcx, color);
+    if (smith_impedance)
+      render_admittance_grid_cell(rcx, color);
+  } else if (trace_mask & (1 << TRC_POLAR)) {
+    render_polar_grid_cell(rcx, color);
+  }
+}

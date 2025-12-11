@@ -160,29 +160,9 @@ static void render_markers_in_cell(RenderCellCtx* rcx) {
   }
 }
 
-/**
- * @brief Draw overlay information such as marker text, measurements, and references.
- */
-void render_overlays(RenderCellCtx* rcx) {
-  cell_draw_all_refpos(rcx);
-#ifdef __VNA_MEASURE_MODULE__
-  cell_draw_measure(rcx);
-#endif
-#if VNA_ENABLE_GRID_VALUES
-  cell_draw_grid_values(rcx);
-#endif
-  cell_draw_marker_info(rcx);
-}#if VNA_ENABLE_GRID_VALUES
-  if (VNA_MODE(VNA_MODE_SHOW_GRID) && rcx->x0 > (GRID_X_TEXT - CELLWIDTH))
-    cell_draw_grid_values(rcx);
-#endif
-  if (rcx->y0 <= marker_area_max())
-    cell_draw_marker_info(rcx);
-#ifdef __VNA_MEASURE_MODULE__
-  cell_draw_measure(rcx);
-#endif
-  cell_draw_all_refpos(rcx);
-}
+
+
+
 
 //**************************************************************************************
 // Cell render functions used to be here (moved to render.c)
@@ -730,6 +710,20 @@ static void cell_draw_marker_info(RenderCellCtx* rcx) {
     ypos += FONT_STR_HEIGHT;
   }
 #endif
+}
+
+
+void render_overlays(RenderCellCtx* rcx) {
+  cell_draw_all_refpos(rcx);
+#ifdef __VNA_MEASURE_MODULE__
+  cell_draw_measure(rcx);
+#endif
+#if VNA_ENABLE_GRID_VALUES
+  if (VNA_MODE(VNA_MODE_SHOW_GRID) && rcx->x0 > (GRID_X_TEXT - CELLWIDTH))
+    cell_draw_grid_values(rcx);
+#endif
+  if (rcx->y0 <= marker_area_max())
+    cell_draw_marker_info(rcx);
 }
 
 // Un-static for build fix

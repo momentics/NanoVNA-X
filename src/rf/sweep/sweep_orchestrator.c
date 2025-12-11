@@ -575,6 +575,7 @@ static float sweep_data[4];
 static float sweep_cal_data[CAL_TYPE_COUNT][2];
 
 bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
+  sweep_service_wait_for_copy_release();
   if (p_sweep >= sweep_points || !break_on_operation) {
     sweep_reset_progress();
     sweep_progress_end();
