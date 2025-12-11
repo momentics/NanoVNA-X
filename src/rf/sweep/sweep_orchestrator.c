@@ -367,7 +367,7 @@ void sweep_service_start_capture(systime_t delay_ticks) {
 
 bool sweep_service_wait_for_capture(void) {
   systime_t start_time = chVTGetSystemTimeX();
-  systime_t timeout = MS2ST(500); // 500ms timeout - adjust as needed
+  systime_t timeout = MS2ST(2000); // 2000ms timeout - increased for stability
   while (wait_count != 0U) {
     systime_t current_time = chVTGetSystemTimeX();
     if (current_time - start_time >= timeout) {

@@ -328,18 +328,9 @@ void shell_service_pending_commands(void) {
     pending_command = NULL;
     osalSysUnlock();
 
-    if (command->flags & CMD_BREAK_SWEEP) {
+    if ((command->flags & CMD_BREAK_SWEEP) || (command->flags & CMD_WAIT_MUTEX)) {
       pause_sweep();
-      chThdSleepMilliseconds(10);
     }
-#if 1 
-    if (command->flags & CMD_WAIT_MUTEX) {
-       // Since measure_mutex is not exposed/found, using pause_sweep() as a coarse-grained lock
-       // This protects the measurement engine from concurrent access.
-       pause_sweep();
-       chThdSleepMilliseconds(10);
-    }
-#endif
     command->sc_function(argc, argv);
 
 
