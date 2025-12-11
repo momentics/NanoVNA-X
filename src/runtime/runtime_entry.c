@@ -624,6 +624,7 @@ static void vna_shell_execute_line(char* line) {
     }
     if (cmd_flag & CMD_BREAK_SWEEP) {
       ui_controller_request_console_break();
+      pause_sweep();
     }
     if (cmd_flag & CMD_WAIT_MUTEX) {
       shell_request_deferred_execution(cmd, argc, argv);

@@ -238,6 +238,7 @@ VNA_SHELL_FUNCTION(cmd_scan) {
 
   if (sweep_ch & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE))
     app_measurement_sweep(false, sweep_ch);
+  pause_sweep();
   
   if (mask) {
     if (mask & SCAN_MASK_BINARY) {
