@@ -71,6 +71,7 @@ bool sweep_service_dump_ready(void);
 
 uint16_t app_measurement_get_sweep_mask(void);
 bool app_measurement_sweep(bool break_on_operation, uint16_t mask);
+void sweep_wait_for_idle(void);
 int app_measurement_set_frequency(freq_t freq);
 void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points);
 void app_measurement_update_frequencies(void);

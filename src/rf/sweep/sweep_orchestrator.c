@@ -575,6 +575,7 @@ static float sweep_data[4];
 static float sweep_cal_data[CAL_TYPE_COUNT][2];
 
 bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
+  sweep_in_progress = true;
   sweep_service_wait_for_copy_release();
   if (p_sweep >= sweep_points || !break_on_operation) {
     sweep_reset_progress();
@@ -584,6 +585,7 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
   if (break_on_operation && mask == 0U) {
     sweep_progress_end();
     sweep_led_end();
+    sweep_in_progress = false;
     return false;
   }
   bool completed = false;
@@ -685,13 +687,21 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
     sweep_progress_end();
     sweep_led_end();
   }
+  sweep_in_progress = false;
   return completed;
 
 capture_failure:
   sweep_reset_progress();
   sweep_progress_end();
   sweep_led_end();
+  sweep_in_progress = false;
   return false;
+}
+
+void sweep_wait_for_idle(void) {
+  while (sweep_in_progress) {
+    chThdSleepMilliseconds(1);
+  }
 }
 
 // Helper function to process a single measurement channel

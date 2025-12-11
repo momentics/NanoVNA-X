@@ -323,8 +323,11 @@ static THD_FUNCTION(Thread1, arg) {
   }
 }
 
+#include "rf/sweep/sweep_orchestrator.h"
+
 void pause_sweep(void) {
   sweep_mode &= ~SWEEP_ENABLE;
+  sweep_wait_for_idle();
 }
 
 void resume_sweep(void) {
