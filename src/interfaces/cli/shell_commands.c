@@ -235,9 +235,23 @@ VNA_SHELL_FUNCTION(cmd_scan) {
 
   set_sweep_points(points);
   app_measurement_set_frequencies(start, stop, points);
+
+  // Avoid race condition: Ensure background sweep is paused before we run our own
+  pause_sweep();
+  chThdSleepMilliseconds(10); // Give background thread time to exit simple loop
+
   if (sweep_ch & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE))
     app_measurement_sweep(false, sweep_ch);
-  pause_sweep();
+  
+  // We already paused, but cmd_scan logic assumes explicit pause at end usually. 
+  // The original code called pause_sweep() here. We keep it or rely on above.
+  // But we might want to restore mode if user wants? 
+  // Usually scan command leaves it paused or restoring it?
+  // Original code:
+  //   app_measurement_sweep(...);
+  //   pause_sweep();
+  // So it intends to leave it paused.
+
   if (mask) {
     if (mask & SCAN_MASK_BINARY) {
       shell_stream_write(&mask, sizeof(uint16_t));

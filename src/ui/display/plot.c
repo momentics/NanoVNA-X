@@ -224,7 +224,11 @@ static inline void invalidate_rect_px(int x0, int y0, int x1, int y1) {
 //**************************************************************************************
 // dummy compact_cell_buffer
 static inline void compact_cell_buffer(RenderCellCtx* rcx) {
-  (void)rcx;
+  if (rcx->w == CELLWIDTH) return;
+  pixel_t* buf = rcx->buf;
+  for (int y = 1; y < rcx->h; y++) {
+    memmove(buf + y * rcx->w, buf + y * CELLWIDTH, rcx->w * sizeof(pixel_t));
+  }
 }
 
 // Measurement callbacks moved to traces.c
