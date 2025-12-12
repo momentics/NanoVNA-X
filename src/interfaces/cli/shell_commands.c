@@ -1,4 +1,5 @@
 #include "interfaces/cli/shell_commands.h"
+#include "runtime/runtime_features.h"
 #include "nanovna.h"
 #include "platform/boards/stm32_peripherals.h"
 #include "platform/peripherals/si5351.h"
@@ -753,7 +754,7 @@ const VNAShellCommand commands[] = {
 #endif
     {"saveconfig", cmd_saveconfig, CMD_RUN_IN_LOAD},
     {"clearconfig", cmd_clearconfig, CMD_RUN_IN_LOAD},
-#ifdef ENABLE_SD_CARD_COMMAND
+#if ENABLE_SD_CARD_COMMAND
     {"sd_list", cmd_sd_list, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
     {"sd_read", cmd_sd_read, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
     {"sd_delete", cmd_sd_delete, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
@@ -773,7 +774,7 @@ const VNAShellCommand commands[] = {
 #if ENABLE_SAMPLE_COMMAND
     {"sample", cmd_sample, 0},
 #endif
-#ifdef ENABLE_TEST_COMMAND
+#if ENABLE_TEST_COMMAND
     {"test", cmd_test, 0},
 #endif
     {"touchcal", cmd_touchcal, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
@@ -815,32 +816,32 @@ const VNAShellCommand commands[] = {
     {"usart", cmd_usart, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
 #endif
-#ifdef ENABLE_VBAT_OFFSET_COMMAND
+#if ENABLE_VBAT_OFFSET_COMMAND
     {"vbat_offset", cmd_vbat_offset, CMD_RUN_IN_LOAD},
 #endif
-#ifdef ENABLE_TRANSFORM_COMMAND
+#if ENABLE_TRANSFORM_COMMAND
     {"transform", cmd_transform, CMD_RUN_IN_LOAD},
 #endif
     {"threshold", cmd_threshold, CMD_RUN_IN_LOAD},
     {"help", cmd_help, 0},
-#ifdef ENABLE_INFO_COMMAND
+#if ENABLE_INFO_COMMAND
     {"info", cmd_info, 0},
 #endif
     {"version", cmd_version, 0},
-#ifdef ENABLE_COLOR_COMMAND
+#if ENABLE_COLOR_COMMAND
     {"color", cmd_color, CMD_RUN_IN_LOAD},
 #endif
-#ifdef ENABLE_I2C_COMMAND
+#if ENABLE_I2C_COMMAND
     {"i2c", cmd_i2c, CMD_WAIT_MUTEX},
 #endif
-#ifdef ENABLE_SI5351_REG_WRITE
-    {"si", cmd_si5351reg, CMD_WAIT_MUTEX},
-#endif
-#ifdef ENABLE_LCD_COMMAND
+#if ENABLE_LCD_COMMAND
     {"lcd", cmd_lcd, CMD_WAIT_MUTEX},
 #endif
 #if ENABLE_THREADS_COMMAND
     {"threads", cmd_threads, 0},
+#endif
+#if ENABLE_SI5351_REG_WRITE
+    {"si", cmd_si5351reg, CMD_WAIT_MUTEX},
 #endif
 #ifdef ENABLE_SI5351_TIMINGS
     {"t", cmd_si5351time, CMD_WAIT_MUTEX},
@@ -848,7 +849,7 @@ const VNAShellCommand commands[] = {
 #ifdef ENABLE_I2C_TIMINGS
     {"i", cmd_i2ctime, CMD_WAIT_MUTEX},
 #endif
-#ifdef ENABLE_BAND_COMMAND
+#if ENABLE_BAND_COMMAND
     {"b", cmd_band, CMD_WAIT_MUTEX},
 #endif
     {NULL, NULL, 0}};
