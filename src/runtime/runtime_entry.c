@@ -167,46 +167,6 @@ FIL* filesystem_file(void) {
 static char shell_line[VNA_SHELL_MAX_LENGTH];
 
 
-// Allow get threads debug info
-// #define ENABLE_THREADS_COMMAND
-// Enable vbat_offset command, allow change battery voltage correction in config
-#define ENABLE_VBAT_OFFSET_COMMAND
-// Info about NanoVNA, need fore soft
-#define ENABLE_INFO_COMMAND
-// Enable color command, allow change config color for traces, grid, menu
-#define ENABLE_COLOR_COMMAND
-// Enable transform command
-#define ENABLE_TRANSFORM_COMMAND
-// Enable sample command
-// #define ENABLE_SAMPLE_COMMAND
-// Enable I2C command for send data to AIC3204, used for debug
-// #define ENABLE_I2C_COMMAND
-// Enable LCD command for send data to LCD screen, used for debug
-// #define ENABLE_LCD_COMMAND
-// Enable output debug data on screen on hard fault
-// #define ENABLE_HARD_FAULT_HANDLER_DEBUG
-// Enable test command, used for debug
-// #define ENABLE_TEST_COMMAND
-// Enable stat command, used for debug
-// #define ENABLE_STAT_COMMAND
-// Enable gain command, used for debug
-// #define ENABLE_GAIN_COMMAND
-// Enable port command, used for debug
-// #define ENABLE_PORT_COMMAND
-// Enable si5351 register write, used for debug
-// #define ENABLE_SI5351_REG_WRITE
-// Enable i2c timing command, used for debug
-// #define ENABLE_I2C_TIMINGS
-// Enable band setting command, used for debug
-// #define ENABLE_BAND_COMMAND
-// Enable debug for console command
-// #define DEBUG_CONSOLE_SHOW
-// Enable usart command
-// Enable config command
-#ifdef __USE_SD_CARD__
-#define ENABLE_SD_CARD_COMMAND
-#endif
-
 uint8_t sweep_mode;
 
 // Flag to indicate when calibration is in progress to prevent UI flash operations during critical phases

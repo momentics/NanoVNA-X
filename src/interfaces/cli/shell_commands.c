@@ -187,7 +187,7 @@ VNA_SHELL_FUNCTION(cmd_scan) {
 
   start = my_atoui(argv[0]);
   stop = my_atoui(argv[1]);
-  if (start == 0 || stop == 0 || start > stop || start < 50000 || stop > 900000000U) {
+  if (start == 0 || stop == 0 || start > stop || start < 50000 || stop > FREQUENCY_MAX) {
     shell_printf("frequency range is invalid" VNA_SHELL_NEWLINE_STR);
     return;
   }
@@ -281,6 +281,7 @@ VNA_SHELL_FUNCTION(cmd_scan_bin) {
 #if ENABLE_SCANBIN_COMMAND
   sweep_mode |= SWEEP_BINARY;
   cmd_scan(argc, argv);
+  sweep_mode &= ~(SWEEP_BINARY);
 #endif
 }
 
@@ -333,8 +334,8 @@ VNA_SHELL_FUNCTION(cmd_freq) {
   }
   if (argc == 1) {
     freq_t freq = my_atoui(argv[0]);
-    if (freq < 50000 || freq > 900000000U) {
-       shell_printf("Start frequency %lu out of range" VNA_SHELL_NEWLINE_STR, freq);
+    if (freq < 50000 || freq > FREQUENCY_MAX) {
+       shell_printf("Start frequency %u out of range" VNA_SHELL_NEWLINE_STR, (unsigned)freq);
        return;
     }
     // set_sweep_frequency_internal(ST_CW, freq, false);
@@ -705,10 +706,12 @@ VNA_SHELL_FUNCTION(cmd_help) {
   }
 }
 VNA_SHELL_FUNCTION(cmd_info) {
-  shell_printf("NanoVNA-X" VNA_SHELL_NEWLINE_STR);
-  shell_printf("Version: %s" VNA_SHELL_NEWLINE_STR, NANOVNA_VERSION_STRING);
-  shell_printf("Build Time: " __DATE__ " " __TIME__ VNA_SHELL_NEWLINE_STR);
-  // Add device ID if available
+  (void)argc;
+  (void)argv;
+  int i = 0;
+  while (info_about[i]) {
+    shell_printf("%s" VNA_SHELL_NEWLINE_STR, info_about[i++]);
+  }
 }
 VNA_SHELL_FUNCTION(cmd_version) { shell_printf("%s" VNA_SHELL_NEWLINE_STR, NANOVNA_VERSION_STRING); }
 VNA_SHELL_FUNCTION(cmd_color) {
@@ -865,4 +868,3 @@ const VNAShellCommand commands[] = {
     {"b", cmd_band, CMD_WAIT_MUTEX},
 #endif
     {NULL, NULL, 0}};
-
