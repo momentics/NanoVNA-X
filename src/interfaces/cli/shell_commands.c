@@ -44,6 +44,9 @@
 #define CLI_PRINT_USAGE PRINT_USAGE
 #define VNA_SHELL_NEWLINE_STR "\r\n"
 
+#define MAX_BANDWIDTH (AUDIO_ADC_FREQ / AUDIO_SAMPLES_COUNT)
+#define MIN_BANDWIDTH ((AUDIO_ADC_FREQ / AUDIO_SAMPLES_COUNT) / 512 + 1)
+
 // Helper for set_power (moved from runtime_entry.c)
 void set_power(uint8_t value) {
   request_to_redraw(REDRAW_CAL_STATUS);
@@ -286,45 +289,26 @@ VNA_SHELL_FUNCTION(cmd_scan_bin) {
 }
 
 VNA_SHELL_FUNCTION(cmd_bandwidth) {
-  if (argc == 0) {
+  uint16_t user_bw;
+  if (argc == 1)
+    user_bw = my_atoui(argv[0]);
+  else if (argc == 2) {
+    /* Accept bandwidth in Hz and translate to register value like legacy firmware */
+    uint16_t f = my_atoui(argv[0]);
+    if (f > MAX_BANDWIDTH)
+      user_bw = 0;
+    else if (f < MIN_BANDWIDTH)
+      user_bw = 511;
+    else
+      user_bw = ((AUDIO_ADC_FREQ + AUDIO_SAMPLES_COUNT / 2) / AUDIO_SAMPLES_COUNT) / f - 1;
+  } else {
     shell_printf("bandwidth %d (%uHz)" VNA_SHELL_NEWLINE_STR, config._bandwidth,
                  get_bandwidth_frequency(config._bandwidth));
     return;
   }
-  uint32_t user_bw = my_atoui(argv[0]);
-  if (user_bw >= 30) {
-#ifdef BANDWIDTH_8000
-    if (user_bw >= 8000) user_bw = BANDWIDTH_8000; else
-#endif
-#ifdef BANDWIDTH_4000
-    if (user_bw >= 4000) user_bw = BANDWIDTH_4000; else
-#endif
-#ifdef BANDWIDTH_2000
-    if (user_bw >= 2000) user_bw = BANDWIDTH_2000; else
-#endif
-#ifdef BANDWIDTH_1000
-    if (user_bw >= 1000) user_bw = BANDWIDTH_1000; else
-#endif
-#ifdef BANDWIDTH_333
-    if (user_bw >= 333) user_bw = BANDWIDTH_333; else
-#endif
-#ifdef BANDWIDTH_100
-    if (user_bw >= 100) user_bw = BANDWIDTH_100; else
-#endif
-#ifdef BANDWIDTH_30
-    if (user_bw >= 30) user_bw = BANDWIDTH_30; else
-#endif
-#ifdef BANDWIDTH_10
-    user_bw = BANDWIDTH_10;
-#else
-#ifdef BANDWIDTH_30
-    user_bw = BANDWIDTH_30;
-#else
-    user_bw = 0; // Should not happen given nanovna.h
-#endif
-#endif
-  }
   set_bandwidth(user_bw);
+  shell_printf("bandwidth %d (%uHz)" VNA_SHELL_NEWLINE_STR, config._bandwidth,
+               get_bandwidth_frequency(config._bandwidth));
 }
 
 VNA_SHELL_FUNCTION(cmd_freq) {
