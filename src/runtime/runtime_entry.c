@@ -126,7 +126,9 @@ static FATFS fs_volume_instance;
 static FIL fs_file_instance;
 
 static void usb_command_session_started(void) {
-  shell_printf(VNA_SHELL_NEWLINE_STR "NanoVNA-X Shell" VNA_SHELL_NEWLINE_STR);
+  /* Match legacy NanoVNA prompt/banner sequence expected by host tools */
+  shell_printf(VNA_SHELL_NEWLINE_STR VNA_SHELL_PROMPT_STR VNA_SHELL_NEWLINE_STR
+               "NanoVNA Shell" VNA_SHELL_NEWLINE_STR VNA_SHELL_PROMPT_STR);
 }
 
 static void usb_command_session_stopped(void) {}
