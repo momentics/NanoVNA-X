@@ -17,15 +17,9 @@
 #include "hal.h"
 #include "nanovna.h"
 #include "interfaces/cli/shell_service.h"
-#include "hal_usb_cdc.h"
 
 /* Virtual serial port over USB.*/
 SerialUSBDriver SDU1;
-
-/*
- * Static line coding variable, required by the CDC implementation.
- */
-static cdc_linecoding_t linecoding = {0x00, 0x40, 0x38, 0x00, LC_STOP_1, LC_PARITY_NONE, 8};
 
 enum { STR_LANG_ID = 0, STR_MANUFACTURER, STR_PRODUCT, STR_SERIAL };
 /*
@@ -356,16 +350,12 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
     usbInitEndpointI(usbp, USBD1_INTERRUPT_REQUEST_EP, &ep2config);
     /* Resetting the state of the CDC subsystem.*/
     sduConfigureHookI(&SDU1);
-    /* Update connection state - initially configured but VCP not yet connected */
-    /* The actual VCP connection state will be set by SET_CONTROL_LINE_STATE */
     break;
   case USB_EVENT_SUSPEND:
     /* Disconnection event on suspend.*/
     sduDisconnectI(&SDU1);
     /* Wake up any waiting shell threads to prevent hanging */
     shell_wake_all_waiting_threads();
-    /* Update connection state to disconnected */
-    shell_update_vcp_connection_state(false);
     break;
   case USB_EVENT_WAKEUP:
     break;
@@ -387,44 +377,9 @@ static void sof_handler(USBDriver* usbp) {
 }
 
 /*
- * Custom hook to handle CDC requests including line state changes.
- */
-bool custom_sduRequestsHook(USBDriver *usbp) {
-
-  if ((usbp->setup.bmRequestType & USB_RTYPE_TYPE_MASK) == USB_RTYPE_TYPE_CLASS) {
-    switch (usbp->setup.bRequest) {
-    case CDC_GET_LINE_CODING:
-      usbSetupTransfer(usbp, (uint8_t *)&linecoding, sizeof(linecoding), NULL);
-      return true;
-    case CDC_SET_LINE_CODING:
-      usbSetupTransfer(usbp, (uint8_t *)&linecoding, sizeof(linecoding), NULL);
-      return true;
-    case CDC_SET_CONTROL_LINE_STATE:
-      /* Check the DTR state - bit 0 of wValue */
-      if ((usbp->setup.wValue & 1) != 0) {
-        /* DTR is asserted - host has opened the port */
-        sduConfigureHookI(&SDU1);
-        shell_update_vcp_connection_state(true);
-      } else {
-        /* DTR is not asserted - host has closed the port */
-        sduDisconnectI(&SDU1);
-        /* Wake up any waiting shell threads to prevent hanging */
-        shell_wake_all_waiting_threads();
-        shell_update_vcp_connection_state(false);
-      }
-      usbSetupTransfer(usbp, NULL, 0, NULL);
-      return true;
-    default:
-      return false;
-    }
-  }
-  return false;
-}
-
-/*
  * USB driver configuration.
  */
-const USBConfig usbcfg = {usb_event, get_descriptor, custom_sduRequestsHook, sof_handler};
+const USBConfig usbcfg = {usb_event, get_descriptor, sduRequestsHook, sof_handler};
 
 /*
  * Serial over USB driver configuration.

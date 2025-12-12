@@ -207,14 +207,6 @@ void shell_reset_console(void) {
   shell_restore_stream();
 }
 
-/* Global variable to track VCP connection state */
-static volatile bool vcp_connected_state = false;
-
-/* Function to update the VCP connection state - called from USB CDC hook */
-void shell_update_vcp_connection_state(bool connected) {
-  vcp_connected_state = connected;
-}
-
 bool shell_check_connect(void) {
 #ifdef __USE_SERIAL_CONSOLE__
   if (VNA_MODE(VNA_MODE_CONNECTION)) {
@@ -227,13 +219,7 @@ bool shell_check_connect(void) {
   shell_handle_session_transition(active);
   return active;
 #else
-#ifdef NANOVNA_HOST_TEST
-  /* For host tests, just check USB state since there's no real USB stack */
   const bool active = SDU1.config->usbp->state == USB_ACTIVE;
-#else
-  const bool usb_active = SDU1.config->usbp->state == USB_ACTIVE;
-  const bool active = usb_active && vcp_connected_state;
-#endif
   shell_handle_session_transition(active);
   return active;
 #endif
