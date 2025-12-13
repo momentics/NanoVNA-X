@@ -1,6 +1,7 @@
 # Структура меню NanoVNA-X
 
 ## CAL
+
 - **MECH CAL**
   - OPEN -> применение эталона
   - SHORT
@@ -8,7 +9,7 @@
   - ISOLN
   - THRU
   - DONE -> запись результатов во flash
-  - DONE IN RAM -> применение без сохранения
+  - DONE IN RAM -> применение текущей калибровки во временной памяти (без сохранения во флэш)
 - CAL RANGE -> отображение/возврат сохранённого диапазона и числа точек
 - CAL POWER -> AUTO или фиксированные токи 2/4/6/8 mA
 - SAVE CAL -> выбор слота калибровки и запись коэффициентов
@@ -23,9 +24,10 @@
   - CAL RESET
 
 Подробная инструкция по 12-точечной калибровке:
-* [12-точечная калибровка](calibration_12_point_RU.md)
+- [12-точечная калибровка](calibration_12_point_RU.md)
 
 ## STIMULUS
+
 - START / STOP / CENTER / SPAN -> ввод пределов свипа
 - CW FREQ -> непрерывный режим на фиксированной частоте
 - FREQ STEP -> шаг перестройки для джога
@@ -35,7 +37,8 @@
 - MORE PTS -> доступ к расширенному списку точек
 
 ## DISPLAY
-- TRACES -> управление TRACE 0…3, а также слотами сохранённых трасс `[STORED_TRACES > 0]`
+
+- TRACES -> управление TRACE 0…3, а также ячейками сохранённых трасс `[STORED_TRACES > 0]`
 - FORMAT S11 -> LOGMAG, PHASE, DELAY, SMITH, SWR, RESISTANCE, REACTANCE, |Z|, ветка MORE -> (POLAR, LINEAR, REAL, IMAG, Q FACTOR, CONDUCTANCE, SUSCEPTANCE, |Y|) -> MORE -> (Z PHASE, SERIES/SHUNT/PARALLEL представления)
 - FORMAT S21 -> LOGMAG, PHASE, DELAY, SMITH, POLAR, LINEAR, REAL, IMAG, ветка MORE -> (series/shunt R/X/|Z|, Q)
 - CHANNEL -> выбор канала CH0/CH1 для активной трассы
@@ -48,13 +51,15 @@
   - MARKER E-DELAY
 
 ## MEASURE
+
 - TRANSFORM -> включение/отключение временной области, LOW PASS IMPULSE / LOW PASS STEP / BANDPASS, окно, VELOCITY FACTOR
-- DATA SMOOTH `[__USE_SMOOTH__]` -> OFF и доступные коэффициенты усреднения
+- DATA SMOOTH `[__USE_SMOOTH__]` -> сглаживание данных (OFF и выбор коэффициентов усреднения)
 - MEASURE `[__VNA_MEASURE_MODULE__]` -> OFF, L/C MATCH, CABLE (S11), RESONANCE (S11), SHUNT LC (S21), SERIES LC (S21), SERIES XTAL (S21), FILTER (S21) с переходом в соответствующие подменю
 - IF BANDWIDTH -> список преднастроек полосы ПЧ
 - PORT-Z `[__VNA_Z_RENORMALIZATION__]` -> задание опорного импеданса
 
 ## SYSTEM
+
 - TOUCH CAL
 - TOUCH TEST
 - BRIGHTNESS `[__LCD_BRIGHTNESS__]`
@@ -77,13 +82,15 @@
 - CONNECTION `[__USE_SERIAL_CONSOLE__]` -> выбор интерфейса (USB/UART) и скорости
 
 ## SD CARD
+
 - LOAD `[__SD_FILE_BROWSER__]` -> файловый браузер с фильтрацией по расширению (SCREENSHOT, S1P, S2P, CAL)
 - SAVE S1P -> запись S-параметров CH0 в файл S1P
 - SAVE S2P -> запись обоих каналов в S2P
 - SCREENSHOT -> снимок экрана (BMP или TIFF в зависимости от переключателя IMAGE FORMAT)
 - SAVE CALIBRATION -> сохранение активного набора калибровки на карту
 - IMAGE FORMAT `[__SD_CARD_DUMP_TIFF__]` -> переключение между `BMP` и `TIF`
-- FORMAT SD `[FF_USE_MKFS]` -> размонтирование, запуск FatFs mkfs (`FM_FAT`), повторное монтирование и отчет о результате
+- FORMAT SD `[FF_USE_MKFS]` -> программное отключение карты, форматирование (FatFs mkfs) и повторное подключение с отчётом о результате
 
 ## Управление свипом
-- Кнопка `%s SWEEP` отображает текущее состояние («PAUSE SWEEP»/«RESUME SWEEP») и немедленно переключает движок свипа.
+
+- Кнопка `%s SWEEP` отображает текущее состояние («PAUSE SWEEP»/«RESUME SWEEP») и переключает режим работы механизма развёртки (свипа).

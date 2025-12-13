@@ -354,6 +354,8 @@ uint32_t get_bandwidth_frequency(uint16_t bw_freq) {
 #define MAX_BANDWIDTH (AUDIO_ADC_FREQ / AUDIO_SAMPLES_COUNT)
 #define MIN_BANDWIDTH ((AUDIO_ADC_FREQ / AUDIO_SAMPLES_COUNT) / 512 + 1)
 
+static void update_marker_index(freq_t start, freq_t stop, uint16_t points);
+
 void set_sweep_points(uint16_t points) {
   if (points > SWEEP_POINTS_MAX)
     points = SWEEP_POINTS_MAX;
@@ -365,6 +367,20 @@ void set_sweep_points(uint16_t points) {
   app_measurement_update_frequencies();
   update_backup_data();
   state_manager_mark_dirty();
+
+  freq_t start = 0;
+  freq_t stop = 0;
+  sweep_get_ordered(&start, &stop);
+  update_marker_index(start, stop, sweep_points);
+  update_grid(start, stop);
+  if (need_interpolate(start, stop, sweep_points))
+    cal_status |= CALSTAT_INTERPOLATED;
+  else
+    cal_status &= (uint16_t)~CALSTAT_INTERPOLATED;
+
+  request_to_redraw(REDRAW_BACKUP | REDRAW_PLOT | REDRAW_CAL_STATUS | REDRAW_FREQUENCY |
+                    REDRAW_AREA);
+  sweep_service_reset_progress();
 }
 
 /*
@@ -571,6 +587,20 @@ void reset_sweep_frequency(void) {
   app_measurement_update_frequencies();
   update_backup_data();
   state_manager_mark_dirty();
+
+  freq_t start = 0;
+  freq_t stop = 0;
+  sweep_get_ordered(&start, &stop);
+  update_marker_index(start, stop, sweep_points);
+  update_grid(start, stop);
+  if (need_interpolate(start, stop, sweep_points))
+    cal_status |= CALSTAT_INTERPOLATED;
+  else
+    cal_status &= (uint16_t)~CALSTAT_INTERPOLATED;
+
+  request_to_redraw(REDRAW_BACKUP | REDRAW_PLOT | REDRAW_CAL_STATUS | REDRAW_FREQUENCY |
+                    REDRAW_AREA);
+  sweep_service_reset_progress();
 }
 
 //

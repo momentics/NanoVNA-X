@@ -92,6 +92,9 @@ static uint16_t redraw_request = 0; // contains REDRAW_XXX flags
 static uint16_t area_width;
 static uint16_t area_height;
 
+static uint16_t last_plotted_sweep_points;
+static uint32_t last_plotted_trace_mask;
+
 // Mark cell to update here
 map_t markmap[MAX_MARKMAP_Y];
 
@@ -517,6 +520,13 @@ static void cell_draw_measure(RenderCellCtx* rcx) {
 //           Build graph data and cache it for output
 //**************************************************************************************
 static void plot_into_index(void) {
+  const uint16_t points_now = sweep_points;
+  const uint32_t trace_mask_now = gather_trace_mask(NULL);
+  if (last_plotted_sweep_points != points_now || last_plotted_trace_mask != trace_mask_now) {
+    request_to_redraw(REDRAW_AREA);
+    last_plotted_sweep_points = points_now;
+    last_plotted_trace_mask = trace_mask_now;
+  }
   // Mark old markers for erase
   markmap_all_markers();
   //  START_PROFILE;
