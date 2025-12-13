@@ -59,7 +59,13 @@ static inline BaseAsynchronousChannel* shell_current_channel(void) {
 
 #define SHELL_IO_TIMEOUT MS2ST(20)
 #define SHELL_IO_CHUNK_SIZE 64U
-#define SHELL_DEFERRED_EXECUTION_TIMEOUT MS2ST(5000)  // 5 seconds (5000ms) timeout for deferred execution
+/*
+ * Deferred (mutex) commands like `scan` may take tens of seconds at low RBW / bandwidth
+ * settings (and/or many points). If the wait times out, the shell thread prints a new
+ * prompt while the sweep is still running, which desynchronizes host tools and makes
+ * them interpret old/partial buffers as new segments.
+ */
+#define SHELL_DEFERRED_EXECUTION_TIMEOUT MS2ST(300000) // 5 minutes
 
 static bool shell_io_write(const uint8_t* data, size_t size) {
   BaseAsynchronousChannel* channel = shell_current_channel();
