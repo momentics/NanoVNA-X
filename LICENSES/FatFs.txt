@@ -1,6 +1,8 @@
 FatFs License
 -------------
 
+Copyright (C) 2021, ChaN, all right reserved.
+
 FatFs module is an open source software. Redistribution and use of FatFs in
 source and binary forms, with or without modification, are permitted provided
 that the following condition is met:
