@@ -243,20 +243,29 @@ VNA_SHELL_FUNCTION(cmd_scan) {
 
   start = my_atoui(argv[0]);
   stop = my_atoui(argv[1]);
+  // Validate frequency range: 50kHz to 2.7GHz
   if (start == 0 || stop == 0 || start > stop || start < 50000 || stop > FREQUENCY_MAX) {
-    shell_printf("frequency range is invalid" VNA_SHELL_NEWLINE_STR);
+    if (start < 50000 || start > FREQUENCY_MAX) {
+      shell_printf("start frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR,
+                   (unsigned long)start);
+    } else if (stop < 50000 || stop > FREQUENCY_MAX) {
+      shell_printf("stop frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR,
+                   (unsigned long)stop);
+    } else {
+      shell_printf("frequency range is invalid" VNA_SHELL_NEWLINE_STR);
+    }
     return;
   }
   if (start != original_start || stop != original_stop)
     restore_config = true;
   if (argc >= 3) {
     points = my_atoui(argv[2]);
-    if (points <= 1 || points > SWEEP_POINTS_MAX) {
-      shell_printf("sweep points must be between 2 and " define_to_STR(SWEEP_POINTS_MAX)
+    if (points == 0 || points > SWEEP_POINTS_MAX) {
+      shell_printf("sweep points exceeds range " define_to_STR(SWEEP_POINTS_MAX)
                        VNA_SHELL_NEWLINE_STR);
       return;
     }
-    set_sweep_points(points);
+    sweep_points = points;
     if (points != original_points)
       restore_config = true;
   }
@@ -290,7 +299,7 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   if (need_interpolate(start, stop, sweep_points))
     sweep_ch |= SWEEP_USE_INTERPOLATION;
 
-  set_sweep_points(points);
+  sweep_points = points;
   app_measurement_set_frequencies(start, stop, points);
 
   if (sweep_ch & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE)) {
@@ -327,7 +336,7 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   }
 
   if (restore_config) {
-    set_sweep_points(original_points);
+    sweep_points = original_points;
     app_measurement_update_frequencies();
   }
   resume_sweep();
