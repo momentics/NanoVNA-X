@@ -47,7 +47,7 @@ static void si5351_reset_cache(void) {
   current_freq = 0;
 }
 
-#ifdef ENABLE_SI5351_TIMINGS
+#if ENABLE_SI5351_TIMINGS
 // For debug
 uint16_t timings[8] = {
     DELAY_BAND_1_2,         // 0

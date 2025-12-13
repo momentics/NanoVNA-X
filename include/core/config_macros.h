@@ -155,7 +155,7 @@
 // Minimum frequency set
 #define FREQUENCY_MIN            600
 // Maximum frequency set
-#define FREQUENCY_MAX            900000000U
+#define FREQUENCY_MAX            2700000000U
 // Frequency threshold (max frequency for si5351, harmonic mode after)
 #define FREQUENCY_THRESHOLD      300000100U
 // XTAL frequency on si5351

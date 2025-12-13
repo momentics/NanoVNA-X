@@ -28,6 +28,7 @@
 
 // Define LCD display driver and size
 #include "core/config_macros.h"
+#include "runtime/runtime_features.h"
 
 /*
  * CPU Hardware depend functions declaration

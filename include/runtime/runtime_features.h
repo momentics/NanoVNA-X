@@ -99,12 +99,23 @@
 #define ENABLE_BAND_COMMAND 0
 #endif
 
+#ifndef ENABLE_HARD_FAULT_HANDLER_DEBUG
+#define ENABLE_HARD_FAULT_HANDLER_DEBUG 0
+#endif
 
-// Enable output debug data on screen on hard fault
-// #define ENABLE_HARD_FAULT_HANDLER_DEBUG
-// Enable si5351 register write, used for debug
-// #define ENABLE_SI5351_REG_WRITE
-// Enable i2c timing command, used for debug
-// #define ENABLE_I2C_TIMINGS
-// Enable debug for console command
-// #define DEBUG_CONSOLE_SHOW
+#ifndef ENABLE_SI5351_REG_WRITE
+#define ENABLE_SI5351_REG_WRITE 0
+#endif
+
+#ifndef ENABLE_SI5351_TIMINGS
+#define ENABLE_SI5351_TIMINGS 0
+#endif
+
+#ifndef ENABLE_I2C_TIMINGS
+#define ENABLE_I2C_TIMINGS 0
+#endif
+
+#ifndef DEBUG_CONSOLE_SHOW
+#define DEBUG_CONSOLE_SHOW 0
+#endif
+

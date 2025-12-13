@@ -18,15 +18,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define FREQ_IS_CENTERSPAN()   (props_mode&TD_CENTER_SPAN)
-#define ST_START 0
-#define ST_STOP 1
-#define ST_CENTER 2
-#define ST_SPAN 3
-#define ST_CW 4
-#define ST_STEP 5
-#define ST_VAR 6
-
 #define VNA_SHELL_FUNCTION(command_name) static __attribute__((unused)) void command_name(int argc __attribute__((unused)), char* argv[] __attribute__((unused)))
 #define VNA_FREQ_FMT_STR "%u"
 #if defined(NANOVNA_F303)
@@ -56,6 +47,9 @@ void set_power(uint8_t value) {
   if (current_props._power == value)
     return;
   current_props._power = value;
+  // Update power if pause, need for generation in CW mode (legacy behaviour)
+  if (!(sweep_mode & SWEEP_ENABLE))
+    si5351_set_power(value);
 }
 
 
@@ -126,31 +120,69 @@ static void cmd_band(int argc, char* argv[]);
 
 VNA_SHELL_FUNCTION(cmd_power) {
   if (argc != 1) {
-    shell_printf("usage: power {0|1|2|3|auto}" VNA_SHELL_NEWLINE_STR);
+    CLI_PRINT_USAGE("usage: power {0-3}|{255 - auto}" VNA_SHELL_NEWLINE_STR
+                    "power: %d" VNA_SHELL_NEWLINE_STR,
+                    current_props._power);
     return;
   }
   if (get_str_index(argv[0], "auto") == 0) {
-     set_power(SI5351_CLK_DRIVE_STRENGTH_AUTO);
-     return;
+    set_power(SI5351_CLK_DRIVE_STRENGTH_AUTO);
+    return;
   }
-  uint32_t val = my_atoui(argv[0]);
-  set_power(val);
+  set_power(my_atoi(argv[0]));
 }
 
 VNA_SHELL_FUNCTION(cmd_offset) {
 #ifdef USE_VARIABLE_OFFSET
   if (argc != 1) {
-    shell_printf("%d" VNA_SHELL_NEWLINE_STR, IF_OFFSET);
+    CLI_PRINT_USAGE("usage: %s" VNA_SHELL_NEWLINE_STR "current: %u" VNA_SHELL_NEWLINE_STR,
+                    "offset {frequency offset(Hz)}", IF_OFFSET);
     return;
   }
-  int32_t offset = my_atoi(argv[0]);
-  si5351_set_frequency_offset(offset);
+  int32_t requested = my_atoi(argv[0]);
+  int32_t clamped = clamp_if_offset(requested);
+  if (clamped != requested) {
+    shell_printf("offset clamped to %ld Hz" VNA_SHELL_NEWLINE_STR, (long)clamped);
+  }
+  si5351_set_frequency_offset(clamped);
+  config_service_notify_configuration_changed();
 #endif
 }
 
 VNA_SHELL_FUNCTION(cmd_time) {
-  // Not implemented
-  shell_printf("Not implemented" VNA_SHELL_NEWLINE_STR);
+#ifdef __USE_RTC__
+  uint32_t dt_buf[2];
+  dt_buf[0] = rtc_get_tr_bcd(); // TR should be read first for sync
+  dt_buf[1] = rtc_get_dr_bcd(); // DR should be read second
+  static const uint8_t idx_to_time[] = {6, 5, 4, 2, 1, 0};
+  static const char time_cmd[] = "y|m|d|h|min|sec|ppm";
+  // time[] ={sec, min, hr, 0, day, month, year, 0}
+  uint8_t* time = (uint8_t*)dt_buf;
+  if (argc == 3 && get_str_index(argv[0], "b") == 0) {
+    rtc_set_time(my_atoui(argv[1]), my_atoui(argv[2]));
+    return;
+  }
+  if (argc != 2)
+    goto usage;
+  int idx = get_str_index(argv[0], time_cmd);
+  if (idx == 6) {
+    rtc_set_cal(my_atof(argv[1]));
+    return;
+  }
+  uint32_t val = my_atoui(argv[1]);
+  if (idx < 0 || val > 99)
+    goto usage;
+  time[idx_to_time[idx]] = ((val / 10) << 4) | (val % 10);
+  rtc_set_time(dt_buf[1], dt_buf[0]);
+  return;
+usage:
+  shell_printf("20%02x/%02x/%02x %02x:%02x:%02x" VNA_SHELL_NEWLINE_STR
+               "usage: time {[%s] 0-99} or {b 0xYYMMDD 0xHHMMSS}" VNA_SHELL_NEWLINE_STR,
+               time[6], time[5], time[4], time[2], time[1], time[0], time_cmd);
+#else
+  (void)argc;
+  (void)argv;
+#endif
 }
 
 VNA_SHELL_FUNCTION(cmd_dac) {
@@ -162,8 +194,28 @@ VNA_SHELL_FUNCTION(cmd_dac) {
 
 VNA_SHELL_FUNCTION(cmd_measure) {
 #ifdef __VNA_MEASURE_MODULE__
-    if (argc!=1) return;
-    // plot_set_measure_mode(my_atoi(argv[0]));
+  static const char cmd_measure_list[] = "none"
+#ifdef __USE_LC_MATCHING__
+                                         "|lc"
+#endif
+#ifdef __S21_MEASURE__
+                                         "|lcshunt"
+                                         "|lcseries"
+                                         "|xtal"
+                                         "|filter"
+#endif
+#ifdef __S11_CABLE_MEASURE__
+                                         "|cable"
+#endif
+#ifdef __S11_RESONANCE_MEASURE__
+                                         "|resonance"
+#endif
+      ;
+  int idx;
+  if (argc == 1 && (idx = get_str_index(argv[0], cmd_measure_list)) >= 0)
+    plot_set_measure_mode((uint8_t)idx);
+  else
+    CLI_PRINT_USAGE("usage: measure {%s}" VNA_SHELL_NEWLINE_STR, cmd_measure_list);
 #endif
 }
 
@@ -313,22 +365,18 @@ VNA_SHELL_FUNCTION(cmd_bandwidth) {
 }
 
 VNA_SHELL_FUNCTION(cmd_freq) {
-  if (argc > 1) {
-    PRINT_USAGE("usage: freq [freq(Hz)]" VNA_SHELL_NEWLINE_STR);
-    return; 
-  }
-  if (argc == 1) {
-    freq_t freq = my_atoui(argv[0]);
-    if (freq < 50000 || freq > FREQUENCY_MAX) {
-       shell_printf("Start frequency %u out of range" VNA_SHELL_NEWLINE_STR, (unsigned)freq);
-       return;
-    }
-    // set_sweep_frequency_internal(ST_CW, freq, false);
-    pause_sweep();
-    app_measurement_set_frequency(freq);
+  if (argc != 1) {
+    CLI_PRINT_USAGE("usage: freq {frequency(Hz)}" VNA_SHELL_NEWLINE_STR);
     return;
   }
-  shell_printf(VNA_FREQ_FMT_STR VNA_SHELL_NEWLINE_STR, get_sweep_frequency(ST_CW));
+  uint32_t freq = my_atoui(argv[0]);
+  if (freq < 50000 || freq > FREQUENCY_MAX) {
+    shell_printf("error: frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR,
+                 (unsigned long)freq);
+    return;
+  }
+  pause_sweep();
+  app_measurement_set_frequency(freq);
 }
 
 VNA_SHELL_FUNCTION(cmd_sweep) {
@@ -337,20 +385,57 @@ VNA_SHELL_FUNCTION(cmd_sweep) {
                  get_sweep_frequency(ST_START), get_sweep_frequency(ST_STOP), sweep_points);
     return;
   } else if (argc > 3) {
-    PRINT_USAGE("usage: sweep {start(Hz)} [stop(Hz)] [points]" VNA_SHELL_NEWLINE_STR);
-    return;
+    goto usage;
   }
-  // Simplified logic from shell_commands.c
   freq_t value0 = 0;
   freq_t value1 = 0;
   uint32_t value2 = 0;
-  if (argc >= 1) value0 = my_atoui(argv[0]);
-  if (argc >= 2) value1 = my_atoui(argv[1]);
-  if (argc >= 3) value2 = my_atoui(argv[2]);
-  
-  if (value0) set_sweep_frequency_internal(ST_START, value0, false);
-  if (value1) set_sweep_frequency_internal(ST_STOP, value1, false);
-  if (value2) set_sweep_points(value2);
+  if (argc >= 1)
+    value0 = my_atoui(argv[0]);
+  if (argc >= 2)
+    value1 = my_atoui(argv[1]);
+  if (argc >= 3)
+    value2 = my_atoui(argv[2]);
+#if MAX_FREQ_TYPE != 5
+#error "Sweep mode possibly changed, check cmd_sweep function"
+#endif
+  // Parse sweep {start|stop|center|span|cw|step|var} {freq(Hz)}
+  static const char sweep_cmd[] = "start|stop|center|span|cw|step|var";
+  if (argc == 2 && value0 == 0) {
+    int type = get_str_index(argv[0], sweep_cmd);
+    if (type == -1)
+      goto usage;
+    bool enforce = !(type == ST_START || type == ST_STOP);
+    if ((value1 < 50000 || value1 > FREQUENCY_MAX)) {
+      shell_printf("error: frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR,
+                   (unsigned long)value1);
+      return;
+    }
+    set_sweep_frequency_internal(type, value1, enforce);
+    return;
+  }
+  // Parse sweep {start(Hz)} [stop(Hz)] [points]
+  if (value0 && (value0 < 50000 || value0 > FREQUENCY_MAX)) {
+    shell_printf("error: start frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR,
+                 (unsigned long)value0);
+    return;
+  }
+  if (value1 && (value1 < 50000 || value1 > FREQUENCY_MAX)) {
+    shell_printf("error: stop frequency out of range (50kHz-2.7GHz): %lu Hz" VNA_SHELL_NEWLINE_STR,
+                 (unsigned long)value1);
+    return;
+  }
+  if (value0)
+    set_sweep_frequency_internal(ST_START, value0, false);
+  if (value1)
+    set_sweep_frequency_internal(ST_STOP, value1, false);
+  if (value2)
+    set_sweep_points(value2);
+  return;
+usage:
+  CLI_PRINT_USAGE("usage: sweep {start(Hz)} [stop(Hz)] [points]" VNA_SHELL_NEWLINE_STR
+                  "\tsweep {%s} {freq(Hz)}" VNA_SHELL_NEWLINE_STR,
+                  sweep_cmd);
 }
 
 VNA_SHELL_FUNCTION(cmd_data) {
@@ -429,7 +514,7 @@ VNA_SHELL_FUNCTION(cmd_clearconfig) {
   }
   clear_all_config_prop_data();
   shell_printf("Config and all cal data cleared." VNA_SHELL_NEWLINE_STR
-               "Do reset manually." VNA_SHELL_NEWLINE_STR);
+               "Do reset manually to take effect. Then do touch cal and save." VNA_SHELL_NEWLINE_STR);
 }
 
 VNA_SHELL_FUNCTION(cmd_capture) {
@@ -518,28 +603,58 @@ VNA_SHELL_FUNCTION(cmd_trace) {
 }
 
 VNA_SHELL_FUNCTION(cmd_marker) {
-
+  static const char cmd_marker_list[] = "on|off";
+  int t;
   if (argc == 0) {
-      for (int t = 0; t < MARKERS_MAX; t++)
-          if (markers[t].enabled)
-              shell_printf("%d %d " VNA_FREQ_FMT_STR VNA_SHELL_NEWLINE_STR, t + 1, markers[t].index, markers[t].frequency);
-      return;
-  }
-  // Simplified marker logic from runtime_entry.c
-  int t = my_atoi(argv[0]) - 1;
-  if (t < 0 || t >= MARKERS_MAX) return;
-  if (argc > 1) {
-      // Toggle or set index
-      if (get_str_index(argv[1], "off") == 0) markers[t].enabled = FALSE;
-      else {
-          markers[t].enabled = TRUE;
-          set_marker_index(t, my_atoi(argv[1]));
+    for (t = 0; t < MARKERS_MAX; t++) {
+      if (markers[t].enabled) {
+        shell_printf("%d %d " VNA_FREQ_FMT_STR "" VNA_SHELL_NEWLINE_STR, t + 1, markers[t].index,
+                     markers[t].frequency);
       }
-  } else {
-      markers[t].enabled = TRUE;
-      active_marker = t;
+    }
+    return;
   }
   request_to_redraw(REDRAW_MARKER | REDRAW_AREA);
+  // Marker on|off command
+  int enable = get_str_index(argv[0], cmd_marker_list);
+  if (enable >= 0) { // string found: 0 - on, 1 - off
+    active_marker = enable == 1 ? MARKER_INVALID : 0;
+    for (t = 0; t < MARKERS_MAX; t++)
+      markers[t].enabled = enable == 0;
+    return;
+  }
+
+  t = my_atoi(argv[0]) - 1;
+  if (t < 0 || t >= MARKERS_MAX)
+    goto usage;
+  if (argc == 1) {
+    shell_printf("%d %d " VNA_FREQ_FMT_STR "" VNA_SHELL_NEWLINE_STR, t + 1, markers[t].index,
+                 markers[t].frequency);
+    active_marker = t;
+    markers[t].enabled = TRUE;
+    return;
+  }
+
+  switch (get_str_index(argv[1], cmd_marker_list)) {
+  case 0:
+    markers[t].enabled = TRUE;
+    active_marker = t;
+    return;
+  case 1:
+    markers[t].enabled = FALSE;
+    if (active_marker == t)
+      active_marker = MARKER_INVALID;
+    return;
+  default: {
+    markers[t].enabled = TRUE;
+    int index = my_atoi(argv[1]);
+    set_marker_index(t, index);
+    active_marker = t;
+    return;
+  }
+  }
+usage:
+  shell_printf("marker [n] [%s|{index}]" VNA_SHELL_NEWLINE_STR, cmd_marker_list);
 }
 
 VNA_SHELL_FUNCTION(cmd_edelay) {
@@ -567,6 +682,9 @@ VNA_SHELL_FUNCTION(cmd_s21offset) {
 VNA_SHELL_FUNCTION(cmd_touchcal) {
   shell_printf("first touch upper left, then lower right...");
   ui_port.api->touch_cal_exec();
+  shell_printf("done" VNA_SHELL_NEWLINE_STR "touch cal params: %d %d %d %d" VNA_SHELL_NEWLINE_STR,
+               config._touch_cal[0], config._touch_cal[1], config._touch_cal[2],
+               config._touch_cal[3]);
   request_to_redraw(REDRAW_ALL);
 }
 
@@ -661,34 +779,264 @@ VNA_SHELL_FUNCTION(cmd_dump) {
 #endif
 }
 
-// Stubs/Empty for others to allow linking if referenced
+// Commands primarily used by host software during init
+VNA_SHELL_FUNCTION(cmd_pause) {
+  (void)argc;
+  (void)argv;
+  pause_sweep();
+}
+
+VNA_SHELL_FUNCTION(cmd_resume) {
+  (void)argc;
+  (void)argv;
+  // Restore frequencies array and calibration state (legacy behaviour)
+  app_measurement_update_frequencies();
+  resume_sweep();
+}
+
+VNA_SHELL_FUNCTION(cmd_vbat) {
+  (void)argc;
+  (void)argv;
+  shell_printf("%d m" S_VOLT VNA_SHELL_NEWLINE_STR, adc_vbat_read());
+}
+
+VNA_SHELL_FUNCTION(cmd_tcxo) {
+  if (argc != 1) {
+    CLI_PRINT_USAGE("usage: %s" VNA_SHELL_NEWLINE_STR "current: %u" VNA_SHELL_NEWLINE_STR,
+                    "tcxo {TCXO frequency(Hz)}", config._xtal_freq);
+    return;
+  }
+  si5351_set_tcxo(my_atoui(argv[0]));
+}
+
+#if defined(__REMOTE_DESKTOP__)
+VNA_SHELL_FUNCTION(cmd_refresh) {
+  static const char cmd_enable_list[] = "on|off";
+  if (argc != 1)
+    return;
+  int enable = get_str_index(argv[0], cmd_enable_list);
+  if (enable == 0)
+    sweep_mode |= SWEEP_REMOTE;
+  else if (enable == 1)
+    sweep_mode &= (uint8_t)~SWEEP_REMOTE;
+  request_to_redraw(REDRAW_FREQUENCY | REDRAW_CAL_STATUS | REDRAW_AREA | REDRAW_BATTERY);
+}
+
+VNA_SHELL_FUNCTION(cmd_touch) {
+  if (argc != 2)
+    return;
+  remote_touch_set(REMOTE_PRESS, my_atoi(argv[0]), my_atoi(argv[1]));
+}
+
+VNA_SHELL_FUNCTION(cmd_release) {
+  int16_t x = -1, y = -1;
+  if (argc == 2) {
+    x = my_atoi(argv[0]);
+    y = my_atoi(argv[1]);
+  }
+  remote_touch_set(REMOTE_RELEASE, x, y);
+}
+#else
+VNA_SHELL_FUNCTION(cmd_refresh) {}
+VNA_SHELL_FUNCTION(cmd_touch) {}
+VNA_SHELL_FUNCTION(cmd_release) {}
+#endif
+
+#if ENABLE_SD_CARD_COMMAND && defined(__USE_SD_CARD__)
+static FRESULT cmd_sd_card_mount(void) {
+  const FRESULT res = f_mount(filesystem_volume(), "", 1);
+  if (res != FR_OK)
+    shell_printf("err: no card" VNA_SHELL_NEWLINE_STR);
+  return res;
+}
+
+VNA_SHELL_FUNCTION(cmd_sd_list) {
+  DIR dj;
+  FILINFO fno;
+  if (cmd_sd_card_mount() != FR_OK)
+    return;
+  switch (argc) {
+  case 0:
+    dj.pat = "*.*";
+    break;
+  case 1:
+    dj.pat = argv[0];
+    break;
+  default:
+    CLI_PRINT_USAGE("usage: sd_list {pattern}" VNA_SHELL_NEWLINE_STR);
+    return;
+  }
+  if (f_opendir(&dj, "") == FR_OK) {
+    while (f_findnext(&dj, &fno) == FR_OK && fno.fname[0])
+      shell_printf("%s %u" VNA_SHELL_NEWLINE_STR, fno.fname, (unsigned)fno.fsize);
+  }
+  f_closedir(&dj);
+}
+
+VNA_SHELL_FUNCTION(cmd_sd_read) {
+  char* buf = (char*)spi_buffer;
+  if (argc != 1) {
+    CLI_PRINT_USAGE("usage: sd_read {filename}" VNA_SHELL_NEWLINE_STR);
+    return;
+  }
+  const char* filename = argv[0];
+  if (cmd_sd_card_mount() != FR_OK)
+    return;
+  FIL* const file = filesystem_file();
+  if (f_open(file, filename, FA_OPEN_EXISTING | FA_READ) != FR_OK) {
+    shell_printf("err: no file" VNA_SHELL_NEWLINE_STR);
+    return;
+  }
+  uint32_t filesize = f_size(file);
+  shell_stream_write(&filesize, 4);
+  UINT size = 0;
+  while (f_read(file, buf, 512, &size) == FR_OK && size > 0)
+    shell_stream_write(buf, size);
+  f_close(file);
+}
+
+VNA_SHELL_FUNCTION(cmd_sd_delete) {
+  if (argc != 1) {
+    CLI_PRINT_USAGE("usage: sd_delete {filename}" VNA_SHELL_NEWLINE_STR);
+    return;
+  }
+  if (cmd_sd_card_mount() != FR_OK)
+    return;
+  const char* filename = argv[0];
+  const FRESULT res = f_unlink(filename);
+  shell_printf("delete: %s %s" VNA_SHELL_NEWLINE_STR, filename, res == FR_OK ? "OK" : "err");
+}
+#else
 VNA_SHELL_FUNCTION(cmd_sd_list) {}
 VNA_SHELL_FUNCTION(cmd_sd_read) {}
 VNA_SHELL_FUNCTION(cmd_sd_delete) {}
+#endif
+
 VNA_SHELL_FUNCTION(cmd_port) {}
 VNA_SHELL_FUNCTION(cmd_stat) {}
 VNA_SHELL_FUNCTION(cmd_gain) {}
 VNA_SHELL_FUNCTION(cmd_test) {}
-VNA_SHELL_FUNCTION(cmd_pause) { pause_sweep(); }
-VNA_SHELL_FUNCTION(cmd_resume) { resume_sweep(); }
+#ifdef __SD_CARD_LOAD__
+VNA_SHELL_FUNCTION(cmd_msg) {
+  if (argc == 0) {
+    CLI_PRINT_USAGE("usage: msg delay [text] [header]" VNA_SHELL_NEWLINE_STR);
+    return;
+  }
+  uint32_t delay = my_atoui(argv[0]);
+  char *header = 0, *text = 0;
+  if (argc > 1)
+    text = argv[1];
+  if (argc > 2)
+    header = argv[2];
+  ui_port.api->message_box(header, text, delay);
+}
+#else
 VNA_SHELL_FUNCTION(cmd_msg) {}
-VNA_SHELL_FUNCTION(cmd_refresh) {}
-VNA_SHELL_FUNCTION(cmd_touch) {}
-VNA_SHELL_FUNCTION(cmd_release) {}
-VNA_SHELL_FUNCTION(cmd_vbat) { shell_printf("%d m" S_VOLT VNA_SHELL_NEWLINE_STR, adc_vbat_read()); }
-VNA_SHELL_FUNCTION(cmd_tcxo) {}
+#endif
 
+#ifdef __USE_SMOOTH__
+VNA_SHELL_FUNCTION(cmd_smooth) {
+  if (argc != 1) {
+    CLI_PRINT_USAGE("usage: %s" VNA_SHELL_NEWLINE_STR "current: %u" VNA_SHELL_NEWLINE_STR,
+                    "smooth {0-8}", get_smooth_factor());
+    return;
+  }
+  set_smooth_factor(my_atoui(argv[0]));
+}
+#else
 VNA_SHELL_FUNCTION(cmd_smooth) {}
+#endif
+
+#if ENABLE_CONFIG_COMMAND
+VNA_SHELL_FUNCTION(cmd_config) {
+  static const char cmd_mode_list[] = "auto"
+#ifdef __USE_SMOOTH__
+                                      "|avg"
+#endif
+#ifdef __USE_SERIAL_CONSOLE__
+                                      "|connection"
+#endif
+                                      "|mode"
+                                      "|grid"
+                                      "|dot"
+#ifdef __USE_BACKUP__
+                                      "|bk"
+#endif
+#ifdef __FLIP_DISPLAY__
+                                      "|flip"
+#endif
+#ifdef __DIGIT_SEPARATOR__
+                                      "|separator"
+#endif
+      ;
+  int idx;
+  if (argc == 2 && (idx = get_str_index(argv[0], cmd_mode_list)) >= 0) {
+    const uint32_t value = my_atoui(argv[1]);
+    apply_vna_mode((uint16_t)idx, value ? VNA_MODE_SET : VNA_MODE_CLR);
+  } else {
+    CLI_PRINT_USAGE("usage: config {%s} [0|1]" VNA_SHELL_NEWLINE_STR, cmd_mode_list);
+  }
+}
+#else
 VNA_SHELL_FUNCTION(cmd_config) {}
+#endif
+
+#ifdef __USE_SERIAL_CONSOLE__
+#if ENABLE_USART_COMMAND
+VNA_SHELL_FUNCTION(cmd_usart_cfg) {
+  if (argc != 1) {
+    shell_printf("Serial: %u baud" VNA_SHELL_NEWLINE_STR, config._serial_speed);
+    return;
+  }
+  uint32_t speed = my_atoui(argv[0]);
+  if (speed < 300)
+    speed = 300;
+  shell_update_speed(speed);
+}
+
+VNA_SHELL_FUNCTION(cmd_usart) {
+  uint32_t time = MS2ST(200);
+  if (argc == 0 || argc > 2 || VNA_MODE(VNA_MODE_CONNECTION))
+    return; // Not work in serial mode
+  if (argc == 2)
+    time = MS2ST(my_atoui(argv[1]));
+  sdWriteTimeout(&SD1, (uint8_t*)argv[0], strlen(argv[0]), time);
+  sdWriteTimeout(&SD1, (uint8_t*)VNA_SHELL_NEWLINE_STR, sizeof(VNA_SHELL_NEWLINE_STR) - 1, time);
+  uint32_t size;
+  uint8_t buffer[64];
+  while ((size = sdReadTimeout(&SD1, buffer, sizeof(buffer), time)))
+    streamWrite(&SDU1, buffer, size);
+}
+#else
 VNA_SHELL_FUNCTION(cmd_usart_cfg) {}
 VNA_SHELL_FUNCTION(cmd_usart) {}
-VNA_SHELL_FUNCTION(cmd_vbat_offset) {}
-VNA_SHELL_FUNCTION(cmd_help) {
-  const VNAShellCommand* cmd = commands;
-  while (cmd->sc_name != NULL) {
-    shell_printf("%s" VNA_SHELL_NEWLINE_STR, cmd->sc_name);
-    cmd++;
+#endif
+#else
+VNA_SHELL_FUNCTION(cmd_usart_cfg) {}
+VNA_SHELL_FUNCTION(cmd_usart) {}
+#endif
+
+#if ENABLE_VBAT_OFFSET_COMMAND
+VNA_SHELL_FUNCTION(cmd_vbat_offset) {
+  if (argc != 1) {
+    shell_printf("%d" VNA_SHELL_NEWLINE_STR, config._vbat_offset);
+    return;
   }
+  config._vbat_offset = (int16_t)my_atoi(argv[0]);
+}
+#else
+VNA_SHELL_FUNCTION(cmd_vbat_offset) {}
+#endif
+VNA_SHELL_FUNCTION(cmd_help) {
+  (void)argc;
+  (void)argv;
+  const VNAShellCommand* scp = commands;
+  shell_printf("Commands:");
+  while (scp->sc_name != NULL) {
+    shell_printf(" %s", scp->sc_name);
+    scp++;
+  }
+  shell_printf(VNA_SHELL_NEWLINE_STR);
 }
 VNA_SHELL_FUNCTION(cmd_info) {
   (void)argc;
@@ -699,13 +1047,29 @@ VNA_SHELL_FUNCTION(cmd_info) {
   }
 }
 VNA_SHELL_FUNCTION(cmd_version) { shell_printf("%s" VNA_SHELL_NEWLINE_STR, NANOVNA_VERSION_STRING); }
+#if ENABLE_COLOR_COMMAND
 VNA_SHELL_FUNCTION(cmd_color) {
-  if (argc == 0) {
-      // List colors?
-      return;
+  uint32_t color;
+  uint16_t i;
+  if (argc != 2) {
+    CLI_PRINT_USAGE("usage: color {id} {rgb24}" VNA_SHELL_NEWLINE_STR);
+    for (i = 0; i < MAX_PALETTE; i++) {
+      color = GET_PALTETTE_COLOR(i);
+      color = HEXRGB(color);
+      shell_printf(" %2d: 0x%06x" VNA_SHELL_NEWLINE_STR, i, (unsigned)color);
+    }
+    return;
   }
-  // Implement color setting logic if UI style allows
+  i = my_atoui(argv[0]);
+  if (i >= MAX_PALETTE)
+    return;
+  color = RGBHEX(my_atoui(argv[1]));
+  config._lcd_palette[i] = color;
+  request_to_redraw(REDRAW_ALL);
 }
+#else
+VNA_SHELL_FUNCTION(cmd_color) {}
+#endif
 VNA_SHELL_FUNCTION(cmd_i2c) {} // Keep empty if debug
 VNA_SHELL_FUNCTION(cmd_si5351reg) {} // Keep empty if debug
 VNA_SHELL_FUNCTION(cmd_lcd) {
@@ -727,9 +1091,19 @@ VNA_SHELL_FUNCTION(cmd_band) {
     }
 }
 VNA_SHELL_FUNCTION(cmd_reset) {
-    shell_printf("Resetting..." VNA_SHELL_NEWLINE_STR);
-    chThdSleepMilliseconds(100);
-    NVIC_SystemReset();
+  (void)argc;
+  (void)argv;
+#ifdef __DFU_SOFTWARE_MODE__
+  if (argc == 1) {
+    if (get_str_index(argv[0], "dfu") == 0) {
+      shell_printf("Performing reset to DFU mode" VNA_SHELL_NEWLINE_STR);
+      ui_port.api->enter_dfu();
+      return;
+    }
+  }
+#endif
+  shell_printf("Performing reset" VNA_SHELL_NEWLINE_STR);
+  NVIC_SystemReset();
 }
 
 const VNAShellCommand commands[] = {
@@ -843,10 +1217,10 @@ const VNAShellCommand commands[] = {
 #if ENABLE_SI5351_REG_WRITE
     {"si", cmd_si5351reg, CMD_WAIT_MUTEX},
 #endif
-#ifdef ENABLE_SI5351_TIMINGS
+#if ENABLE_SI5351_TIMINGS
     {"t", cmd_si5351time, CMD_WAIT_MUTEX},
 #endif
-#ifdef ENABLE_I2C_TIMINGS
+#if ENABLE_I2C_TIMINGS
     {"i", cmd_i2ctime, CMD_WAIT_MUTEX},
 #endif
 #if ENABLE_BAND_COMMAND

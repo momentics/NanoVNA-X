@@ -201,7 +201,7 @@ const char* const info_about[] = {
 };
 
 // Allow draw some debug on LCD
-#ifdef DEBUG_CONSOLE_SHOW
+#if DEBUG_CONSOLE_SHOW
 void my_debug_log(int offs, char* log) {
   static uint16_t shell_line_y = 0;
   lcd_set_foreground(LCD_FG_COLOR);
@@ -260,7 +260,7 @@ static void app_measurement_service_loop(measurement_engine_port_t* port) {
   ui_port.api->process();
   sweep_mode &= (uint8_t)~SWEEP_UI_MODE;
   schedule_battery_redraw();
-#ifndef DEBUG_CONSOLE_SHOW
+#if !DEBUG_CONSOLE_SHOW
   draw_all();
 #endif
   state_manager_service();
@@ -835,7 +835,7 @@ __attribute__((naked)) void HardFault_Handler(void) {
 
 __attribute__((used)) void hard_fault_handler_c(uint32_t* sp, const hard_fault_extra_registers_t* extra,
                           uint32_t exc_return) {
-#ifdef ENABLE_HARD_FAULT_HANDLER_DEBUG
+#if ENABLE_HARD_FAULT_HANDLER_DEBUG
   uint32_t r0 = sp[0];
   uint32_t r1 = sp[1];
   uint32_t r2 = sp[2];
