@@ -231,9 +231,12 @@ VNA_SHELL_FUNCTION(cmd_measure) {
 VNA_SHELL_FUNCTION(cmd_scan) {
   freq_t start, stop;
   uint16_t points = sweep_points;
-  const freq_t original_start = get_sweep_frequency(ST_START);
-  const freq_t original_stop = get_sweep_frequency(ST_STOP);
-  const uint16_t original_points = sweep_points;
+  static freq_t original_start;
+  static freq_t original_stop;
+  static uint16_t original_points;
+  original_start = get_sweep_frequency(ST_START);
+  original_stop = get_sweep_frequency(ST_STOP);
+  original_points = sweep_points;
   bool restore_config = false;
 
   if (argc < 2 || argc > 4) {
