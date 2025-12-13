@@ -1,10 +1,6 @@
 /*
- * Centralized application feature toggles.
+ * Feature toggles (overridable at compile time) 
  *
- * Each macro defaults to enabled but can be overridden at compile time
- * by defining the symbol before including this header (for example via
- * compiler command line options).
- * 
  * Copyright (c) 2024, @momentics <momentics@gmail.com>
  * All rights reserved.
  *

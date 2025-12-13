@@ -1,22 +1,41 @@
+/*
+ * Copyright (c) 2024, @momentics <momentics@gmail.com>
+ * All rights reserved.
+ *
+ * This is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3, or (at your option)
+ * any later version.
+ *
+ * The software is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GNU Radio; see the file COPYING.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street,
+ * Boston, MA 02110-1301, USA.
+ */
+
 #pragma once
 
 #include <stdint.h>
 #include "core/config_macros.h"
 
-// Set display buffers count for cell render (if use 2 and DMA, possible send data and prepare new in some time)
+// Display buffer config (2 for DMA, 1 otherwise)
 #ifdef __USE_DISPLAY_DMA__
-// Cell size = sizeof(spi_buffer), but need wait while cell data send to LCD
+// Double-buffering for DMA
 //#define DISPLAY_CELL_BUFFER_COUNT     1
-// Cell size = sizeof(spi_buffer)/2, while one cell send to LCD by DMA, CPU render to next cell
 #define DISPLAY_CELL_BUFFER_COUNT     2
 #else
-// Always one if no DMA mode
+// Single buffer for blocking mode
 #define DISPLAY_CELL_BUFFER_COUNT     1
 #endif
 
-// Custom display driver panel definitions for ILI9341
+// Display Driver Definitions: ILI9341 / ST7789
 #if defined(LCD_DRIVER_ILI9341) || defined(LCD_DRIVER_ST7789)
-// LCD touch settings
+// Touch calibration (2.8" panel)
 #define DEFAULT_TOUCH_CONFIG {530, 795, 3460, 3350}    // 2.8 inch LCD panel
 // Define LCD pixel format (8 or 16 bit)
 //#define LCD_8BIT_MODE
@@ -27,9 +46,9 @@
 #define LCD_RX_PIXEL_SIZE  3
 #endif
 
-// Custom display driver panel definitions for ST7796S
+// Display Driver Definitions: ST7796S
 #ifdef LCD_DRIVER_ST7796S
-// LCD touch settings
+// Touch calibration (4.0" panel)
 #define DEFAULT_TOUCH_CONFIG {380, 665, 3600, 3450 }  // 4.0 inch LCD panel
 // Define LCD pixel format (8 or 16 bit)
 //#define LCD_8BIT_MODE
@@ -40,7 +59,7 @@
 #define LCD_RX_PIXEL_SIZE  2
 #endif
 
-// For 8 bit color displays pixel data definitions
+// 8-bit Color Definitions
 #ifdef LCD_8BIT_MODE
 typedef uint8_t pixel_t;
 //  8-bit RRRGGGBB
@@ -49,12 +68,12 @@ typedef uint8_t pixel_t;
 #define RGBHEX(hex)    ( (((hex)&0xE00000)>>16) | (((hex)&0x00E000)>>11) | (((hex)&0x0000C0)>>6) )
 #define HEXRGB(hex)    ( (((hex)<<16)&0xE00000) | (((hex)<<11)&0x00E000) | (((hex)<<6)&0x0000C0) )
 #define LCD_PIXEL_SIZE        1
-// Cell size, depends from spi_buffer size, CELLWIDTH*CELLHEIGHT*sizeof(pixel) <= sizeof(spi_buffer)
+// Cell dimensions
 #define CELLWIDTH  (64/DISPLAY_CELL_BUFFER_COUNT)
 #define CELLHEIGHT (64)
 #endif
 
-// For 16 bit color displays pixel data definitions
+// 16-bit Color Definitions
 #ifdef LCD_16BIT_MODE
 typedef uint16_t pixel_t;
 // SPI bus revert byte order
@@ -68,7 +87,7 @@ typedef uint16_t pixel_t;
 #define CELLHEIGHT (16)
 #endif
 
-// Define size of screen buffer in pixel_t (need for cell w * h * count)
+// SPI Buffer Size
 #define SPI_BUFFER_SIZE             (CELLWIDTH * CELLHEIGHT * DISPLAY_CELL_BUFFER_COUNT)
 
 #ifndef SPI_BUFFER_SIZE

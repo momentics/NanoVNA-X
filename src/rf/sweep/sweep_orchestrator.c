@@ -33,9 +33,7 @@
 #include "../analysis/vna_renorm.c"
 #endif
 
-/*
- * DMA/I2S capture state
- */
+// I2S/DMA Capture State
 static systime_t ready_time = 0;
 static volatile uint16_t wait_count = 0;
 static alignas(4) audio_sample_t rx_buffer[AUDIO_BUFFER_LEN * 2];
@@ -46,9 +44,7 @@ static volatile int16_t dump_len = 0;
 static int16_t dump_selection = 0;
 #endif
 
-/*
- * Sweep execution state shared across the firmware.
- */
+// Shared Sweep State
 static volatile bool sweep_in_progress = false;
 static volatile bool sweep_copy_in_progress = false;
 static volatile uint32_t sweep_generation = 0;
@@ -567,7 +563,7 @@ static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
   }
 }
 
-// Static buffers to reduce stack usage in app_measurement_sweep
+// Static buffers (stack optimization)
 static float sweep_data[4];
 static float sweep_cal_data[CAL_TYPE_COUNT][2];
 
@@ -701,8 +697,7 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
 
 #ifdef __VNA_Z_RENORMALIZATION__
     if (mask & SWEEP_USE_RENORMALIZATION) {
-      // Use the sweep_data buffer for renormalization
-      // Note: This may need to process both channels differently
+      // Re-use buffer for renorm
       // For now, pass the first two elements for ch0 and next two for ch1
       apply_renormalization(sweep_data, mask);
     }
@@ -790,13 +785,10 @@ uint8_t get_smooth_factor(void) {
 }
 
 int app_measurement_set_frequency(freq_t freq) {
-  // Use dynamic delay returned by si5351_set_frequency which accounts for PLL settling time
-  // Different values are returned based on frequency range changes, PLL resets, etc.
-  // This ensures proper synchronization between frequency setting and measurement
+  // Use dynamic PLL settling delay
   int delay = si5351_set_frequency(freq, current_props._power);
   
-  // Use the original delay calculation from DiSlord firmware for proper timing
-  // If no specific delay returned, use default channel change delay
+  // Use default delay if 0
   if (delay == 0) {
     delay = DELAY_CHANNEL_CHANGE;
   }

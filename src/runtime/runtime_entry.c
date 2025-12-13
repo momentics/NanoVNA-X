@@ -67,11 +67,8 @@ void lcd_set_brightness(uint16_t brightness);
 #define CLI_PRINT_USAGE(...) do { (void)0; } while (0)
 #endif
 
-/*
- *  Shell settings
- */
-// If need run shell as thread (use more amount of memory for stack), after
-// enable this need reduce spi_buffer size, by default shell runs in main thread
+// Shell settings
+// VNA_SHELL_THREAD: Run shell in a separate thread (requires more stack/less SPI buffer).
 // #define VNA_SHELL_THREAD
 
 static event_bus_t app_event_bus;
@@ -157,8 +154,7 @@ FIL* filesystem_file(void) {
 }
 #endif
 
-// Shell frequency printf format
-// #define VNA_FREQ_FMT_STR         "%lu"
+// Shell frequency format
 #define VNA_FREQ_FMT_STR "%u"
 
 #define VNA_SHELL_FUNCTION(command_name) static void command_name(int argc, char* argv[])
@@ -169,9 +165,9 @@ static char shell_line[VNA_SHELL_MAX_LENGTH];
 
 uint8_t sweep_mode;
 
-// Flag to indicate when calibration is in progress to prevent UI flash operations during critical phases
+// Global flag: prevent UI flash usage during critical calibration
 volatile bool calibration_in_progress = false;
-// Sweep measured data - aligned for DMA operations
+// Measurement buffer (DMA aligned)
 alignas(4) float measured[2][SWEEP_POINTS_MAX][2];
 
 static int16_t battery_last_mv;
@@ -183,7 +179,7 @@ static systime_t battery_next_sample = 0;
 #define BATTERY_REDRAW_INTERVAL VBAT_MEASURE_INTERVAL
 #endif
 
-// Version text, displayed in Config->Version menu, also send by info command
+// Version info
 const char* const info_about[] = {
     "Board: " BOARD_NAME, "NanoVNA-X maintainer: @momentics <momentics@gmail.com>",
     "Version: " NANOVNA_VERSION_STRING " ["
@@ -272,11 +268,8 @@ static THD_FUNCTION(Thread1, arg) {
   if (VNA_MODE(VNA_MODE_FLIP_DISPLAY))
     lcd_set_flip(true);
 #endif
-  /*
-   * UI (menu, touch, buttons) and plot initialize
-   */
+  // Init UI and Plotting
   ui_port.api->init();
-  // Initialize graph plotting
   plot_init();
   while (1) {
     measurement_engine_tick(&measurement_engine);
@@ -383,9 +376,7 @@ void set_sweep_points(uint16_t points) {
   sweep_service_reset_progress();
 }
 
-/*
- * Frequency list functions
- */
+// Frequency list functions
 bool need_interpolate(freq_t start, freq_t stop, uint16_t points) {
   return start != cal_frequency0 || stop != cal_frequency1 || points != cal_sweep_points;
 }
@@ -695,13 +686,8 @@ THD_FUNCTION(myshellThread, p) {
 #endif
 
 // Main thread stack size defined in makefile USE_PROCESS_STACKSIZE = 0x200
-// Profile stack usage (enable threads command by def ENABLE_THREADS_COMMAND) show:
-// Stack maximum usage = 472 bytes (need test more and run all commands), free stack = 40 bytes
-//
 int runtime_main(void) {
-  /*
-   * Initialize ChibiOS systems
-   */
+  // Initialize ChibiOS systems
   halInit();
   chSysInit();
   sweep_mode = SWEEP_ENABLE;
@@ -749,47 +735,33 @@ int runtime_main(void) {
   measurement_engine_port.service_loop = app_measurement_service_loop;
   measurement_engine_init(&measurement_engine, &measurement_engine_port, &app_event_bus, drivers);
 
-  /*
-   * restore config and calibration 0 slot from flash memory, also if need use backup data
-   */
+  // Restore config and calibration
   state_manager_init();
 
 #ifdef USE_VARIABLE_OFFSET
   si5351_set_frequency_offset(IF_OFFSET);
 #endif
-  /*
-   * Init Shell console connection data
-   */
+  // Init Shell console connection
   shell_register_commands(commands);
   shell_init_connection();
 
-  /*
-   * tlv320aic Initialize (audio codec)
-   */
+  // Initialize audio codec
   tlv320aic3204_init();
   chThdSleepMilliseconds(200); // Wait for aic codec start
-                               /*
-                                * I2S Initialize
-                                */
+  
+  // Initialize I2S
   init_i2s((void*)sweep_service_rx_buffer(),
            (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
 
-/*
- * SD Card init (if inserted) allow fix issues
- * Some card after insert work in SDIO mode and can corrupt SPI exchange (need switch it to SPI)
- */
+  // Initialize SD Card
 #ifdef __USE_SD_CARD__
   disk_initialize(0);
 #endif
 
-  /*
-   * I2C bus run on work speed
-   */
+  // Set I2C timings
   i2c_set_timings(STM32_I2C_TIMINGR);
 
-  /*
-   * Startup sweep thread
-   */
+  // Start sweep thread
   chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO - 1, Thread1, NULL);
 
   while (1) {

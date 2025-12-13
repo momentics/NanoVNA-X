@@ -1,39 +1,24 @@
 /*
-    ChibiOS - Copyright (C) 2006..2015 Giovanni Di Sirio
-
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
-
-        http://www.apache.org/licenses/LICENSE-2.0
-
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
+ * NanoVNA-H (STM32F072) Board Configuration
+ * Based on ChibiOS and previous NanoVNA work.
+ *
+ * Licensed under Apache License 2.0.
 */
 
 #ifndef _BOARD_H_
 #define _BOARD_H_
 
-/*
- * Board identifier.
- */
+// Board identifier
 #define BOARD_NANOVNA_STM32_F072
 #define BOARD_NAME              "NanoVNA"
 
-/*
- * Board frequencies.
- */
+// Board frequencies
 #define STM32_LSECLK            32768
 #define STM32_HSECLK            8000000
 
 #define STM32_HSE_BYPASS
 
-/*
- * MCU type, supported types are defined in ./os/hal/platforms/hal_lld.h.
- */
+// MCU type
 #define STM32F072xB
 
 #define STM32F072xB_SYSTEM_MEMORY            0x1FFFC800
@@ -41,11 +26,9 @@
 #define BOOT_FROM_SYTEM_MEMORY_MAGIC         0xDEADBEEF
 #define SYSTEM_BOOT_MSP                      0x20002250
 
-/*
- * IO pins assignments
- */
+// IO Pin Assignments
 
-/* on-board */
+// On-board Peripherals
 
 #define GPIOA_BUTTON			0 // (not used)
 #define GPIOA_LEVER1			1
@@ -87,11 +70,7 @@
 #define GPIOF_OSC_OUT           1
 
 
-/*
- * I/O ports initial setup, this configuration is established soon after reset
- * in the initialization code.
- * Please refer to the STM32 Reference Manual for details.
- */
+// Initial IO Port Setup
 #define PIN_MODE_INPUT(n)           (0U << ((n) * 2U))
 #define PIN_MODE_OUTPUT(n)          (1U << ((n) * 2U))
 #define PIN_MODE_ALTERNATE(n)       (2U << ((n) * 2U))

@@ -1,18 +1,9 @@
 /*
-    ChibiOS - Copyright (C) 2006..2015 Giovanni Di Sirio
-
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
-
-        http://www.apache.org/licenses/LICENSE-2.0
-
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
-*/
+ * NanoVNA-H 4 (STM32F303) Board Configuration
+ * Based on ChibiOS and previous NanoVNA work.
+ *
+ * Licensed under Apache License 2.0.
+ */
 
 #ifndef _BOARD_H_
 #define _BOARD_H_
@@ -21,30 +12,22 @@
  * Setup for the Strawberry Linux STbee
  */
 
-/*
- * Board identifier.
- */
+// Board Identifier
 #define BOARD_NANOVNA_STM32_F303
 #define BOARD_NAME              "NanoVNA-H 4"
 
-/*
- * Board frequencies.
- */
+// Board Frequencies
 #define STM32_LSECLK            32768
 #define STM32_HSECLK            8000000
 
-/*
- * MCU type, supported types are defined in ./os/hal/platforms/hal_lld.h.
- */
+// MCU Type
 #define STM32F303xC
 
 #define STM32F303xC_SYSTEM_MEMORY            0x1FFFD800
 #define BOOT_FROM_SYTEM_MEMORY_MAGIC_ADDRESS 0x20009FFC
 #define BOOT_FROM_SYTEM_MEMORY_MAGIC         0xDEADBEEF
 
-/*
- * IO pins assignments
- */
+// IO Pin Assignments
 
 /* on-board */
 
@@ -90,11 +73,7 @@
 #define GPIOF_OSC_OUT           1
 
 
-/*
- * I/O ports initial setup, this configuration is established soon after reset
- * in the initialization code.
- * Please refer to the STM32 Reference Manual for details.
- */
+// Initial IO Port Setup (Reset state)
 #define PIN_MODE_INPUT(n)           (0U << ((n) * 2U))
 #define PIN_MODE_OUTPUT(n)          (1U << ((n) * 2U))
 #define PIN_MODE_ALTERNATE(n)       (2U << ((n) * 2U))
@@ -112,25 +91,7 @@
 #define PIN_PUPDR_PULLDOWN(n)       (2U << ((n) * 2U))
 #define PIN_AFIO_AF(n, v)           ((v##U) << (((n) % 8U) * 4U))
 
-/*
- * GPIOA setup:
- * PA0 - free
- * PA1 - button left                (input)
- * PA2 - button right               (input)
- * PA3 - button middle              (input)
- * PA4 - usb vbus (free)
- * PA5 - lcd backlight              (analog out)
- * PA6 - touch XP                   (analog in)
- * PA7 - touch YP                   (analog in)
- * PA8  - MCO                       (analog).
- * PA9  - USART1_TX                 (alternate 7).
- * PA10 - USART1_RX	                (alternate 7).
- * PA11 - USB_DM                    (alternate 14).
- * PA12 - USB_DP                    (alternate 14).
- * PA13 - SWDIO                     (alternate 0).
- * PA14 - SWCLK                     (alternate 0).
- * PA15 - LCD RESET                 (output)
- */
+// GPIOA Configuration
 #define VAL_GPIOA_MODER             (PIN_MODE_INPUT(0U) |           \
                                      PIN_MODE_INPUT(1U) |           \
                                      PIN_MODE_INPUT(2U) |  			\

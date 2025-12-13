@@ -30,22 +30,20 @@
 #include "core/config_macros.h"
 #include "runtime/runtime_features.h"
 
-/*
- * CPU Hardware depend functions declaration
- */
+// Hardware dependencies
 #include "platform/boards/stm32_peripherals.h"
 #include "platform/hal.h"
 
 #define AUDIO_ADC_FREQ       (AUDIO_ADC_FREQ_K*1000)
 #define FREQUENCY_OFFSET     (FREQUENCY_IF_K*1000)
 
-// Apply calibration after made sweep, (if set 1, then calibration move out from sweep cycle)
+// Apply calibration post-sweep (1: deferred, 0: immediate)
 #define APPLY_CALIBRATION_AFTER_SWEEP 0
 
-// Speed of light const
+// Physical constants
 #define SPEED_OF_LIGHT           299792458
 
-// pi const
+// Math constants
 #define VNA_PI                   3.14159265358979323846f
 #define VNA_TWOPI                6.28318530717958647692f
 
@@ -54,7 +52,7 @@
 #include "ui/core/ui_core.h"
 #include "processing/calibration.h"
 
-// Optional sweep point (in UI menu)
+// Sweep point options for UI
 #if SWEEP_POINTS_MAX >=401
 #define POINTS_SET_COUNT       5
 #define POINTS_SET             {51, 101, 201, 301, SWEEP_POINTS_MAX}
@@ -111,7 +109,6 @@ float    my_atof(const char *p);
 bool strcmpi(const char *t1, const char *t2);
 int get_str_index(const char *v, const char *list);
 int parse_line(char *line, char* args[], int max_cnt);
-void swap_bytes(uint16_t *buf, int size);
 int packbits(char *source, char *dest, int size);
 void _delay_8t(uint32_t cycles);
 inline void delay_microseconds(uint32_t us) {_delay_8t(us*STM32_CORE_CLOCK/8);}
@@ -128,7 +125,7 @@ int  load_properties(uint32_t id);
 void set_sweep_points(uint16_t points);
 
 #ifdef __REMOTE_DESKTOP__
-// State flags for remote touch state
+// Remote touch state flags
 
 void remote_touch_set(uint16_t state, int16_t x, int16_t y);
 void send_region(remote_region_t *rd, uint8_t * buf, uint16_t size);
@@ -142,16 +139,13 @@ void send_region(remote_region_t *rd, uint8_t * buf, uint16_t size);
 
 
 
-// Global flag to indicate when calibration is in critical phase to prevent UI flash operations
+// Global flag: preventing UI flash operations during critical calibration
 
 
-/*
- * Measure timings for si5351 generator, after ready
- */
-// Enable si5351 timing command, used for debug align times
-//#define ENABLE_SI5351_TIMINGS
+// Si5351 generator timing (debug usage)
+// #define ENABLE_SI5351_TIMINGS
 #if defined(NANOVNA_F303)
-// Generator ready delays, values in us
+// Generator delays (us)
 #define DELAY_BAND_1_2           US2ST( 100)   // Delay for bands 1-2
 #define DELAY_BAND_3_4           US2ST( 120)   // Delay for bands 3-4
 #define DELAY_BANDCHANGE         US2ST(2000)   // Band changes need set additional delay after reset PLL
@@ -185,11 +179,7 @@ void send_region(remote_region_t *rd, uint8_t * buf, uint16_t size);
 // Buffer contain left and right channel samples (need x2)
 #define AUDIO_BUFFER_LEN      (AUDIO_SAMPLES_COUNT*2)
 
-// Bandwidth depend from AUDIO_SAMPLES_COUNT and audio ADC frequency
-// for AUDIO_SAMPLES_COUNT = 48 and ADC =  48kHz one measure give  48000/48=1000Hz
-// for AUDIO_SAMPLES_COUNT = 48 and ADC =  96kHz one measure give  96000/48=2000Hz
-// for AUDIO_SAMPLES_COUNT = 48 and ADC = 192kHz one measure give 192000/48=4000Hz
-// Define additional measure count for menus
+// Bandwidth settings (derived from sample rate and audio ADC freq)
 #if AUDIO_ADC_FREQ/AUDIO_SAMPLES_COUNT == 16000
 #define BANDWIDTH_8000            (  1 - 1)
 #define BANDWIDTH_4000            (  2 - 1)
@@ -234,9 +224,7 @@ void fetch_amplitude(float *gamma);
 void fetch_amplitude_ref(float *gamma);
 void generate_dsp_table(int offset);
 
-/*
- * tlv320aic3204.c
- */
+// TLV320AIC3204 Driver
 
 void tlv320aic3204_init(void);
 void tlv320aic3204_set_gain(uint8_t lgain, uint8_t rgain);
@@ -256,24 +244,22 @@ void _delay_8t(uint32_t cycles);
 
 #include "processing/vna_math.h"
 
-/*
- * plot.c
- */
-// LCD display size settings
-#ifdef LCD_320x240 // 320x240 display plot definitions
+// LCD plot definitions
+// 320x240 display settings
+#ifndef LCD_480x320
 #define LCD_WIDTH                   320
 #define LCD_HEIGHT                  240
 
-// Define maximum distance in pixel for pickup marker (can be bigger for big displays)
+// Marker pickup distance (pixels)
 #define MARKER_PICKUP_DISTANCE       20
-// Used marker image settings
+// Marker set selection
 #define _USE_MARKER_SET_              1
 // Used font settings
 #define _USE_FONT_                    1
 #define _USE_SMALL_FONT_              0
 
-// Plot area size settings
-// Offset of plot area (size of additional info at left side)
+// Plot area settings
+// Left margin size
 #define OFFSETX                      10
 #define OFFSETY                       0
 
@@ -370,21 +356,21 @@ void _delay_8t(uint32_t cycles);
 #define FREQUENCIES_YPOS            (AREA_HEIGHT_NORMAL + 2)
 #endif // end 480x320 display plot definitions
 
-// UI size defines
-// Text offset in menu
+// UI Dimension definitions
+// Menu text offsets
 #define MENU_TEXT_OFFSET              6
 #define MENU_ICON_OFFSET              4
-// Scale / ref quick touch position
+// Scale/Ref quick touch zones
 #define UI_SCALE_REF_X0             (OFFSETX - 5)
 #define UI_SCALE_REF_X1             (OFFSETX + CELLOFFSETX + 10)
-// Leveler Marker mode select
+// Leveler Marker Y-offset
 #define UI_MARKER_Y0                 30
-// Maximum menu buttons count
+// Menu button limits
 #define MENU_BUTTON_MAX              16
 #define MENU_BUTTON_MIN               8
-// Menu buttons y offset
+// Menu button vertical spacing
 #define MENU_BUTTON_Y_OFFSET          1
-// Menu buttons size = 21 for icon and 10 chars
+// Menu button dimensions (icon + 10 chars)
 #define MENU_BUTTON_WIDTH           (7 + FONT_STR_WIDTH(12))
 #define MENU_BUTTON_HEIGHT(n)       (AREA_HEIGHT_NORMAL/(n))
 #define MENU_BUTTON_BORDER            1
@@ -400,9 +386,9 @@ void _delay_8t(uint32_t cycles);
 // Define message box width
 #define MESSAGE_BOX_WIDTH           180
 
-// Height of numerical input field (at bottom)
+// Numeric input field height
 #define NUM_INPUT_HEIGHT             32
-// On screen keyboard button size
+// On-screen keyboard layout
 #if 1 // Full screen keyboard
 #define KP_WIDTH                  (LCD_WIDTH / 4)                                  // numeric keypad button width
 #define KP_HEIGHT                 ((LCD_HEIGHT - NUM_INPUT_HEIGHT) / 4)            // numeric keypad button height
@@ -539,9 +525,7 @@ enum {
   KP_EMPTY = 255  // Empty button
 };
 
-/*
- * LC match text output settings
- */
+// LC Match text settings
 #ifdef __VNA_MEASURE_MODULE__
 // X and Y offset to L/C match text
  #define STR_MEASURE_X      (OFFSETX +  0)
@@ -567,7 +551,7 @@ enum {
 #define R_TEXT_COLOR       SET_FGCOLOR(\x01)  // set  1 color index as foreground
 #define R_LINK_COLOR       SET_FGCOLOR(\x19)  // set 25 color index as foreground
 
-// Additional chars in fonts
+// Font special characters
 #define S_ENTER    "\x16"  // hex 0x16
 #define S_DELTA    "\x17"  // hex 0x17
 #define S_SARROW   "\x18"  // hex 0x18
@@ -700,7 +684,7 @@ typedef struct {
   int8_t shift_y : 8;
 } vector_data;
 
-// Used for easy define big Bitmap as 0bXXXXXXXXX image
+// Bitmap Data Macros
 #define _BMP8(d)                                                        ((d)&0xFF)
 #define _BMP16(d)                                      (((d)>>8)&0xFF), ((d)&0xFF)
 #define _BMP24(d)                    (((d)>>16)&0xFF), (((d)>>8)&0xFF), ((d)&0xFF)
@@ -759,9 +743,7 @@ FIL   *filesystem_file(void);
 void test_log(void);
 #endif
 
-/*
- * flash.c
- */
+// Flash Storage
 #define CONFIG_MAGIC      0x434f4e56 // Config magic value (allow reset on new config version)
 #define PROPERTIES_MAGIC  0x434f4e54 // Properties magic value (allow reset on new properties version)
 
@@ -876,9 +858,7 @@ int config_recall(void);
 
 void clear_all_config_prop_data(void);
 
-/*
- * ui.c
- */
+// UI Entry Points
 // Enter in leveler search mode after search click
 //#define UI_USE_LEVELER_SEARCH_MODE
 
@@ -898,9 +878,7 @@ bool sd_card_load_config(void);
 #endif
 
 #define TOUCH_THRESHOLD 2000
-/*
- * misclinous
- */
+// Miscellaneous Utilities
 int plot_printf(char *str, int, const char *fmt, ...);
 #define PULSE do { palClearPad(GPIOC, GPIOC_LED); palSetPad(GPIOC, GPIOC_LED);} while(0)
 
