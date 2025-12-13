@@ -70,6 +70,8 @@ static void eterm_calc_er(int sign) {
   int i;
   for (i = 0; i < sweep_points; i++) {
     // Er = sign*(1-sign*Es)S11ms'
+    float s11sr = cal_data[CAL_SHORT][i][0] - cal_data[ETERM_ED][i][0];
+    float s11si = cal_data[CAL_SHORT][i][1] - cal_data[ETERM_ED][i][1];
     float esr = cal_data[ETERM_ES][i][0];
     float esi = cal_data[ETERM_ES][i][1];
     if (sign > 0) {
@@ -77,25 +79,21 @@ static void eterm_calc_er(int sign) {
       esi = -esi;
     }
     esr = 1 + esr;
-    if (sign < 0) {  // Use SHORT standard
-      float s11mr = cal_data[CAL_SHORT][i][0] - cal_data[ETERM_ED][i][0];
-      float s11mi = cal_data[CAL_SHORT][i][1] - cal_data[ETERM_ED][i][1];
-      cal_data[ETERM_ER][i][0] = esr * s11mr - esi * s11mi;
-      cal_data[ETERM_ER][i][1] = esr * s11mi + esi * s11mr;
-      cal_status &= ~CALSTAT_SHORT;
-    } else {  // Use OPEN standard
-      float s11mr = cal_data[CAL_OPEN][i][0] - cal_data[ETERM_ED][i][0];
-      float s11mi = cal_data[CAL_OPEN][i][1] - cal_data[ETERM_ED][i][1];
-      cal_data[ETERM_ER][i][0] = esr * s11mr - esi * s11mi;
-      cal_data[ETERM_ER][i][1] = esr * s11mi + esi * s11mr;
-      cal_status &= ~CALSTAT_OPEN;
+    float err = esr * s11sr - esi * s11si;
+    float eri = esr * s11si + esi * s11sr;
+    if (sign < 0) {
+      err = -err;
+      eri = -eri;
     }
+    cal_data[ETERM_ER][i][0] = err;
+    cal_data[ETERM_ER][i][1] = eri;
     
     // Yield periodically to keep UI responsive during intensive computation
     if ((i & 0xF) == 0) {  // yield every 16 iterations
       chThdYield();
     }
   }
+  cal_status &= ~CALSTAT_SHORT;
   cal_status |= CALSTAT_ER;
 }
 

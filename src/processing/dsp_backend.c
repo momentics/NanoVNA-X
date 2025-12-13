@@ -259,31 +259,20 @@ void calculate_gamma(float* gamma) {
   static acc_t rs_acc;
   static acc_t rc_acc;
   dsp_snapshot(&ss_acc, &sc_acc, &rs_acc, &rc_acc);
-  // calculate reflection coeff. by samp divide by ref
-#if 1
-  measure_t rs = (measure_t)rs_acc;
-  measure_t rc = (measure_t)rc_acc;
-  measure_t rr = rs * rs + rc * rc;
-  if (rr < 1e-12f) {
+
+  // Calculate reflection coeff. by samp divide by ref (legacy DiSlord algorithm).
+  const measure_t rc = (measure_t)rc_acc;
+  if (rc == 0.0f) {
     gamma[0] = 0.0f;
     gamma[1] = 0.0f;
     return;
   }
-  measure_t ss = (measure_t)ss_acc;
-  measure_t sc = (measure_t)sc_acc;
-  // Calculate reflection coefficient by dividing sample by reference: gamma = samp/ref
-  // Complex division: (samp_real + j*samp_imag) / (ref_real + j*ref_imag)
-  // = [(samp_real*ref_real + samp_imag*ref_imag) + j*(samp_imag*ref_real - samp_real*ref_imag)] / |ref|^2
-  gamma[0] = (ss * rs + sc * rc) / rr; // Real part: (samp_real*ref_real + samp_imag*ref_imag) / |ref|^2
-  gamma[1] = (ss * rc - sc * rs) / rr; // Imaginary part: (samp_imag*ref_real - samp_real*ref_imag) / |ref|^2
-#else
-  measure_t rs_rc = (measure_t)rs_acc / rc_acc;
-  measure_t sc_rc = (measure_t)sc_acc / rc_acc;
-  measure_t ss_rc = (measure_t)ss_acc / rc_acc;
-  measure_t rr = rs_rc * rs_rc + 1.0f;
+  const measure_t rs_rc = (measure_t)rs_acc / rc;
+  const measure_t sc_rc = (measure_t)sc_acc / rc;
+  const measure_t ss_rc = (measure_t)ss_acc / rc;
+  const measure_t rr = rs_rc * rs_rc + 1.0f;
   gamma[0] = (sc_rc + ss_rc * rs_rc) / rr;
   gamma[1] = (ss_rc - sc_rc * rs_rc) / rr;
-#endif
 }
 
 void fetch_amplitude(float* gamma) {
