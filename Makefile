@@ -161,7 +161,7 @@ STREAMSSRC := $(filter-out $(CHIBIOS)/os/hal/lib/streams/chprintf.c $(CHIBIOS)/o
 ifeq ($(TARGET),F303)
  LDSCRIPT= boards/STM32F303/STM32F303xC.ld
 else
- LDSCRIPT= boards/STM32F072/STM32F072xB.ld
+ LDSCRIPT= $(CHIBIOS)/os/common/startup/ARMCMx/compilers/GCC/ld/STM32F072xB.ld
 endif
 
 # C sources that can be compiled in ARM or THUMB mode depending on the global
