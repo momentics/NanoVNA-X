@@ -25,7 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define __VNA_MEASURE_MODULE__ 1
+#define VNA_MEASURE_MODULE 1
 #include "nanovna.h"
 
 /*

@@ -14,8 +14,8 @@
     limitations under the License.
 */
 
-#ifndef _BOARD_H_
-#define _BOARD_H_
+#ifndef STM32F072_BOARD_H
+#define STM32F072_BOARD_H
 
 /*
  * Board identifier.
@@ -34,7 +34,6 @@
 /*
  * MCU type, supported types are defined in ./os/hal/platforms/hal_lld.h.
  */
-
 
 #define STM32F072xB_SYSTEM_MEMORY 0x1FFFC800
 #define BOOT_FROM_SYTEM_MEMORY_MAGIC_ADDRESS 0x20003FF0
@@ -425,4 +424,4 @@ void board_dfu_enter(void);
 #endif
 #endif /* _FROM_ASM_ */
 
-#endif /* _BOARD_H_ */
+#endif /* STM32F072_BOARD_H */

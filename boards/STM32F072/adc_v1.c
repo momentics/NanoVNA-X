@@ -97,7 +97,7 @@ int16_t adc_vbat_read(void) {
     restart_touch = 1;
   }
   uint32_t meas_vrefint = adc_single_read(ADC_CHSELR_CHSEL17); // VREFINT == ADC_IN17
-  uint32_t vbat = adc_single_read(ADC_CHSELR_CHSEL18);    // VBAT == ADC_IN18
+  uint32_t vbat = adc_single_read(ADC_CHSELR_CHSEL18);         // VBAT == ADC_IN18
 
   if (restart_touch)
     adc_start_analog_watchdog();

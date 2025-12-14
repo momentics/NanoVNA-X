@@ -32,7 +32,7 @@
 #define W_FONT_GET_HEIGHT 14
 #define W_FONT_STR_HEIGHT 16
 #define W_FONT_GET_DATA(ch) (&x11x14_bits[((ch) - wFONT_START_CHAR) * 2 * wFONT_GET_HEIGHT])
-#define W_FONT_GET_WIDTH(ch)                                                                        \
+#define W_FONT_GET_WIDTH(ch)                                                                       \
   (14 - (x11x14_bits[((ch) - wFONT_START_CHAR) * 2 * wFONT_GET_HEIGHT + 1] & 0x7))
 
 #define CW_06 0x07

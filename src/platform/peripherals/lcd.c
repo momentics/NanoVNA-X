@@ -35,7 +35,7 @@
 
 // SPI bus for LCD
 #define LCD_SPI SPI1
-#ifdef __USE_DISPLAY_DMA__
+#ifdef USE_DISPLAY_DMA
 // DMA channels for used in LCD SPI bus
 #define LCD_DMA_RX STM32_DMA1_STREAM2 // DMA1 channel 2 use for SPI1 rx
 #define LCD_DMA_TX STM32_DMA1_STREAM3 // DMA1 channel 3 use for SPI1 tx
@@ -61,7 +61,7 @@
 #endif
 
 // Disable DMA rx on disabled DMA tx
-#ifndef __USE_DISPLAY_DMA__
+#ifndef USE_DISPLAY_DMA
 #undef __USE_DISPLAY_DMA_RX__
 #endif
 
@@ -124,7 +124,7 @@ void spi_drop_rx(void) {
 //*****************************************************
 // SPI DMA settings and data
 //*****************************************************
-#ifdef __USE_DISPLAY_DMA__
+#ifdef USE_DISPLAY_DMA
 static const uint32_t TXDMAMODE = 0 | STM32_DMA_CR_PL(STM32_SPI_SPI1_DMA_PRIORITY) // Set priority
                                   | STM32_DMA_CR_DIR_M2P;                          // Memory to Spi
 
@@ -135,8 +135,7 @@ static const uint32_t RXDMAMODE = 0 | STM32_DMA_CR_PL(STM32_SPI_SPI1_DMA_PRIORIT
 static inline void spi_dma_tx_buffer(const uint8_t *buffer, uint16_t len, bool wait) {
   dmaStreamSetMemory0(LCD_DMA_TX, buffer);
   dmaStreamSetTransactionSize(LCD_DMA_TX, len);
-  dmaStreamSetMode(LCD_DMA_TX,
-                    TXDMAMODE | STM32_DMA_CR_BYTE | STM32_DMA_CR_MINC | STM32_DMA_CR_EN);
+  dmaStreamSetMode(LCD_DMA_TX, TXDMAMODE | STM32_DMA_CR_BYTE | STM32_DMA_CR_MINC | STM32_DMA_CR_EN);
   if (wait)
     dmaWaitCompletion(LCD_DMA_TX);
 }
@@ -154,8 +153,7 @@ static inline void spi_dma_rx_buffer(uint8_t *buffer, uint16_t len, bool wait) {
   // Init Rx DMA buffer, size, mode (spi and mem data size is 8 bit), and start
   dmaStreamSetMemory0(LCD_DMA_RX, buffer);
   dmaStreamSetTransactionSize(LCD_DMA_RX, len);
-  dmaStreamSetMode(LCD_DMA_RX,
-                    RXDMAMODE | STM32_DMA_CR_BYTE | STM32_DMA_CR_MINC | STM32_DMA_CR_EN);
+  dmaStreamSetMode(LCD_DMA_RX, RXDMAMODE | STM32_DMA_CR_BYTE | STM32_DMA_CR_MINC | STM32_DMA_CR_EN);
   // Init dummy Tx DMA (for rx clock), size, mode (spi and mem data size is 8 bit), and start
   dmaStreamSetMemory0(LCD_DMA_TX, &DUMMY_TX);
   dmaStreamSetTransactionSize(LCD_DMA_TX, len);
@@ -169,7 +167,7 @@ static inline void spi_dma_rx_buffer(uint8_t *buffer, uint16_t len, bool wait) {
   {}
 #define spi_dma_tx_buffer(buffer, len, flag) spi_tx_buffer(buffer, len)
 #define spi_dma_rx_buffer(buffer, len, flag) spi_rx_buffer(buffer, len)
-#endif // __USE_DISPLAY_DMA__
+#endif // USE_DISPLAY_DMA
 
 static void spi_init(void) {
   rccEnableSPI1(FALSE);
@@ -186,7 +184,7 @@ static void spi_init(void) {
   LCD_SPI->CR2 = SPI_CR2_8BIT    // SPI data size, set to 8 bit
                  | SPI_CR2_FRXTH // SPI_SR_RXNE generated every 8 bit data
 //             | SPI_CR2_SSOE      //
-#ifdef __USE_DISPLAY_DMA__
+#ifdef USE_DISPLAY_DMA
                  | SPI_CR2_TXDMAEN // Tx DMA enable
 #ifdef __USE_DISPLAY_DMA_RX__
                  | SPI_CR2_RXDMAEN // Rx DMA enable
@@ -194,7 +192,7 @@ static void spi_init(void) {
 #endif
     ;
 // Init SPI DMA Peripheral
-#ifdef __USE_DISPLAY_DMA__
+#ifdef USE_DISPLAY_DMA
   dmaStreamSetPeripheral(LCD_DMA_TX, &LCD_SPI->DR); // DMA Peripheral Tx
 #ifdef __USE_DISPLAY_DMA_RX__
   dmaStreamSetPeripheral(LCD_DMA_RX, &LCD_SPI->DR); // DMA Peripheral Rx
@@ -613,7 +611,7 @@ void lcd_read_memory(int x, int y, int w, int h, uint16_t *out) {
     SPI_BR_SET(LCD_SPI, ST7789V_SPI_RX_SPEED);
   } else if (ILI9341_SPI_RX_SPEED != LCD_SPI_SPEED) {
     SPI_BR_SET(LCD_SPI, ILI9341_SPI_RX_SPEED);
-}
+  }
   spi_drop_rx();                    // Skip data from SPI rx buffer
   spi_rx_byte();                    // require 8bit dummy clock
   uint8_t *rgbbuf = (uint8_t *)out; // receive pixel data to buffer
@@ -680,7 +678,7 @@ void lcd_bulk_finish(void) {
 
 static void lcd_bulk_buffer(int x, int y, int w, int h, pixel_t *buffer) {
   lcd_set_window(x, y, w, h, LCD_RAMWR);
-#ifdef __USE_DISPLAY_DMA__
+#ifdef USE_DISPLAY_DMA
   dmaStreamSetMemory0(LCD_DMA_TX, buffer);
   dmaStreamSetTransactionSize(LCD_DMA_TX, w * h);
   dmaStreamSetMode(LCD_DMA_TX, TXDMAMODE | LCD_DMA_MODE | STM32_DMA_CR_MINC | STM32_DMA_CR_EN);
@@ -688,7 +686,7 @@ static void lcd_bulk_buffer(int x, int y, int w, int h, pixel_t *buffer) {
   spi_tx_buffer((uint8_t *)buffer, w * h * sizeof(pixel_t));
 #endif
 
-#ifdef __REMOTE_DESKTOP__
+#ifdef REMOTE_DESKTOP
   if (sweep_mode & SWEEP_REMOTE) {
     remote_region_t rd = {"bulk\r\n", x, y, w, h};
     send_region(&rd, (uint8_t *)buffer, w * h * sizeof(pixel_t));
@@ -717,7 +715,7 @@ void lcd_bulk(int x, int y, int w, int h) {
 void lcd_fill(int x, int y, int w, int h) {
   lcd_set_window(x, y, w, h, LCD_RAMWR);
   uint32_t len = w * h;
-#ifdef __USE_DISPLAY_DMA__
+#ifdef USE_DISPLAY_DMA
   dmaStreamSetMemory0(LCD_DMA_TX, &background_color);
   while (len) {
     uint32_t delta = len > 0xFFFF ? 0xFFFF : len; // DMA can send only 65535 data in one run
@@ -737,7 +735,7 @@ void lcd_fill(int x, int y, int w, int h) {
   } while (--len);
 #endif
 
-#ifdef __REMOTE_DESKTOP__
+#ifdef REMOTE_DESKTOP
   if (sweep_mode & SWEEP_REMOTE) {
     remote_region_t rd = {"fill\r\n", x, y, w, h};
     send_region(&rd, (uint8_t *)&background_color, sizeof(pixel_t));
@@ -911,7 +909,7 @@ static msg_t lcd_put(void *ip, uint8_t ch) {
       lcd_set_background(ch);
     } else if (ps->state == R_FGCOLOR[0]) {
       lcd_set_foreground(ch);
-}
+    }
     ps->state = 0;
     return MSG_OK;
   } else if (ch < 0x09) {
@@ -995,7 +993,7 @@ int lcd_drawchar_size(uint8_t ch, int x, int y, uint8_t size) {
       for (uint32_t r = 0; r < w; r++, bits <<= 1) {
         for (uint32_t j = 0; j < size; j++)
           *buf++ = (0x80 & bits) ? foreground_color : background_color;
-}
+      }
     }
   }
   lcd_bulk(x, y, w * size, FONT_GET_HEIGHT * size);
@@ -1088,7 +1086,7 @@ void ili9341_test(int mode) {
 }
 #endif
 
-#ifdef __USE_SD_CARD__
+#ifdef USE_SD_CARD
 //*****************************************************
 //* SD functions and definitions
 //*****************************************************
@@ -1172,7 +1170,7 @@ void ili9341_test(int mode) {
 #define SD_OCR_VDD_MASK SD_OCR_VDD_27_36
 
 // Use DMA on sector data Tx to SD card (only if enabled Tx DMA for LCD)
-#ifdef __USE_DISPLAY_DMA__
+#ifdef USE_DISPLAY_DMA
 #define __USE_SDCARD_DMA__
 #endif
 
@@ -1416,7 +1414,7 @@ static uint8_t sd_send_cmd(uint8_t cmd, uint32_t arg) {
       crc = 0x95;
     } else if (cmd == CMD8) {
       crc = 0x87;
-}
+    }
     buf[5] = crc;
 #endif
     spi_tx_buffer(buf, 6);
@@ -1494,7 +1492,7 @@ DSTATUS disk_initialize(BYTE pdrv) {
           r1 = sd_send_cmd(ACMD41, host_ocr);
         } else {
           r1 = sd_send_cmd(CMD1, 0);
-}
+        }
         if (r1 == 0)
           break;
         chThdSleepMilliseconds(10);

@@ -33,10 +33,10 @@ static void board_peripherals_init(void) {
 #if HAL_USE_PAL == FALSE
   init_pal();
 #endif
-#ifdef __USE_RTC__
+#ifdef USE_RTC
   rtc_init();
 #endif
-#if defined(__VNA_ENABLE_DAC__) || defined(__LCD_BRIGHTNESS__)
+#if defined(VNA_ENABLE_DAC) || defined(LCD_BRIGHTNESS)
   dac_init();
 #endif
   i2c_start();
@@ -47,7 +47,7 @@ static void display_driver_init(void) {
 }
 
 static void display_driver_set_backlight(uint16_t level) {
-#if defined(__VNA_ENABLE_DAC__) || defined(__LCD_BRIGHTNESS__)
+#if defined(VNA_ENABLE_DAC) || defined(LCD_BRIGHTNESS)
   dac_setvalue_ch2(level);
 #else
   (void)level;

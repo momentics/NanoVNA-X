@@ -35,8 +35,9 @@ typedef struct usb_command_server_port_api {
   bool (*check_connect)(void);
   void (*init_connection)(void);
   const vna_shell_command_t *(*parse_command)(char *line, uint16_t *argc, char ***argv,
-                                          const char **name_out);
-  void (*request_deferred_execution)(const vna_shell_command_t *command, uint16_t argc, char **argv);
+                                              const char **name_out);
+  void (*request_deferred_execution)(const vna_shell_command_t *command, uint16_t argc,
+                                     char **argv);
   void (*service_pending_commands)(void);
   int (*read_line)(char *line, int max_size);
   void (*execute_cmd_line)(char *line);

@@ -1,5 +1,5 @@
-#ifndef __UI_MENU_DISPLAY_H__
-#define __UI_MENU_DISPLAY_H__
+#ifndef UI_MENU_DISPLAY_H
+#define UI_MENU_DISPLAY_H
 
 #include "ui/ui_menu.h"
 
@@ -16,4 +16,4 @@ void input_measure_r(uint16_t data, button_t *b);
 void input_portz(uint16_t data, button_t *b);
 // Exposed for menu_main.c
 
-#endif // __UI_MENU_DISPLAY_H__
+#endif // UI_MENU_DISPLAY_H

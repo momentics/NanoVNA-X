@@ -3,99 +3,99 @@
 // Define LCD display driver and size
 #if defined(NANOVNA_F303)
 #define LCD_DRIVER_ST7796S
-#define LCD_480x320
+#define LCD_480X320
 #else
 // Used auto detect from ILI9341 or ST7789
 #define LCD_DRIVER_ILI9341
 #define LCD_DRIVER_ST7789
-#define LCD_320x240
+#define LCD_320X240
 #endif
 
 // Enable DMA mode for send data to LCD (Need enable HAL_USE_SPI in halconf.h)
-#define __USE_DISPLAY_DMA__
+#define USE_DISPLAY_DMA
 // LCD or hardware allow change brightness, add menu item for this
 #if defined(NANOVNA_F303)
-#define __LCD_BRIGHTNESS__
+#define LCD_BRIGHTNESS
 #else
-// #define __LCD_BRIGHTNESS__
+// #define LCD_BRIGHTNESS
 #endif
-// Use DAC (in H4 used for brightness used DAC, so need enable __LCD_BRIGHTNESS__ for it)
-// #define __VNA_ENABLE_DAC__
+// Use DAC (in H4 used for brightness used DAC, so need enable LCD_BRIGHTNESS for it)
+// #define VNA_ENABLE_DAC
 // Allow enter to DFU from menu or command
-#define __DFU_SOFTWARE_MODE__
+#define DFU_SOFTWARE_MODE
 // Add RTC clock support
-#define __USE_RTC__
+#define USE_RTC
 // Add RTC backup registers support
-#define __USE_BACKUP__
+#define USE_BACKUP
 // Add SD card support, requires RTC for timestamps
-#define __USE_SD_CARD__
+#define USE_SD_CARD
 // Use unique serial string for USB
-#define __USB_UID__
+#define USB_UID
 // If enabled serial in halconf.h, possible enable serial console control
-// #define __USE_SERIAL_CONSOLE__
+// #define USE_SERIAL_CONSOLE
 // Add show y grid line values option
-#define __USE_GRID_VALUES__
+#define USE_GRID_VALUES
 // Add remote desktop option
-#define __REMOTE_DESKTOP__
+#define REMOTE_DESKTOP
 #if !defined(NANOVNA_F303)
-#undef __REMOTE_DESKTOP__
+#undef REMOTE_DESKTOP
 #endif
 // Add RLE8 compression capture image format
-#define __CAPTURE_RLE8__
+#define CAPTURE_RLE8
 // Allow flip display
-// #define __FLIP_DISPLAY__
+// #define FLIP_DISPLAY
 // Add shadow on text in plot area (improve readable, but little slowdown render)
-#define _USE_SHADOW_TEXT_
+#define USE_SHADOW_TEXT
 // Faster draw line in cell algorithm (better clipping and faster)
-// #define __VNA_FAST_LINES__
+// #define VNA_FAST_LINES
 // Use build in table for sin/cos calculation, allow save a lot of flash space (this table also use
 // for FFT), max sin/cos error = 4e-7
-#define __VNA_USE_MATH_TABLES__
+#define VNA_USE_MATH_TABLES
 // Use custom fast/compact approximation for some math functions in calculations (vna_ ...), use it
 // carefully
-#define __USE_VNA_MATH__
+#define USE_VNA_MATH
 // Use cache for window function used by FFT (but need FFT_SIZE*sizeof(float) RAM)
 // #define USE_FFT_WINDOW_BUFFER
 // Enable data smooth option
-#define __USE_SMOOTH__
+#define USE_SMOOTH
 // Enable optional change digit separator for locales (dot or comma, need for correct work some
 // external software)
-#define __DIGIT_SEPARATOR__
+#define DIGIT_SEPARATOR
 // Use table for frequency list (if disabled use real time calc)
-// #define __USE_FREQ_TABLE__
+// #define USE_FREQ_TABLE
 // Enable DSP instruction (support only by Cortex M4 and higher)
 #ifdef ARM_MATH_CM4
-#define __USE_DSP__
+#define USE_DSP
 #endif
 // Add measure module option (allow made some measure calculations on data)
-#define __VNA_MEASURE_MODULE__
+#define VNA_MEASURE_MODULE
 // Add Z normalization feature
-// #define __VNA_Z_RENORMALIZATION__
+// #define VNA_Z_RENORMALIZATION
 
 /*
  * Submodules defines
  */
-#ifdef __USE_SD_CARD__
+#ifdef USE_SD_CARD
 // Allow run commands from SD card (config.ini in root)
-#define __SD_CARD_LOAD__
+#define SD_CARD_LOAD
 // Allow screenshots in TIFF format
-#define __SD_CARD_DUMP_TIFF__
+#define SD_CARD_DUMP_TIFF
 // Allow dump firmware to SD card
-#define __SD_CARD_DUMP_FIRMWARE__
+#define SD_CARD_DUMP_FIRMWARE
 // Enable SD card file browser, and allow load files from it
-#define __SD_FILE_BROWSER__
+#define SD_FILE_BROWSER
 #endif
 
 // If measure module enabled, add submodules
-#ifdef __VNA_MEASURE_MODULE__
+#ifdef VNA_MEASURE_MODULE
 // Add LC match function
-#define __USE_LC_MATCHING__
+#define USE_LC_MATCHING
 // Enable Series measure option
-#define __S21_MEASURE__
+#define S21_MEASURE
 // Enable S11 cable measure option
-#define __S11_CABLE_MEASURE__
+#define S11_CABLE_MEASURE
 // Enable S11 resonance search option
-#define __S11_RESONANCE_MEASURE__
+#define S11_RESONANCE_MEASURE
 #endif
 
 /*

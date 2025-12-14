@@ -27,7 +27,7 @@ const menuitem_t MENU_TOP[] = {
   {MT_SUBMENU, 0, "STIMULUS", MENU_STIMULUS},
   {MT_SUBMENU, 0, "DISPLAY", MENU_DISPLAY},
   {MT_SUBMENU, 0, "MEASURE", MENU_MEASURE_TOOLS},
-#ifdef __USE_SD_CARD__
+#ifdef USE_SD_CARD
   {MT_SUBMENU, 0, "SD CARD", menu_sdcard_cb},
 #endif
   {MT_SUBMENU, 0, "SYSTEM", MENU_SYSTEM},

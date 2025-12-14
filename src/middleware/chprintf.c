@@ -213,7 +213,7 @@ static char *ftoa_s(char *p, float num, int16_t precision) {
     precision -= 2;
   } else if (l >= 10) {
     precision -= 1;
-}
+  }
   if (precision < 0)
     precision = 0;
   p = ftoa(p, num, precision);
@@ -325,7 +325,7 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
         state |= SHORT_FLOAT;
       } else {
         break;
-}
+      }
       fmt++;
     }
     // Get [width|*] - The Width field specifies a minimum number of characters to output
@@ -338,7 +338,7 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
         c = va_arg(ap, int);
       } else {
         break;
-}
+      }
       width = width * 10 + c;
     }
     // Get [.precision|*]
@@ -352,7 +352,7 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
           c = va_arg(ap, int);
         } else {
           break;
-}
+        }
         precision = precision * 10 + c;
       }
     } else
@@ -400,7 +400,7 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
 #ifdef CHPRINTF_USE_SPACE_FLAG
       } else if (state & PLUS_SPACE) {
         *p++ = ' ';
-}
+      }
 #endif
       if (state & COMPLEX)
         *p++ = 'j';
@@ -416,7 +416,7 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
         value.u = va_arg(ap, uint32_t);
       } else {
         value.f = va_arg(ap, double);
-}
+      }
       if (value.f < 0) {
         state |= NEGATIVE;
         *p++ = '-';
@@ -426,7 +426,7 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
 #ifdef CHPRINTF_USE_SPACE_FLAG
       } else if (state & PLUS_SPACE) {
         *p++ = ' ';
-}
+      }
 #endif
       if (state & COMPLEX)
         *p++ = 'j';
@@ -480,7 +480,7 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
       width = 0;
     } else {
       filler = (state & PAD_ZERO) ? '0' : ' ';
-}
+    }
     // if left align, put sign digit, and fill
     // [{sign}ffffffXXXXXXXXXXXX]
     if (!(state & LEFT_ALIGN)) {

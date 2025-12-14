@@ -35,8 +35,6 @@ static const keypad_pos_t KEY_POS[] = {
   [NUM_KEYBOARD] = {KP_X_OFFSET, KP_Y_OFFSET, KP_WIDTH, KP_HEIGHT},
   [TXT_KEYBOARD] = {KPF_X_OFFSET, KPF_Y_OFFSET, KPF_WIDTH, KPF_HEIGHT}};
 
-
-
 typedef struct {
   uint8_t size, type;
   struct {
@@ -157,7 +155,7 @@ static int get_lines_count(const char *label) {
   while (*label) {
     if (*label++ == '\n')
       n++;
-}
+  }
   return n;
 }
 
@@ -247,13 +245,13 @@ static void draw_numeric_input(const char *buf) {
   uint16_t x = 14 + FONT_STR_WIDTH(12), space;
   uint16_t y = LCD_HEIGHT - (NUM_FONT_GET_HEIGHT + NUM_INPUT_HEIGHT) / 2;
   uint16_t xsim;
-#ifdef __USE_RTC__
+#ifdef USE_RTC
   if ((1 << keypad_mode) & ((1 << KM_RTC_DATE) | (1 << KM_RTC_TIME))) {
     xsim = 0b01010100;
   } else {
 #endif
     xsim = (0b00100100100100100 >> (2 - (period_pos() % 3))) & (~1);
-}
+  }
   LCD_SET_COLORS(LCD_INPUT_TEXT_COLOR, LCD_INPUT_BG_COLOR);
   while (*buf) {
     int c = *buf++;
@@ -267,7 +265,7 @@ static void draw_numeric_input(const char *buf) {
       c -= '0';
     } else {
       continue;
-}
+    }
     // Add space before char
     space = 2 + 10 * (xsim & 1);
     xsim >>= 1;
@@ -324,7 +322,7 @@ static int num_keypad_click(int c, int kp_index) {
     }
     return K_DONE;
   }
-#ifdef __USE_RTC__
+#ifdef USE_RTC
   int maxlength = (1 << keypad_mode) & ((1 << KM_RTC_DATE) | (1 << KM_RTC_TIME)) ? 6 : NUMINPUT_LEN;
 #else
   int maxlength = NUMINPUT_LEN;
@@ -350,10 +348,11 @@ static int num_keypad_click(int c, int kp_index) {
     if (c <= KP_9) {
       kp_buf[kp_index++] = '0' + c;
     } else if (c == KP_PERIOD && kp_index == period_pos() &&
-             maxlength == NUMINPUT_LEN) { // append period if there are no period and for num input
-                                        // (skip for date/time)
+               maxlength ==
+                 NUMINPUT_LEN) { // append period if there are no period and for num input
+                                 // (skip for date/time)
       kp_buf[kp_index++] = '.';
-}
+    }
   }
   kp_buf[kp_index] = '\0';
   draw_numeric_input(kp_buf);

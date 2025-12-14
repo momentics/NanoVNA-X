@@ -105,8 +105,8 @@ static bool compare_ext(const char *name, const char *ext) {
   int i = 0, j = 0;
   while (name[i]) {
     if (name[i++] == '.')
-      j = i;                                      // Get last '.' position + 1
-}
+      j = i; // Get last '.' position + 1
+  }
   return j == 0 ? false : strcmpi(&name[j], ext); // Compare text after '.' and ext
 }
 
@@ -196,7 +196,7 @@ repeat:
         key = 2;
       } else {
         key = 1;
-}
+      }
       touch_wait_release();
     }
     // chThdSleepMilliseconds(100); // Device hang after ~2min in this place, not switch thread back

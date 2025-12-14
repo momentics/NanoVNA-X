@@ -15,7 +15,7 @@
 #include "infra/state/state_manager.h"    // For state_manager_force_save if needed
 #include "platform/boards/board_events.h" // For boardDFUEnter if referenced? No, local DFU is System.
 
-#ifdef __USE_SD_CARD__
+#ifdef USE_SD_CARD
 
 #include "ff.h" // FatFs
 
@@ -104,7 +104,7 @@ static FILE_LOAD_CALLBACK(load_snp) {
         continue;
       } else if (j < line_size) {
         line[j++] = (char)c;
-}
+      }
     }
   }
   if (count != 0) {
@@ -199,7 +199,7 @@ static FILE_LOAD_CALLBACK(load_bmp) {
   return NULL;
 }
 
-#ifdef __SD_CARD_DUMP_TIFF__
+#ifdef SD_CARD_DUMP_TIFF
 #define IFD_ENTRY(type, val_t, count, value)                                                       \
   BMP_UINT16(type), BMP_UINT16(val_t), BMP_UINT32(count), BMP_UINT32(value)
 #define IFD_BYTE 1
@@ -303,7 +303,7 @@ static FILE_LOAD_CALLBACK(load_cal) {
   return NULL;
 }
 
-#ifdef __SD_CARD_DUMP_FIRMWARE__
+#ifdef SD_CARD_DUMP_FIRMWARE
 static FILE_SAVE_CALLBACK(save_bin) {
   (void)format;
   UINT size;
@@ -313,7 +313,7 @@ static FILE_SAVE_CALLBACK(save_bin) {
 }
 #endif
 
-#ifdef __SD_CARD_LOAD__
+#ifdef SD_CARD_LOAD
 static FILE_LOAD_CALLBACK(load_cmd) {
   (void)fno;
   (void)format;
@@ -334,7 +334,7 @@ static FILE_LOAD_CALLBACK(load_cmd) {
         continue;
       } else if (j < line_size) {
         line[j++] = (char)c;
-}
+      }
     }
   }
   if (j > 0) {
@@ -345,7 +345,7 @@ static FILE_LOAD_CALLBACK(load_cmd) {
 }
 #endif
 
-#if defined(__USE_SD_CARD__) && FF_USE_MKFS
+#if defined(USE_SD_CARD) && FF_USE_MKFS
 _Static_assert(sizeof(spi_buffer) >= FF_MAX_SS, "spi_buffer is too small for mkfs work buffer");
 
 static FRESULT sd_card_format(void) {
@@ -388,7 +388,7 @@ static UI_FUNCTION_CALLBACK(menu_sdcard_format_cb) {
 }
 #endif
 
-#ifdef __SD_FILE_BROWSER__
+#ifdef SD_FILE_BROWSER
 #define FILE_OPTIONS(e, s, l, o)                                                                   \
   { e, s, l, o }
 #else
@@ -402,7 +402,7 @@ static UI_FUNCTION_CALLBACK(menu_sdcard_format_cb) {
 const struct {
   const char *ext;
   file_save_cb_t save;
-#ifdef __SD_FILE_BROWSER__
+#ifdef SD_FILE_BROWSER
   file_load_cb_t load;
 #endif
   uint32_t opt;
@@ -410,14 +410,14 @@ const struct {
   [FMT_S1P_FILE] = FILE_OPTIONS("s1p", save_snp, load_snp, 0),
   [FMT_S2P_FILE] = FILE_OPTIONS("s2p", save_snp, load_snp, 0),
   [FMT_BMP_FILE] = FILE_OPTIONS("bmp", save_bmp, load_bmp, FILE_OPT_REDRAW | FILE_OPT_CONTINUE),
-#ifdef __SD_CARD_DUMP_TIFF__
+#ifdef SD_CARD_DUMP_TIFF
   [FMT_TIF_FILE] = FILE_OPTIONS("tif", save_tiff, load_tiff, FILE_OPT_REDRAW | FILE_OPT_CONTINUE),
 #endif
   [FMT_CAL_FILE] = FILE_OPTIONS("cal", save_cal, load_cal, 0),
-#ifdef __SD_CARD_DUMP_FIRMWARE__
+#ifdef SD_CARD_DUMP_FIRMWARE
   [FMT_BIN_FILE] = FILE_OPTIONS("bin", save_bin, NULL, 0),
 #endif
-#ifdef __SD_CARD_LOAD__
+#ifdef SD_CARD_LOAD
   [FMT_CMD_FILE] = FILE_OPTIONS("cmd", NULL, load_cmd, 0),
 #endif
 };
@@ -466,14 +466,14 @@ static void ui_save_file(char *name, uint8_t format) {
 }
 
 static uint16_t fix_screenshot_format(uint16_t data) {
-#ifdef __SD_CARD_DUMP_TIFF__
+#ifdef SD_CARD_DUMP_TIFF
   if (data == FMT_BMP_FILE && VNA_MODE(VNA_MODE_TIFF))
     return FMT_TIF_FILE;
 #endif
   return data;
 }
 
-#ifdef __SD_FILE_BROWSER__
+#ifdef SD_FILE_BROWSER
 #include "vna_browser.c"
 
 static UI_FUNCTION_CALLBACK(menu_sdcard_browse_cb) {
@@ -497,10 +497,10 @@ UI_FUNCTION_CALLBACK(menu_sdcard_cb) {
     ui_save_file(NULL, data);
   } else {
     ui_mode_keypad(data + KM_S1P_NAME);
-}
+  }
 }
 
-#ifdef __SD_FILE_BROWSER__
+#ifdef SD_FILE_BROWSER
 const menuitem_t menu_sdcard_browse[] = {
   {MT_CALLBACK, FMT_BMP_FILE, "LOAD\nSCREENSHOT", menu_sdcard_browse_cb},
   {MT_CALLBACK, FMT_S1P_FILE, "LOAD S1P", menu_sdcard_browse_cb},
@@ -511,7 +511,7 @@ const menuitem_t menu_sdcard_browse[] = {
 #endif
 
 const menuitem_t MENU_SDCARD[] = {
-#ifdef __SD_FILE_BROWSER__
+#ifdef SD_FILE_BROWSER
   {MT_SUBMENU, 0, "LOAD", menu_sdcard_browse},
 #endif
   {MT_CALLBACK, FMT_S1P_FILE, "SAVE S1P", menu_sdcard_cb},
@@ -522,10 +522,10 @@ const menuitem_t MENU_SDCARD[] = {
   {MT_CALLBACK, 0, "FORMAT SD", menu_sdcard_format_cb},
 #endif
   {MT_ADV_CALLBACK, VNA_MODE_AUTO_NAME, "AUTO NAME", menu_vna_mode_acb},
-#ifdef __SD_CARD_DUMP_TIFF__
+#ifdef SD_CARD_DUMP_TIFF
   {MT_ADV_CALLBACK, VNA_MODE_TIFF, "IMAGE FORMAT\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
 #endif
   {MT_NEXT, 0, NULL, MENU_BACK} // next-> MENU_BACK
 };
 
-#endif // __USE_SD_CARD__
+#endif // USE_SD_CARD

@@ -147,7 +147,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_power_sel_acb) {
     if (current_props._power != SI5351_CLK_DRIVE_STRENGTH_AUTO) {
       plot_printf(b->label, sizeof(b->label), "POWER" R_LINK_COLOR "  %um" S_AMPER,
                   2 + current_props._power * 2);
-}
+    }
     return;
   }
   menu_push_submenu(menu_build_power_menu());
@@ -161,7 +161,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_recall_acb) {
                   (float)p->_frequency1);
     } else {
       b->p1.u = data;
-}
+    }
     if (lastsaveid == data)
       b->icon = BUTTON_ICON_CHECK;
     return;
@@ -173,7 +173,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_recall_acb) {
 static const menuitem_t *menu_build_recall_menu(void) {
   menuitem_t *cursor = menu_dynamic_acquire();
   menuitem_t *base = cursor;
-#ifdef __SD_FILE_BROWSER__
+#ifdef SD_FILE_BROWSER
 //   *cursor++ = (menuitem_t){MT_CALLBACK, FMT_CAL_FILE, "LOAD FROM\n SD CARD",
 //                            menu_sdcard_browse_cb}; // Requires menu_sdcard_browse_cb exposure
 #endif
@@ -196,7 +196,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_save_acb) {
                   (float)p->_frequency1);
     } else {
       b->p1.u = data;
-}
+    }
     if (lastsaveid == data)
       b->icon = BUTTON_ICON_CHECK;
     return;
@@ -216,7 +216,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_save_acb) {
 static const menuitem_t *menu_build_save_menu(void) {
   menuitem_t *cursor = menu_dynamic_acquire();
   menuitem_t *base = cursor;
-#ifdef __SD_FILE_BROWSER__
+#ifdef SD_FILE_BROWSER
   *cursor++ = (menuitem_t){MT_CALLBACK, FMT_CAL_FILE, "SAVE TO\n SD CARD", menu_sdcard_cb};
 #endif
   cursor = ui_menu_list(MENU_STATE_SLOTS_DESC, ARRAY_COUNT(MENU_STATE_SLOTS_DESC), "Empty %d",
@@ -255,7 +255,7 @@ const menuitem_t MENU_CAL_OPTIONS[] = {
   {MT_ADV_CALLBACK, 0, "CAL RANGE", menu_cal_range_acb},
   {MT_ADV_CALLBACK, 0, "CAL POWER", menu_power_sel_acb},
   {MT_ADV_CALLBACK, 0, "ENHANCED\nRESPONSE", menu_cal_enh_acb},
-#ifdef __VNA_Z_RENORMALIZATION__
+#ifdef VNA_Z_RENORMALIZATION
   {MT_ADV_CALLBACK, KM_CAL_LOAD_R, "LOAD STD\n " R_LINK_COLOR "%bF" S_OHM, menu_keyboard_acb},
 #endif
   {MT_NEXT, 0, NULL, MENU_BACK} // next-> MENU_BACK

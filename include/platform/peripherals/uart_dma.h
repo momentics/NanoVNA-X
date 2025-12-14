@@ -22,7 +22,7 @@
 
 #include "nanovna.h"
 
-#ifdef __USE_SERIAL_CONSOLE__
+#ifdef USE_SERIAL_CONSOLE
 
 #include "ch.h"
 #include "hal.h"

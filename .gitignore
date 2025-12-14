@@ -24,3 +24,6 @@ TAGS
 .idea/
 .vscode/
 *.swp
+actionable_warnings.txt
+tidy_report.txt
+run_tidy.sh

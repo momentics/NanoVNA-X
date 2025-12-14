@@ -29,7 +29,7 @@ static board_events_t *ui_board_events = NULL;
 static bool ui_board_events_subscribed = false;
 static uint8_t ui_request_flags = UI_CONTROLLER_REQUEST_NONE;
 
-#ifdef __REMOTE_DESKTOP__
+#ifdef REMOTE_DESKTOP
 static uint8_t touch_remote = REMOTE_NONE;
 #endif
 
@@ -43,7 +43,7 @@ extern void ui_menu_lever(uint16_t status);
 extern void ui_menu_touch(int x, int y);
 extern void ui_keypad_lever(uint16_t status);
 extern void ui_keypad_touch(int x, int y);
-#ifdef __SD_FILE_BROWSER__
+#ifdef SD_FILE_BROWSER
 extern void ui_browser_lever(uint16_t status);
 extern void ui_browser_touch(int x, int y);
 #endif
@@ -56,7 +56,7 @@ static const struct {
   [UI_NORMAL] = {ui_normal_lever, ui_normal_touch},
   [UI_MENU] = {ui_menu_lever, ui_menu_touch},
   [UI_KEYPAD] = {ui_keypad_lever, ui_keypad_touch},
-#ifdef __SD_FILE_BROWSER__
+#ifdef SD_FILE_BROWSER
   [UI_BROWSER] = {ui_browser_lever, ui_browser_touch},
 #endif
 };
@@ -240,7 +240,7 @@ static void touch_prepare_sense(void) {
   palSetPadMode(GPIOA, GPIOA_XP, PAL_MODE_OUTPUT_PUSHPULL);
 }
 
-#ifdef __REMOTE_DESKTOP__
+#ifdef REMOTE_DESKTOP
 void remote_touch_set(uint16_t state, int16_t x, int16_t y) {
   touch_remote = state;
   if (x != -1)
@@ -310,7 +310,7 @@ int touch_check(void) {
       last_touch_x = x;
       last_touch_y = y;
     }
-#ifdef __REMOTE_DESKTOP__
+#ifdef REMOTE_DESKTOP
     touch_remote = REMOTE_NONE;
   } else {
     stat = touch_remote == REMOTE_PRESS;
@@ -446,7 +446,7 @@ void ui_touch_cal_exec(void) {
   const uint16_t x2 = LCD_WIDTH - 1 - CALIBRATION_OFFSET - TOUCH_MARK_X;
   const uint16_t y2 = LCD_HEIGHT - 1 - CALIBRATION_OFFSET - TOUCH_MARK_Y;
   uint16_t p1 = 0, p2 = 2;
-#ifdef __FLIP_DISPLAY__
+#ifdef FLIP_DISPLAY
   if (VNA_MODE(VNA_MODE_FLIP_DISPLAY)) {
     p1 = 2, p2 = 0;
   }
@@ -457,7 +457,7 @@ void ui_touch_cal_exec(void) {
 }
 
 void touch_position(int *x, int *y) {
-#ifdef __REMOTE_DESKTOP__
+#ifdef REMOTE_DESKTOP
   if (touch_remote != REMOTE_NONE) {
     *x = last_touch_x;
     *y = last_touch_y;
@@ -507,7 +507,7 @@ void touch_position(int *x, int *y) {
     ty = LCD_HEIGHT - 1;
   }
 
-#ifdef __FLIP_DISPLAY__
+#ifdef FLIP_DISPLAY
   if (VNA_MODE(VNA_MODE_FLIP_DISPLAY)) {
     tx = LCD_WIDTH - 1 - tx;
     ty = LCD_HEIGHT - 1 - ty;
@@ -633,7 +633,7 @@ void ui_init(void) {
   ui_input_reset_state();
   ui_init_ext();
   touch_init();
-#ifdef __LCD_BRIGHTNESS__
+#ifdef LCD_BRIGHTNESS
   lcd_set_brightness(config._brightness);
 #endif
 }

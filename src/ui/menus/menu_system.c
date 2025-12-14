@@ -19,7 +19,7 @@ enum {
   MENU_CONFIG_VERSION,
   MENU_CONFIG_SAVE,
   MENU_CONFIG_RESET,
-#if defined(__SD_CARD_LOAD__) && !defined(__SD_FILE_BROWSER__)
+#if defined(SD_CARD_LOAD) && !defined(SD_FILE_BROWSER)
   MENU_CONFIG_LOAD,
 #endif
 };
@@ -66,28 +66,28 @@ typedef struct {
 const vna_mode_data_t VNA_MODE_DATA[] = {
   //                        text (if 0 use checkbox) Redraw flags on change
   [VNA_MODE_AUTO_NAME] = {0, REDRAW_BACKUP},
-#ifdef __USE_SMOOTH__
+#ifdef USE_SMOOTH
   [VNA_MODE_SMOOTH] = {"Geom\0Arith", REDRAW_BACKUP},
 #endif
-#ifdef __USE_SERIAL_CONSOLE__
+#ifdef USE_SERIAL_CONSOLE
   [VNA_MODE_CONNECTION] = {"USB\0SERIAL", REDRAW_BACKUP},
 #endif
   [VNA_MODE_SEARCH] = {"MAXIMUM\0MINIMUM", REDRAW_BACKUP},
   [VNA_MODE_SHOW_GRID] = {0, REDRAW_BACKUP | REDRAW_AREA},
   [VNA_MODE_DOT_GRID] = {0, REDRAW_BACKUP | REDRAW_AREA},
-#ifdef __USE_BACKUP__
+#ifdef USE_BACKUP
   [VNA_MODE_BACKUP] = {0, REDRAW_BACKUP},
 #endif
-#ifdef __FLIP_DISPLAY__
+#ifdef FLIP_DISPLAY
   [VNA_MODE_FLIP_DISPLAY] = {0, REDRAW_BACKUP | REDRAW_ALL},
 #endif
-#ifdef __DIGIT_SEPARATOR__
+#ifdef DIGIT_SEPARATOR
   [VNA_MODE_SEPARATOR] = {"DOT '.'\0COMMA ','", REDRAW_BACKUP | REDRAW_MARKER | REDRAW_FREQUENCY},
 #endif
-#ifdef __SD_CARD_DUMP_TIFF__
+#ifdef SD_CARD_DUMP_TIFF
   [VNA_MODE_TIFF] = {"BMP\0TIF", REDRAW_BACKUP},
 #endif
-#ifdef __USB_UID__
+#ifdef USB_UID
   [VNA_MODE_USB_UID] = {0, REDRAW_BACKUP},
 #endif
 };
@@ -101,14 +101,14 @@ void apply_vna_mode(uint16_t idx, vna_mode_ops_t operation) {
     config._vna_mode |= m; // set
   } else {
     config._vna_mode ^= m; // toggle
-}
+  }
   if (old == config._vna_mode)
     return;
   request_to_redraw(VNA_MODE_DATA[idx].update_flag);
   config_service_notify_configuration_changed();
   // Custom processing after apply
   switch (idx) {
-#ifdef __USE_SERIAL_CONSOLE__
+#ifdef USE_SERIAL_CONSOLE
   case VNA_MODE_CONNECTION:
     shell_reset_console();
     break;
@@ -119,7 +119,7 @@ void apply_vna_mode(uint16_t idx, vna_mode_ops_t operation) {
     select_lever_mode(LM_SEARCH);
 #endif
     break;
-#ifdef __FLIP_DISPLAY__
+#ifdef FLIP_DISPLAY
   case VNA_MODE_FLIP_DISPLAY:
     lcd_set_flip(VNA_MODE(VNA_MODE_FLIP_DISPLAY));
     draw_all();
@@ -135,7 +135,7 @@ UI_FUNCTION_ADV_CALLBACK(menu_vna_mode_acb) {
       b->icon = VNA_MODE(data) ? BUTTON_ICON_CHECK : BUTTON_ICON_NOCHECK;
     } else {
       b->p1.text = VNA_MODE(data) ? t + strlen(t) + 1 : t;
-}
+    }
     return;
   }
   apply_vna_mode(data, VNA_MODE_TOGGLE);
@@ -144,7 +144,7 @@ UI_FUNCTION_ADV_CALLBACK(menu_vna_mode_acb) {
 // ===================================
 // Serial Speed Logic
 // ===================================
-#ifdef __USE_SERIAL_CONSOLE__
+#ifdef USE_SERIAL_CONSOLE
 static const menu_descriptor_t menu_serial_speed_desc[] = {
   {MT_ADV_CALLBACK, 0}, {MT_ADV_CALLBACK, 1}, {MT_ADV_CALLBACK, 2}, {MT_ADV_CALLBACK, 3},
   {MT_ADV_CALLBACK, 4}, {MT_ADV_CALLBACK, 5}, {MT_ADV_CALLBACK, 6}, {MT_ADV_CALLBACK, 7},
@@ -196,7 +196,7 @@ static UI_FUNCTION_CALLBACK(menu_config_cb) {
     clear_all_config_prop_data();
     NVIC_SystemReset();
     break;
-#if defined(__SD_CARD_LOAD__) && !defined(__SD_FILE_BROWSER__)
+#if defined(SD_CARD_LOAD) && !defined(SD_FILE_BROWSER)
   case MENU_CONFIG_LOAD:
     if (!sd_card_load_config())
       ui_message_box("Error", "No config.ini", 2000);
@@ -207,7 +207,7 @@ static UI_FUNCTION_CALLBACK(menu_config_cb) {
   request_to_redraw(REDRAW_ALL);
 }
 
-#ifdef __DFU_SOFTWARE_MODE__
+#ifdef DFU_SOFTWARE_MODE
 static UI_FUNCTION_CALLBACK(menu_dfu_cb) {
   (void)data;
   ui_enter_dfu();
@@ -238,7 +238,7 @@ UI_FUNCTION_ADV_CALLBACK(menu_offset_sel_acb) {
 #endif
 
 // Brightness logic
-#ifdef __LCD_BRIGHTNESS__
+#ifdef LCD_BRIGHTNESS
 void lcd_set_brightness(uint16_t b) {
   dac_setvalue_ch2(700 + b * (4000 - 700) / 100);
 }
@@ -305,7 +305,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_band_sel_acb) {
 }
 
 // RTC Logic
-#ifdef __USE_RTC__
+#ifdef USE_RTC
 static UI_FUNCTION_ADV_CALLBACK(menu_rtc_out_acb) {
   (void)data;
   if (b) {
@@ -322,14 +322,14 @@ static UI_FUNCTION_ADV_CALLBACK(menu_rtc_out_acb) {
 
 // Menus
 
-#ifdef __DFU_SOFTWARE_MODE__
+#ifdef DFU_SOFTWARE_MODE
 const menuitem_t MENU_DFU[] = {
   {MT_CALLBACK, 0, "RESET AND\nENTER DFU", menu_dfu_cb},
   {MT_NEXT, 0, NULL, MENU_BACK} // next-> MENU_BACK
 };
 #endif
 
-#ifdef __USE_SERIAL_CONSOLE__
+#ifdef USE_SERIAL_CONSOLE
 const menuitem_t MENU_CONNECTION[] = {
   {MT_ADV_CALLBACK, VNA_MODE_CONNECTION, "CONNECTION\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
   {MT_ADV_CALLBACK, 0, "SERIAL SPEED\n " R_LINK_COLOR "%u", menu_serial_speed_sel_acb},
@@ -356,17 +356,17 @@ const menuitem_t MENU_OFFSET[] = {{MT_ADV_CALLBACK, 0, "%d" S_HZ, menu_offset_ac
 
 const menuitem_t MENU_DEVICE1[] = {
   {MT_ADV_CALLBACK, 0, "MODE\n " R_LINK_COLOR "%s", menu_band_sel_acb},
-#ifdef __DIGIT_SEPARATOR__
+#ifdef DIGIT_SEPARATOR
   {MT_ADV_CALLBACK, VNA_MODE_SEPARATOR, "SEPARATOR\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
 #endif
-#ifdef __USB_UID__
+#ifdef USB_UID
   {MT_ADV_CALLBACK, VNA_MODE_USB_UID, "USB DEVICE\nUID", menu_vna_mode_acb},
 #endif
   {MT_SUBMENU, 0, "CLEAR CONFIG", menu_draw},
   {MT_NEXT, 0, NULL, MENU_BACK} // next-> MENU_BACK
 };
 
-#ifdef __USE_RTC__
+#ifdef USE_RTC
 const menuitem_t MENU_RTC[] = {
   {MT_ADV_CALLBACK, KM_RTC_DATE, "SET DATE", menu_keyboard_acb},
   {MT_ADV_CALLBACK, KM_RTC_TIME, "SET TIME", menu_keyboard_acb},
@@ -407,7 +407,7 @@ UI_KEYBOARD_CALLBACK(input_vbat) {
   config_service_notify_configuration_changed();
 }
 
-#ifdef __USE_RTC__
+#ifdef USE_RTC
 UI_KEYBOARD_CALLBACK(input_date_time) {
   if (b)
     return;
@@ -430,7 +430,7 @@ UI_KEYBOARD_CALLBACK(input_date_time) {
       kp_buf[1] = 1;
     } else if (kp_buf[1] > 0x12) {
       kp_buf[1] = 0x12;
-}
+    }
     // Day limit (depend from month):
     uint8_t day_max = 28 + ((0b11101100000000000010111110111011001100 >> (kp_buf[1] << 1)) & 3);
     day_max = ((day_max / 10) << 4) | (day_max % 10); // to BCD
@@ -438,7 +438,7 @@ UI_KEYBOARD_CALLBACK(input_date_time) {
       kp_buf[2] = 1;
     } else if (kp_buf[2] > day_max) {
       kp_buf[2] = day_max;
-}
+    }
     time[6] = kp_buf[0]; // year
     time[5] = kp_buf[1]; // month
     time[4] = kp_buf[2]; // day
@@ -474,13 +474,13 @@ const menuitem_t MENU_DEVICE[] = {
 #ifdef USE_VARIABLE_OFFSET_MENU
   {MT_ADV_CALLBACK, 0, "IF OFFSET\n " R_LINK_COLOR "%d" S_HZ, menu_offset_sel_acb},
 #endif
-#ifdef __USE_BACKUP__
+#ifdef USE_BACKUP
   {MT_ADV_CALLBACK, VNA_MODE_BACKUP, "REMEMBER\nSTATE", menu_vna_mode_acb},
 #endif
-#ifdef __FLIP_DISPLAY__
+#ifdef FLIP_DISPLAY
   {MT_ADV_CALLBACK, VNA_MODE_FLIP_DISPLAY, "FLIP\nDISPLAY", menu_vna_mode_acb},
 #endif
-#ifdef __DFU_SOFTWARE_MODE__
+#ifdef DFU_SOFTWARE_MODE
   {MT_SUBMENU, 0, S_RARROW "DFU", MENU_DFU},
 #endif
   {MT_SUBMENU, 0, S_RARROW " MORE", MENU_DEVICE1},
@@ -490,20 +490,20 @@ const menuitem_t MENU_DEVICE[] = {
 const menuitem_t MENU_SYSTEM[] = {
   {MT_CALLBACK, MENU_CONFIG_TOUCH_CAL, "TOUCH CAL", menu_config_cb},
   {MT_CALLBACK, MENU_CONFIG_TOUCH_TEST, "TOUCH TEST", menu_config_cb},
-#ifdef __LCD_BRIGHTNESS__
+#ifdef LCD_BRIGHTNESS
   {MT_ADV_CALLBACK, 0, "BRIGHTNESS\n " R_LINK_COLOR "%d%%%%", menu_brightness_acb},
 #endif
   {MT_CALLBACK, MENU_CONFIG_SAVE, "SAVE CONFIG", menu_config_cb},
-#if defined(__SD_CARD_LOAD__) && !defined(__SD_FILE_BROWSER__)
+#if defined(SD_CARD_LOAD) && !defined(SD_FILE_BROWSER)
   {MT_CALLBACK, MENU_CONFIG_LOAD, "LOAD CONFIG", menu_config_cb},
 #endif
   {MT_CALLBACK, MENU_CONFIG_VERSION, "VERSION", menu_config_cb},
-#ifdef __USE_RTC__
+#ifdef USE_RTC
   {MT_SUBMENU, 0, "DATE/TIME", MENU_RTC},
 #endif
   {MT_SUBMENU, 0, "DEVICE", MENU_DEVICE},
-#ifdef __USE_SERIAL_CONSOLE__
-#ifdef __USE_SERIAL_CONSOLE__
+#ifdef USE_SERIAL_CONSOLE
+#ifdef USE_SERIAL_CONSOLE
   {MT_SUBMENU, 0, "CONNECTION", MENU_CONNECTION},
 #endif
 #endif

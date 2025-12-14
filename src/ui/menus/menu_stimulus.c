@@ -72,7 +72,7 @@ UI_KEYBOARD_CALLBACK(input_var_delay) {
     if (current_props._var_delay) {
       plot_printf(b->label, sizeof(b->label), "JOG STEP\n " R_LINK_COLOR "%F" S_SECOND,
                   current_props._var_delay);
-}
+    }
     return;
   }
   current_props._var_delay = keyboard_get_float();

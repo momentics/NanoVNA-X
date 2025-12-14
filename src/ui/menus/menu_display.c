@@ -23,9 +23,9 @@ static UI_FUNCTION_ADV_CALLBACK(menu_trace_acb) {
   }
 
   if (trace[data].enabled && data != current_trace) { // for enabled trace and not current trace
-    set_active_trace(data);                         // make active
-  } else {                                              //
-    set_trace_enable(data, !trace[data].enabled);   // toggle trace enable
+    set_active_trace(data);                           // make active
+  } else {                                            //
+    set_trace_enable(data, !trace[data].enabled);     // toggle trace enable
   }
 }
 
@@ -204,7 +204,7 @@ UI_KEYBOARD_CALLBACK(input_amplitude) {
     top = value; // top value input
   } else {
     bot = value; // bottom value input
-}
+  }
   scale = (top - bot) / NGRIDY;
   ref = (top == bot) ? -value : -bot / scale;
   set_trace_scale(current_trace, scale);
@@ -256,7 +256,7 @@ UI_KEYBOARD_CALLBACK(input_velocity) {
   velocity_factor = keyboard_get_uint();
 }
 
-#ifdef __S11_CABLE_MEASURE__
+#ifdef S11_CABLE_MEASURE
 extern float real_cable_len;
 UI_KEYBOARD_CALLBACK(input_cable_len) {
   (void)data;
@@ -271,7 +271,7 @@ UI_KEYBOARD_CALLBACK(input_cable_len) {
 }
 #endif
 
-#ifdef __S21_MEASURE__
+#ifdef S21_MEASURE
 UI_KEYBOARD_CALLBACK(input_measure_r) {
   (void)data;
   if (b) {
@@ -283,7 +283,7 @@ UI_KEYBOARD_CALLBACK(input_measure_r) {
 }
 #endif
 
-#ifdef __VNA_Z_RENORMALIZATION__
+#ifdef VNA_Z_RENORMALIZATION
 UI_KEYBOARD_CALLBACK(input_portz) {
   if (b) {
     b->p1.f = data ? current_props._cal_load_r : current_props._portz;
@@ -304,7 +304,7 @@ const menuitem_t MENU_SCALE[] = {
   {MT_ADV_CALLBACK, KM_REFPOS, "REFERENCE\nPOSITION", menu_scale_keyboard_acb},
   {MT_ADV_CALLBACK, KM_EDELAY, "E-DELAY", menu_keyboard_acb},
   {MT_ADV_CALLBACK, KM_S21OFFSET, "S21 OFFSET\n " R_LINK_COLOR "%b.3F" S_DB, menu_keyboard_acb},
-#ifdef __USE_GRID_VALUES__
+#ifdef USE_GRID_VALUES
   {MT_ADV_CALLBACK, VNA_MODE_SHOW_GRID, "SHOW GRID\nVALUES", menu_vna_mode_acb},
   {MT_ADV_CALLBACK, VNA_MODE_DOT_GRID, "DOT GRID", menu_vna_mode_acb},
 #endif
@@ -548,7 +548,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_bandwidth_sel_acb) {
   menu_push_submenu(menu_build_bandwidth_menu());
 }
 
-#ifdef __USE_SMOOTH__
+#ifdef USE_SMOOTH
 static const menu_descriptor_t MENU_SMOOTH_DESC[] = {
   {MT_ADV_CALLBACK, 1}, {MT_ADV_CALLBACK, 2}, {MT_ADV_CALLBACK, 4},
   {MT_ADV_CALLBACK, 5}, {MT_ADV_CALLBACK, 6},
@@ -586,7 +586,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_smooth_sel_acb) {
 // ===================================
 // Measure Logic
 // ===================================
-#ifdef __VNA_MEASURE_MODULE__
+#ifdef VNA_MEASURE_MODULE
 extern const menuitem_t *const MENU_MEASURE_LIST[];
 static UI_FUNCTION_ADV_CALLBACK(menu_measure_acb) {
   if (b) {
@@ -603,7 +603,7 @@ static UI_FUNCTION_CALLBACK(menu_measure_cb) {
 }
 
 // Select menu depend from measure mode
-#ifdef __USE_LC_MATCHING__
+#ifdef USE_LC_MATCHING
 const menuitem_t MENU_MEASURE_LC[] = {
   {MT_ADV_CALLBACK, MEASURE_NONE, "OFF", menu_measure_acb},
   {MT_ADV_CALLBACK, MEASURE_LC_MATH, "L/C MATCH", menu_measure_acb},
@@ -611,7 +611,7 @@ const menuitem_t MENU_MEASURE_LC[] = {
 };
 #endif
 
-#ifdef __S11_CABLE_MEASURE__
+#ifdef S11_CABLE_MEASURE
 const menuitem_t MENU_MEASURE_CABLE[] = {
   {MT_ADV_CALLBACK, MEASURE_NONE, "OFF", menu_measure_acb},
   {MT_ADV_CALLBACK, MEASURE_S11_CABLE, "CABLE\n (S11)", menu_measure_acb},
@@ -621,7 +621,7 @@ const menuitem_t MENU_MEASURE_CABLE[] = {
 };
 #endif
 
-#ifdef __S11_RESONANCE_MEASURE__
+#ifdef S11_RESONANCE_MEASURE
 const menuitem_t MENU_MEASURE_RESONANCE[] = {
   {MT_ADV_CALLBACK, MEASURE_NONE, "OFF", menu_measure_acb},
   {MT_ADV_CALLBACK, MEASURE_S11_RESONANCE, "RESONANCE\n (S11)", menu_measure_acb},
@@ -629,7 +629,7 @@ const menuitem_t MENU_MEASURE_RESONANCE[] = {
 };
 #endif
 
-#ifdef __S21_MEASURE__
+#ifdef S21_MEASURE
 const menuitem_t MENU_MEASURE_S21[] = {
   {MT_ADV_CALLBACK, MEASURE_NONE, "OFF", menu_measure_acb},
   {MT_ADV_CALLBACK, MEASURE_SHUNT_LC, "SHUNT LC\n (S21)", menu_measure_acb},
@@ -648,16 +648,16 @@ const menuitem_t MENU_MEASURE_FILTER[] = {
 
 const menuitem_t MENU_MEASURE[] = {
   {MT_ADV_CALLBACK, MEASURE_NONE, "OFF", menu_measure_acb},
-#ifdef __USE_LC_MATCHING__
+#ifdef USE_LC_MATCHING
   {MT_ADV_CALLBACK, MEASURE_LC_MATH, "L/C MATCH", menu_measure_acb},
 #endif
-#ifdef __S11_CABLE_MEASURE__
+#ifdef S11_CABLE_MEASURE
   {MT_ADV_CALLBACK, MEASURE_S11_CABLE, "CABLE\n (S11)", menu_measure_acb},
 #endif
-#ifdef __S11_RESONANCE_MEASURE__
+#ifdef S11_RESONANCE_MEASURE
   {MT_ADV_CALLBACK, MEASURE_S11_RESONANCE, "RESONANCE\n (S11)", menu_measure_acb},
 #endif
-#ifdef __S21_MEASURE__
+#ifdef S21_MEASURE
   {MT_ADV_CALLBACK, MEASURE_SHUNT_LC, "SHUNT LC\n (S21)", menu_measure_acb},
   {MT_ADV_CALLBACK, MEASURE_SERIES_LC, "SERIES LC\n (S21)", menu_measure_acb},
   {MT_ADV_CALLBACK, MEASURE_SERIES_XTAL, "SERIES\nXTAL (S21)", menu_measure_acb},
@@ -669,19 +669,19 @@ const menuitem_t MENU_MEASURE[] = {
 // Dynamic menu selector depend from measure mode
 const menuitem_t *const MENU_MEASURE_LIST[] = {
   [MEASURE_NONE] = MENU_MEASURE,
-#ifdef __USE_LC_MATCHING__
+#ifdef USE_LC_MATCHING
   [MEASURE_LC_MATH] = MENU_MEASURE_LC,
 #endif
-#ifdef __S21_MEASURE__
+#ifdef S21_MEASURE
   [MEASURE_SHUNT_LC] = MENU_MEASURE_S21,
   [MEASURE_SERIES_LC] = MENU_MEASURE_S21,
   [MEASURE_SERIES_XTAL] = MENU_MEASURE_S21,
   [MEASURE_FILTER] = MENU_MEASURE_FILTER,
 #endif
-#ifdef __S11_CABLE_MEASURE__
+#ifdef S11_CABLE_MEASURE
   [MEASURE_S11_CABLE] = MENU_MEASURE_CABLE,
 #endif
-#ifdef __S11_RESONANCE_MEASURE__
+#ifdef S11_RESONANCE_MEASURE
   [MEASURE_S11_RESONANCE] = MENU_MEASURE_RESONANCE,
 #endif
 };
@@ -689,14 +689,14 @@ const menuitem_t *const MENU_MEASURE_LIST[] = {
 
 const menuitem_t MENU_MEASURE_TOOLS[] = {
   {MT_SUBMENU, 0, "TRANSFORM", MENU_TRANSFORM},
-#ifdef __USE_SMOOTH__
+#ifdef USE_SMOOTH
   {MT_ADV_CALLBACK, 0, "DATA\nSMOOTH", menu_smooth_sel_acb},
 #endif
-#ifdef __VNA_MEASURE_MODULE__
+#ifdef VNA_MEASURE_MODULE
   {MT_CALLBACK, 0, "MEASURE", menu_measure_cb},
 #endif
   {MT_ADV_CALLBACK, 0, "IF BANDWIDTH\n " R_LINK_COLOR "%u" S_HZ, menu_bandwidth_sel_acb},
-#ifdef __VNA_Z_RENORMALIZATION__
+#ifdef VNA_Z_RENORMALIZATION
   {MT_ADV_CALLBACK, KM_Z_PORT, "PORT-Z\n " R_LINK_COLOR "50 " S_RARROW " %bF" S_OHM,
    menu_keyboard_acb},
 #endif

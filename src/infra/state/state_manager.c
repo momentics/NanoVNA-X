@@ -83,7 +83,7 @@ static void load_default_properties(void) {
   current_props._measure = 0;
 }
 
-#ifdef __USE_BACKUP__
+#ifdef USE_BACKUP
 typedef union {
   struct {
     uint32_t points : 9;
@@ -105,10 +105,10 @@ static inline uint16_t active_calibration_slot(void) {
 
 void update_backup_data(void) {
   backup_0_t bk = {.points = sweep_points,
-                 .bw = config._bandwidth,
-                 .id = lastsaveid,
-                 .leveler = sweep_mode,
-                 .brightness = config._brightness};
+                   .bw = config._bandwidth,
+                   .id = lastsaveid,
+                   .leveler = sweep_mode,
+                   .brightness = config._brightness};
   set_backup_data32(0, bk.v);
   set_backup_data32(1, frequency0);
   set_backup_data32(2, frequency1);
@@ -147,7 +147,7 @@ static void load_settings(void) {
     sanitize_rf_preferences();
   }
   app_measurement_update_frequencies();
-#ifdef __VNA_MEASURE_MODULE__
+#ifdef VNA_MEASURE_MODULE
   plot_set_measure_mode(current_props._measure);
 #endif
 }
@@ -174,14 +174,14 @@ void state_manager_init(void) {
 }
 
 void state_manager_mark_dirty(void) {
-#ifdef __USE_BACKUP__
+#ifdef USE_BACKUP
   sweep_state_dirty = true;
   sweep_state_deadline = chVTGetSystemTimeX() + SWEEP_STATE_AUTOSAVE_DELAY;
 #endif
 }
 
 void state_manager_force_save(void) {
-#ifdef __USE_BACKUP__
+#ifdef USE_BACKUP
   // Don't save during calibration to avoid conflicts with measurement process
   if (!calibration_in_progress) {
     caldata_save(active_calibration_slot());
@@ -193,7 +193,7 @@ void state_manager_force_save(void) {
 }
 
 void state_manager_service(void) {
-#ifdef __USE_BACKUP__
+#ifdef USE_BACKUP
   if (!VNA_MODE(VNA_MODE_BACKUP) || !sweep_state_dirty) {
     return;
   }

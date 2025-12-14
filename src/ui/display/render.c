@@ -22,7 +22,7 @@
  * This function draws a line between two points in the cell buffer, with optimized
  * boundary checking and clipping to avoid expensive operations outside the cell.
  */
-void cell_drawline(const RenderCellCtx *rcx, int x0, int y0, int x1, int y1, pixel_t c) {
+void cell_drawline(const render_cell_ctx_t *rcx, int x0, int y0, int x1, int y1, pixel_t c) {
   // Quick out-of-bounds check to avoid expensive computation
   if ((x0 < 0 && x1 < 0) || (y0 < 0 && y1 < 0) || (x0 >= CELLWIDTH && x1 >= CELLWIDTH) ||
       (y0 >= CELLHEIGHT && y1 >= CELLHEIGHT))
@@ -68,7 +68,7 @@ void cell_drawline(const RenderCellCtx *rcx, int x0, int y0, int x1, int y1, pix
 }
 
 // Slower, but allow any width bitmaps
-void cell_blit_bitmap(RenderCellCtx *rcx, int16_t x, int16_t y, uint16_t w, uint16_t h,
+void cell_blit_bitmap(render_cell_ctx_t *rcx, int16_t x, int16_t y, uint16_t w, uint16_t h,
                       const uint8_t *bmp) {
   int16_t x1, y1;
   if ((x1 = x + w) < 0 || (y1 = y + h) < 0)
@@ -94,7 +94,7 @@ void cell_blit_bitmap(RenderCellCtx *rcx, int16_t x, int16_t y, uint16_t w, uint
 #endif
 
 #ifdef VNA_ENABLE_SHADOW_TEXT
-void cell_blit_bitmap_shadow(RenderCellCtx *rcx, int16_t x, int16_t y, uint16_t w, uint16_t h,
+void cell_blit_bitmap_shadow(render_cell_ctx_t *rcx, int16_t x, int16_t y, uint16_t w, uint16_t h,
                              const uint8_t *bmp) {
   int i;
   if (x + w < 0 || h + y < 0)
@@ -127,7 +127,7 @@ void cell_blit_bitmap_shadow(RenderCellCtx *rcx, int16_t x, int16_t y, uint16_t 
 //**************************************************************************************
 typedef struct {
   const void *vmt;
-  RenderCellCtx *ctx;
+  render_cell_ctx_t *ctx;
   int16_t x;
   int16_t y;
 } cell_print_stream_t;
@@ -180,7 +180,7 @@ static msg_t cell_put(void *ip, uint8_t ch) {
 }
 
 // Simple print in buffer function
-static int cell_vprintf(RenderCellCtx *rcx, int16_t x, int16_t y, const char *fmt, va_list ap) {
+static int cell_vprintf(render_cell_ctx_t *rcx, int16_t x, int16_t y, const char *fmt, va_list ap) {
   static const struct lcd_print_stream_vmt {
     _base_sequential_stream_methods
   } cell_vmt = {NULL, NULL, cell_put, NULL};
@@ -195,7 +195,7 @@ static int cell_vprintf(RenderCellCtx *rcx, int16_t x, int16_t y, const char *fm
   return retval;
 }
 
-int cell_printf_ctx(RenderCellCtx *rcx, int16_t x, int16_t y, const char *fmt, ...) {
+int cell_printf_ctx(render_cell_ctx_t *rcx, int16_t x, int16_t y, const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
   int retval = cell_vprintf(rcx, x, y, fmt, ap);
@@ -204,9 +204,9 @@ int cell_printf_ctx(RenderCellCtx *rcx, int16_t x, int16_t y, const char *fmt, .
 }
 
 // Bound during draw_cell() so measurement helpers can reuse printf utilities.
-static RenderCellCtx *active_cell_ctx = NULL;
+static render_cell_ctx_t *active_cell_ctx = NULL;
 
-void set_active_cell_ctx(RenderCellCtx *ctx) {
+void set_active_cell_ctx(render_cell_ctx_t *ctx) {
   active_cell_ctx = ctx;
 }
 

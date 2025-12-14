@@ -93,7 +93,7 @@ bool i2c_receive(uint8_t addr, const uint8_t *w, size_t wn, uint8_t *r, size_t r
 /*
  * rtc.c
  */
-#ifdef __USE_RTC__
+#ifdef USE_RTC
 #define RTC_START_YEAR 2000
 
 #define RTC_DR_YEAR(dr) (((dr) >> 16) & 0xFF)
@@ -132,7 +132,7 @@ float rtc_get_cal(void);
 /*
  * Backup
  */
-#ifdef __USE_BACKUP__
+#ifdef USE_BACKUP
 inline uint32_t get_backup_data32(uint16_t id) {
   switch (id) {
   case 0:
@@ -316,20 +316,20 @@ extern void i2s_lld_serve_rx_interrupt(void *p, uint32_t flags);
 // #define DMA1_CH6_HANDLER_FUNC
 // #define DMA1_CH7_HANDLER_FUNC
 
-#define DMA_CHANNEL_SET_MEMORY(ch, addr)                                                              \
+#define DMA_CHANNEL_SET_MEMORY(ch, addr)                                                           \
   { (ch)->CMAR = (uint32_t)(addr); }
-#define DMA_CHANNEL_SET_PERIPHERAL(ch, addr)                                                          \
+#define DMA_CHANNEL_SET_PERIPHERAL(ch, addr)                                                       \
   { (ch)->CPAR = (uint32_t)(addr); }
-#define DMA_CHANNEL_SET_TRANSACTION_SIZE(ch, size)                                                     \
+#define DMA_CHANNEL_SET_TRANSACTION_SIZE(ch, size)                                                 \
   { (ch)->CNDTR = (uint32_t)(size); }
 #define DMA_CHANNEL_GET_TRANSACTION_SIZE(ch) ((ch)->CNDTR)
-#define DMA_CHANNEL_SET_MODE(ch, mode)                                                                \
+#define DMA_CHANNEL_SET_MODE(ch, mode)                                                             \
   { (ch)->CCR = (uint32_t)(mode); }
-#define DMA_CHANNEL_ENABLE(ch)                                                                       \
+#define DMA_CHANNEL_ENABLE(ch)                                                                     \
   { (ch)->CCR |= STM32_DMA_CR_EN; }
-#define DMA_CHANNEL_DISABLE(ch)                                                                      \
+#define DMA_CHANNEL_DISABLE(ch)                                                                    \
   { (ch)->CCR &= ~STM32_DMA_CR_EN; }
-#define DMA_CHANNEL_WAIT_COMPLETION(ch)                                                               \
+#define DMA_CHANNEL_WAIT_COMPLETION(ch)                                                            \
   {                                                                                                \
     while ((ch)->CNDTR > 0)                                                                        \
       ;                                                                                            \

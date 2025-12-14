@@ -45,7 +45,7 @@
 #include "ui/controller/ui_controller.h"
 #include "platform/boards/board_events.h"
 
-#ifdef __LCD_BRIGHTNESS__
+#ifdef LCD_BRIGHTNESS
 void lcd_set_brightness(uint16_t brightness);
 #endif
 
@@ -85,8 +85,8 @@ static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
 static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
 
 static board_events_t board_events;
-static const display_presenter_t LCD_DISPLAY_PRESENTER  __attribute__((unused)) = {.context = NULL,
-                                                          .api = &DISPLAY_PRESENTER_LCD_API};
+static const display_presenter_t LCD_DISPLAY_PRESENTER
+  __attribute__((unused)) = {.context = NULL, .api = &DISPLAY_PRESENTER_LCD_API};
 
 static measurement_engine_t measurement_engine;
 const processing_port_t PROCESSING_PORT
@@ -123,7 +123,7 @@ static measurement_engine_port_t measurement_engine_port;
 static void usb_command_session_started(void);
 static void usb_command_session_stopped(void);
 
-#ifdef __USE_SD_CARD__
+#ifdef USE_SD_CARD
 static FATFS fs_volume_instance;
 static FIL fs_file_instance;
 
@@ -149,7 +149,7 @@ void *filesystem_file(void) {
 }
 #endif
 
-#ifdef __USE_SD_CARD__
+#ifdef USE_SD_CARD
 FATFS *filesystem_volume(void) {
   return &fs_volume_instance;
 }
@@ -270,7 +270,7 @@ static THD_WORKING_AREA(waThread1, 768);
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
   chRegSetThreadName("sweep");
-#ifdef __FLIP_DISPLAY__
+#ifdef FLIP_DISPLAY
   if (VNA_MODE(VNA_MODE_FLIP_DISPLAY))
     lcd_set_flip(true);
 #endif
@@ -324,7 +324,7 @@ alignas(4) properties_t current_props;
 int load_properties(uint32_t id) {
   int r = caldata_recall(id);
   app_measurement_update_frequencies();
-#ifdef __VNA_MEASURE_MODULE__
+#ifdef VNA_MEASURE_MODULE
   plot_set_measure_mode(current_props._measure);
 #endif
   return r;
@@ -336,7 +336,7 @@ void set_bandwidth(uint16_t bw_count) {
   update_backup_data();
 }
 
-#ifdef __LCD_BRIGHTNESS__
+#ifdef LCD_BRIGHTNESS
 void set_brightness(uint8_t brightness) {
   config._brightness = brightness;
   lcd_set_brightness(brightness);
@@ -378,7 +378,7 @@ void set_sweep_points(uint16_t points) {
     cal_status |= CALSTAT_INTERPOLATED;
   } else {
     cal_status &= (uint16_t)~CALSTAT_INTERPOLATED;
-}
+  }
 
   request_to_redraw(REDRAW_BACKUP | REDRAW_PLOT | REDRAW_CAL_STATUS | REDRAW_FREQUENCY |
                     REDRAW_AREA);
@@ -419,7 +419,7 @@ static void update_marker_index(freq_t start, freq_t stop, uint16_t points) {
     step = (stop - start) / (points - 1);
   } else {
     step = 1;
-}
+  }
   for (i = 0; i < MARKERS_MAX; i++) {
     if (markers[i].enabled) {
       int32_t index = (int32_t)(markers[i].frequency - start) / step;
@@ -447,7 +447,7 @@ void app_measurement_update_frequencies(void) {
     cal_status |= CALSTAT_INTERPOLATED;
   } else {
     cal_status &= ~CALSTAT_INTERPOLATED;
-}
+  }
 
   request_to_redraw(REDRAW_BACKUP | REDRAW_PLOT | REDRAW_CAL_STATUS | REDRAW_FREQUENCY |
                     REDRAW_AREA);
@@ -616,7 +616,7 @@ void reset_sweep_frequency(void) {
     cal_status |= CALSTAT_INTERPOLATED;
   } else {
     cal_status &= (uint16_t)~CALSTAT_INTERPOLATED;
-}
+  }
 
   request_to_redraw(REDRAW_BACKUP | REDRAW_PLOT | REDRAW_CAL_STATUS | REDRAW_FREQUENCY |
                     REDRAW_AREA);
@@ -649,9 +649,9 @@ static void vna_shell_execute_line(char *line) {
   }
 }
 
-#ifdef __SD_CARD_LOAD__
-#ifndef __USE_SD_CARD__
-#error "Need enable SD card support __USE_SD_CARD__ in nanovna.h, for use __SD_CARD_LOAD__"
+#ifdef SD_CARD_LOAD
+#ifndef USE_SD_CARD
+#error "Need enable SD card support USE_SD_CARD in nanovna.h, for use SD_CARD_LOAD"
 #endif
 bool sd_card_load_config(void) {
   if (f_mount(filesystem_volume(), "", 1) != FR_OK)
@@ -798,7 +798,7 @@ int runtime_main(void) {
  * SD Card init (if inserted) allow fix issues
  * Some card after insert work in SDIO mode and can corrupt SPI exchange (need switch it to SPI)
  */
-#ifdef __USE_SD_CARD__
+#ifdef USE_SD_CARD
   disk_initialize(0);
 #endif
 
@@ -831,7 +831,7 @@ int runtime_main(void) {
         vna_shell_execute_line(shell_line);
       } else {
         chThdSleepMilliseconds(200);
-}
+      }
     } while (SHELL_CHECK_CONNECT());
 #endif
   }
@@ -951,7 +951,7 @@ void set_active_trace(int t) {
   request_to_redraw(REDRAW_MARKER | REDRAW_GRID_VALUE);
 }
 
-#ifdef __REMOTE_DESKTOP__
+#ifdef REMOTE_DESKTOP
 void send_region(remote_region_t *rd, uint8_t *buf, uint16_t size) {
   if (sd_u1.config->usbp->state == USB_ACTIVE) {
     shell_stream_write(rd, sizeof(remote_region_t));

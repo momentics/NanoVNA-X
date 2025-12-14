@@ -75,7 +75,8 @@ typedef struct {
 
 size_t chnWriteTimeout(base_asynchronous_channel_t *chp, const uint8_t *data, size_t size,
                        systime_t timeout);
-size_t chnReadTimeout(base_asynchronous_channel_t *chp, uint8_t *data, size_t size, systime_t timeout);
+size_t chnReadTimeout(base_asynchronous_channel_t *chp, uint8_t *data, size_t size,
+                      systime_t timeout);
 
 void chMBObjectInit(mailbox_t *mbp, msg_t *buf, size_t n);
 msg_t chMBPost(mailbox_t *mbp, msg_t msg, systime_t timeout);

@@ -59,7 +59,7 @@
 
 // Menu structs moved to UI headers
 
-#ifdef __DFU_SOFTWARE_MODE__
+#ifdef DFU_SOFTWARE_MODE
 void ui_enter_dfu(void) {
   touch_stop_watchdog();
   int x = 5, y = 20;
@@ -107,7 +107,7 @@ UI_FUNCTION_ADV_CALLBACK(menu_stored_trace_acb) {
 //                                 UI menus
 //=====================================================================================================
 
-#if defined(__SD_FILE_BROWSER__)
+#if defined(SD_FILE_BROWSER)
 #define MENU_STATE_SD_ENTRY 1
 #else
 #define MENU_STATE_SD_ENTRY 0
@@ -147,36 +147,36 @@ const keypads_list_t KEYPADS_MODE_TBL[KM_NONE] = {
   [KM_VAR_DELAY] = {KEYPAD_NFLOAT, 0, "JOG STEP", input_var_delay},   // VAR electrical delay
   [KM_S21OFFSET] = {KEYPAD_FLOAT, 0, "S21 OFFSET", input_s21_offset}, // S21 level offset
   [KM_VELOCITY_FACTOR] = {KEYPAD_PERCENT, 0, "VELOCITY%%", input_velocity}, // velocity factor
-#ifdef __S11_CABLE_MEASURE__
+#ifdef S11_CABLE_MEASURE
   [KM_ACTUAL_CABLE_LEN] = {KEYPAD_MKUFLOAT, 0, "CABLE LENGTH",
                            input_cable_len}, // real cable length input for VF calculation
 #endif
   [KM_XTAL] = {KEYPAD_FREQ, 0, "TCXO 26M" S_HZ, input_xtal},      // XTAL frequency
   [KM_THRESHOLD] = {KEYPAD_FREQ, 0, "THRESHOLD", input_harmonic}, // Harmonic threshold frequency
   [KM_VBAT] = {KEYPAD_UFLOAT, 0, "BAT OFFSET", input_vbat},       // Vbat offset input in mV
-#ifdef __S21_MEASURE__
+#ifdef S21_MEASURE
   [KM_MEASURE_R] = {KEYPAD_UFLOAT, 0, "MEASURE Rl", input_measure_r}, // CH0 port impedance in Om
 #endif
-#ifdef __VNA_Z_RENORMALIZATION__
+#ifdef VNA_Z_RENORMALIZATION
   [KM_Z_PORT] = {KEYPAD_UFLOAT, 0, "PORT Z 50" S_RARROW,
                  input_portz}, // Port Z renormalization impedance
   [KM_CAL_LOAD_R] = {KEYPAD_UFLOAT, 1, "STANDARD\n LOAD R",
                      input_portz}, // Calibration standard load R
 #endif
-#ifdef __USE_RTC__
+#ifdef USE_RTC
   [KM_RTC_DATE] = {KEYPAD_UFLOAT, KM_RTC_DATE, "SET DATE\nYY MM DD", input_date_time}, // Date
   [KM_RTC_TIME] = {KEYPAD_UFLOAT, KM_RTC_TIME, "SET TIME\nHH MM SS", input_date_time}, // Time
   [KM_RTC_CAL] = {KEYPAD_FLOAT, 0, "RTC CAL", input_rtc_cal}, // RTC calibration in ppm
 #endif
-#ifdef __USE_SD_CARD__
+#ifdef USE_SD_CARD
   [KM_S1P_NAME] = {KEYPAD_TEXT, FMT_S1P_FILE, "S1P", input_filename},
   [KM_S2P_NAME] = {KEYPAD_TEXT, FMT_S2P_FILE, "S2P", input_filename},
   [KM_BMP_NAME] = {KEYPAD_TEXT, FMT_BMP_FILE, "BMP", input_filename},
-#ifdef __SD_CARD_DUMP_TIFF__
+#ifdef SD_CARD_DUMP_TIFF
   [KM_TIF_NAME] = {KEYPAD_TEXT, FMT_TIF_FILE, "TIF", input_filename},
 #endif
   [KM_CAL_NAME] = {KEYPAD_TEXT, FMT_CAL_FILE, "CAL", input_filename},
-#ifdef __SD_CARD_DUMP_FIRMWARE__
+#ifdef SD_CARD_DUMP_FIRMWARE
   [KM_BIN_NAME] = {KEYPAD_TEXT, FMT_BIN_FILE, "BIN", input_filename},
 #endif
 #endif
@@ -204,7 +204,7 @@ void ui_mode_normal(void) {
   set_area_size(AREA_WIDTH_NORMAL, AREA_HEIGHT_NORMAL);
   if (ui_mode == UI_MENU)
     request_to_draw_cells_behind_menu();
-#ifdef __SD_FILE_BROWSER__
+#ifdef SD_FILE_BROWSER
   if (ui_mode == UI_KEYPAD || ui_mode == UI_BROWSER)
     request_to_redraw(REDRAW_ALL);
 #else

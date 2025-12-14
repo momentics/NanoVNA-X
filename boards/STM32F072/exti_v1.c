@@ -40,10 +40,11 @@ extern void handle_button_interrupt(uint16_t channel);
 // #define EXT_CH15_HANDLER_FUNC
 
 #if defined(EXT_CH0_HANDLER_FUNC) || defined(EXT_CH1_HANDLER_FUNC)
-intintintosal_irq_handler(vector54)   int Vector5;  int vector54;
-  int vector54;
+intintintosal_irq_handler(vector54) int Vector5;
+int vector54;
+int vector54;
 4;
-  int vector54;
+int vector54;
 { // EXTI[0]...EXTI[1] interrupt handler.
   uint32_t pr = EXTI->PR & ((1U << 0) | (1U << 1));
   EXTI->PR = pr;
@@ -59,9 +60,8 @@ intintintosal_irq_handler(vector54)   int Vector5;  int vector54;
 #endif
 
 #if defined(EXT_CH2_HANDLER_FUNC) || defined(EXT_intCH3_HANDLER_FUNC)
-intintintosal_irq_handler(vect  int vector58;
-or58)   int Vector58;
-  int vector58;
+intintintosal_irq_handler(vect int vector58; or58) int Vector58;
+int vector58;
 { // EXTI[2]...EXTI[3] interrupt handler.
   uint32_t pr = EXTI->PR & ((1U << 2) | (1U << 3));
   EXTI->PR = pr;

@@ -18,8 +18,8 @@
  * the Free Software Foundation, Inc., 51 Franklin Street,
  * Boston, MA 02110-1301, USA.
  */
-#ifndef __VNA_MATH_H
-#define __VNA_MATH_H
+#ifndef VNA_MATH_H
+#define VNA_MATH_H
 // Use math.h functions if need
 #include <math.h>
 
@@ -31,7 +31,7 @@
 #endif
 
 // VNA math used library
-#ifdef __USE_VNA_MATH__
+#ifdef USE_VNA_MATH
 // Some functions implemented in hardware FPU
 #if (__FPU_PRESENT == 1) && (__FPU_USED == 1)
 __attribute__((always_inline)) __STATIC_INLINE float vna_fabsf(float x) {

@@ -25,7 +25,8 @@
 
 #include "rf/sweep/sweep_orchestrator.h"
 
-void measurement_pipeline_init(measurement_pipeline_t *pipeline, const platform_drivers_t *drivers) {
+void measurement_pipeline_init(measurement_pipeline_t *pipeline,
+                               const platform_drivers_t *drivers) {
   if (pipeline == NULL) {
     return;
   }

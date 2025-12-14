@@ -11,7 +11,7 @@ enum {
   UI_NORMAL,
   UI_MENU,
   UI_KEYPAD,
-#ifdef __SD_FILE_BROWSER__
+#ifdef SD_FILE_BROWSER
   UI_BROWSER,
 #endif
 };
@@ -27,19 +27,19 @@ enum {
 #define TOUCH_DRAG_POLL_INTERVAL_MS 8U    // 125 Hz drag updates
 
 // File Formats (moved from ui_controller.c)
-#ifdef __USE_SD_CARD__
+#ifdef USE_SD_CARD
 enum {
   FMT_S1P_FILE = 0,
   FMT_S2P_FILE,
   FMT_BMP_FILE,
-#ifdef __SD_CARD_DUMP_TIFF__
+#ifdef SD_CARD_DUMP_TIFF
   FMT_TIF_FILE,
 #endif
   FMT_CAL_FILE,
-#ifdef __SD_CARD_DUMP_FIRMWARE__
+#ifdef SD_CARD_DUMP_FIRMWARE
   FMT_BIN_FILE,
 #endif
-#ifdef __SD_CARD_LOAD__
+#ifdef SD_CARD_LOAD
   FMT_CMD_FILE,
 #endif
 };
@@ -76,7 +76,7 @@ void ui_mode_keypad(int mode);
 void ui_normal_lever(uint16_t status);
 void ui_normal_touch(int touch_x, int touch_y);
 
-#ifdef __SD_FILE_BROWSER__
+#ifdef SD_FILE_BROWSER
 // The ui_mode_browser declaration was moved above.
 #endif
 

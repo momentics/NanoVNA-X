@@ -154,28 +154,28 @@ enum { LM_MARKER, LM_SEARCH, LM_FREQ_0, LM_FREQ_1, LM_EDELAY };
 //
 enum {
   VNA_MODE_AUTO_NAME = 0, // Auto name for files
-#ifdef __USE_SMOOTH__
+#ifdef USE_SMOOTH
   VNA_MODE_SMOOTH, // Smooth function (0: Geom, 1: Arith)
 #endif
-#ifdef __USE_SERIAL_CONSOLE__
+#ifdef USE_SERIAL_CONSOLE
   VNA_MODE_CONNECTION, // Connection flag (0: USB, 1: SERIAL)
 #endif
   VNA_MODE_SEARCH,    // Marker search mode (0: max, 1: min)
   VNA_MODE_SHOW_GRID, // Show grid values
   VNA_MODE_DOT_GRID,  // Dotted grid lines
-#ifdef __USE_BACKUP__
+#ifdef USE_BACKUP
   VNA_MODE_BACKUP, // Made backup settings (save some settings after power off)
 #endif
-#ifdef __FLIP_DISPLAY__
+#ifdef FLIP_DISPLAY
   VNA_MODE_FLIP_DISPLAY, // Flip display
 #endif
-#ifdef __DIGIT_SEPARATOR__
+#ifdef DIGIT_SEPARATOR
   VNA_MODE_SEPARATOR, // Comma or dot digit separator (0: dot, 1: comma)
 #endif
-#ifdef __SD_CARD_DUMP_TIFF__
+#ifdef SD_CARD_DUMP_TIFF
   VNA_MODE_TIFF, // Save screenshot format (0: bmp, 1: tiff)
 #endif
-#ifdef __USB_UID__
+#ifdef USB_UID
   VNA_MODE_USB_UID // Use unique serial string for USB
 #endif
 };
@@ -183,23 +183,23 @@ enum {
 // Update config._vna_mode flags function
 typedef enum { VNA_MODE_CLR = 0, VNA_MODE_SET, VNA_MODE_TOGGLE } vna_mode_ops_t;
 
-#ifdef __VNA_MEASURE_MODULE__
+#ifdef VNA_MEASURE_MODULE
 // Measure option mode
 enum {
   MEASURE_NONE = 0,
-#ifdef __USE_LC_MATCHING__
+#ifdef USE_LC_MATCHING
   MEASURE_LC_MATH,
 #endif
-#ifdef __S21_MEASURE__
+#ifdef S21_MEASURE
   MEASURE_SHUNT_LC,
   MEASURE_SERIES_LC,
   MEASURE_SERIES_XTAL,
   MEASURE_FILTER,
 #endif
-#ifdef __S11_CABLE_MEASURE__
+#ifdef S11_CABLE_MEASURE
   MEASURE_S11_CABLE,
 #endif
-#ifdef __S11_RESONANCE_MEASURE__
+#ifdef S11_RESONANCE_MEASURE
   MEASURE_S11_RESONANCE,
 #endif
   MEASURE_END

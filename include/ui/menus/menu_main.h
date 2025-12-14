@@ -1,8 +1,8 @@
-#ifndef __UI_MENU_MAIN_H__
-#define __UI_MENU_MAIN_H__
+#ifndef UI_MENU_MAIN_H
+#define UI_MENU_MAIN_H
 
 #include "ui/ui_menu.h"
 
 extern const menuitem_t MENU_TOP[];
 
-#endif // __UI_MENU_MAIN_H__
+#endif // UI_MENU_MAIN_H

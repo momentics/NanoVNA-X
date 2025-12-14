@@ -19,7 +19,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifdef __VNA_MEASURE_MODULE__
+#ifdef VNA_MEASURE_MODULE
 // Use size optimization (module not need fast speed, better have smallest size)
 #pragma GCC push_options
 #pragma GCC optimize("Os")
@@ -220,19 +220,19 @@ void linear_regression(int N, get_value_t getx, get_value_t gety, float *result)
   result[1] = b;
 }
 
-#ifdef __USE_LC_MATCHING__
+#ifdef USE_LC_MATCHING
 // calculate physical component values to match an impendace to 'ref_impedance' (ie 50R)
 typedef struct {
   float xps; // Reactance parallel to source (can be NAN if not applicable)
   float xs;  // Serial reactance (can be 0.0 if not applicable)
   float xpl; // Reactance parallel to load (can be NAN if not applicable)
-} t_lc_match;
+} lc_match_t;
 
 typedef struct {
   freq_t Hz;
   float R0;
   // L-Network solution structure
-  t_lc_match matches[4];
+  lc_match_t matches[4];
   int16_t num_matches;
 } lc_match_array_t;
 
@@ -240,7 +240,7 @@ typedef struct {
 static lc_match_array_t *lc_match_array = (lc_match_array_t *)measure_memory;
 
 // Calculate two solutions for ZL where (R + X * X / R) > R0
-static void lc_match_calc_hi(float R0, float RL, float XL, t_lc_match *matches) {
+static void lc_match_calc_hi(float R0, float RL, float XL, lc_match_t *matches) {
   float xp[2];
   const float a = R0 - RL;
   const float b = 2.0f * XL * R0;
@@ -262,7 +262,7 @@ static void lc_match_calc_hi(float R0, float RL, float XL, t_lc_match *matches) 
 }
 
 // Calculate two solutions for ZL where R < R0
-static void lc_match_calc_lo(float R0, float RL, float XL, t_lc_match *matches) {
+static void lc_match_calc_lo(float R0, float RL, float XL, lc_match_t *matches) {
   float xs[2];
   // Calculate Xs
   const float a = 1.0f;
@@ -303,7 +303,7 @@ static int16_t lc_match_calc(int index) {
 
   // only one solution is enough: just a serial reactance
   // this gives SWR < 1.1 if R is within the range 0.91 .. 1.1 of R0
-  t_lc_match *matches = lc_match_array->matches;
+  lc_match_t *matches = lc_match_array->matches;
   if ((RL * 1.1f) > R0 && RL < (R0 * 1.1f)) {
     matches[0].xpl = 0.0f;
     matches[0].xps = 0.0f;
@@ -390,9 +390,9 @@ static void draw_lc_match(int xp, int yp) {
     }
   }
 }
-#endif // __USE_LC_MATCHING__
+#endif // USE_LC_MATCHING
 
-#ifdef __S21_MEASURE__
+#ifdef S21_MEASURE
 typedef struct {
   const char *header;
   freq_t freq;  // resonant frequency
@@ -580,13 +580,13 @@ typedef struct {
   float f[_end]; // freq array for -3, -6, -10, -20, -60 dB logmag
   float decade;
   float octave;
-} s21_pass;
+} s21_pass_t;
 
 typedef struct {
   float fmax;
   float vmax;
-  s21_pass lo_pass;
-  s21_pass hi_pass;
+  s21_pass_t lo_pass;
+  s21_pass_t hi_pass;
   // Band pass filter data
   float f_center;
   float bw_3dB;
@@ -595,7 +595,7 @@ typedef struct {
 } s21_filter_measure_t;
 static s21_filter_measure_t *s21_filter = (s21_filter_measure_t *)measure_memory;
 
-static void draw_s21_pass(int xp, int yp, s21_pass *p, const char *name) {
+static void draw_s21_pass(int xp, int yp, s21_pass_t *p, const char *name) {
   CELL_PRINTF(xp, yp, name);
   if (p->f[_3dB])
     CELL_PRINTF(xp, yp + STR_MEASURE_HEIGHT, "%.6F" S_HZ, p->f[_3dB]);
@@ -651,7 +651,7 @@ static void draw_filter_result(int xp, int yp) {
   }
 }
 
-static void find_filter_pass(float max, s21_pass *p, uint16_t idx, int16_t mode) {
+static void find_filter_pass(float max, s21_pass_t *p, uint16_t idx, int16_t mode) {
   // Fill frequency for all in filter_att (-3, -6, -10, -20, -60 dB) logmag
   for (int i = 0; i < _end; i++)
     p->f[i] = measure_search_value(&idx, max - filter_att[i], s21logmag, mode,
@@ -698,9 +698,9 @@ static void prepare_filter(uint8_t type, uint8_t update_mask) {
   INVALIDATE_RECT(STR_MEASURE_X, STR_MEASURE_Y, STR_MEASURE_X + 3 * STR_MEASURE_WIDTH,
                   STR_MEASURE_Y + 10 * STR_MEASURE_HEIGHT);
 }
-#endif // __S21_MEASURE__
+#endif // S21_MEASURE
 
-#ifdef __S11_CABLE_MEASURE__
+#ifdef S11_CABLE_MEASURE
 typedef struct {
   float freq;
   float R;
@@ -788,9 +788,9 @@ static void prepare_s11_cable(uint8_t type, uint8_t update_mask) {
                   STR_MEASURE_Y + 6 * STR_MEASURE_HEIGHT);
 }
 
-#endif // __S11_CABLE_MEASURE__
+#endif // S11_CABLE_MEASURE
 
-#ifdef __S11_RESONANCE_MEASURE__
+#ifdef S11_RESONANCE_MEASURE
 #define MEASURE_RESONANCE_COUNT 6
 typedef struct {
   struct {
@@ -860,6 +860,6 @@ static void prepare_s11_resonance(uint8_t type, uint8_t update_mask) {
   INVALIDATE_RECT(STR_MEASURE_X, STR_MEASURE_Y, STR_MEASURE_X + 3 * STR_MEASURE_WIDTH,
                   STR_MEASURE_Y + (MEASURE_RESONANCE_COUNT + 1) * STR_MEASURE_HEIGHT);
 }
-#endif //__S11_RESONANCE_MEASURE__
+#endif //S11_RESONANCE_MEASURE
 #pragma GCC pop_options
-#endif // __VNA_MEASURE_MODULE__
+#endif // VNA_MEASURE_MODULE

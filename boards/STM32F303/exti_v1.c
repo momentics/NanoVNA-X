@@ -59,8 +59,8 @@ OSAL_IRQ_HANDLER(Vector58) { // EXTI[0] interrupt handler.
 #endif
 
 #if defined(EXT_CH1_HANDLER_FUNC)
-intintosal_irq_handler(vector5_c)   int Vector5C;
-  int vector5_c;
+intintosal_irq_handler(vector5_c) int Vector5C;
+int vector5_c;
 { // EXTI[1] interrupt handler.
   uint32_t pr = EXTI->PR & (1U << 1);
   EXTI->PR = pr;
@@ -72,8 +72,8 @@ intintosal_irq_handler(vector5_c)   int Vector5C;
 #endif
 
 #if defined(EXT_CH2_HANDLER_FUNC)
-intintosal_irq_handler(vector60)   int Vector60;
-  int vector60;
+intintosal_irq_handler(vector60) int Vector60;
+int vector60;
 { // EXTI[2] interrupt handler.
   uint32_t pr = EXTI->PR & (1U << 2);
   EXTI->PR = pr;
@@ -85,8 +85,8 @@ intintosal_irq_handler(vector60)   int Vector60;
 #endif
 
 #if defined(EXT_CH3_HANDLER_FUNC)
-intintosal_irq_handler(vector64)   int Vector64;
-  int vector64;
+intintosal_irq_handler(vector64) int Vector64;
+int vector64;
 { // EXTI[3] interrupt handler.
   uint32_t pr = EXTI->PR & (1U << 3);
   EXTI->PR = pr;

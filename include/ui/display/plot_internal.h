@@ -21,7 +21,7 @@ typedef struct {
   uint16_t y0;
 } render_cell_ctx_t;
 
-typedef render_cell_ctx_t RenderCellCtx;
+typedef render_cell_ctx_t render_cell_ctx_t;
 
 /**
  * @brief Tracks state transitions when recomputing trace sample positions.
@@ -32,7 +32,7 @@ typedef struct {
   uint16_t last_y;
 } mark_line_state_t;
 
-typedef mark_line_state_t MarkLineState;
+typedef mark_line_state_t mark_line_state_t;
 
 /**
  * @brief Result bounds for locating sweep indices within a cell.
@@ -43,10 +43,10 @@ typedef struct {
   uint16_t i1;
 } trace_index_range_t;
 
-typedef trace_index_range_t TraceIndexRange;
+typedef trace_index_range_t trace_index_range_t;
 
 // PORT_Z definition moved from plot.c
-#ifdef __VNA_Z_RENORMALIZATION__
+#ifdef VNA_Z_RENORMALIZATION
 #define PORT_Z current_props._portz
 #else
 #define PORT_Z 50.0f
@@ -93,7 +93,8 @@ static inline void cell_clear(render_cell_ctx_t *rcx, pixel_t color) {
 #endif
 }
 
-static inline render_cell_ctx_t render_cell_ctx(int x0, int y0, uint16_t w, uint16_t h, pixel_t *buf) {
+static inline render_cell_ctx_t render_cell_ctx(int x0, int y0, uint16_t w, uint16_t h,
+                                                pixel_t *buf) {
   render_cell_ctx_t ctx = {
     .buf = buf,
     .w = w,

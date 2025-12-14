@@ -118,17 +118,17 @@ float my_atof(const char *p) {
       exp = -9; // nano
     } else if (*p == 'p') {
       exp = -12; // pico
-}
+    }
     if (exp > 0) {
       do {
         x *= 1e+1f;
       } while (--exp);
-}
+    }
     if (exp < 0) {
       do {
         x *= 1e-1f;
       } while (++exp);
-}
+    }
   }
   return neg ? -x : x;
 }
@@ -180,15 +180,15 @@ int get_str_index(const char *v, const char *list) {
     }
     i++;
   }
-  }
-
+}
 
 // Search first symbols (s2) entry in string (s1)
 static inline char *my_strpbrk(char *s1, const char *s2) {
   while (*s1) {
     const char *s = s2;
     while (*s) {
-      if (*s++ == *s1) return s1;
+      if (*s++ == *s1)
+        return s1;
     }
     s1++;
   }
@@ -224,7 +224,8 @@ int parse_line(char *line, char *args[], int max_cnt) {
         char *end_pos = my_strpbrk(lp, brk);
         if (end_pos != 0 && *end_pos != 0) {
           *end_pos = 0;
-          if (c == '"') end_pos++;
+          if (c == '"')
+            end_pos++;
         }
         break;
       }
@@ -270,8 +271,8 @@ int packbits(char *source, char *dest, int size) {
     if (sz && rle < 2) {
       rle = 0; // Ignore (rle + 1) < 3 sequence on run non RLE input
     } else if (sz == 0 || rle > 0) {
-      sz = pk++;    // Reset state or RLE sequence found -> start new block
-}
+      sz = pk++; // Reset state or RLE sequence found -> start new block
+    }
     dest[pk++] = c; // Write char to block
     if (rle > 0) {
       i += rle;

@@ -23,12 +23,12 @@
 
 // Use table increase transform speed, but increase code size
 // Use compact table, need 1/4 code size, and not decrease speed
-// Used only if not defined __VNA_USE_MATH_TABLES__ (use self table for TTF or direct sin/cos
+// Used only if not defined VNA_USE_MATH_TABLES (use self table for TTF or direct sin/cos
 // calculations)
 #define FFT_USE_SIN_COS_TABLE
 
 // Use sin table and interpolation for sin/sos calculations
-#ifdef __VNA_USE_MATH_TABLES__
+#ifdef VNA_USE_MATH_TABLES
 
 // Platform-specific quarter-wave table configuration
 #ifdef NANOVNA_F303
@@ -102,7 +102,7 @@ static inline float quadratic_interpolation(float x) {
 // For FFT_SIZE = 256, table index maps to angle (i/256)*360 degrees
 // Using quarter-wave table (0-90 degrees) with variable intervals depending on platform, we need to
 // map accordingly
-#if !defined(__VNA_USE_MATH_TABLES__) || defined(NANOVNA_HOST_TEST)
+#if !defined(VNA_USE_MATH_TABLES) || defined(NANOVNA_HOST_TEST)
 static inline float fft_sin_256(uint16_t i) {
   float angle = (2.0f * VNA_PI * i) / 256.0f;
   return sinf(angle);
@@ -191,7 +191,7 @@ static inline float fft_cos_256(uint16_t i) {
     return sin_interp;
   }
 }
-#endif // !defined(__VNA_USE_MATH_TABLES__) || defined(NANOVNA_HOST_TEST)
+#endif // !defined(VNA_USE_MATH_TABLES) || defined(NANOVNA_HOST_TEST)
 
 #define FFT_SIN(i) fft_sin_256(i)
 #define FFT_COS(i) fft_cos_256(i)
@@ -199,7 +199,7 @@ static inline float fft_cos_256(uint16_t i) {
 // For FFT_SIZE = 512, table index maps to angle (i/512)*360 degrees
 // Using quarter-wave table (0-90 degrees) with variable intervals depending on platform, we need to
 // map accordingly
-#if !defined(__VNA_USE_MATH_TABLES__) || defined(NANOVNA_HOST_TEST)
+#if !defined(VNA_USE_MATH_TABLES) || defined(NANOVNA_HOST_TEST)
 static inline float fft_sin_512(uint16_t i) {
   float angle = (2.0f * VNA_PI * i) / 512.0f;
   return sinf(angle);
@@ -288,7 +288,7 @@ static inline float fft_cos_512(uint16_t i) {
     return sin_interp;
   }
 }
-#endif // !defined(__VNA_USE_MATH_TABLES__) || defined(NANOVNA_HOST_TEST)
+#endif // !defined(VNA_USE_MATH_TABLES) || defined(NANOVNA_HOST_TEST)
 
 #define FFT_SIN(i) fft_sin_512(i)
 #define FFT_COS(i) fft_cos_512(i)
@@ -299,7 +299,7 @@ static inline float fft_cos_512(uint16_t i) {
 // Clean up the temporary macro
 #undef QTR_WAVE_TABLE_SIZE_FOR_CALC
 
-#endif // __VNA_USE_MATH_TABLES__
+#endif // VNA_USE_MATH_TABLES
 
 #ifdef ARM_MATH_CM4
 // Use CORTEX M4 rbit instruction (reverse bit order in 32bit value)
@@ -365,7 +365,7 @@ void fft(float array[][2], const uint8_t dir) {
 
 // Return sin/cos value angle in range 0.0 to 1.0 (0 is 0 degree, 1 is 360 degree)
 void vna_sincosf(float angle, float *p_sin_val, float *p_cos_val) {
-#if !defined(__VNA_USE_MATH_TABLES__) || defined(NANOVNA_HOST_TEST)
+#if !defined(VNA_USE_MATH_TABLES) || defined(NANOVNA_HOST_TEST)
   // Use default sin/cos functions for host tests
   angle *= 2.0f * VNA_PI; // Convert to rad
   *p_sin_val = sinf(angle);

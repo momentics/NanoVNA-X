@@ -250,7 +250,7 @@ static const USBDescriptor VCOM_STRINGS[] = {
   [STR_PRODUCT] = {sizeof VCOM_STRING2, VCOM_STRING2},
   [STR_SERIAL] = {sizeof VCOM_STRING3, VCOM_STRING3}};
 
-#ifdef __USB_UID__
+#ifdef USB_UID
 // Use unique serial string generated from MCU id
 #define UID_RADIX 5 // Radix conversion constant (5 bit, use 0..9 and A..V)
 #define USB_SERIAL_STRING_SIZE (64 / UID_RADIX) // Result string size
@@ -299,7 +299,7 @@ static const USBDescriptor *get_descriptor(USBDriver *usbp, uint8_t dtype, uint8
   case USB_DESCRIPTOR_CONFIGURATION:
     return &VCOM_CONFIGURATION_DESCRIPTOR;
   case USB_DESCRIPTOR_STRING:
-#ifdef __USB_UID__ // send unique USB serial string if need
+#ifdef USB_UID // send unique USB serial string if need
     if (dindex == STR_SERIAL && VNA_MODE(VNA_MODE_USB_UID))
       return get_serial_string_descriptor();
 #endif

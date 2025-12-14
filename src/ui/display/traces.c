@@ -34,7 +34,7 @@ static void mark_line(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2) {
 }
 
 static void mark_set_index(trace_index_table_t index, uint16_t i, uint16_t x, uint16_t y,
-                           MarkLineState *state) {
+                           mark_line_state_t *state) {
   chDbgAssert(i < SWEEP_POINTS_MAX, "index overflow");
   state->diff <<= 1;
   if (TRACE_X(index, i) != x || TRACE_Y(index, i) != y)
@@ -273,7 +273,7 @@ const char *get_smith_format_names(int m) {
   return MARKER_INFO_LIST[m].name;
 }
 
-void format_smith_value(RenderCellCtx *rcx, int xpos, int ypos, const float *coeff, uint16_t idx,
+void format_smith_value(render_cell_ctx_t *rcx, int xpos, int ypos, const float *coeff, uint16_t idx,
                         uint16_t m) {
   char value = 0;
   if (m >= MS_END)
@@ -296,7 +296,7 @@ void format_smith_value(RenderCellCtx *rcx, int xpos, int ypos, const float *coe
   cell_printf_ctx(rcx, xpos, ypos, format, zr, zi, value);
 }
 
-void trace_print_value_string(RenderCellCtx *rcx, int xpos, int ypos, int t, int index,
+void trace_print_value_string(render_cell_ctx_t *rcx, int xpos, int ypos, int t, int index,
                               int index_ref) {
   uint8_t type = trace[t].type;
   if (type >= MAX_TRACE_TYPE)
@@ -317,7 +317,7 @@ void trace_print_value_string(RenderCellCtx *rcx, int xpos, int ypos, int t, int
   }
 }
 
-int trace_print_info(RenderCellCtx *rcx, int xpos, int ypos, int t) {
+int trace_print_info(render_cell_ctx_t *rcx, int xpos, int ypos, int t) {
   float scale = get_trace_scale(t);
   const char *format;
   int type = trace[t].type;
@@ -358,7 +358,7 @@ void trace_into_index(int t) {
   get_value_cb_t c = TRACE_INFO_LIST[trace[t].type].get_value_cb;
   float refpos = HEIGHT - (get_trace_refpos(t)) * GRIDY + 0.5f;
   float scale = get_trace_scale(t);
-  MarkLineState line_state = {0};
+  mark_line_state_t line_state = {0};
   if (type & RECTANGULAR_GRID_MASK) {
     const float dscale = GRIDY / scale;
     if (type & (1 << TRC_SWR))
@@ -465,7 +465,7 @@ bool need_process_trace(uint16_t idx) {
     return trace[idx].enabled;
   } else if (idx < TRACE_INDEX_COUNT) {
     return enabled_store_trace & (1 << (idx - TRACES_MAX));
-}
+  }
   return false;
 }
 #else
@@ -480,9 +480,9 @@ bool need_process_trace(uint16_t idx) {
 }
 #endif
 
-TraceIndexRange search_index_range_x(uint16_t x_start, uint16_t x_end,
+trace_index_range_t search_index_range_x(uint16_t x_start, uint16_t x_end,
                                      trace_index_const_table_t index) {
-  TraceIndexRange range = {.found = false, .i0 = 0, .i1 = 0};
+  trace_index_range_t range = {.found = false, .i0 = 0, .i1 = 0};
   if (sweep_points < 2)
     return range;
   if (x_end <= x_start)
@@ -532,7 +532,7 @@ TraceIndexRange search_index_range_x(uint16_t x_start, uint16_t x_end,
   return range;
 }
 
-void render_traces_in_cell(RenderCellCtx *rcx) {
+void render_traces_in_cell(render_cell_ctx_t *rcx) {
   if (sweep_points < 2)
     return;
   for (int t = TRACE_INDEX_COUNT - 1; t >= 0; --t) {
@@ -543,7 +543,7 @@ void render_traces_in_cell(RenderCellCtx *rcx) {
     bool rectangular = false;
     if (t < TRACES_MAX)
       rectangular = ((uint32_t)1u << trace[t].type) & RECTANGULAR_GRID_MASK;
-    TraceIndexRange range = {.found = false, .i0 = 0, .i1 = 0};
+    trace_index_range_t range = {.found = false, .i0 = 0, .i1 = 0};
     if (rectangular && !get_stored_traces() && sweep_points > 30) {
       range = search_index_range_x(rcx->x0, rcx->x0 + rcx->w, index);
     }

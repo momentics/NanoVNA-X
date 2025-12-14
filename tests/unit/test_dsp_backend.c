@@ -20,7 +20,7 @@
 
 /*
  * Unit tests for the scalar dsp_process() path in src/processing/dsp_backend.c.
- * When the firmware is built on a host (without __USE_DSP__) this path performs
+ * When the firmware is built on a host (without USE_DSP) this path performs
  * plain C accumulation of quadrature samples; accurate results are critical for
  * the SNR of the measurement pipeline.  By driving it with synthetic capture
  * buffers we ensure regressions are caught in CI.

@@ -121,12 +121,12 @@ void resume_sweep(void);
 void toggle_sweep(void);
 int load_properties(uint32_t id);
 
-#ifdef __USE_BACKUP__
+#ifdef USE_BACKUP
 #endif
 
 void set_sweep_points(uint16_t points);
 
-#ifdef __REMOTE_DESKTOP__
+#ifdef REMOTE_DESKTOP
 // State flags for remote touch state
 
 void remote_touch_set(uint16_t state, int16_t x, int16_t y);
@@ -256,7 +256,7 @@ void delay_8t(uint32_t cycles);
  * plot.c
  */
 // LCD display size settings
-#ifdef LCD_320x240 // 320x240 display plot definitions
+#ifdef LCD_320X240 // 320x240 display plot definitions
 #define LCD_WIDTH 320
 #define LCD_HEIGHT 240
 
@@ -311,7 +311,7 @@ void delay_8t(uint32_t cycles);
 #define FREQUENCIES_YPOS (AREA_HEIGHT_NORMAL)
 #endif // end 320x240 display plot definitions
 
-#ifdef LCD_480x320 // 480x320 display definitions
+#ifdef LCD_480X320 // 480x320 display definitions
 #define LCD_WIDTH 480
 #define LCD_HEIGHT 320
 
@@ -558,7 +558,7 @@ enum {
 /*
  * LC match text output settings
  */
-#ifdef __VNA_MEASURE_MODULE__
+#ifdef VNA_MEASURE_MODULE
 // X and Y offset to L/C match text
 #define STR_MEASURE_X (OFFSETX + 0)
 // Better be aligned by cell (cell height = 32)
@@ -569,7 +569,7 @@ enum {
 #define STR_MEASURE_HEIGHT (FONT_STR_HEIGHT + 1)
 #endif
 
-#ifdef __USE_GRID_VALUES__
+#ifdef USE_GRID_VALUES
 #define GRID_X_TEXT (WIDTH - sFONT_STR_WIDTH(5))
 #endif
 
@@ -764,7 +764,7 @@ void lcd_vector_draw(int x, int y, const vector_data_t *v);
 uint32_t lcd_send_register(uint8_t cmd, uint8_t len, const uint8_t *data);
 void lcd_set_flip(bool flip);
 
-#ifdef __USE_SD_CARD__
+#ifdef USE_SD_CARD
 #include "ff.h"
 #include "diskio.h"
 
@@ -805,7 +805,7 @@ void test_log(void);
 #define markers current_props._markers
 #define active_marker current_props._active_marker
 #define previous_marker current_props._previous_marker
-#ifdef __VNA_Z_RENORMALIZATION__
+#ifdef VNA_Z_RENORMALIZATION
 #define cal_load_r current_props._cal_load_r
 #else
 #define CAL_LOAD_R 50.0f
@@ -856,7 +856,7 @@ static inline uint32_t clamp_harmonic_threshold(uint32_t value) {
   }
   return value;
 }
-#ifdef __DIGIT_SEPARATOR__
+#ifdef DIGIT_SEPARATOR
 #define DIGIT_SEPARATOR (VNA_MODE(VNA_MODE_SEPARATOR) ? ',' : '.')
 #else
 #define DIGIT_SEPARATOR '.'
@@ -911,7 +911,7 @@ void ui_touch_draw_test(void);
 void ui_enter_dfu(void);
 
 void ui_message_box(const char *header, const char *text, uint32_t delay);
-#ifdef __USE_SD_CARD__
+#ifdef USE_SD_CARD
 bool sd_card_load_config(void);
 #endif
 
@@ -937,7 +937,7 @@ int plot_printf(char *str, int, const char *fmt, ...);
 #define SWAP(type, x, y)                                                                           \
   {                                                                                                \
     type t = x;                                                                                    \
-    (x) = y;                                                                                         \
-    (y) = t;                                                                                         \
+    (x) = y;                                                                                       \
+    (y) = t;                                                                                       \
   }
 /*EOF*/

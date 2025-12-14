@@ -8,7 +8,7 @@
 // Plot area draw grid functions
 //**************************************************************************************
 
-void render_polar_grid_cell(const RenderCellCtx *rcx, pixel_t color) {
+void render_polar_grid_cell(const render_cell_ctx_t *rcx, pixel_t color) {
   const int32_t base_x = (int32_t)rcx->x0 - P_CENTER_X;
   const int32_t base_y = (int32_t)rcx->y0 - P_CENTER_Y;
 
@@ -70,7 +70,7 @@ void render_polar_grid_cell(const RenderCellCtx *rcx, pixel_t color) {
   }
 }
 
-void render_smith_grid_cell(const RenderCellCtx *rcx, pixel_t color) {
+void render_smith_grid_cell(const render_cell_ctx_t *rcx, pixel_t color) {
   const int32_t base_x = (int32_t)rcx->x0 - P_CENTER_X;
   const int32_t base_y = (int32_t)rcx->y0 - P_CENTER_Y;
 
@@ -144,7 +144,7 @@ void render_smith_grid_cell(const RenderCellCtx *rcx, pixel_t color) {
   }
 }
 
-void render_admittance_grid_cell(const RenderCellCtx *rcx, pixel_t color) {
+void render_admittance_grid_cell(const render_cell_ctx_t *rcx, pixel_t color) {
   const int32_t base_x = P_CENTER_X - (int32_t)rcx->x0;
   const int32_t base_y = (int32_t)rcx->y0 - P_CENTER_Y;
 
@@ -266,7 +266,7 @@ int rectangular_grid_y(uint32_t y) {
   return (y % GRIDY) == 0;
 }
 
-void render_rectangular_grid_layer(RenderCellCtx *rcx, pixel_t color) {
+void render_rectangular_grid_layer(render_cell_ctx_t *rcx, pixel_t color) {
   const uint16_t step = VNA_MODE(VNA_MODE_DOT_GRID) ? 2u : 1u;
   for (uint16_t x = 0; x < rcx->w; ++x) {
     if (!rectangular_grid_x(rcx->x0 + x))
@@ -282,7 +282,7 @@ void render_rectangular_grid_layer(RenderCellCtx *rcx, pixel_t color) {
   }
 }
 
-void render_round_grid_layer(RenderCellCtx *rcx, pixel_t color, uint32_t trace_mask,
+void render_round_grid_layer(render_cell_ctx_t *rcx, pixel_t color, uint32_t trace_mask,
                              bool smith_impedance) {
   if (trace_mask & (1 << TRC_SMITH)) {
     render_smith_grid_cell(rcx, color);

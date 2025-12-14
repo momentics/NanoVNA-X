@@ -31,8 +31,8 @@
 #define __STATIC_INLINE static inline
 #endif
 
-#define __VNA_USE_MATH_TABLES__ 1
-#define __USE_VNA_MATH__ 1
+#define VNA_USE_MATH_TABLES 1
+#define USE_VNA_MATH 1
 #define SWEEP_POINTS_MAX 512
 #define FFT_SIZE 512
 #define AUDIO_SAMPLES_COUNT 48

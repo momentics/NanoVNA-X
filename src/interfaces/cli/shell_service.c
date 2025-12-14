@@ -133,7 +133,7 @@ int shell_printf(const char *fmt, ...) {
   return written;
 }
 
-#ifdef __USE_SERIAL_CONSOLE__
+#ifdef USE_SERIAL_CONSOLE
 int serial_shell_printf(const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
@@ -174,27 +174,27 @@ static void shell_handle_session_transition(bool active) {
   }
 }
 
-#ifdef __USE_SERIAL_CONSOLE__
+#ifdef USE_SERIAL_CONSOLE
 #define PREPARE_STREAM                                                                             \
   do {                                                                                             \
     shell_assign_stream(VNA_MODE(VNA_MODE_CONNECTION) ? (BaseSequentialStream *)&SD1               \
-                                                      : (BaseSequentialStream *)&sd_u1);            \
+                                                      : (BaseSequentialStream *)&sd_u1);           \
   } while (false)
 #else
 #define PREPARE_STREAM                                                                             \
   do {                                                                                             \
-    shell_assign_stream((BaseSequentialStream *)&sd_u1);                                            \
+    shell_assign_stream((BaseSequentialStream *)&sd_u1);                                           \
   } while (false)
 #endif
 
 void shell_update_speed(uint32_t speed) {
   config._serial_speed = speed;
-#ifdef __USE_SERIAL_CONSOLE__
+#ifdef USE_SERIAL_CONSOLE
   sdSetBaudrate(&SD1, speed);
 #endif
 }
 
-#ifdef __USE_SERIAL_CONSOLE__
+#ifdef USE_SERIAL_CONSOLE
 static bool usb_is_active_locked(void) {
   return usbGetDriverStateI(&USBD1) == USB_ACTIVE;
 }
@@ -202,7 +202,7 @@ static bool usb_is_active_locked(void) {
 
 void shell_reset_console(void) {
   osalSysLock();
-#ifdef __USE_SERIAL_CONSOLE__
+#ifdef USE_SERIAL_CONSOLE
   if (usb_is_active_locked()) {
     if (VNA_MODE(VNA_MODE_CONNECTION)) {
       sduDisconnectI(&SDU1);
@@ -226,7 +226,7 @@ void shell_update_vcp_connection_state(bool connected) {
 }
 
 bool shell_check_connect(void) {
-#ifdef __USE_SERIAL_CONSOLE__
+#ifdef USE_SERIAL_CONSOLE
   if (VNA_MODE(VNA_MODE_CONNECTION)) {
     shell_handle_session_transition(true);
     return true;
@@ -253,7 +253,7 @@ void shell_init_connection(void) {
   osalThreadQueueObjectInit(&shell_thread);
   sduObjectInit(&sd_u1);
   sduStart(&sd_u1, &SERUSBCFG);
-#ifdef __USE_SERIAL_CONSOLE__
+#ifdef USE_SERIAL_CONSOLE
   SerialConfig serial_cfg = {config._serial_speed, 0, USART_CR2_STOP1_BITS, 0};
   sdStart(&SD1, &serial_cfg);
   shell_update_speed(config._serial_speed);
@@ -274,7 +274,7 @@ void shell_register_commands(const vna_shell_command_t *table) {
 }
 
 const vna_shell_command_t *shell_parse_command(char *line, uint16_t *argc, char ***argv,
-                                           const char **name_out) {
+                                               const char **name_out) {
   shell_nargs = parse_line(line, shell_args, ARRAY_COUNT(shell_args));
   if (shell_nargs > ARRAY_COUNT(shell_args)) {
     shell_printf("too many arguments, max " DEFINE_TO_STR(VNA_SHELL_MAX_ARGUMENTS)
@@ -313,7 +313,8 @@ const vna_shell_command_t *shell_parse_command(char *line, uint16_t *argc, char 
   return NULL;
 }
 
-void shell_request_deferred_execution(const vna_shell_command_t *command, uint16_t argc, char **argv) {
+void shell_request_deferred_execution(const vna_shell_command_t *command, uint16_t argc,
+                                      char **argv) {
   pending_command = command;
   pending_argc = argc;
   pending_argv = argv;

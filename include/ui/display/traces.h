@@ -41,7 +41,7 @@ static inline trace_index_const_table_t trace_index_const_table(int trace_id) {
 // Function declarations
 uint32_t gather_trace_mask(bool *smith_is_impedance);
 
-void trace_print_value_string(RenderCellCtx *rcx, int xpos, int ypos, int t, int index,
+void trace_print_value_string(render_cell_ctx_t *rcx, int xpos, int ypos, int t, int index,
                               int index_ref);
 
 // Measurement callbacks
@@ -78,14 +78,14 @@ float series_l_impl(int i, const float *v);
 // Public API
 const char *get_trace_typename(int t, int marker_smith_format);
 const char *get_smith_format_names(int m);
-void format_smith_value(RenderCellCtx *rcx, int xpos, int ypos, const float *coeff, uint16_t idx,
+void format_smith_value(render_cell_ctx_t *rcx, int xpos, int ypos, const float *coeff, uint16_t idx,
                         uint16_t m);
-int trace_print_info(RenderCellCtx *rcx, int xpos, int ypos, int t);
+int trace_print_info(render_cell_ctx_t *rcx, int xpos, int ypos, int t);
 
 float time_of_index(int idx);
 float distance_of_index(int idx);
 
-TraceIndexRange search_index_range_x(uint16_t x_start, uint16_t x_end,
+trace_index_range_t search_index_range_x(uint16_t x_start, uint16_t x_end,
                                      trace_index_const_table_t index);
 
 void toggle_stored_trace(int idx);
@@ -93,6 +93,6 @@ uint8_t get_stored_traces(void);
 bool need_process_trace(uint16_t idx);
 
 void trace_into_index(int t);
-void render_traces_in_cell(RenderCellCtx *rcx);
+void render_traces_in_cell(render_cell_ctx_t *rcx);
 
 #endif // UI_DISPLAY_TRACES_H

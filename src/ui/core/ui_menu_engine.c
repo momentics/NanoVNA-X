@@ -119,7 +119,7 @@ static int get_lines_count(const char *label) {
   while (*label) {
     if (*label++ == '\n')
       n++;
-}
+  }
   return n;
 }
 
@@ -129,12 +129,12 @@ static void ensure_selection(void) {
     selection = -1;
   } else if (selection >= i) {
     selection = i - 1;
-}
+  }
   if (i < MENU_BUTTON_MIN) {
     i = MENU_BUTTON_MIN;
   } else if (i >= MENU_BUTTON_MAX) {
     i = MENU_BUTTON_MAX;
-}
+  }
   menu_button_height = MENU_BUTTON_HEIGHT(i);
 }
 
@@ -324,7 +324,7 @@ void ui_menu_lever(uint16_t status) {
       ui_mode_normal();
     } else {
       menu_invoke(selection);
-}
+    }
     return;
   }
 

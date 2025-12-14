@@ -153,7 +153,7 @@ VNA_SHELL_FUNCTION(cmd_offset) {
 }
 
 VNA_SHELL_FUNCTION(cmd_time) {
-#ifdef __USE_RTC__
+#ifdef USE_RTC
   uint32_t dt_buf[2];
   dt_buf[0] = rtc_get_tr_bcd(); // TR should be read first for sync
   dt_buf[1] = rtc_get_dr_bcd(); // DR should be read second
@@ -189,7 +189,7 @@ usage:
 }
 
 VNA_SHELL_FUNCTION(cmd_dac) {
-#ifdef __VNA_ENABLE_DAC__
+#ifdef VNA_ENABLE_DAC
   if (argc != 1)
     return;
     // si5351_dvc_write(my_atoui(argv[0])); // Assuming this function exists or similar
@@ -197,21 +197,21 @@ VNA_SHELL_FUNCTION(cmd_dac) {
 }
 
 VNA_SHELL_FUNCTION(cmd_measure) {
-#ifdef __VNA_MEASURE_MODULE__
+#ifdef VNA_MEASURE_MODULE
   static const char cmd_measure_list[] = "none"
-#ifdef __USE_LC_MATCHING__
+#ifdef USE_LC_MATCHING
                                          "|lc"
 #endif
-#ifdef __S21_MEASURE__
+#ifdef S21_MEASURE
                                          "|lcshunt"
                                          "|lcseries"
                                          "|xtal"
                                          "|filter"
 #endif
-#ifdef __S11_CABLE_MEASURE__
+#ifdef S11_CABLE_MEASURE
                                          "|cable"
 #endif
-#ifdef __S11_RESONANCE_MEASURE__
+#ifdef S11_RESONANCE_MEASURE
                                          "|resonance"
 #endif
     ;
@@ -220,7 +220,7 @@ VNA_SHELL_FUNCTION(cmd_measure) {
     plot_set_measure_mode((uint8_t)idx);
   } else {
     CLI_PRINT_USAGE("usage: measure {%s}" VNA_SHELL_NEWLINE_STR, cmd_measure_list);
-}
+  }
 #endif
 }
 
@@ -371,7 +371,7 @@ VNA_SHELL_FUNCTION(cmd_bandwidth) {
       user_bw = 511;
     } else {
       user_bw = ((AUDIO_ADC_FREQ + AUDIO_SAMPLES_COUNT / 2) / AUDIO_SAMPLES_COUNT) / f - 1;
-}
+    }
   } else {
     shell_printf("bandwidth %d (%uHz)" VNA_SHELL_NEWLINE_STR, config._bandwidth,
                  get_bandwidth_frequency(config._bandwidth));
@@ -574,7 +574,7 @@ VNA_SHELL_FUNCTION(cmd_cal) {
     for (int i = 0; i < 9; i++) {
       if (cal_status & (1 << i))
         shell_printf("%s ", items[i]);
-}
+    }
     shell_printf(VNA_SHELL_NEWLINE_STR);
     return;
   }
@@ -729,7 +729,7 @@ VNA_SHELL_FUNCTION(cmd_edelay) {
         value = my_atof(argv[0]);
       } else {
         return;
-}
+      }
     }
     set_electrical_delay(ch, value * 1e-12);
     return;
@@ -880,7 +880,7 @@ VNA_SHELL_FUNCTION(cmd_tcxo) {
   si5351_set_tcxo(my_atoui(argv[0]));
 }
 
-#if defined(__REMOTE_DESKTOP__)
+#if defined(REMOTE_DESKTOP)
 VNA_SHELL_FUNCTION(cmd_refresh) {
   static const char cmd_enable_list[] = "on|off";
   if (argc != 1)
@@ -913,7 +913,7 @@ VNA_SHELL_FUNCTION(cmd_touch) {}
 VNA_SHELL_FUNCTION(cmd_release) {}
 #endif
 
-#if ENABLE_SD_CARD_COMMAND && defined(__USE_SD_CARD__)
+#if ENABLE_SD_CARD_COMMAND && defined(USE_SD_CARD)
 static FRESULT cmd_sd_card_mount(void) {
   const FRESULT res = f_mount(filesystem_volume(), "", 1);
   if (res != FR_OK)
@@ -987,7 +987,7 @@ VNA_SHELL_FUNCTION(cmd_port) {}
 VNA_SHELL_FUNCTION(cmd_stat) {}
 VNA_SHELL_FUNCTION(cmd_gain) {}
 VNA_SHELL_FUNCTION(cmd_test) {}
-#ifdef __SD_CARD_LOAD__
+#ifdef SD_CARD_LOAD
 VNA_SHELL_FUNCTION(cmd_msg) {
   if (argc == 0) {
     CLI_PRINT_USAGE("usage: msg delay [text] [header]" VNA_SHELL_NEWLINE_STR);
@@ -1005,7 +1005,7 @@ VNA_SHELL_FUNCTION(cmd_msg) {
 VNA_SHELL_FUNCTION(cmd_msg) {}
 #endif
 
-#ifdef __USE_SMOOTH__
+#ifdef USE_SMOOTH
 VNA_SHELL_FUNCTION(cmd_smooth) {
   if (argc != 1) {
     CLI_PRINT_USAGE("usage: %s" VNA_SHELL_NEWLINE_STR "current: %u" VNA_SHELL_NEWLINE_STR,
@@ -1021,22 +1021,22 @@ VNA_SHELL_FUNCTION(cmd_smooth) {}
 #if ENABLE_CONFIG_COMMAND
 VNA_SHELL_FUNCTION(cmd_config) {
   static const char cmd_mode_list[] = "auto"
-#ifdef __USE_SMOOTH__
+#ifdef USE_SMOOTH
                                       "|avg"
 #endif
-#ifdef __USE_SERIAL_CONSOLE__
+#ifdef USE_SERIAL_CONSOLE
                                       "|connection"
 #endif
                                       "|mode"
                                       "|grid"
                                       "|dot"
-#ifdef __USE_BACKUP__
+#ifdef USE_BACKUP
                                       "|bk"
 #endif
-#ifdef __FLIP_DISPLAY__
+#ifdef FLIP_DISPLAY
                                       "|flip"
 #endif
-#ifdef __DIGIT_SEPARATOR__
+#ifdef DIGIT_SEPARATOR
                                       "|separator"
 #endif
     ;
@@ -1052,7 +1052,7 @@ VNA_SHELL_FUNCTION(cmd_config) {
 VNA_SHELL_FUNCTION(cmd_config) {}
 #endif
 
-#ifdef __USE_SERIAL_CONSOLE__
+#ifdef USE_SERIAL_CONSOLE
 #if ENABLE_USART_COMMAND
 VNA_SHELL_FUNCTION(cmd_usart_cfg) {
   if (argc != 1) {
@@ -1166,7 +1166,7 @@ VNA_SHELL_FUNCTION(cmd_band) {
 VNA_SHELL_FUNCTION(cmd_reset) {
   (void)argc;
   (void)argv;
-#ifdef __DFU_SOFTWARE_MODE__
+#ifdef DFU_SOFTWARE_MODE
   if (argc == 1) {
     if (get_str_index(argv[0], "dfu") == 0) {
       shell_printf("Performing reset to DFU mode" VNA_SHELL_NEWLINE_STR);
@@ -1193,10 +1193,10 @@ const vna_shell_command_t COMMANDS[] = {
   {"offset", cmd_offset, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
   {"bandwidth", cmd_bandwidth, CMD_RUN_IN_LOAD},
-#ifdef __USE_RTC__
+#ifdef USE_RTC
   {"time", cmd_time, CMD_RUN_IN_UI},
 #endif
-#ifdef __VNA_ENABLE_DAC__
+#ifdef VNA_ENABLE_DAC
   {"dac", cmd_dac, CMD_RUN_IN_LOAD},
 #endif
   {"saveconfig", cmd_saveconfig, CMD_RUN_IN_LOAD},
@@ -1228,7 +1228,7 @@ const vna_shell_command_t COMMANDS[] = {
   {"touchtest", cmd_touchtest, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
   {"pause", cmd_pause, CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
   {"resume", cmd_resume, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
-#ifdef __SD_CARD_LOAD__
+#ifdef SD_CARD_LOAD
   {"msg", cmd_msg, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_LOAD},
 #endif
   {"cal", cmd_cal, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
@@ -1239,10 +1239,10 @@ const vna_shell_command_t COMMANDS[] = {
   {"edelay", cmd_edelay, CMD_RUN_IN_LOAD},
   {"s21offset", cmd_s21offset, CMD_RUN_IN_LOAD},
   {"capture", cmd_capture, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
-#ifdef __VNA_MEASURE_MODULE__
+#ifdef VNA_MEASURE_MODULE
   {"measure", cmd_measure, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
-#ifdef __REMOTE_DESKTOP__
+#ifdef REMOTE_DESKTOP
   {"refresh", cmd_refresh, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
   {"touch", cmd_touch, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
   {"release", cmd_release, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
@@ -1250,13 +1250,13 @@ const vna_shell_command_t COMMANDS[] = {
   {"vbat", cmd_vbat, CMD_RUN_IN_LOAD},
   {"tcxo", cmd_tcxo, CMD_RUN_IN_LOAD},
   {"reset", cmd_reset, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_LOAD},
-#ifdef __USE_SMOOTH__
+#ifdef USE_SMOOTH
   {"smooth", cmd_smooth, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
 #if ENABLE_CONFIG_COMMAND
   {"config", cmd_config, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
-#ifdef __USE_SERIAL_CONSOLE__
+#ifdef USE_SERIAL_CONSOLE
 #if ENABLE_USART_COMMAND
   {"usart_cfg", cmd_usart_cfg, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
   {"usart", cmd_usart, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},

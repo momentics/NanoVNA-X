@@ -140,7 +140,7 @@ static const int16_t sincos_tbl[48][2] = {
   {18205, -27246},  {-6393, -32138},  {-27246, -18205}, {-32138, 6393},   {-18205, 27246}};
 #endif
 
-#ifndef __USE_DSP__
+#ifndef USE_DSP
 typedef float acc_t;
 #else
 typedef int64_t acc_t;
@@ -177,7 +177,7 @@ static inline void dsp_snapshot(acc_t *samp_s, acc_t *samp_c, acc_t *ref_s, acc_
   dsp_exit_critical(primask);
 }
 
-#ifndef __USE_DSP__
+#ifndef USE_DSP
 void dsp_process(audio_sample_t *capture, size_t length) {
   int32_t samp_s = 0;
   int32_t samp_c = 0;

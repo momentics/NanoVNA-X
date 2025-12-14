@@ -30,7 +30,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#ifdef __VNA_Z_RENORMALIZATION__
+#ifdef VNA_Z_RENORMALIZATION
 #include "../analysis/vna_renorm.c"
 #endif
 
@@ -79,13 +79,13 @@ static inline bool sweep_ui_input_pending(void) {
   return (pending & (UI_CONTROLLER_REQUEST_TOUCH | UI_CONTROLLER_REQUEST_LEVER)) != 0;
 }
 
-#ifdef __USE_FREQ_TABLE__
+#ifdef USE_FREQ_TABLE
 static freq_t frequencies[SWEEP_POINTS_MAX];
 #else
-static freq_t _f_start __attribute__((used));
-static freq_t _f_delta __attribute__((used));
-static freq_t _f_error __attribute__((used));
-static uint16_t _f_points __attribute__((used));
+static freq_t f_start_val __attribute__((used));
+static freq_t f_delta_val __attribute__((used));
+static freq_t f_error_val __attribute__((used));
+static uint16_t f_points_val __attribute__((used));
 #endif
 
 static float arifmetic_mean(float v0, float v1, float v2) __attribute__((unused));
@@ -229,7 +229,7 @@ static void duplicate_buffer_to_dump(audio_sample_t *p, size_t n) {
 #endif
 
 void i2s_lld_serve_rx_interrupt(void *ctx, uint32_t flags) {
-(void)ctx;
+  (void)ctx;
   uint16_t wait = wait_count;
   if (wait == 0U || chVTGetSystemTimeX() < ready_time) {
     return;
@@ -419,10 +419,10 @@ uint16_t app_measurement_get_sweep_mask(void) {
 #else
   ch_mask |= SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE;
 #endif
-#ifdef __VNA_MEASURE_MODULE__
+#ifdef VNA_MEASURE_MODULE
   ch_mask |= plot_get_measure_channels();
 #endif
-#ifdef __VNA_Z_RENORMALIZATION__
+#ifdef VNA_Z_RENORMALIZATION
   if (current_props._portz != cal_load_r) {
     ch_mask |= SWEEP_USE_RENORMALIZATION;
   }
@@ -703,7 +703,7 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
       }
     }
 
-#ifdef __VNA_Z_RENORMALIZATION__
+#ifdef VNA_Z_RENORMALIZATION
     if (mask & SWEEP_USE_RENORMALIZATION) {
       // Use the sweep_data buffer for renormalization
       // Note: This may need to process both channels differently
@@ -808,7 +808,7 @@ int app_measurement_set_frequency(freq_t freq) {
   return delay;
 }
 
-#ifdef __USE_FREQ_TABLE__
+#ifdef USE_FREQ_TABLE
 void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points) {
   freq_t step = points - 1U;
   freq_t span = stop - start;
@@ -842,18 +842,18 @@ freq_t get_frequency_step(void) {
 #else
 void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points) {
   freq_t span = stop - start;
-  _f_start = start;
-  _f_points = points - 1U;
-  _f_delta = span / _f_points;
-  _f_error = span % _f_points;
+  f_start_val = start;
+  f_points_val = points - 1U;
+  f_delta_val = span / f_points_val;
+  f_error_val = span % f_points_val;
 }
 
 freq_t get_frequency(uint16_t idx) {
-  return _f_start + _f_delta * idx + (_f_points / 2U + _f_error * idx) / _f_points;
+  return f_start_val + f_delta_val * idx + (f_points_val / 2U + f_error_val * idx) / f_points_val;
 }
 
 freq_t get_frequency_step(void) {
-  return _f_delta;
+  return f_delta_val;
 }
 #endif
 

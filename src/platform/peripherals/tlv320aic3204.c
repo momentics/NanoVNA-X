@@ -411,8 +411,8 @@ static const uint8_t CONF_DATA[] = {
   REG_34_I_N2_L_TO_LEFT_P_10K, // Route IN2L to LEFT_P with 10K
   0x36,
   REG_36_I_N2_R_TO_LEFT_N_10K, // Route IN2R to LEFT_N with 10K
-                             // 0x37, 0x04,     // Route IN3R to RIGHT_P with 10K
-                             // 0x39, 0x04,     // Route IN3L to RIGHT_N with 10K
+                               // 0x37, 0x04,     // Route IN3R to RIGHT_P with 10K
+                               // 0x39, 0x04,     // Route IN3L to RIGHT_N with 10K
   // 0x3b, 0x00,     // Unmute Left MICPGA, Gain selection of 32dB to make channel gain 0dB
   // 0x3c, 0x00,     // Unmute Right MICPGA, Gain selection of 32dB to make channel gain 0dB
 };
@@ -430,9 +430,9 @@ static const uint8_t CONF_DATA_CH3_SELECT[] = {
   // 0x00,   0x01,                       // Select Page 1 (should be set as default)
   0x37,
   REG_37_I_N3_R_TO_RIGHT_P_10K,           // Route IN3R to RIGHT_P with input impedance of 10K
-  /*0x38,*/ 0x00,                       // Reserved
+  /*0x38,*/ 0x00,                         // Reserved
   /*0x39,*/ REG_39_I_N3_L_TO_RIGHT_N_10K, // Route IN3L to RIGHT_N with input impedance of 10K
-  /*0x3A,*/ 0b11000000,                 // IN1 is weakly driven to common mode
+  /*0x3A,*/ 0b11000000,                   // IN1 is weakly driven to common mode
 };
 
 static const uint8_t CONF_DATA_CH1_SELECT[] = {
@@ -440,9 +440,9 @@ static const uint8_t CONF_DATA_CH1_SELECT[] = {
   // 0x00,   0x01,                       // Select Page 1 (should be set as default)
   0x37,
   REG_37_I_N1_R_TO_RIGHT_P_10K,           // Route IN1R to RIGHT_P with input impedance of 10K
-  /*0x38,*/ 0x00,                       // Reserved
+  /*0x38,*/ 0x00,                         // Reserved
   /*0x39,*/ REG_39_I_N1_L_TO_RIGHT_N_10K, // Route IN1L to RIGHT_N with input impedance of 10K
-  /*0x3A,*/ 0b00001100,                 // IN3 is weakly driven to common mode
+  /*0x3A,*/ 0b00001100,                   // IN3 is weakly driven to common mode
 };
 
 static void tlv320aic3204_bulk_write(const uint8_t *buf, int len) {

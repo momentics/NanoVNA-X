@@ -23,33 +23,33 @@ enum {
   KM_VAR_DELAY,
   KM_S21OFFSET,
   KM_VELOCITY_FACTOR,
-#ifdef __S11_CABLE_MEASURE__
+#ifdef S11_CABLE_MEASURE
   KM_ACTUAL_CABLE_LEN,
 #endif
   KM_XTAL,
   KM_THRESHOLD,
   KM_VBAT,
-#ifdef __S21_MEASURE__
+#ifdef S21_MEASURE
   KM_MEASURE_R,
 #endif
-#ifdef __VNA_Z_RENORMALIZATION__
+#ifdef VNA_Z_RENORMALIZATION
   KM_Z_PORT,
   KM_CAL_LOAD_R,
 #endif
-#ifdef __USE_RTC__
+#ifdef USE_RTC
   KM_RTC_DATE,
   KM_RTC_TIME,
   KM_RTC_CAL,
 #endif
-#ifdef __USE_SD_CARD__
+#ifdef USE_SD_CARD
   KM_S1P_NAME,
   KM_S2P_NAME,
   KM_BMP_NAME,
-#ifdef __SD_CARD_DUMP_TIFF__
+#ifdef SD_CARD_DUMP_TIFF
   KM_TIF_NAME,
 #endif
   KM_CAL_NAME,
-#ifdef __SD_CARD_DUMP_FIRMWARE__
+#ifdef SD_CARD_DUMP_FIRMWARE
   KM_BIN_NAME,
 #endif
 #endif

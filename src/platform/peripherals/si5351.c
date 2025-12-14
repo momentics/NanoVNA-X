@@ -247,7 +247,7 @@ static void si5351_setup_pll(uint8_t pll_source, /* SI5351_REG_PLL_A or SI5351_R
   }
   // Pll MSN(A|B) registers Datasheet
   uint8_t reg[9];
-  reg[0] = pll_source;                                       // SI5351_REG_PLL_A or SI5351_REG_PLL_B
+  reg[0] = pll_source;                                      // SI5351_REG_PLL_A or SI5351_REG_PLL_B
   reg[1] = (p3 & 0x0FF00) >> 8;                             // MSN_P3[15: 8]
   reg[2] = (p3 & 0x000FF);                                  // MSN_P3[ 7: 0]
   reg[3] = (p1 & 0x30000) >> 16;                            // MSN_P1[17:16]
@@ -261,10 +261,10 @@ static void si5351_setup_pll(uint8_t pll_source, /* SI5351_REG_PLL_A or SI5351_R
 
 // Set Multisynth divider = (div + num/denom) * rdiv
 static void si5351_setup_multisynth(uint32_t channel,
-                                   uint32_t div, // 4,6,8, 8+ ~ 900
-                                   uint32_t num, uint32_t denom,
-                                   uint32_t rdiv,  // SI5351_R_DIV_1~128
-                                   uint8_t chctrl) // SI5351_REG_16_CLKX_CONTROL settings
+                                    uint32_t div, // 4,6,8, 8+ ~ 900
+                                    uint32_t num, uint32_t denom,
+                                    uint32_t rdiv,  // SI5351_R_DIV_1~128
+                                    uint8_t chctrl) // SI5351_REG_16_CLKX_CONTROL settings
 {
   /* Output Multisynth Divider Equations
    * where: a = div, b = num and c = denom
@@ -1144,9 +1144,9 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
     // Setup CH0 and CH1 constant fdiv divider at change
     if (band_s[current_band].div != band_s[band].div) {
       si5351_setup_multisynth(OFREQ_CHANNEL, fdiv, 0, 1, SI5351_R_DIV_1,
-                             ods | SI5351_CLK_PLL_SELECT_A);
+                              ods | SI5351_CLK_PLL_SELECT_A);
       si5351_setup_multisynth(FREQ_CHANNEL, fdiv, 0, 1, SI5351_R_DIV_1,
-                             ds | SI5351_CLK_PLL_SELECT_B);
+                              ds | SI5351_CLK_PLL_SELECT_B);
     }
     // Calculate CH2 freq = CLK2_FREQUENCY, depend from calculated before CH1 PLLB = (freq/mul)*fdiv
     si5351_set_frequency_fixedpll(AUDIO_CODEC_CHANNEL, (uint64_t)freq * fdiv, CLK2_FREQUENCY * mul,

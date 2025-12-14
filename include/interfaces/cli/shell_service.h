@@ -55,7 +55,7 @@ enum {
 void shell_register_commands(const vna_shell_command_t *table);
 
 int shell_printf(const char *fmt, ...);
-#ifdef __USE_SERIAL_CONSOLE__
+#ifdef USE_SERIAL_CONSOLE
 int serial_shell_printf(const char *fmt, ...);
 #endif
 
@@ -71,8 +71,9 @@ void shell_init_connection(void);
 void shell_restore_stream(void);
 
 const vna_shell_command_t *shell_parse_command(char *line, uint16_t *argc, char ***argv,
-                                           const char **name_out);
-void shell_request_deferred_execution(const vna_shell_command_t *command, uint16_t argc, char **argv);
+                                               const char **name_out);
+void shell_request_deferred_execution(const vna_shell_command_t *command, uint16_t argc,
+                                      char **argv);
 void shell_service_pending_commands(void);
 void shell_attach_event_bus(event_bus_t *bus);
 void shell_register_session_start_callback(shell_session_callback_t callback);

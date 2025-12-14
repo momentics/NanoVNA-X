@@ -131,7 +131,6 @@ void adc_init(void) {
 }
 
 #define ADC_AVERAGE_N 4
-#define adcStartMeasure adc_start_measure
 static void adc_start_measure(ADC_TypeDef *adc, uint32_t sqr0, uint16_t *samples) {
   // ADC setup
   adc->ISR = adc->ISR;     // reset interrupts
@@ -161,7 +160,7 @@ static void adc_start_measure(ADC_TypeDef *adc, uint32_t sqr0, uint16_t *samples
 
 uint16_t adc_single_read(uint32_t chsel) {
   uint16_t samples[1];
-  adcStartMeasure(TOUCH_ADC, ADC_SQR1_NUM_CH(1) | ADC_SQR1_SQ1_N(chsel), samples);
+  adc_start_measure(TOUCH_ADC, ADC_SQR1_NUM_CH(1) | ADC_SQR1_SQ1_N(chsel), samples);
   return samples[0];
 }
 
@@ -192,7 +191,7 @@ int16_t adc_vbat_read(void) {
   //  float ts;
 #define N_CH_VBAT 2 // 17 and 18 channels
   uint16_t samplesVBAT[N_CH_VBAT];
-  adcStartMeasure(BAT_ADC,
+  adc_start_measure(BAT_ADC,
                   ADC_SQR1_NUM_CH(N_CH_VBAT) | ADC_SQR1_SQ1_N(17) |
                     ADC_SQR1_SQ2_N(18) /*| ADC_SQR1_SQ3_N(16)*/,
                   samplesVBAT);

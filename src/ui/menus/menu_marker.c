@@ -96,7 +96,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_marker_sel_acb) {
       b->icon = BUTTON_ICON_CHECK_AUTO;
     } else if (markers[mk].enabled) {
       b->icon = BUTTON_ICON_CHECK;
-}
+    }
     b->p1.u = mk + 1;
     return;
   }

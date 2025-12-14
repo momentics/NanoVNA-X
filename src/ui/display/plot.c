@@ -53,7 +53,7 @@
  *                        src/ui/display/fast_render/vna_render.c (defaults to the legacy
  *                        implementation when undefined).
  *   VNA_ENABLE_SHADOW_TEXT - Enables drop shadow text rendering when true. The
- *                        legacy configuration macro _USE_SHADOW_TEXT_ still
+ *                        legacy configuration macro USE_SHADOW_TEXT still
  *                        works and feeds this flag.
  *   VNA_ENABLE_GRID_VALUES - Enables textual grid value annotations. This flag
  *                        replaces ad-hoc #if 0/1 toggles.
@@ -72,7 +72,7 @@
 #endif
 
 #ifndef VNA_ENABLE_SHADOW_TEXT
-#ifdef _USE_SHADOW_TEXT_
+#ifdef USE_SHADOW_TEXT
 #define VNA_ENABLE_SHADOW_TEXT 1
 #else
 #define VNA_ENABLE_SHADOW_TEXT 0
@@ -80,7 +80,7 @@
 #endif
 
 #ifndef VNA_ENABLE_GRID_VALUES
-#ifdef __USE_GRID_VALUES__
+#ifdef USE_GRID_VALUES
 #define VNA_ENABLE_GRID_VALUES 1
 #else
 #define VNA_ENABLE_GRID_VALUES 0
@@ -113,7 +113,7 @@ _Static_assert(TRACE_INDEX_COUNT > 0, "Trace index count must be positive");
 // I copied "trace_into_index".
 // Did I copy "render_traces_in_cell"?
 // Let's check my input for step 499.
-// I see "void render_traces_in_cell(RenderCellCtx* rcx) {" in my memory?
+// I see "void render_traces_in_cell(render_cell_ctx_t* rcx) {" in my memory?
 // No, I see "void trace_into_index(int t) {...}"
 // I see "mark_line", "mark_set_index", trace info lists...
 // I do NOT see "render_traces_in_cell" in the written traces.c content in step 499.
@@ -130,7 +130,7 @@ _Static_assert(TRACE_INDEX_COUNT > 0, "Trace index count must be positive");
 /**
  * @brief Draw marker icons for every enabled trace.
  */
-static void render_markers_in_cell(RenderCellCtx *rcx) {
+static void render_markers_in_cell(render_cell_ctx_t *rcx) {
   for (int i = 0; i < MARKERS_MAX; i++) {
     if (!markers[i].enabled)
       continue;
@@ -222,7 +222,7 @@ static inline void invalidate_rect_px(int x0, int y0, int x1, int y1) {
 // LINEAR = |S|
 //**************************************************************************************
 // dummy compact_cell_buffer
-static inline void compact_cell_buffer(RenderCellCtx *rcx) {
+static inline void compact_cell_buffer(render_cell_ctx_t *rcx) {
   if (rcx->w == CELLWIDTH)
     return;
   pixel_t *buf = rcx->buf;
@@ -273,18 +273,18 @@ static int marker_area_max(void) {
   for (i = 0; i < TRACES_MAX; i++) {
     if (trace[i].enabled)
       t_count++;
-}
+  }
   for (i = 0; i < MARKERS_MAX; i++) {
     if (markers[i].enabled)
       m_count++;
-}
+  }
   int cnt = t_count > m_count ? t_count : m_count;
   int extra = 0;
   if (get_electrical_delay() != 0.0f)
     extra += 2;
   if (s21_offset != 0.0f)
     extra += 2;
-#ifdef __VNA_Z_RENORMALIZATION__
+#ifdef VNA_Z_RENORMALIZATION
   if (current_props._portz != 50.0f)
     extra += 2;
 #endif
@@ -312,10 +312,10 @@ static void markmap_all_markers(void) {
 //**************************************************************************************
 //            Marker search functions
 //**************************************************************************************
-static bool _greater(int x, int y) {
+static bool plot_greater(int x, int y) {
   return x > y;
 }
-static bool _lesser(int x, int y) {
+static bool plot_lesser(int x, int y) {
   return x < y;
 }
 
@@ -327,7 +327,7 @@ void marker_search(void) {
   // Select search index table
   trace_index_const_table_t index = trace_index_const_table(current_trace);
   // Select compare function (depend from config settings)
-  bool (*compare)(int x, int y) = VNA_MODE(VNA_MODE_SEARCH) ? _lesser : _greater;
+  bool (*compare)(int x, int y) = VNA_MODE(VNA_MODE_SEARCH) ? plot_lesser : plot_greater;
   for (i = 1, value = TRACE_Y(index, 0); i < sweep_points; i++) {
     if ((*compare)(value, TRACE_Y(index, i))) {
       value = TRACE_Y(index, i);
@@ -345,7 +345,7 @@ void marker_search_dir(int16_t from, int16_t dir) {
   // Select search index table
   trace_index_const_table_t index = trace_index_const_table(current_trace);
   // Select compare function (depend from config settings)
-  bool (*compare)(int x, int y) = VNA_MODE(VNA_MODE_SEARCH) ? _lesser : _greater;
+  bool (*compare)(int x, int y) = VNA_MODE(VNA_MODE_SEARCH) ? plot_lesser : plot_greater;
   // Search next
   for (i = from + dir, value = TRACE_Y(index, from); i >= 0 && i < sweep_points; i += dir) {
     if ((*compare)(value, TRACE_Y(index, i)))
@@ -393,7 +393,7 @@ static void markmap_all_refpos(void) {
   invalidate_rect_px(0, 0, CELLOFFSETX + 1, AREA_HEIGHT_NORMAL);
 }
 
-static void cell_draw_all_refpos(RenderCellCtx *rcx) {
+static void cell_draw_all_refpos(render_cell_ctx_t *rcx) {
   int x = -((int)rcx->x0) + CELLOFFSETX - REFERENCE_X_OFFSET;
   if ((uint32_t)(x + REFERENCE_WIDTH) >= CELLWIDTH + REFERENCE_WIDTH)
     return;
@@ -423,7 +423,7 @@ void request_to_draw_cells_behind_menu(void) {
 //**************************************************************************************
 //            Measure module draw results and calculations
 //**************************************************************************************
-#ifdef __VNA_MEASURE_MODULE__
+#ifdef VNA_MEASURE_MODULE
 typedef void (*measure_cell_cb_t)(int x0, int y0);
 typedef void (*measure_prepare_cb_t)(uint8_t mode, uint8_t update_mask);
 
@@ -439,7 +439,7 @@ static uint8_t data_update = 0;
 #define MEASURE_UPD_ALL (MEASURE_UPD_SWEEP | MEASURE_UPD_FREQ)
 
 // Include measure functions
-#ifdef __VNA_MEASURE_MODULE__
+#ifdef VNA_MEASURE_MODULE
 #define CELL_PRINTF cell_printf_bound
 // legacy_measure.c expects invalidate_rect to be available for marking dirty regions.
 // Provide a compatibility alias to the pixel-based helper defined above.
@@ -456,19 +456,19 @@ static const struct {
   measure_prepare_cb_t measure_prepare;
 } MEASURE[] = {
   [MEASURE_NONE] = {MESAURE_NONE, 0, NULL, NULL},
-#ifdef __USE_LC_MATCHING__
+#ifdef USE_LC_MATCHING
   [MEASURE_LC_MATH] = {MESAURE_NONE, MEASURE_UPD_ALL, draw_lc_match, prepare_lc_match},
 #endif
-#ifdef __S21_MEASURE__
+#ifdef S21_MEASURE
   [MEASURE_SHUNT_LC] = {MESAURE_S21, MEASURE_UPD_SWEEP, draw_serial_result, prepare_series},
   [MEASURE_SERIES_LC] = {MESAURE_S21, MEASURE_UPD_SWEEP, draw_serial_result, prepare_series},
   [MEASURE_SERIES_XTAL] = {MESAURE_S21, MEASURE_UPD_SWEEP, draw_serial_result, prepare_series},
   [MEASURE_FILTER] = {MESAURE_S21, MEASURE_UPD_SWEEP, draw_filter_result, prepare_filter},
 #endif
-#ifdef __S11_CABLE_MEASURE__
+#ifdef S11_CABLE_MEASURE
   [MEASURE_S11_CABLE] = {MESAURE_S11, MEASURE_UPD_ALL, draw_s11_cable, prepare_s11_cable},
 #endif
-#ifdef __S11_RESONANCE_MEASURE__
+#ifdef S11_RESONANCE_MEASURE
   [MEASURE_S11_RESONANCE] = {MESAURE_S11, MEASURE_UPD_ALL, draw_s11_resonance,
                              prepare_s11_resonance},
 #endif
@@ -500,7 +500,7 @@ static void measure_prepare(void) {
   data_update = 0;
 }
 
-static void cell_draw_measure(RenderCellCtx *rcx) {
+static void cell_draw_measure(render_cell_ctx_t *rcx) {
   if (current_props._measure >= MEASURE_END)
     return;
   measure_cell_cb_t measure_draw_cb = MEASURE[current_props._measure].measure_cell;
@@ -534,12 +534,12 @@ static void plot_into_index(void) {
   for (int t = 0; t < TRACES_MAX; t++) {
     if (trace[t].enabled)
       trace_into_index(t);
-}
+  }
   //  STOP_PROFILE;
   // Marker track on data update
   if (props_mode & TD_MARKER_TRACK)
     marker_search();
-#ifdef __VNA_MEASURE_MODULE__
+#ifdef VNA_MEASURE_MODULE
   // Current scan update
   measure_set_flag(MEASURE_UPD_SWEEP);
 #endif
@@ -551,7 +551,7 @@ static void plot_into_index(void) {
 //            Grid line values
 //**************************************************************************************
 #if VNA_ENABLE_GRID_VALUES
-static void cell_draw_grid_values(RenderCellCtx *rcx) {
+static void cell_draw_grid_values(render_cell_ctx_t *rcx) {
   // Skip not selected trace
   if (current_trace == TRACE_INVALID)
     return;
@@ -602,7 +602,7 @@ static const struct {
   {1 + (WIDTH / 2) + CELLOFFSETX, 1 + 3 * FONT_STR_HEIGHT},
 };
 
-#ifdef LCD_320x240
+#ifdef LCD_320X240
 #if _USE_FONT_ < 1
 #define MARKER_FREQ "%.6q" S_HZ
 #else
@@ -610,12 +610,12 @@ static const struct {
 #endif
 #define MARKER_FREQ_SIZE 67
 #endif
-#ifdef LCD_480x320
+#ifdef LCD_480X320
 #define MARKER_FREQ "%q" S_HZ
 #define MARKER_FREQ_SIZE 116
 #endif
 
-static void cell_draw_marker_info(RenderCellCtx *rcx) {
+static void cell_draw_marker_info(render_cell_ctx_t *rcx) {
   int t, mk, xpos, ypos;
   if (active_marker == MARKER_INVALID)
     return;
@@ -705,7 +705,7 @@ static void cell_draw_marker_info(RenderCellCtx *rcx) {
     } else {
       cell_printf_ctx(rcx, xpos, ypos, "%F" S_SECOND " (%F" S_METRE ")",
                       time_of_index(active_marker_idx), distance_of_index(active_marker_idx));
-}
+    }
   }
 
   xpos = 1 + 18 + CELLOFFSETX - rcx->x0;
@@ -722,7 +722,7 @@ static void cell_draw_marker_info(RenderCellCtx *rcx) {
     cell_printf_ctx(rcx, xpos, ypos, "S21 offset: %.3F" S_DB, s21_offset);
     ypos += FONT_STR_HEIGHT;
   }
-#ifdef __VNA_Z_RENORMALIZATION__
+#ifdef VNA_Z_RENORMALIZATION
   if (current_props._portz != 50.0f) {
     cell_printf_ctx(rcx, xpos, ypos, "PORT-Z: 50 " S_RARROW " %F" S_OHM, current_props._portz);
     ypos += FONT_STR_HEIGHT;
@@ -730,9 +730,9 @@ static void cell_draw_marker_info(RenderCellCtx *rcx) {
 #endif
 }
 
-void render_overlays(RenderCellCtx *rcx) {
+void render_overlays(render_cell_ctx_t *rcx) {
   cell_draw_all_refpos(rcx);
-#ifdef __VNA_MEASURE_MODULE__
+#ifdef VNA_MEASURE_MODULE
   cell_draw_measure(rcx);
 #endif
 #if VNA_ENABLE_GRID_VALUES
@@ -753,7 +753,7 @@ void draw_cell(int x0, int y0) {
     h = area_height - y0;
   if (w <= 0 || h <= 0)
     return;
-  RenderCellCtx rcx = render_cell_ctx(x0, y0, (uint16_t)w, (uint16_t)h, lcd_get_cell_buffer());
+  render_cell_ctx_t rcx = render_cell_ctx(x0, y0, (uint16_t)w, (uint16_t)h, lcd_get_cell_buffer());
   set_active_cell_ctx(&rcx);
   cell_clear(&rcx, GET_PALTETTE_COLOR(LCD_BG_COLOR));
   bool smith_impedance = false;
@@ -780,7 +780,7 @@ void draw_all_cells(void) {
   uint16_t m, n;
   uint16_t w = (area_width + CELLWIDTH - 1) / CELLWIDTH;
   uint16_t h = (area_height + CELLHEIGHT - 1) / CELLHEIGHT;
-#ifdef __VNA_MEASURE_MODULE__
+#ifdef VNA_MEASURE_MODULE
   measure_prepare();
 #endif
   for (n = 0; n < h; n++) {
@@ -788,7 +788,7 @@ void draw_all_cells(void) {
     for (m = 0; update_map && m < w; update_map >>= 1, m++) {
       if (update_map & 1)
         draw_cell(m * CELLWIDTH, n * CELLHEIGHT);
-}
+    }
   }
 
 #if 0
@@ -812,7 +812,7 @@ void draw_all_cells(void) {
 void redraw_marker(int8_t marker) {
   if (marker == MARKER_INVALID || !markers[marker].enabled)
     return;
-#ifdef __VNA_MEASURE_MODULE__
+#ifdef VNA_MEASURE_MODULE
   if (marker == active_marker)
     measure_set_flag(MEASURE_UPD_FREQ);
 #endif
@@ -901,7 +901,7 @@ static void draw_cal_status(void) {
   // 2,4,6,8 mA power or auto
   lcd_printf(x, y += sFONT_STR_HEIGHT, "P%c",
              current_props._power > 3 ? ('a') : (current_props._power * 2 + '2'));
-#ifdef __USE_SMOOTH__
+#ifdef USE_SMOOTH
   y += FONT_STR_HEIGHT;
   uint8_t smooth = get_smooth_factor();
   if (smooth > 0) {
@@ -965,7 +965,7 @@ static void draw_battery_status(void) {
 //            Draw all request
 //**************************************************************************************
 void draw_all(void) {
-#ifdef __USE_BACKUP__
+#ifdef USE_BACKUP
   if (redraw_request & REDRAW_BACKUP)
     update_backup_data();
 #endif

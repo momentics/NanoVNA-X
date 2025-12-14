@@ -64,7 +64,7 @@ SerialUSBConfig serusbcfg = {0};
 USBDriver USBD1 = {.state = USB_ACTIVE};
 SerialUSBDriver sd_u1 = {.stream = {.vmt = NULL}, .config = &serusbcfg, .user_data = NULL};
 
-static shell_stream_state_t g_stream_state;
+static shell_stream_state_t stream_state;
 static int g_queue_enqueues = 0;
 static int g_queue_dequeues = 0;
 static event_bus_listener_t g_registered_listener = NULL;
@@ -74,11 +74,11 @@ static size_t g_published_event_count = 0;
 
 static bool tx_contains(const char *needle) {
   size_t needle_len = strlen(needle);
-  if (needle_len == 0 || g_stream_state.tx_len < needle_len) {
+  if (needle_len == 0 || stream_state.tx_len < needle_len) {
     return false;
   }
-  for (size_t i = 0; i <= g_stream_state.tx_len - needle_len; ++i) {
-    if (memcmp(&g_stream_state.tx[i], needle, needle_len) == 0) {
+  for (size_t i = 0; i <= stream_state.tx_len - needle_len; ++i) {
+    if (memcmp(&stream_state.tx[i], needle, needle_len) == 0) {
       return true;
     }
   }
@@ -217,14 +217,14 @@ static int g_failures = 0;
   } while (0)
 
 static void reset_shell_state(const char *scripted_rx) {
-  memset(&g_stream_state, 0, sizeof(g_stream_state));
+  memset(&stream_state, 0, sizeof(stream_state));
   if (scripted_rx != NULL) {
-    g_stream_state.rx_len = strlen(scripted_rx);
-    memcpy(g_stream_state.rx, scripted_rx, g_stream_state.rx_len);
+    stream_state.rx_len = strlen(scripted_rx);
+    memcpy(stream_state.rx, scripted_rx, stream_state.rx_len);
   }
   serusbcfg.usbp = &USBD1;
   sd_u1.config = &serusbcfg;
-  sd_u1.user_data = &g_stream_state;
+  sd_u1.user_data = &stream_state;
   USBD1.state = USB_ACTIVE;
   config._vna_mode = 0;
   config._serial_speed = 115200;
@@ -250,7 +250,7 @@ static void test_command_callback(int argc, char *argv[]) {
   }
 }
 
-static const vna_shell_command_t g_test_commands[] = {
+static const vna_shell_command_t test_commands[] = {
   {.sc_name = "scan", .sc_function = test_command_callback, .flags = 0},
   {.sc_name = NULL, .sc_function = NULL, .flags = 0},
 };
@@ -268,14 +268,14 @@ static void trigger_pending_event(void) {
 
 static void test_shell_parse_and_overflow(void) {
   reset_shell_state(NULL);
-  shell_register_commands(g_test_commands);
+  shell_register_commands(test_commands);
   char line[] = "scan 123 456";
   uint16_t argc = 0;
   char **argv = NULL;
   const char *name = NULL;
 
   const vna_shell_command_t *cmd = shell_parse_command(line, &argc, &argv, &name);
-  CHECK(cmd == &g_test_commands[0], "registered command must be returned");
+  CHECK(cmd == &test_commands[0], "registered command must be returned");
   CHECK(argc == 2, "argc should exclude the command token");
   CHECK(argv != NULL && strcmp(argv[0], "123") == 0, "argv[0] should match first parameter");
   CHECK(argv != NULL && strcmp(argv[1], "456") == 0, "argv[1] should match second parameter");
@@ -286,7 +286,7 @@ static void test_shell_parse_and_overflow(void) {
   char **overflow_argv = NULL;
   const vna_shell_command_t *overflow_cmd =
     shell_parse_command(overflow_line, &overflow_argc, &overflow_argv, NULL);
-  CHECK(overflow_cmd == &g_test_commands[0], "known commands should still parse when clamped");
+  CHECK(overflow_cmd == &test_commands[0], "known commands should still parse when clamped");
   CHECK(overflow_argc == VNA_SHELL_MAX_ARGUMENTS, "argc must be clamped to the configured maximum");
   CHECK(strcmp(overflow_argv[VNA_SHELL_MAX_ARGUMENTS - 1], "4") == 0,
         "excess arguments should be dropped");
@@ -294,7 +294,7 @@ static void test_shell_parse_and_overflow(void) {
 
 static void test_shell_deferred_queue_and_event_bus(void) {
   reset_shell_state(NULL);
-  shell_register_commands(g_test_commands);
+  shell_register_commands(test_commands);
   event_bus_t bus = {0};
   shell_attach_event_bus(&bus);
   CHECK(g_registered_listener != NULL, "attach should register event listener");
@@ -328,7 +328,7 @@ static void test_shell_read_line_and_echo(void) {
   int status = vna_shell_read_line(line, sizeof(line));
   CHECK(status == 1, "read_line should complete on CR/LF");
   CHECK(strcmp(line, "hlo") == 0, "backspace must remove the previous character");
-  CHECK(g_stream_state.tx_len > 0, "shell should echo characters to the TX buffer");
+  CHECK(stream_state.tx_len > 0, "shell should echo characters to the TX buffer");
   CHECK(tx_contains(VNA_SHELL_NEWLINE_STR), "entering a line should emit a newline");
 }
 

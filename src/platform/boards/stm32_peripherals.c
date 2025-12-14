@@ -43,7 +43,7 @@
 #include "boards/STM32F072/i2c_v2.c"
 #endif
 
-#ifdef __USE_RTC__
+#ifdef USE_RTC
 // Compact STM32 RTC time library
 #if HAL_USE_RTC == TRUE
 #error "Error VNA use self RTC lib, define HAL_USE_RTC = FALSE in halconf.h"
