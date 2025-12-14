@@ -10,7 +10,7 @@
 #include "rf/sweep/sweep_orchestrator.h"
 #include "infra/storage/config_service.h"
 #include "infra/state/state_manager.h"
-#include "interfaces/ports/UI_PORT.h"
+#include "interfaces/ports/ui_port.h"
 #include "interfaces/ports/processing_port.h"
 #include "interfaces/ports/usb_command_server_port.h"
 #include "version_info.h"
