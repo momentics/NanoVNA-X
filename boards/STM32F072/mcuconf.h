@@ -8,28 +8,29 @@
 #ifndef MCUCONF_H
 #define MCUCONF_H
 
-// STM32F0xx Driver Config & Priorities
-
 #define STM32F0xx_MCUCONF
 
 // HAL Settings
 #define STM32_NO_INIT                       FALSE
 #define STM32_PVD_ENABLE                    FALSE
 #define STM32_PLS                           STM32_PLS_LEV0
-#define STM32_HSI_ENABLED                   TRUE
+#define STM32_HSI_ENABLED                   FALSE
 #define STM32_HSI14_ENABLED                 FALSE
 #define STM32_HSI48_ENABLED                 TRUE
-#define STM32_HSE_ENABLED                   FALSE
+#define STM32_HSE_ENABLED                   TRUE
 #define STM32_SW                            STM32_SW_PLL
-#define STM32_PLLSRC                        STM32_PLLSRC_HSI_DIV2
+#define STM32_PLLSRC                        STM32_PLLSRC_HSE
 #define STM32_PREDIV_VALUE                  1
-#define STM32_PLLMUL_VALUE                  12
+#define STM32_PLLMUL_VALUE                  6
 #define STM32_HPRE                          STM32_HPRE_DIV1
 #define STM32_PPRE                          STM32_PPRE_DIV1
 #define STM32_ADCPRE                        STM32_ADCPRE_DIV4
 #define STM32_MCOSEL                        STM32_MCOSEL_PLLDIV2
 #define STM32_USBSW                         STM32_USBSW_HSI48
-#define STM32_CECSW                         STM32_CECSW_HSI
+#define STM32_CECSW                         STM32_CECSW_OFF
+
+// STM32F0xx Driver Config & Priorities
+
 //#define STM32_I2C1SW                        STM32_I2C1SW_HSI
 #define STM32_I2C1SW                        STM32_I2C1SW_SYSCLK
 #define STM32_USART1SW                      STM32_USART1SW_PCLK

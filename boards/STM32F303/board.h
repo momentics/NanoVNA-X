@@ -20,6 +20,8 @@
 #define STM32_LSECLK            32768
 #define STM32_HSECLK            8000000
 
+#define STM32_HSE_BYPASS
+
 // MCU Type
 #define STM32F303xC
 
