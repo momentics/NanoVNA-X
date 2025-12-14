@@ -173,6 +173,9 @@ static inline void spi_dma_rx_buffer(uint8_t* buffer, uint16_t len, bool wait) {
 #endif // __USE_DISPLAY_DMA__
 
 static void spi_init(void) {
+#ifdef __USE_DISPLAY_DMA__
+  rccEnableDMA1(FALSE);
+#endif
   rccEnableSPI1(FALSE);
   LCD_SPI->CR1 = 0;
   LCD_SPI->CR1 = SPI_CR1_MSTR  // SPI is MASTER
