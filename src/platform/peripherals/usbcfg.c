@@ -324,7 +324,7 @@ static USBOutEndpointState ep1outstate;
  */
 static const USBEndpointConfig ep1config = {USB_EP_MODE_TYPE_BULK, NULL,        sduDataTransmitted,
                                             sduDataReceived,       0x0040,      0x0040,
-                                            &ep1instate,           &ep1outstate};
+                                            &ep1instate,           &ep1outstate, 1U, NULL};
 
 /**
  * @brief   IN EP2 state.
@@ -335,14 +335,13 @@ static USBInEndpointState ep2instate;
  * @brief   EP2 initialization structure (IN only).
  */
 static const USBEndpointConfig ep2config = {
-    USB_EP_MODE_TYPE_INTR, NULL, sduInterruptTransmitted, NULL, 0x0010, 0x0000, &ep2instate, NULL};
+    USB_EP_MODE_TYPE_INTR, NULL, sduInterruptTransmitted, NULL, 0x0010, 0x0000, &ep2instate, NULL, 1U, NULL};
 
 /*
  * Handles the USB driver global events.
  */
 static void usb_event(USBDriver* usbp, usbevent_t event) {
   extern SerialUSBDriver SDU1;
-  chSysLockFromISR();
   switch (event) {
   case USB_EVENT_RESET:
     break;
@@ -352,25 +351,31 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
     /* Enables the endpoints specified into the configuration.
        Note, this callback is invoked from an ISR so I-Class functions
        must be used.*/
+    osalSysLockFromISR();
     usbInitEndpointI(usbp, USBD1_DATA_REQUEST_EP, &ep1config);
     usbInitEndpointI(usbp, USBD1_INTERRUPT_REQUEST_EP, &ep2config);
     /* Resetting the state of the CDC subsystem.*/
     sduConfigureHookI(&SDU1);
+    osalSysUnlockFromISR();
     break;
+  case USB_EVENT_UNCONFIGURED:
   case USB_EVENT_SUSPEND:
-    /* Disconnection event on suspend.*/
-    sduDisconnectI(&SDU1);
+    osalSysLockFromISR();
+    sduSuspendHookI(&SDU1);
+    osalSysUnlockFromISR();
     /* Wake up any waiting shell threads to prevent hanging */
     shell_wake_all_waiting_threads();
     /* Update connection state to disconnected */
     shell_update_vcp_connection_state(false);
     break;
   case USB_EVENT_WAKEUP:
+    osalSysLockFromISR();
+    sduWakeupHookI(&SDU1);
+    osalSysUnlockFromISR();
     break;
   case USB_EVENT_STALLED:
     break;
   }
-  chSysUnlockFromISR();
   return;
 }
 
@@ -389,8 +394,8 @@ static void sof_handler(USBDriver* usbp) {
  */
 bool custom_sduRequestsHook(USBDriver *usbp) {
 
-  if ((usbp->setup.bmRequestType & USB_RTYPE_TYPE_MASK) == USB_RTYPE_TYPE_CLASS) {
-    switch (usbp->setup.bRequest) {
+  if ((usbp->setup[0] & USB_RTYPE_TYPE_MASK) == USB_RTYPE_TYPE_CLASS) {
+    switch (usbp->setup[1]) {
     case CDC_GET_LINE_CODING:
       usbSetupTransfer(usbp, (uint8_t *)&linecoding, sizeof(linecoding), NULL);
       return true;
@@ -399,13 +404,18 @@ bool custom_sduRequestsHook(USBDriver *usbp) {
       return true;
     case CDC_SET_CONTROL_LINE_STATE:
       /* Check the DTR state - bit 0 of wValue */
-      if ((usbp->setup.wValue & 1) != 0) {
+      uint16_t wValue = (uint16_t)usbp->setup[2] | ((uint16_t)usbp->setup[3] << 8U);
+      if ((wValue & 1U) != 0U) {
         /* DTR is asserted - host has opened the port */
+        osalSysLockFromISR();
         sduConfigureHookI(&SDU1);
+        osalSysUnlockFromISR();
         shell_update_vcp_connection_state(true);
       } else {
         /* DTR is not asserted - host has closed the port */
-        sduDisconnectI(&SDU1);
+        osalSysLockFromISR();
+        sduSuspendHookI(&SDU1);
+        osalSysUnlockFromISR();
         /* Wake up any waiting shell threads to prevent hanging */
         shell_wake_all_waiting_threads();
         shell_update_vcp_connection_state(false);

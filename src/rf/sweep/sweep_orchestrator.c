@@ -102,7 +102,7 @@ static float geometry_mean(float v0, float v1, float v2) {
 
 #define SWEEP_UI_INPUT_SLICE_POINTS 1U
 #define SWEEP_UI_IDLE_SLICE_POINTS ((uint16_t)SWEEP_POINTS_MAX)
-#define SWEEP_UI_TIMESLICE_TICKS MS2ST(8U)
+#define SWEEP_UI_TIMESLICE_TICKS TIME_MS2I(8U)
 
 static inline void sweep_reset_progress(void) {
   p_sweep = 0;
@@ -307,7 +307,7 @@ uint32_t sweep_service_current_generation(void) {
 
 void sweep_service_wait_for_generation(void) {
   systime_t start_time = chVTGetSystemTimeX();
-  systime_t timeout = MS2ST(1000); // 1 second timeout to prevent infinite wait
+  sysinterval_t timeout = TIME_MS2I(1000); // 1 second timeout to prevent infinite wait
   
   while (sweep_service_current_generation() == 0U) {
     if (chVTGetSystemTimeX() - start_time >= timeout) {
@@ -323,7 +323,7 @@ bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* s
     return false;
   }
   systime_t start_time = chVTGetSystemTimeX();
-  systime_t timeout = MS2ST(2000); // 2 second timeout to prevent infinite wait
+  sysinterval_t timeout = TIME_MS2I(2000); // 2 second timeout to prevent infinite wait
   
   while (true) {
     osalSysLock();
@@ -365,7 +365,7 @@ void sweep_service_start_capture(systime_t delay_ticks) {
 
 bool sweep_service_wait_for_capture(void) {
   systime_t start_time = chVTGetSystemTimeX();
-  systime_t timeout = MS2ST(2000); // 2000ms timeout - increased for stability
+  sysinterval_t timeout = TIME_MS2I(2000); // 2000ms timeout - increased for stability
   while (wait_count != 0U) {
     systime_t current_time = chVTGetSystemTimeX();
     if (current_time - start_time >= timeout) {

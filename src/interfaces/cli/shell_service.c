@@ -57,7 +57,7 @@ static inline BaseAsynchronousChannel* shell_current_channel(void) {
   return (BaseAsynchronousChannel*)shell_stream;
 }
 
-#define SHELL_IO_TIMEOUT MS2ST(20)
+#define SHELL_IO_TIMEOUT TIME_MS2I(20)
 #define SHELL_IO_CHUNK_SIZE 64U
 /*
  * Deferred (mutex) commands like `scan` may take tens of seconds at low RBW / bandwidth
@@ -65,7 +65,7 @@ static inline BaseAsynchronousChannel* shell_current_channel(void) {
  * prompt while the sweep is still running, which desynchronizes host tools and makes
  * them interpret old/partial buffers as new segments.
  */
-#define SHELL_DEFERRED_EXECUTION_TIMEOUT MS2ST(300000) // 5 minutes
+#define SHELL_DEFERRED_EXECUTION_TIMEOUT TIME_MS2I(300000) // 5 minutes
 
 static bool shell_io_write(const uint8_t* data, size_t size) {
   BaseAsynchronousChannel* channel = shell_current_channel();
@@ -201,7 +201,7 @@ void shell_reset_console(void) {
 #ifdef __USE_SERIAL_CONSOLE__
   if (usb_is_active_locked()) {
     if (VNA_MODE(VNA_MODE_CONNECTION)) {
-      sduDisconnectI(&SDU1);
+      sduSuspendHookI(&SDU1);
     } else {
       sduConfigureHookI(&SDU1);
     }

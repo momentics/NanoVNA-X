@@ -174,7 +174,7 @@ static int16_t battery_last_mv;
 static systime_t battery_next_sample = 0;
 
 #ifndef VBAT_MEASURE_INTERVAL
-#define BATTERY_REDRAW_INTERVAL S2ST(5)
+#define BATTERY_REDRAW_INTERVAL TIME_S2I(5)
 #else
 #define BATTERY_REDRAW_INTERVAL VBAT_MEASURE_INTERVAL
 #endif

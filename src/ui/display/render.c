@@ -146,7 +146,7 @@ void cell_blit_bitmap_shadow(RenderCellCtx* rcx, int16_t x, int16_t y, uint16_t 
 // Cell printf function
 //**************************************************************************************
 typedef struct {
-  const void* vmt;
+  const struct BaseSequentialStreamVMT* vmt;
   RenderCellCtx* ctx;
   int16_t x;
   int16_t y;
@@ -198,11 +198,29 @@ static msg_t cell_put(void* ip, uint8_t ch) {
   return MSG_OK;
 }
 
+static size_t cell_write(void* ip, const uint8_t* bp, size_t n) {
+  for (size_t i = 0; i < n; ++i) {
+    (void)cell_put(ip, bp[i]);
+  }
+  return n;
+}
+
+static size_t cell_read(void* ip, uint8_t* bp, size_t n) {
+  (void)ip;
+  (void)bp;
+  (void)n;
+  return 0U;
+}
+
+static msg_t cell_get(void* ip) {
+  (void)ip;
+  return MSG_RESET;
+}
+
 // Simple print in buffer function
 static int cell_vprintf(RenderCellCtx* rcx, int16_t x, int16_t y, const char* fmt, va_list ap) {
-  static const struct lcd_printStreamVMT {
-    _base_sequential_stream_methods
-  } cell_vmt = {NULL, NULL, cell_put, NULL};
+  static const struct BaseSequentialStreamVMT cell_vmt = {0U, cell_write, cell_read, cell_put,
+                                                          cell_get};
   // Skip print if not on cell (at top/bottom/right)
   if ((uint32_t)(y + FONT_GET_HEIGHT) >= CELLHEIGHT + FONT_GET_HEIGHT || x >= CELLWIDTH)
     return 0;

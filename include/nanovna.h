@@ -146,21 +146,21 @@ void send_region(remote_region_t *rd, uint8_t * buf, uint16_t size);
 // #define ENABLE_SI5351_TIMINGS
 #if defined(NANOVNA_F303)
 // Generator delays (us)
-#define DELAY_BAND_1_2           US2ST( 100)   // Delay for bands 1-2
-#define DELAY_BAND_3_4           US2ST( 120)   // Delay for bands 3-4
-#define DELAY_BANDCHANGE         US2ST(2000)   // Band changes need set additional delay after reset PLL
-#define DELAY_CHANNEL_CHANGE     US2ST( 100)   // Switch channel delay
-#define DELAY_SWEEP_START        US2ST(2000)   // Delay at sweep start
+#define DELAY_BAND_1_2           TIME_US2I(100)   // Delay for bands 1-2
+#define DELAY_BAND_3_4           TIME_US2I(120)   // Delay for bands 3-4
+#define DELAY_BANDCHANGE         TIME_US2I(2000)  // Band changes need set additional delay after reset PLL
+#define DELAY_CHANNEL_CHANGE     TIME_US2I(100)   // Switch channel delay
+#define DELAY_SWEEP_START        TIME_US2I(2000)  // Delay at sweep start
 // Delay after set new PLL values in ms, and send reset
 #define DELAY_RESET_PLL_BEFORE            0    //    0 (0 for disabled)
 #define DELAY_RESET_PLL_AFTER          4000    // 4000 (0 for disabled)
 #else
 // Generator ready delays, values in us
-#define DELAY_BAND_1_2           US2ST( 100)   // 0 Delay for bands 1-2
-#define DELAY_BAND_3_4           US2ST( 140)   // 1 Delay for bands 3-4
-#define DELAY_BANDCHANGE         US2ST(5000)   // 2 Band changes need set additional delay after reset PLL
-#define DELAY_CHANNEL_CHANGE     US2ST( 100)   // 3 Switch channel delay
-#define DELAY_SWEEP_START        US2ST( 100)   // 4 Delay at sweep start
+#define DELAY_BAND_1_2           TIME_US2I(100)   // 0 Delay for bands 1-2
+#define DELAY_BAND_3_4           TIME_US2I(140)   // 1 Delay for bands 3-4
+#define DELAY_BANDCHANGE         TIME_US2I(5000)  // 2 Band changes need set additional delay after reset PLL
+#define DELAY_CHANNEL_CHANGE     TIME_US2I(100)   // 3 Switch channel delay
+#define DELAY_SWEEP_START        TIME_US2I(100)   // 4 Delay at sweep start
 // Delay after before/after set new PLL values in ms
 #define DELAY_RESET_PLL_BEFORE            0    // 5    0 (0 for disabled)
 #define DELAY_RESET_PLL_AFTER          4000    // 6 4000 (0 for disabled)

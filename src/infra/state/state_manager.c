@@ -31,8 +31,8 @@
 
 #include <string.h>
 
-#define SWEEP_STATE_AUTOSAVE_DELAY   MS2ST(750)
-#define SWEEP_STATE_AUTOSAVE_MIN_GAP S2ST(3)
+#define SWEEP_STATE_AUTOSAVE_DELAY   TIME_MS2I(750)
+#define SWEEP_STATE_AUTOSAVE_MIN_GAP TIME_S2I(3)
 
 static bool sweep_state_dirty = false;
 static systime_t sweep_state_deadline = 0;

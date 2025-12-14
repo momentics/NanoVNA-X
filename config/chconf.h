@@ -29,6 +29,7 @@
 #define _CHCONF_H_
 
 #define _CHIBIOS_RT_CONF_
+#define _CHIBIOS_RT_CONF_VER_7_0_
 
 // System timers settings
 // System time counter resolution (16/32 bits)
@@ -36,6 +37,12 @@
 
 // System tick frequency
 #define CH_CFG_ST_FREQUENCY                 100000
+
+// Time intervals data size (16/32/64 bits)
+#define CH_CFG_INTERVALS_SIZE               32
+
+// Time types data size (16/32 bits)
+#define CH_CFG_TIME_TYPES_SIZE              32
 
 // Time delta constant for tick-less mode
 #define CH_CFG_ST_TIMEDELTA                 2
@@ -49,6 +56,10 @@
 
 // Idle thread automatic spawn suppression
 #define CH_CFG_NO_IDLE_THREAD               FALSE
+
+// System settings
+// Handling of instances (SMP support; single-core uses FALSE)
+#define CH_CFG_SMP_MODE                     FALSE
 
 /*===========================================================================*/
 /**
@@ -65,7 +76,7 @@
  * @note    This is not related to the compiler optimization options.
  * @note    The default is @p TRUE.
  */
-#define CH_CFG_OPTIMIZE_SPEED               TRUE
+#define CH_CFG_OPTIMIZE_SPEED               FALSE
 
 /** @} */
 
@@ -84,6 +95,11 @@
  * @note    The default is @p TRUE.
  */
 #define CH_CFG_USE_TM                       FALSE
+
+/**
+ * @brief   Time Stamps APIs.
+ */
+#define CH_CFG_USE_TIMESTAMP                FALSE
 
 /**
  * @brief   Threads registry APIs.
@@ -208,6 +224,101 @@
 #define CH_CFG_USE_MAILBOXES                TRUE
 
 /**
+ * @brief   Objects FIFOs APIs.
+ * @details If enabled then the objects FIFOs APIs are included
+ *          in the kernel.
+ *
+ * @note    The default is @p TRUE.
+ */
+#define CH_CFG_USE_OBJ_FIFOS                FALSE
+
+/**
+ * @brief   Pipes APIs.
+ * @details If enabled then the pipes APIs are included
+ *          in the kernel.
+ *
+ * @note    The default is @p TRUE.
+ */
+#define CH_CFG_USE_PIPES                    FALSE
+
+/**
+ * @brief   Objects Caches APIs.
+ * @details If enabled then the objects caches APIs are included
+ *          in the kernel.
+ *
+ * @note    The default is @p TRUE.
+ */
+#define CH_CFG_USE_OBJ_CACHES               FALSE
+
+/**
+ * @brief   Delegate threads APIs.
+ * @details If enabled then the delegate threads APIs are included
+ *          in the kernel.
+ *
+ * @note    The default is @p TRUE.
+ */
+#define CH_CFG_USE_DELEGATES                FALSE
+
+/**
+ * @brief   Jobs Queues APIs.
+ * @details If enabled then the jobs queues APIs are included
+ *          in the kernel.
+ *
+ * @note    The default is @p TRUE.
+ */
+#define CH_CFG_USE_JOBS                     FALSE
+
+/*===========================================================================*/
+/**
+ * @name Objects factory options
+ * @{
+ */
+/*===========================================================================*/
+
+/**
+ * @brief   Objects Factory APIs.
+ * @details If enabled then the objects factory APIs are included in the
+ *          kernel.
+ *
+ * @note    The default is @p FALSE.
+ */
+#define CH_CFG_USE_FACTORY                  FALSE
+
+/**
+ * @brief   Maximum length for object names.
+ * @details If the specified length is zero then the name is stored by
+ *          pointer but this could have unintended side effects.
+ */
+#define CH_CFG_FACTORY_MAX_NAMES_LENGTH     0
+
+/**
+ * @brief   Enables the registry of generic objects.
+ */
+#define CH_CFG_FACTORY_OBJECTS_REGISTRY     FALSE
+
+/**
+ * @brief   Enables factory for generic buffers.
+ */
+#define CH_CFG_FACTORY_GENERIC_BUFFERS      FALSE
+
+/**
+ * @brief   Enables factory for semaphores.
+ */
+#define CH_CFG_FACTORY_SEMAPHORES           FALSE
+
+/**
+ * @brief   Enables factory for mailboxes.
+ */
+#define CH_CFG_FACTORY_MAILBOXES            FALSE
+
+/**
+ * @brief   Enables factory for objects FIFOs.
+ */
+#define CH_CFG_FACTORY_OBJ_FIFOS            FALSE
+
+/** @} */
+
+/**
  * @brief   I/O Queues APIs.
  * @details If enabled then the I/O queues APIs are included in the kernel.
  *
@@ -325,7 +436,7 @@
  * @note    The default failure mode is to halt the system with the global
  *          @p panic_msg variable set to @p NULL.
  */
-#define CH_DBG_ENABLE_STACK_CHECK           TRUE
+#define CH_DBG_ENABLE_STACK_CHECK           FALSE
 
 /**
  * @brief   Debug option, stacks initialization.
@@ -335,16 +446,13 @@
  *
  * @note    The default is @p FALSE.
  */
-#define CH_DBG_FILL_THREADS                 TRUE
-
+#define CH_DBG_FILL_THREADS                 FALSE
 /**
  * @brief   Debug option, threads profiling.
  * @details If enabled then a field is added to the @p thread_t structure that
  *          counts the system ticks occurred while executing the thread.
  *
  * @note    The default is @p FALSE.
- * @note    This debug option is not currently compatible with the
- *          tickless mode.
  */
 #define CH_DBG_THREADS_PROFILING            FALSE
 
@@ -356,6 +464,38 @@
  * @{
  */
 /*===========================================================================*/
+
+/**
+ * @brief   System structure extension.
+ * @details User fields added to the end of the @p ch_system_t structure.
+ */
+#define CH_CFG_SYSTEM_EXTRA_FIELDS                                          \
+  /* Add system custom fields here.*/
+
+/**
+ * @brief   System initialization hook.
+ * @details User initialization code added to the @p chSysInit() function
+ *          just before interrupts are enabled globally.
+ */
+#define CH_CFG_SYSTEM_INIT_HOOK() {                                         \
+  /* Add system initialization code here.*/                                 \
+}
+
+/**
+ * @brief   OS instance structure extension.
+ * @details User fields added to the end of the @p os_instance_t structure.
+ */
+#define CH_CFG_OS_INSTANCE_EXTRA_FIELDS                                     \
+  /* Add OS instance custom fields here.*/
+
+/**
+ * @brief   OS instance initialization hook.
+ *
+ * @param[in] oip       pointer to the @p os_instance_t structure
+ */
+#define CH_CFG_OS_INSTANCE_INIT_HOOK(oip) {                                 \
+  /* Add OS instance initialization code here.*/                            \
+}
 
 /**
  * @brief   Threads descriptor structure extension.
@@ -460,6 +600,14 @@
  */
 #define CH_CFG_TRACE_HOOK(tep) {                                            \
   /* Trace code here.*/                                                     \
+}
+
+/**
+ * @brief   Runtime Faults Collection Unit hook.
+ * @details This hook is invoked each time new faults are collected and stored.
+ */
+#define CH_CFG_RUNTIME_FAULTS_HOOK(mask) {                                  \
+  /* Faults handling code here.*/                                           \
 }
 
 /** @} */

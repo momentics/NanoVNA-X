@@ -27,7 +27,7 @@ IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
 OF SUCH DAMAGE.
 
 This notice is reproduced from the lwIP-related sources and bindings shipped
-under `third_party/ChibiOS`, for example:
-- `third_party/ChibiOS/os/various/lwip_bindings/arch/cc.h`
-- `third_party/ChibiOS/os/various/lwip_bindings/lwipthread.c`
-- `third_party/ChibiOS/ext/lwip-1.4.1_patched.7z`
+under `third_party/ChibiOS_21.11.4`, for example:
+- `third_party/ChibiOS_21.11.4/os/various/lwip_bindings/arch/cc.h`
+- `third_party/ChibiOS_21.11.4/os/various/lwip_bindings/lwipthread.c`
+- `third_party/ChibiOS_21.11.4/ext/lwip-2.1.2.7z`

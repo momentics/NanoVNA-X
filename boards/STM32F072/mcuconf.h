@@ -57,7 +57,6 @@
  #define STM32_LSE_ENABLED                   FALSE
 // Disable this function call in ChibiOS, backup domain init on auto select RTC source
  #define STM32_NO_BACKUP_DOMAIN_INIT
- #define hal_lld_backup_domain_init
 #else
  #ifndef VNA_USE_LSE
   // Use 40kHz LSI

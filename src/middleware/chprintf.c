@@ -598,14 +598,10 @@ int chsnprintf(char *str, size_t size, const char *fmt, ...) {
 #endif
 
 //
-// Small memory stream object, only put function
+// Small memory stream object, only put function.
 //
-struct printStreamVMT {
-  _base_sequential_stream_methods
-};
-
 typedef struct {
-  const struct printStreamVMT* vmt;
+  const struct BaseSequentialStreamVMT* vmt;
   uint8_t* buffer;
   uint16_t size;
 } printStream;
@@ -619,7 +615,26 @@ static msg_t put(void* ip, uint8_t b) {
   return MSG_OK;
 }
 
-static const struct printStreamVMT vmt = {NULL, NULL, put, NULL};
+static size_t write(void* ip, const uint8_t* bp, size_t n) {
+  for (size_t i = 0; i < n; ++i) {
+    (void)put(ip, bp[i]);
+  }
+  return n;
+}
+
+static size_t read(void* ip, uint8_t* bp, size_t n) {
+  (void)ip;
+  (void)bp;
+  (void)n;
+  return 0U;
+}
+
+static msg_t get(void* ip) {
+  (void)ip;
+  return MSG_RESET;
+}
+
+static const struct BaseSequentialStreamVMT vmt = {0U, write, read, put, get};
 // Simple print in buffer function
 int plot_printf(char* str, int size, const char* fmt, ...) {
   va_list ap;

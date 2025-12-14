@@ -857,7 +857,7 @@ void lcd_drawstring(int16_t x, int16_t y, const char* str) {
 #endif
 
 typedef struct {
-  const void* vmt;
+  const struct BaseSequentialStreamVMT* vmt;
   int16_t start_x, start_y;
   int16_t x, y;
   uint16_t state;
@@ -920,11 +920,29 @@ static msg_t lcd_put(void* ip, uint8_t ch) {
   return MSG_OK;
 }
 
+static size_t lcd_write(void* ip, const uint8_t* bp, size_t n) {
+  for (size_t i = 0; i < n; ++i) {
+    (void)lcd_put(ip, bp[i]);
+  }
+  return n;
+}
+
+static size_t lcd_read(void* ip, uint8_t* bp, size_t n) {
+  (void)ip;
+  (void)bp;
+  (void)n;
+  return 0U;
+}
+
+static msg_t lcd_get(void* ip) {
+  (void)ip;
+  return MSG_RESET;
+}
+
+static const struct BaseSequentialStreamVMT lcd_vmt = {0U, lcd_write, lcd_read, lcd_put, lcd_get};
+
 // Simple print in buffer function
 int lcd_printf_va(int16_t x, int16_t y, const char* fmt, va_list ap) {
-  struct lcd_printStreamVMT {
-    _base_sequential_stream_methods
-  } lcd_vmt = {NULL, NULL, lcd_put, NULL};
   lcdPrintStream ps = {&lcd_vmt, x, y, x, y, 0};
   va_list args;
   va_copy(args, ap);
@@ -943,9 +961,6 @@ int lcd_printf(int16_t x, int16_t y, const char* fmt, ...) {
 
 int lcd_printf_v(int16_t x, int16_t y, const char* fmt, ...) {
   // Init small lcd print stream
-  struct lcd_printStreamVMT {
-    _base_sequential_stream_methods
-  } lcd_vmt = {NULL, NULL, lcd_put, NULL};
   lcdPrintStream ps = {&lcd_vmt, x, y, x, y, 0};
   lcd_set_foreground(LCD_FG_COLOR);
   lcd_set_background(LCD_BG_COLOR);
@@ -1337,7 +1352,7 @@ static uint32_t sd_read_be32(void) {
 
 // Receive data block from SD
 static bool sd_rx_data_block(uint8_t* buff, uint16_t len, uint8_t token) {
-  if (!sd_wait_data_token(token, MS2ST(100))) {
+  if (!sd_wait_data_token(token, TIME_MS2I(100))) {
     DEBUG_PRINT(" rx sd_wait_data_token err\r\n");
     return FALSE;
   }
@@ -1366,7 +1381,7 @@ static bool sd_tx_data_block(const uint8_t* buff, uint16_t len, uint8_t token) {
    * sure the device has released the bus before we transmit a new token and do
    * not report success until it finishes programming the block we just sent.
    */
-  if (sd_wait_not_busy(MS2ST(2000)) != 0xFF)
+  if (sd_wait_not_busy(TIME_MS2I(2000)) != 0xFF)
     return FALSE;
   spi_tx_byte(token);
 #ifdef __USE_SDCARD_DMA__
@@ -1388,7 +1403,7 @@ static bool sd_tx_data_block(const uint8_t* buff, uint16_t len, uint8_t token) {
     DEBUG_PRINT(" Tx accept error = %04x\n", (uint32_t)r1);
     return FALSE;
   }
-  if (sd_wait_not_busy(MS2ST(2000)) != 0xFF)
+  if (sd_wait_not_busy(TIME_MS2I(2000)) != 0xFF)
     return FALSE;
   return TRUE;
 }
@@ -1399,7 +1414,7 @@ static uint8_t sd_send_cmd(uint8_t cmd, uint32_t arg) {
   uint8_t r1;
   if ((cmd & 0x80) && (r1 = sd_send_cmd(CMD55, 0)) > 1)
     return r1;
-  if (sd_wait_not_busy(MS2ST(200)) == 0xFF) {
+  if (sd_wait_not_busy(TIME_MS2I(200)) == 0xFF) {
     buf[0] = cmd & 0x7F;
     buf[1] = (arg >> 24) & 0xFF;
     buf[2] = (arg >> 16) & 0xFF;
@@ -1562,7 +1577,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buff, DWORD sector, UINT count) {
     sector++;
     count--;
   }
-  sd_wait_not_busy(MS2ST(2000));
+  sd_wait_not_busy(TIME_MS2I(2000));
   sd_unselect_spi();
 #if DEBUG == 1
   w_time += chVTGetSystemTimeX();
@@ -1581,7 +1596,7 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff) {
   sd_select_spi(SD_SPI_RX_SPEED);
   switch (cmd) {
   case CTRL_SYNC:
-    if (sd_wait_not_busy(MS2ST(2000)) == 0xFF)
+    if (sd_wait_not_busy(TIME_MS2I(2000)) == 0xFF)
       res = RES_OK;
     break;
 #if FF_USE_TRIM == 1

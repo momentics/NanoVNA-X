@@ -110,23 +110,24 @@ static bool event_bus_enqueue(event_bus_t* bus, event_bus_queue_node_t* node, bo
   }
 
   msg_t msg = (msg_t)node;
-  msg_t result;
+  msg_t result = MSG_OK;
   if (from_isr) {
+    chSysLockFromISR();
     result = chMBPostI(&bus->mailbox, msg);
-  } else {
-    result = chMBPost(&bus->mailbox, msg, TIME_IMMEDIATE);
-  }
-  if (result != MSG_OK) {
-    if (from_isr) {
-      chSysLockFromISR();
+    if (result != MSG_OK) {
       node->in_use = false;
       chSysUnlockFromISR();
-    } else {
+      return false;
+    }
+    chSysUnlockFromISR();
+  } else {
+    result = chMBPostTimeout(&bus->mailbox, msg, TIME_IMMEDIATE);
+    if (result != MSG_OK) {
       chSysLock();
       node->in_use = false;
       chSysUnlock();
+      return false;
     }
-    return false;
   }
   return true;
 }
@@ -177,7 +178,7 @@ bool event_bus_publish_from_isr(event_bus_t* bus, event_bus_topic_t topic, const
   return event_bus_publish_common(bus, topic, payload, true);
 }
 
-bool event_bus_dispatch(event_bus_t* bus, systime_t timeout) {
+bool event_bus_dispatch(event_bus_t* bus, sysinterval_t timeout) {
   if (bus == NULL) {
     return false;
   }
@@ -188,7 +189,7 @@ bool event_bus_dispatch(event_bus_t* bus, systime_t timeout) {
   }
 
   msg_t raw;
-  msg_t result = chMBFetch(&bus->mailbox, &raw, timeout);
+  msg_t result = chMBFetchTimeout(&bus->mailbox, &raw, timeout);
   if (result != MSG_OK) {
     return false;
   }

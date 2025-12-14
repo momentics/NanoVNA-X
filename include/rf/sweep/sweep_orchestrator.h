@@ -60,7 +60,7 @@ void sweep_service_reset_progress(void);
 bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* snapshot);
 bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot);
 
-void sweep_service_start_capture(systime_t delay_ticks);
+void sweep_service_start_capture(sysinterval_t delay_ticks);
 bool sweep_service_wait_for_capture(void);
 const audio_sample_t* sweep_service_rx_buffer(void);
 

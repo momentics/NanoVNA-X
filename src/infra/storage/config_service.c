@@ -72,9 +72,9 @@ static int config_save_impl(void) {
   msg_t msg = MSG_OK;
   // During calibration, don't wait for semaphore as it could delay critical measurements
   if (calibration_in_progress > 0) {
-    msg = chSemWaitTimeout(&flash_operation_semaphore, MS2ST(100)); // Very short timeout during calibration
+    msg = chSemWaitTimeout(&flash_operation_semaphore, TIME_MS2I(100)); // Very short timeout during calibration
   } else {
-    msg = chSemWaitTimeout(&flash_operation_semaphore, MS2ST(500)); // 500ms timeout normally
+    msg = chSemWaitTimeout(&flash_operation_semaphore, TIME_MS2I(500)); // 500ms timeout normally
   }
   
   // If we can't get the semaphore within timeout, return error
@@ -119,7 +119,7 @@ static int caldata_save_impl(uint32_t id) {
   }
 
   // Wait for exclusive access to flash operations
-  msg_t msg = chSemWaitTimeout(&flash_operation_semaphore, MS2ST(500));
+  msg_t msg = chSemWaitTimeout(&flash_operation_semaphore, TIME_MS2I(500));
   if (msg != MSG_OK)
     return -1;
 
@@ -159,7 +159,7 @@ static int caldata_recall_impl(uint32_t id) {
     return 0;
 
   // Wait for exclusive access to flash operations (read consistency)
-  msg_t msg = chSemWaitTimeout(&flash_operation_semaphore, MS2ST(500));
+  msg_t msg = chSemWaitTimeout(&flash_operation_semaphore, TIME_MS2I(500));
   if (msg != MSG_OK)
     return -1;
 
@@ -181,7 +181,7 @@ static int caldata_recall_impl(uint32_t id) {
 
 static void clear_all_config_prop_data_impl(void) {
   // Wait for exclusive access to flash operations with timeout
-  msg_t msg = chSemWaitTimeout(&flash_operation_semaphore, MS2ST(2000)); // 2 second timeout for erase operation
+  msg_t msg = chSemWaitTimeout(&flash_operation_semaphore, TIME_MS2I(2000)); // 2 second timeout for erase operation
   
   // If we can't get the semaphore within timeout, return early
   if (msg != MSG_OK) {

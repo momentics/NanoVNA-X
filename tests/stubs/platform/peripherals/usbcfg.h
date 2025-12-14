@@ -57,7 +57,8 @@ extern USBDriver USBD1;
 
 void sduObjectInit(SerialUSBDriver* driver);
 void sduStart(SerialUSBDriver* driver, const SerialUSBConfig* cfg);
-void sduDisconnectI(SerialUSBDriver* driver);
+void sduSuspendHookI(SerialUSBDriver* driver);
+void sduWakeupHookI(SerialUSBDriver* driver);
 void sduConfigureHookI(SerialUSBDriver* driver);
 void usbDisconnectBus(USBDriver* driver);
 void usbStart(USBDriver* driver, const USBConfig* cfg);

@@ -25,6 +25,7 @@
 #include <stdint.h>
 
 typedef uint32_t systime_t;
+typedef systime_t sysinterval_t;
 typedef intptr_t msg_t;
 
 #ifndef CH_CFG_USE_WAITEXIT
@@ -39,7 +40,12 @@ typedef intptr_t msg_t;
 #define TIME_IMMEDIATE 0
 #define TIME_INFINITE (-1)
 
-#define MS2ST(ms) ((systime_t)(ms))
+#define TIME_MS2I(ms) ((sysinterval_t)(ms))
+#define TIME_US2I(us) ((sysinterval_t)(((us) + 999U) / 1000U))
+#define TIME_S2I(s) ((sysinterval_t)((s) * 1000U))
+#define TIME_I2MS(i) ((uint32_t)(i))
+#define TIME_I2US(i) ((uint32_t)(i) * 1000U)
+#define TIME_I2S(i) ((uint32_t)(i) / 1000U)
 
 typedef struct BaseSequentialStream {
   void* vmt;
@@ -77,9 +83,9 @@ size_t chnReadTimeout(BaseAsynchronousChannel* chp, uint8_t* data, size_t size,
                       systime_t timeout);
 
 void chMBObjectInit(mailbox_t* mbp, msg_t* buf, size_t n);
-msg_t chMBPost(mailbox_t* mbp, msg_t msg, systime_t timeout);
+msg_t chMBPostTimeout(mailbox_t* mbp, msg_t msg, sysinterval_t timeout);
 msg_t chMBPostI(mailbox_t* mbp, msg_t msg);
-msg_t chMBFetch(mailbox_t* mbp, msg_t* msgp, systime_t timeout);
+msg_t chMBFetchTimeout(mailbox_t* mbp, msg_t* msgp, sysinterval_t timeout);
 
 void chSysLock(void);
 void chSysUnlock(void);

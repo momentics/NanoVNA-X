@@ -161,7 +161,10 @@ void sduStart(SerialUSBDriver* driver, const SerialUSBConfig* cfg) {
   (void)driver;
   (void)cfg;
 }
-void sduDisconnectI(SerialUSBDriver* driver) {
+void sduSuspendHookI(SerialUSBDriver* driver) {
+  (void)driver;
+}
+void sduWakeupHookI(SerialUSBDriver* driver) {
   (void)driver;
 }
 void sduConfigureHookI(SerialUSBDriver* driver) {

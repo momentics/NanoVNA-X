@@ -75,4 +75,4 @@ bool event_bus_subscribe(event_bus_t* bus, event_bus_topic_t topic, event_bus_li
 bool event_bus_publish(event_bus_t* bus, event_bus_topic_t topic, const void* payload);
 bool event_bus_publish_from_isr(event_bus_t* bus, event_bus_topic_t topic, const void* payload);
 
-bool event_bus_dispatch(event_bus_t* bus, systime_t timeout);
+bool event_bus_dispatch(event_bus_t* bus, sysinterval_t timeout);

@@ -37,7 +37,7 @@
 #endif
 
 // Measure vbat every 5 second
-#define VBAT_MEASURE_INTERVAL S2ST(5)
+#define VBAT_MEASURE_INTERVAL TIME_S2I(5)
 
 void adc_init(void);
 uint16_t

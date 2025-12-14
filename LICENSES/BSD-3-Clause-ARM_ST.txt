@@ -30,4 +30,4 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 This license text covers files originating from ARM Limited (CMSIS core) and
 STMicroelectronics (STM32 device headers) that are shipped inside
-`third_party/ChibiOS/os/common/ext/CMSIS`.
+`third_party/ChibiOS_21.11.4/os/common/ext/ARM/CMSIS` and `third_party/ChibiOS_21.11.4/os/common/ext/ST`.

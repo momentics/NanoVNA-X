@@ -64,7 +64,7 @@ void chMBObjectInit(mailbox_t* mbp, msg_t* buf, size_t n) {
   mbp->count = 0;
 }
 
-msg_t chMBPost(mailbox_t* mbp, msg_t msg, systime_t timeout) {
+msg_t chMBPostTimeout(mailbox_t* mbp, msg_t msg, sysinterval_t timeout) {
   (void)timeout;
   return mailbox_push(mbp, msg);
 }
@@ -73,7 +73,7 @@ msg_t chMBPostI(mailbox_t* mbp, msg_t msg) {
   return mailbox_push(mbp, msg);
 }
 
-msg_t chMBFetch(mailbox_t* mbp, msg_t* msgp, systime_t timeout) {
+msg_t chMBFetchTimeout(mailbox_t* mbp, msg_t* msgp, sysinterval_t timeout) {
   (void)timeout;
   if (mbp == NULL || mbp->count == 0U) {
     return MSG_TIMEOUT;

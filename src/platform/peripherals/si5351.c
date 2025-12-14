@@ -59,7 +59,7 @@ uint16_t timings[8] = {
     DELAY_RESET_PLL_AFTER,  // 6
 };
 inline void si5351_set_timing(int i, int v) {
-  timings[i] = US2ST(v);
+  timings[i] = (uint16_t)TIME_US2I(v);
 }
 #undef DELAY_BAND_1_2
 #undef DELAY_BAND_3_4
@@ -117,7 +117,7 @@ bool si5351_bulk_read(uint8_t reg, uint8_t* buf, int len) {
 static void si5351_wait_pll_lock(void)
 {
   uint8_t status = 0xFF;  // Initialize to worst case to force at least one read
-  systime_t timeout = chVTGetSystemTimeX() + MS2ST(100); // Set timeout to 100ms
+  systime_t timeout = chVTGetSystemTimeX() + TIME_MS2I(100); // Set timeout to 100ms
   
   // Wait for both PLLA and PLLB to lock (bits 5 and 6 of register 0 should be 0)
   do {

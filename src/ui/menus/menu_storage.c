@@ -361,7 +361,7 @@ static UI_FUNCTION_CALLBACK(menu_sdcard_format_cb) {
   char msg[32];
   FRESULT res = result;
   if (res == FR_OK) {
-    uint32_t elapsed_ms = (uint32_t)ST2MS(chVTTimeElapsedSinceX(start));
+    uint32_t elapsed_ms = (uint32_t)TIME_I2MS(chVTTimeElapsedSinceX(start));
     plot_printf(msg, sizeof(msg), "OK %lums", (unsigned long)elapsed_ms);
   } else
     plot_printf(msg, sizeof(msg), "ERR %d", res);

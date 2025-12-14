@@ -1027,16 +1027,16 @@ VNA_SHELL_FUNCTION(cmd_usart_cfg) {
 }
 
 VNA_SHELL_FUNCTION(cmd_usart) {
-  uint32_t time = MS2ST(200);
+  sysinterval_t timeout = TIME_MS2I(200);
   if (argc == 0 || argc > 2 || VNA_MODE(VNA_MODE_CONNECTION))
     return; // Not work in serial mode
   if (argc == 2)
-    time = MS2ST(my_atoui(argv[1]));
-  sdWriteTimeout(&SD1, (uint8_t*)argv[0], strlen(argv[0]), time);
-  sdWriteTimeout(&SD1, (uint8_t*)VNA_SHELL_NEWLINE_STR, sizeof(VNA_SHELL_NEWLINE_STR) - 1, time);
+    timeout = TIME_MS2I(my_atoui(argv[1]));
+  sdWriteTimeout(&SD1, (uint8_t*)argv[0], strlen(argv[0]), timeout);
+  sdWriteTimeout(&SD1, (uint8_t*)VNA_SHELL_NEWLINE_STR, sizeof(VNA_SHELL_NEWLINE_STR) - 1, timeout);
   uint32_t size;
   uint8_t buffer[64];
-  while ((size = sdReadTimeout(&SD1, buffer, sizeof(buffer), time)))
+  while ((size = sdReadTimeout(&SD1, buffer, sizeof(buffer), timeout)))
     streamWrite(&SDU1, buffer, size);
 }
 #else
