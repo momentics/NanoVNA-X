@@ -49,29 +49,13 @@
 #define STM32_RTC_LSI_PRER                  RTC_PRER( 40, 1000)
 
 // Use auto select source (LSE or LSI)
-//!!!! Need disable hal_lld_backup_domain_init() in hal_lld.c for current CPU!!!!
-//        And if need correct rtc_init part
-#ifdef VNA_AUTO_SELECT_RTC_SOURCE
- #define STM32_LSEDRV                        (3 << 3)
- #define STM32_RTCSEL                        STM32_RTCSEL_NOCLOCK
- #define STM32_LSI_ENABLED                   FALSE
- #define STM32_LSE_ENABLED                   FALSE
-// Disable this function call in ChibiOS, backup domain init on auto select RTC source
- #define STM32_NO_BACKUP_DOMAIN_INIT
-#else
- #ifndef VNA_USE_LSE
-  // Use 40kHz LSI
-  #define STM32_LSE_ENABLED                   FALSE
-  #define STM32_LSI_ENABLED                   TRUE
-  #define STM32_RTCSEL                        STM32_RTCSEL_LSI
- #else
-// Use 32768Hz LSE
-  #define STM32_LSE_ENABLED                   TRUE
-  #define STM32_LSI_ENABLED                   FALSE
-  #define STM32_RTCSEL                        STM32_RTCSEL_LSE
-  #define STM32_LSEDRV                        (3 << 3)
- #endif
-#endif
+// Forced LSI Configuration matching OOD and Standard ChibiOS 21.11
+#define STM32_LSEDRV                        (3 << 3)
+#define STM32_LSI_ENABLED                   TRUE
+#define STM32_LSE_ENABLED                   FALSE
+#define STM32_RTCSEL                        STM32_RTCSEL_LSI
+// Deprecated define ignored by standard HAL but kept for reference
+// #define STM32_NO_BACKUP_DOMAIN_INIT
 
 // ADC Settings
 #define STM32_ADC_USE_ADC1                  FALSE
