@@ -1,23 +1,3 @@
-/*
- * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * All rights reserved.
- *
- * This is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3, or (at your option)
- * any later version.
- *
- * The software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with GNU Radio; see the file COPYING.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street,
- * Boston, MA 02110-1301, USA.
- */
-
 #pragma once
 
 #include "ui/core/ui_core.h"
@@ -90,9 +70,9 @@ enum {
 typedef struct {
   uint8_t keypad_type;
   uint8_t data;
-  const char* name;
+  const char *name;
   const keyboard_cb_t cb;
-} __attribute__((packed)) keypads_list;
+} __attribute__((packed)) keypads_list_t;
 
 // Buffer for input
 // Max keyboard input length
@@ -116,6 +96,6 @@ void ui_keypad_lever(uint16_t status);
 void ui_keypad_touch(int touch_x, int touch_y);
 
 // Callback
-void ui_keyboard_cb(uint16_t data, button_t* b);
+void ui_keyboard_cb(uint16_t data, button_t *b);
 
 extern uint8_t keypad_mode;

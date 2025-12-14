@@ -58,32 +58,36 @@ enum { VNA_MODE_CONNECTION = 0 };
 
 #define ARRAY_COUNT(a) (sizeof(a) / sizeof(*(a)))
 #define STR1(x) #x
-#define define_to_STR(x) STR1(x)
+#define DEFINE_TO_STR(x) STR1(x)
 
-#define SWAP(type, x, y)                                                                         \
-  do {                                                                                           \
-    type _tmp = (x);                                                                             \
-    (x) = (y);                                                                                   \
-    (y) = _tmp;                                                                                  \
+#define SWAP(type, x, y)                                                                           \
+  do {                                                                                             \
+    type _tmp = (x);                                                                               \
+    (x) = (y);                                                                                     \
+    (y) = _tmp;                                                                                    \
   } while (0)
 
 #include "processing/vna_math.h"
 
-int parse_line(char* line, char* args[], int max_cnt);
-int get_str_index(const char* value, const char* list);
+int parse_line(char *line, char *args[], int max_cnt);
+int get_str_index(const char *value, const char *list);
 
 void lcd_fill(int x, int y, int w, int h);
 void lcd_bulk(int x, int y, int w, int h);
 void lcd_drawchar(uint8_t ch, int x, int y);
 int lcd_drawchar_size(uint8_t ch, int x, int y, uint8_t size);
 void lcd_drawfont(uint8_t ch, int x, int y);
-void lcd_drawstring(int x, int y, const char* str);
-void lcd_drawstring_size(const char* str, int x, int y, uint8_t size);
-int lcd_printf_va(int16_t x, int16_t y, const char* fmt, va_list args);
-void lcd_read_memory(int x, int y, int w, int h, uint16_t* out);
+void lcd_drawstring(int x, int y, const char *str);
+#define LCD_DRAWSTRING lcd_drawstring
+void lcd_drawstring_size(const char *str, int x, int y, uint8_t size);
+int lcd_printf_va(int16_t x, int16_t y, const char *fmt, va_list args);
+void lcd_read_memory(int x, int y, int w, int h, uint16_t *out);
 void lcd_line(int x0, int y0, int x1, int y1);
 void lcd_set_background(uint16_t bg);
 void lcd_set_colors(uint16_t fg, uint16_t bg);
 void lcd_set_flip(bool flip);
 void lcd_set_font(int type);
-void lcd_blit_bitmap(uint16_t x, uint16_t y, uint16_t width, uint16_t height, const uint8_t* bitmap);
+#define LCD_SET_FONT(type) lcd_set_font(type)
+void pause_sweep(void);
+void lcd_blit_bitmap(uint16_t x, uint16_t y, uint16_t width, uint16_t height,
+                     const uint8_t *bitmap);

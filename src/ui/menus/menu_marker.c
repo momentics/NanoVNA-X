@@ -1,23 +1,3 @@
-/*
- * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * All rights reserved.
- *
- * This is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3, or (at your option)
- * any later version.
- *
- * The software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with GNU Radio; see the file COPYING.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street,
- * Boston, MA 02110-1301, USA.
- */
-
 #include "ch.h"
 #include "hal.h"
 #include "nanovna.h"
@@ -25,7 +5,7 @@
 #include "ui/core/ui_core.h"
 #include "ui/core/ui_menu_engine.h"
 #include "ui/menus/menu_marker.h"
-#include "ui/menus/menu_display.h" 
+#include "ui/menus/menu_display.h"
 
 // Macros
 #define UI_MARKER_EDELAY 6
@@ -80,7 +60,7 @@ static UI_FUNCTION_CALLBACK(menu_marker_op_cb) {
   case UI_MARKER_EDELAY:
     if (current_trace != TRACE_INVALID) {
       int ch = trace[current_trace].channel;
-      float (*array)[2] = measured[ch];
+      float(*array)[2] = measured[ch];
       int index = markers[active_marker].index;
       float v = groupdelay_from_array(index, array[index]);
       set_electrical_delay(ch, current_props._electrical_delay[ch] + v);
@@ -112,10 +92,11 @@ static UI_FUNCTION_ADV_CALLBACK(menu_marker_sel_acb) {
   // if (data >= MARKERS_MAX) return;
   int mk = data;
   if (b) {
-    if (mk == active_marker)
+    if (mk == active_marker) {
       b->icon = BUTTON_ICON_CHECK_AUTO;
-    else if (markers[mk].enabled)
+    } else if (markers[mk].enabled) {
       b->icon = BUTTON_ICON_CHECK;
+}
     b->p1.u = mk + 1;
     return;
   }
@@ -157,39 +138,39 @@ static UI_FUNCTION_ADV_CALLBACK(menu_marker_delta_acb) {
 
 // Descriptors and Dynamic Builders
 
-static const menu_descriptor_t menu_marker_sel_desc[] = {
-    {MT_ADV_CALLBACK, 0},
+static const menu_descriptor_t MENU_MARKER_SEL_DESC[] = {
+  {MT_ADV_CALLBACK, 0},
 #if MARKERS_MAX >= 2
-    {MT_ADV_CALLBACK, 1},
+  {MT_ADV_CALLBACK, 1},
 #endif
 #if MARKERS_MAX >= 3
-    {MT_ADV_CALLBACK, 2},
+  {MT_ADV_CALLBACK, 2},
 #endif
 #if MARKERS_MAX >= 4
-    {MT_ADV_CALLBACK, 3},
+  {MT_ADV_CALLBACK, 3},
 #endif
 #if MARKERS_MAX >= 5
-    {MT_ADV_CALLBACK, 4},
+  {MT_ADV_CALLBACK, 4},
 #endif
 #if MARKERS_MAX >= 6
-    {MT_ADV_CALLBACK, 5},
+  {MT_ADV_CALLBACK, 5},
 #endif
 #if MARKERS_MAX >= 7
-    {MT_ADV_CALLBACK, 6},
+  {MT_ADV_CALLBACK, 6},
 #endif
 #if MARKERS_MAX >= 8
-    {MT_ADV_CALLBACK, 7},
+  {MT_ADV_CALLBACK, 7},
 #endif
 };
 
-const menuitem_t* menu_build_marker_select_menu(void) {
-  menuitem_t* cursor = menu_dynamic_acquire();
-  const menuitem_t* base = cursor;
-  cursor = ui_menu_list(menu_marker_sel_desc, ARRAY_COUNT(menu_marker_sel_desc), "MARKER %d",
+const menuitem_t *menu_build_marker_select_menu(void) {
+  menuitem_t *cursor = menu_dynamic_acquire();
+  const menuitem_t *base = cursor;
+  cursor = ui_menu_list(MENU_MARKER_SEL_DESC, ARRAY_COUNT(MENU_MARKER_SEL_DESC), "MARKER %d",
                         menu_marker_sel_acb, cursor);
   *cursor++ = (menuitem_t){MT_CALLBACK, 0, "ALL OFF", menu_marker_disable_all_cb};
   *cursor++ = (menuitem_t){MT_ADV_CALLBACK, 0, "DELTA", menu_marker_delta_acb};
-  menu_set_next(cursor, menu_back);
+  menu_set_next(cursor, MENU_BACK);
   return base;
 }
 
@@ -198,17 +179,17 @@ static UI_FUNCTION_CALLBACK(menu_marker_select_cb) {
   menu_push_submenu(menu_build_marker_select_menu());
 }
 
-const menuitem_t menu_marker[] = {
-    {MT_CALLBACK, 0, "SELECT\nMARKER", menu_marker_select_cb},
-    {MT_ADV_CALLBACK, 0, "TRACKING", menu_marker_tracking_acb},
-    {MT_ADV_CALLBACK, VNA_MODE_SEARCH, "SEARCH\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
-    {MT_CALLBACK, MK_SEARCH_LEFT, "SEARCH\n " S_LARROW "LEFT", menu_marker_search_dir_cb},
-    {MT_CALLBACK, MK_SEARCH_RIGHT, "SEARCH\n " S_RARROW "RIGHT", menu_marker_search_dir_cb},
-    {MT_CALLBACK, ST_START, "MOVE\nSTART", menu_marker_op_cb},
-    {MT_CALLBACK, ST_STOP, "MOVE\nSTOP", menu_marker_op_cb},
-    {MT_CALLBACK, ST_CENTER, "MOVE\nCENTER", menu_marker_op_cb},
-    {MT_CALLBACK, ST_SPAN, "MOVE\nSPAN", menu_marker_op_cb},
-    {MT_CALLBACK, UI_MARKER_EDELAY, "MARKER\nE-DELAY", menu_marker_op_cb},
-    {MT_ADV_CALLBACK, 0, "DELTA", menu_marker_delta_acb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+const menuitem_t MENU_MARKER[] = {
+  {MT_CALLBACK, 0, "SELECT\nMARKER", menu_marker_select_cb},
+  {MT_ADV_CALLBACK, 0, "TRACKING", menu_marker_tracking_acb},
+  {MT_ADV_CALLBACK, VNA_MODE_SEARCH, "SEARCH\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
+  {MT_CALLBACK, MK_SEARCH_LEFT, "SEARCH\n " S_LARROW "LEFT", menu_marker_search_dir_cb},
+  {MT_CALLBACK, MK_SEARCH_RIGHT, "SEARCH\n " S_RARROW "RIGHT", menu_marker_search_dir_cb},
+  {MT_CALLBACK, ST_START, "MOVE\nSTART", menu_marker_op_cb},
+  {MT_CALLBACK, ST_STOP, "MOVE\nSTOP", menu_marker_op_cb},
+  {MT_CALLBACK, ST_CENTER, "MOVE\nCENTER", menu_marker_op_cb},
+  {MT_CALLBACK, ST_SPAN, "MOVE\nSPAN", menu_marker_op_cb},
+  {MT_CALLBACK, UI_MARKER_EDELAY, "MARKER\nE-DELAY", menu_marker_op_cb},
+  {MT_ADV_CALLBACK, 0, "DELTA", menu_marker_delta_acb},
+  {MT_NEXT, 0, NULL, MENU_BACK} // next-> MENU_BACK
 };

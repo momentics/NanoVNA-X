@@ -30,15 +30,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
-BaseSequentialStream* uart_dma_stream(void);
+BaseSequentialStream *uart_dma_stream(void);
 void uart_dma_init(uint32_t baudrate);
 void uart_dma_set_baudrate(uint32_t baudrate);
 void uart_dma_stop(void);
 void uart_dma_flush_queues(void);
-size_t uart_dma_write_timeout(const uint8_t* data, size_t size, systime_t timeout);
-size_t uart_dma_read_timeout(uint8_t* data, size_t size, systime_t timeout);
+size_t uart_dma_write_timeout(const uint8_t *data, size_t size, systime_t timeout);
+size_t uart_dma_read_timeout(uint8_t *data, size_t size, systime_t timeout);
 msg_t uart_dma_put_timeout(uint8_t value, systime_t timeout);
-msg_t uart_dma_get_timeout(uint8_t* value, systime_t timeout);
+msg_t uart_dma_get_timeout(uint8_t *value, systime_t timeout);
 
 #endif
-

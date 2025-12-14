@@ -1,15 +1,38 @@
 ---
 BasedOnStyle: LLVM
 Language: Cpp
+Standard: c++11 # For C11 compatibility in structure
+
+# Indentation
 IndentWidth: 2
 TabWidth: 2
 UseTab: Never
+ContinuationIndentWidth: 2
+IndentCaseLabels: false
+
+# Line Width
 ColumnLimit: 100
+
+# Braces (K&R Style)
 BreakBeforeBraces: Attach
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
-AllowShortFunctionsOnASingleLine: InlineOnly
-SortIncludes: false
-PointerAlignment: Left
+AllowShortFunctionsOnASingleLine: Empty # Only allow empty functions on single line
+NamespaceIndentation: None
+
+# Spacing & Alignment
+PointerAlignment: Right # Matches standard C pointer * placement (char *p) common in embedded
 SpaceBeforeParens: ControlStatements
-... 
+SpaceInEmptyParentheses: false
+AlignTrailingComments: true
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignOperands: true
+
+# Includes
+SortIncludes: false # Keep manual include order as per embedded requirements
+
+# Macros
+MacroBlockBegin: ''
+MacroBlockEnd: ''
+...

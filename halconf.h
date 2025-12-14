@@ -28,16 +28,13 @@
 #ifndef _HALCONF_H_
 #define _HALCONF_H_
 
-#define _CHIBIOS_HAL_CONF_
-#define _CHIBIOS_HAL_CONF_VER_9_0_
-
 #include "mcuconf.h"
 
 /**
  * @brief   Enables the PAL subsystem.
  */
 #if !defined(HAL_USE_PAL) || defined(__DOXYGEN__)
-#define HAL_USE_PAL FALSE
+#define HAL_USE_PAL TRUE
 #endif
 
 /**
@@ -65,7 +62,7 @@
  * @brief   Enables the EXT subsystem.
  */
 #if !defined(HAL_USE_EXT) || defined(__DOXYGEN__)
-#define HAL_USE_EXT FALSE
+#define HAL_USE_EXT TRUE
 #endif
 
 /**
@@ -135,11 +132,7 @@
  * @brief   Enables the SERIAL subsystem.
  */
 #if !defined(HAL_USE_SERIAL) || defined(__DOXYGEN__)
-#if defined(NANOVNA_F303)
 #define HAL_USE_SERIAL TRUE
-#else
-#define HAL_USE_SERIAL FALSE
-#endif
 #endif
 
 /**
@@ -157,7 +150,7 @@
  * @brief   Enables the SPI subsystem.
  */
 #if !defined(HAL_USE_SPI) || defined(__DOXYGEN__)
-#define HAL_USE_SPI FALSE
+#define HAL_USE_SPI TRUE
 #endif
 
 /**
@@ -344,8 +337,8 @@
 #endif
 
 // USB Send timeout
-// #define USB_WRITE_TIMEOUT                    TIME_MS2I(100)   // 100ms
-// #define USB_READ_TIMEOUT                     TIME_MS2I(100)   // 100ms
+// #define USB_WRITE_TIMEOUT                    MS2ST(100)   // 100ms
+// #define USB_READ_TIMEOUT                     MS2ST(100)   // 100ms
 
 // #define STM32_USB_USE_FAST_COPY   TRUE
 // #define STM32_USB_USE_ISOCHRONOUS TRUE

@@ -37,14 +37,14 @@ typedef enum {
 
 typedef struct {
   event_bus_topic_t topic;
-  const void* payload;
+  const void *payload;
 } event_bus_message_t;
 
-typedef void (*event_bus_listener_t)(const event_bus_message_t* message, void* user_data);
+typedef void (*event_bus_listener_t)(const event_bus_message_t *message, void *user_data);
 
 typedef struct {
   event_bus_listener_t callback;
-  void* user_data;
+  void *user_data;
   event_bus_topic_t topic;
 } event_bus_subscription_t;
 
@@ -54,25 +54,25 @@ typedef struct {
 } event_bus_queue_node_t;
 
 typedef struct {
-  event_bus_subscription_t* subscriptions;
+  event_bus_subscription_t *subscriptions;
   size_t capacity;
   size_t count;
   mailbox_t mailbox;
   bool mailbox_ready;
-  msg_t* queue_storage;
+  msg_t *queue_storage;
   size_t queue_length;
-  event_bus_queue_node_t* nodes;
+  event_bus_queue_node_t *nodes;
   size_t node_count;
 } event_bus_t;
 
-void event_bus_init(event_bus_t* bus, event_bus_subscription_t* storage, size_t capacity,
-                    msg_t* queue_storage, size_t queue_length, event_bus_queue_node_t* nodes,
+void event_bus_init(event_bus_t *bus, event_bus_subscription_t *storage, size_t capacity,
+                    msg_t *queue_storage, size_t queue_length, event_bus_queue_node_t *nodes,
                     size_t node_count);
 
-bool event_bus_subscribe(event_bus_t* bus, event_bus_topic_t topic, event_bus_listener_t listener,
-                         void* user_data);
+bool event_bus_subscribe(event_bus_t *bus, event_bus_topic_t topic, event_bus_listener_t listener,
+                         void *user_data);
 
-bool event_bus_publish(event_bus_t* bus, event_bus_topic_t topic, const void* payload);
-bool event_bus_publish_from_isr(event_bus_t* bus, event_bus_topic_t topic, const void* payload);
+bool event_bus_publish(event_bus_t *bus, event_bus_topic_t topic, const void *payload);
+bool event_bus_publish_from_isr(event_bus_t *bus, event_bus_topic_t topic, const void *payload);
 
-bool event_bus_dispatch(event_bus_t* bus, sysinterval_t timeout);
+bool event_bus_dispatch(event_bus_t *bus, systime_t timeout);

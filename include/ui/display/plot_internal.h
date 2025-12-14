@@ -1,23 +1,3 @@
-/*
- * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * All rights reserved.
- *
- * This is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3, or (at your option)
- * any later version.
- *
- * The software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with GNU Radio; see the file COPYING.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street,
- * Boston, MA 02110-1301, USA.
- */
-
 #ifndef UI_DISPLAY_PLOT_INTERNAL_H
 #define UI_DISPLAY_PLOT_INTERNAL_H
 
@@ -26,6 +6,7 @@
 #include "nanovna.h"
 
 // Cell render use spi buffer
+
 /**
  * @brief Rendering context for a single LCD cell.
  *
@@ -33,12 +14,14 @@
  * top-left corner of the plot area.
  */
 typedef struct {
-  pixel_t* buf;
+  pixel_t *buf;
   uint16_t w;
   uint16_t h;
   uint16_t x0;
   uint16_t y0;
-} RenderCellCtx;
+} render_cell_ctx_t;
+
+typedef render_cell_ctx_t RenderCellCtx;
 
 /**
  * @brief Tracks state transitions when recomputing trace sample positions.
@@ -47,7 +30,9 @@ typedef struct {
   uint16_t diff;
   uint16_t last_x;
   uint16_t last_y;
-} MarkLineState;
+} mark_line_state_t;
+
+typedef mark_line_state_t MarkLineState;
 
 /**
  * @brief Result bounds for locating sweep indices within a cell.
@@ -56,7 +41,9 @@ typedef struct {
   bool found;
   uint16_t i0;
   uint16_t i1;
-} TraceIndexRange;
+} trace_index_range_t;
+
+typedef trace_index_range_t TraceIndexRange;
 
 // PORT_Z definition moved from plot.c
 #ifdef __VNA_Z_RENORMALIZATION__
@@ -75,14 +62,15 @@ static inline uint16_t clamp_u16(int value, uint16_t min_value, uint16_t max_val
   return (uint16_t)value;
 }
 
-static inline pixel_t* cell_ptr(const RenderCellCtx* rcx, uint16_t x, uint16_t y) {
+static inline pixel_t *cell_ptr(const render_cell_ctx_t *rcx, uint16_t x, uint16_t y) {
   return rcx->buf + (uint32_t)y * CELLWIDTH + x;
 }
 
-static inline void cell_clear(RenderCellCtx* rcx, pixel_t color) {
-  // chDbgAssert(((uintptr_t)rcx->buf % sizeof(uint32_t)) == 0, "cell buffer must be 32-bit aligned");
+static inline void cell_clear(render_cell_ctx_t *rcx, pixel_t color) {
+  // chDbgAssert(((uintptr_t)rcx->buf % sizeof(uint32_t)) == 0, "cell buffer must be 32-bit
+  // aligned");
   const size_t rows = rcx->h;
-  uint32_t* dst32 = (uint32_t*)rcx->buf;
+  uint32_t *dst32 = (uint32_t *)rcx->buf;
 #if LCD_PIXEL_SIZE == 2
   const uint32_t packed = (uint32_t)color | ((uint32_t)color << 16);
   const size_t stride32 = CELLWIDTH / 2;
@@ -92,8 +80,8 @@ static inline void cell_clear(RenderCellCtx* rcx, pixel_t color) {
     dst32 += stride32;
   }
 #elif LCD_PIXEL_SIZE == 1
-  const uint32_t packed = (uint32_t)color | ((uint32_t)color << 8) | ((uint32_t)color << 16) |
-                          ((uint32_t)color << 24);
+  const uint32_t packed =
+    (uint32_t)color | ((uint32_t)color << 8) | ((uint32_t)color << 16) | ((uint32_t)color << 24);
   const size_t stride32 = CELLWIDTH / 4;
   for (size_t y = 0; y < rows; ++y) {
     for (size_t x = 0; x < stride32; ++x)
@@ -105,13 +93,13 @@ static inline void cell_clear(RenderCellCtx* rcx, pixel_t color) {
 #endif
 }
 
-static inline RenderCellCtx render_cell_ctx(int x0, int y0, uint16_t w, uint16_t h, pixel_t* buf) {
-  RenderCellCtx ctx = {
-      .buf = buf,
-      .w = w,
-      .h = h,
-      .x0 = (uint16_t)x0,
-      .y0 = (uint16_t)y0,
+static inline render_cell_ctx_t render_cell_ctx(int x0, int y0, uint16_t w, uint16_t h, pixel_t *buf) {
+  render_cell_ctx_t ctx = {
+    .buf = buf,
+    .w = w,
+    .h = h,
+    .x0 = (uint16_t)x0,
+    .y0 = (uint16_t)y0,
   };
   return ctx;
 }
@@ -146,10 +134,11 @@ static inline map_t markmap_mask(uint16_t x_begin, uint16_t x_end) {
   map_t m = 0;
   // Create mask for range [x_begin, x_end]
   // 1. Create mask for bits up to x_end (inclusive)
-  if (x_end < sizeof(map_t) * 8 - 1)
+  if (x_end < sizeof(map_t) * 8 - 1) {
     m = ((map_t)1 << (x_end + 1)) - 1;
-  else
+  } else {
     m = (map_t)-1;
+  }
   // 2. Clear bits before x_begin
   if (x_begin > 0)
     m &= ~(((map_t)1 << x_begin) - 1);
@@ -192,6 +181,8 @@ static inline float get_s21_x(float re, float im, float z) {
   return -2.0f * z * im / get_l(re, im);
 }
 
-static inline float get_w(int i) { return 2 * VNA_PI * get_sweep_frequency(ST_START + i); }
+static inline float get_w(int i) {
+  return 2 * VNA_PI * get_sweep_frequency(ST_START + i);
+}
 
 #endif // UI_DISPLAY_PLOT_INTERNAL_H

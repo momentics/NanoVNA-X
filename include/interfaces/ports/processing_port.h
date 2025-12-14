@@ -23,7 +23,7 @@
 #include "nanovna.h"
 
 typedef struct processing_port processing_port_t;
-typedef void (*processing_sample_func_t)(float* gamma);
+typedef void (*processing_sample_func_t)(float *gamma);
 
 typedef struct processing_port_api {
   processing_sample_func_t calculate_gamma;
@@ -32,9 +32,8 @@ typedef struct processing_port_api {
 } processing_port_api_t;
 
 struct processing_port {
-  void* context;
-  const processing_port_api_t* api;
+  void *context;
+  const processing_port_api_t *api;
 };
 
-extern const processing_port_api_t processing_port_api;
-
+extern const processing_port_api_t PROCESSING_PORT_API;

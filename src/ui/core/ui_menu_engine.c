@@ -1,23 +1,3 @@
-/*
- * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * All rights reserved.
- *
- * This is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3, or (at your option)
- * any later version.
- *
- * The software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with GNU Radio; see the file COPYING.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street,
- * Boston, MA 02110-1301, USA.
- */
-
 #include "ch.h"
 #include "hal.h"
 #include "nanovna.h"
@@ -30,21 +10,21 @@
 // Bring in macros for drawing (or include a common ui_draw.h if I created one)
 // For now, reuse the macros as localized here.
 #undef lcd_drawstring
-#define lcd_drawstring(...) display_presenter_drawstring(__VA_ARGS__)
-#define lcd_printf(...) display_presenter_printf(__VA_ARGS__)
-#define lcd_fill(...) display_presenter_fill(__VA_ARGS__)
-#define lcd_set_background(...) display_presenter_set_background(__VA_ARGS__)
-#define lcd_set_colors(...) display_presenter_set_colors(__VA_ARGS__)
-#define lcd_set_font(...) display_presenter_set_font(__VA_ARGS__)
-#define lcd_blit_bitmap(...) display_presenter_blit_bitmap(__VA_ARGS__)
-
+#undef LCD_DRAWSTRING
+#define LCD_DRAWSTRING(...) display_presenter_drawstring(__VA_ARGS__)
+#define LCD_PRINTF(...) display_presenter_printf(__VA_ARGS__)
+#define LCD_FILL(...) display_presenter_fill(__VA_ARGS__)
+#define LCD_SET_BACKGROUND(...) display_presenter_set_background(__VA_ARGS__)
+#define LCD_SET_COLORS(...) display_presenter_set_colors(__VA_ARGS__)
+#define LCD_SET_FONT(...) display_presenter_set_font(__VA_ARGS__)
+#define LCD_BLIT_BITMAP(...) display_presenter_blit_bitmap(__VA_ARGS__)
 
 // Externs
-extern const menuitem_t menu_top[];
+extern const menuitem_t MENU_TOP[];
 
 // State variables
 #define MENU_STACK_DEPTH_MAX 5
-const menuitem_t* menu_stack[MENU_STACK_DEPTH_MAX];
+const menuitem_t *menu_stack[MENU_STACK_DEPTH_MAX];
 uint8_t menu_current_level = 0;
 int8_t selection = -1;
 static uint16_t menu_button_height;
@@ -53,9 +33,8 @@ static uint16_t menu_button_height;
 // Menu Helper Functions
 // ===================================
 
-menuitem_t* ui_menu_list(const menu_descriptor_t* descriptors, size_t count,
-                                const char* label, const void* reference,
-                                menuitem_t* out) {
+menuitem_t *ui_menu_list(const menu_descriptor_t *descriptors, size_t count, const char *label,
+                         const void *reference, menuitem_t *out) {
   if (descriptors == NULL || out == NULL)
     return out;
   for (size_t i = 0; i < count; i++) {
@@ -68,7 +47,7 @@ menuitem_t* ui_menu_list(const menu_descriptor_t* descriptors, size_t count,
   return out;
 }
 
-void menu_set_next(menuitem_t* entry, const menuitem_t* next) {
+void menu_set_next(menuitem_t *entry, const menuitem_t *next) {
   if (entry == NULL)
     return;
   entry->type = MT_NEXT;
@@ -77,7 +56,7 @@ void menu_set_next(menuitem_t* entry, const menuitem_t* next) {
   entry->reference = next;
 }
 
-void ui_cycle_option(uint16_t* dst, const option_desc_t* list, size_t count, button_t* b) {
+void ui_cycle_option(uint16_t *dst, const option_desc_t *list, size_t count, button_t *b) {
   if (dst == NULL || list == NULL || count == 0)
     return;
   size_t idx = 0;
@@ -85,7 +64,7 @@ void ui_cycle_option(uint16_t* dst, const option_desc_t* list, size_t count, but
     idx++;
   if (idx >= count)
     idx = 0;
-  const option_desc_t* desc = &list[idx];
+  const option_desc_t *desc = &list[idx];
   if (b) {
     if (desc->label)
       b->p1.text = desc->label;
@@ -98,7 +77,7 @@ void ui_cycle_option(uint16_t* dst, const option_desc_t* list, size_t count, but
 }
 
 static void menu_stack_reset_internal(void) {
-  menu_stack[0] = menu_top;
+  menu_stack[0] = MENU_TOP;
   for (size_t i = 1; i < MENU_STACK_DEPTH_MAX; i++) {
     menu_stack[i] = NULL;
   }
@@ -111,15 +90,15 @@ void menu_stack_reset(void) {
   menu_stack_reset_internal();
 }
 
-static const menuitem_t* menu_next_item(const menuitem_t* m) {
+static const menuitem_t *menu_next_item(const menuitem_t *m) {
   if (m == NULL)
     return NULL;
   m++; // Next item
-  return m->type == MT_NEXT ? (menuitem_t*)m->reference : m;
+  return m->type == MT_NEXT ? (menuitem_t *)m->reference : m;
 }
 
-const menuitem_t* current_menu_item(int i) {
-  const menuitem_t* m = menu_stack[menu_current_level];
+const menuitem_t *current_menu_item(int i) {
+  const menuitem_t *m = menu_stack[menu_current_level];
   while (i--)
     m = menu_next_item(m);
   return m;
@@ -127,7 +106,7 @@ const menuitem_t* current_menu_item(int i) {
 
 int current_menu_get_count(void) {
   int i = 0;
-  const menuitem_t* m = menu_stack[menu_current_level];
+  const menuitem_t *m = menu_stack[menu_current_level];
   while (m) {
     m = menu_next_item(m);
     i++;
@@ -135,24 +114,27 @@ int current_menu_get_count(void) {
   return i;
 }
 
-static int get_lines_count(const char* label) {
+static int get_lines_count(const char *label) {
   int n = 1;
-  while (*label)
+  while (*label) {
     if (*label++ == '\n')
       n++;
+}
   return n;
 }
 
 static void ensure_selection(void) {
   int i = current_menu_get_count();
-  if (selection < 0)
+  if (selection < 0) {
     selection = -1;
-  else if (selection >= i)
+  } else if (selection >= i) {
     selection = i - 1;
-  if (i < MENU_BUTTON_MIN)
+}
+  if (i < MENU_BUTTON_MIN) {
     i = MENU_BUTTON_MIN;
-  else if (i >= MENU_BUTTON_MAX)
+  } else if (i >= MENU_BUTTON_MAX) {
     i = MENU_BUTTON_MAX;
+}
   menu_button_height = MENU_BUTTON_HEIGHT(i);
 }
 
@@ -165,12 +147,12 @@ void menu_move_back(bool leave_ui) {
     ui_mode_normal();
 }
 
-void menu_set_submenu(const menuitem_t* submenu) {
+void menu_set_submenu(const menuitem_t *submenu) {
   menu_stack[menu_current_level] = submenu;
   ensure_selection();
 }
 
-void menu_push_submenu(const menuitem_t* submenu) {
+void menu_push_submenu(const menuitem_t *submenu) {
   if (menu_current_level < MENU_STACK_DEPTH_MAX - 1)
     menu_current_level++;
   menu_set_submenu(submenu);
@@ -179,21 +161,19 @@ void menu_push_submenu(const menuitem_t* submenu) {
 // Icons
 #include "../resources/icons/icons_menu.h"
 // This path might be wrong relative to ui/core/
-// Original: #include "../resources/icons/icons_menu.h" in ui_controller.c (src/ui/controller/ui_controller.c)
-// src/ui/core/ui_menu_engine.c -> ../../resources/icons/icons_menu.h?
-// resources/icons is likely in src/ui/resources/icons or src/resources/icons?
-// I need to check where resources dir is.
-// view_dir was not used but likely in `src/ui/resources` or `src/resources`.
-// I'll assume relative path from src (NanoVNA-X root include path is usually added).
-// But #include "..." uses relative to file.
-// If file is in src/ui/core/, ../../ moves to src/.
-// Then resources/icons/icons_menu.h.
+// Original: #include "../resources/icons/icons_menu.h" in ui_controller.c
+// (src/ui/controller/ui_controller.c) src/ui/core/ui_menu_engine.c ->
+// ../../resources/icons/icons_menu.h? resources/icons is likely in src/ui/resources/icons or
+// src/resources/icons? I need to check where resources dir is. view_dir was not used but likely in
+// `src/ui/resources` or `src/resources`. I'll assume relative path from src (NanoVNA-X root include
+// path is usually added). But #include "..." uses relative to file. If file is in src/ui/core/,
+// ../../ moves to src/. Then resources/icons/icons_menu.h.
 
 // ===================================
 // Drawing
 // ===================================
 
-static void menu_draw_buttons(const menuitem_t* m, uint32_t mask) {
+static void menu_draw_buttons(const menuitem_t *m, uint32_t mask) {
   int i;
   int y = MENU_BUTTON_Y_OFFSET;
   for (i = 0; i < MENU_BUTTON_MAX && m; i++, m = menu_next_item(m), y += menu_button_height) {
@@ -213,7 +193,7 @@ static void menu_draw_buttons(const menuitem_t* m, uint32_t mask) {
       button.border = MENU_BUTTON_BORDER | BUTTON_BORDER_RISE;
     }
     // Custom button, apply custom settings/label from callback
-    const char* text;
+    const char *text;
     uint16_t text_offs;
     if (m->type == MT_ADV_CALLBACK) {
       button.label[0] = 0;
@@ -230,7 +210,7 @@ static void menu_draw_buttons(const menuitem_t* m, uint32_t mask) {
                    &button);
     // Draw icon if need (and add extra shift for text)
     if (button.icon >= 0) {
-      lcd_blit_bitmap(LCD_WIDTH - MENU_BUTTON_WIDTH + MENU_BUTTON_BORDER + MENU_ICON_OFFSET,
+      LCD_BLIT_BITMAP(LCD_WIDTH - MENU_BUTTON_WIDTH + MENU_BUTTON_BORDER + MENU_ICON_OFFSET,
                       y + (menu_button_height - ICON_HEIGHT) / 2, ICON_WIDTH, ICON_HEIGHT,
                       ICON_GET_DATA(button.icon));
       text_offs = LCD_WIDTH - MENU_BUTTON_WIDTH + MENU_BUTTON_BORDER + MENU_ICON_OFFSET + ICON_SIZE;
@@ -240,30 +220,29 @@ static void menu_draw_buttons(const menuitem_t* m, uint32_t mask) {
     int lines = get_lines_count(text);
 #if _USE_FONT_ != _USE_SMALL_FONT_
     if (menu_button_height < lines * FONT_GET_HEIGHT + 2) {
-      lcd_set_font(FONT_SMALL);
-      lcd_drawstring(text_offs, y + (menu_button_height - lines * sFONT_STR_HEIGHT - 1) / 2, text);
+      LCD_SET_FONT(FONT_SMALL);
+      LCD_DRAWSTRING(text_offs, y + (menu_button_height - lines * sFONT_STR_HEIGHT - 1) / 2, text);
     } else {
-      lcd_set_font(FONT_NORMAL);
+      LCD_SET_FONT(FONT_NORMAL);
       lcd_printf(
-          text_offs,
-          y + (menu_button_height - lines * FONT_STR_HEIGHT + (FONT_STR_HEIGHT - FONT_GET_HEIGHT)) /
-                  2,
-          text);
+        text_offs,
+        y +
+          (menu_button_height - lines * FONT_STR_HEIGHT + (FONT_STR_HEIGHT - FONT_GET_HEIGHT)) / 2,
+        text);
     }
 #else
-    lcd_printf(
-        text_offs,
-        y + (menu_button_height - lines * FONT_STR_HEIGHT + (FONT_STR_HEIGHT - FONT_GET_HEIGHT)) /
-                2,
-        text);
+    LCD_PRINTF(
+      text_offs,
+      y + (menu_button_height - lines * FONT_STR_HEIGHT + (FONT_STR_HEIGHT - FONT_GET_HEIGHT)) / 2,
+      text);
 #endif
   }
   // Erase empty buttons
   if (AREA_HEIGHT_NORMAL + OFFSETY > y) {
-    lcd_set_background(LCD_BG_COLOR);
-    lcd_fill(LCD_WIDTH - MENU_BUTTON_WIDTH, y, MENU_BUTTON_WIDTH, AREA_HEIGHT_NORMAL + OFFSETY - y);
+    LCD_SET_BACKGROUND(LCD_BG_COLOR);
+    LCD_FILL(LCD_WIDTH - MENU_BUTTON_WIDTH, y, MENU_BUTTON_WIDTH, AREA_HEIGHT_NORMAL + OFFSETY - y);
   }
-  lcd_set_font(FONT_NORMAL);
+  LCD_SET_FONT(FONT_NORMAL);
 }
 
 void menu_draw(uint32_t mask) {
@@ -271,7 +250,7 @@ void menu_draw(uint32_t mask) {
 }
 
 void menu_invoke(int item) {
-  const menuitem_t* menu = current_menu_item(item);
+  const menuitem_t *menu = current_menu_item(item);
   if (menu == NULL)
     return;
   switch (menu->type) {
@@ -286,10 +265,10 @@ void menu_invoke(int item) {
     break;
 
   case MT_SUBMENU:
-    menu_push_submenu((const menuitem_t*)menu->reference);
+    menu_push_submenu((const menuitem_t *)menu->reference);
     break;
   }
-// Redraw menu after if UI in menu mode
+  // Redraw menu after if UI in menu mode
   if (ui_mode == UI_MENU)
     menu_draw(-1);
 }
@@ -308,15 +287,14 @@ static UI_FUNCTION_CALLBACK(menu_back_cb) {
   menu_move_back(false);
 }
 
-const menuitem_t menu_back[] = {
-    {MT_CALLBACK, 0, S_LARROW " BACK", menu_back_cb},
-    {MT_NEXT, 0, NULL, NULL} // sentinel
+const menuitem_t MENU_BACK[] = {
+  {MT_CALLBACK, 0, S_LARROW " BACK", menu_back_cb}, {MT_NEXT, 0, NULL, NULL} // sentinel
 };
 
 // Generic Menu Callbacks
 UI_FUNCTION_ADV_CALLBACK(menu_keyboard_acb) {
   if (data == KM_VAR &&
-      lever_mode == LM_EDELAY) // JOG STEP button auto set (e-delay or frequency step)
+      sweep_mode == LM_EDELAY) // JOG STEP button auto set (e-delay or frequency step)
     data = KM_VAR_DELAY;
   if (b) {
     ui_keyboard_cb(data, b);
@@ -331,7 +309,7 @@ UI_FUNCTION_ADV_CALLBACK(menu_keyboard_acb) {
 #define MENU_DYNAMIC_BUFFER_SIZE 64
 static menuitem_t menu_dynamic_buffer[MENU_DYNAMIC_BUFFER_SIZE];
 
-menuitem_t* menu_dynamic_acquire(void) {
+menuitem_t *menu_dynamic_acquire(void) {
   return menu_dynamic_buffer;
 }
 
@@ -342,10 +320,11 @@ menuitem_t* menu_dynamic_acquire(void) {
 void ui_menu_lever(uint16_t status) {
   uint16_t count = current_menu_get_count();
   if (status & EVT_BUTTON_SINGLE_CLICK) {
-    if ((uint16_t)selection >= count)
-       ui_mode_normal();
-    else
+    if ((uint16_t)selection >= count) {
+      ui_mode_normal();
+    } else {
       menu_invoke(selection);
+}
     return;
   }
 
@@ -357,7 +336,7 @@ void ui_menu_lever(uint16_t status) {
       selection--;
     // close menu if no menu item
     if ((uint16_t)selection >= count) {
-       ui_mode_normal();
+      ui_mode_normal();
       return;
     }
     menu_draw(mask | (1 << selection));

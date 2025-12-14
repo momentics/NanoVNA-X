@@ -48,7 +48,7 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t channel_mask) {
 
 static int g_failures = 0;
 
-static void assert_true(bool cond, const char* msg) {
+static void assert_true(bool cond, const char *msg) {
   if (!cond) {
     ++g_failures;
     fprintf(stderr, "[FAIL] %s\n", msg);
@@ -57,7 +57,7 @@ static void assert_true(bool cond, const char* msg) {
 
 static void test_init_and_mask(void) {
   measurement_pipeline_t pipeline = {.drivers = NULL};
-  PlatformDrivers dummy = {0};
+  platform_drivers_t dummy = {0};
   measurement_pipeline_init(&pipeline, &dummy);
   assert_true(pipeline.drivers == &dummy, "init should capture driver table");
 

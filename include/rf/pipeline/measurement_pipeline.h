@@ -26,12 +26,12 @@
 #include "platform/hal.h"
 
 typedef struct {
-  const PlatformDrivers* drivers;
+  const platform_drivers_t *drivers;
 } measurement_pipeline_t;
 
-void measurement_pipeline_init(measurement_pipeline_t* pipeline, const PlatformDrivers* drivers);
+void measurement_pipeline_init(measurement_pipeline_t *pipeline, const platform_drivers_t *drivers);
 
-uint16_t measurement_pipeline_active_mask(measurement_pipeline_t* pipeline);
+uint16_t measurement_pipeline_active_mask(measurement_pipeline_t *pipeline);
 
-bool measurement_pipeline_execute(measurement_pipeline_t* pipeline, bool break_on_operation,
+bool measurement_pipeline_execute(measurement_pipeline_t *pipeline, bool break_on_operation,
                                   uint16_t channel_mask);

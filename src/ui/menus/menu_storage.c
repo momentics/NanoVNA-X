@@ -1,23 +1,3 @@
-/*
- * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * All rights reserved.
- *
- * This is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3, or (at your option)
- * any later version.
- *
- * The software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with GNU Radio; see the file COPYING.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street,
- * Boston, MA 02110-1301, USA.
- */
-
 #include "ch.h"
 #include "hal.h"
 #include "nanovna.h"
@@ -32,7 +12,7 @@
 #include "chprintf.h"
 #include <string.h>
 #include "infra/storage/config_service.h"
-#include "infra/state/state_manager.h" // For state_manager_force_save if needed
+#include "infra/state/state_manager.h"    // For state_manager_force_save if needed
 #include "platform/boards/board_events.h" // For boardDFUEnter if referenced? No, local DFU is System.
 
 #ifdef __USE_SD_CARD__
@@ -45,37 +25,37 @@
 static uint8_t keyboard_temp; // Used for SD card keyboard workflows
 
 // Save file callback
-typedef FRESULT (*file_save_cb_t)(FIL* f, uint8_t format);
-#define FILE_SAVE_CALLBACK(save_function_name) FRESULT save_function_name(FIL* f, uint8_t format)
+typedef FRESULT (*file_save_cb_t)(FIL *f, uint8_t format);
+#define FILE_SAVE_CALLBACK(save_function_name) FRESULT save_function_name(FIL *f, uint8_t format)
 // Load file callback
-typedef const char* (*file_load_cb_t)(FIL* f, FILINFO* fno, uint8_t format);
+typedef const char *(*file_load_cb_t)(FIL *f, FILINFO *fno, uint8_t format);
 #define FILE_LOAD_CALLBACK(load_function_name)                                                     \
-  const char* load_function_name(FIL* f, FILINFO* fno, uint8_t format)
+  const char *load_function_name(FIL *f, FILINFO *fno, uint8_t format)
 
 //=====================================================================================================
 // S1P and S2P file headers, and data structures
 //=====================================================================================================
-static const char s1_file_header[] = "!File created by NanoVNA\r\n"
+static const char S1_FILE_HEADER[] = "!File created by NanoVNA\r\n"
                                      "# Hz S RI R 50\r\n";
 
-static const char s1_file_param[] = "%u % f % f\r\n";
+static const char S1_FILE_PARAM[] = "%u % f % f\r\n";
 
-static const char s2_file_header[] = "!File created by NanoVNA\r\n"
+static const char S2_FILE_HEADER[] = "!File created by NanoVNA\r\n"
                                      "# Hz S RI R 50\r\n";
 
-static const char s2_file_param[] = "%u % f % f % f % f 0 0 0 0\r\n";
+static const char S2_FILE_PARAM[] = "%u % f % f % f % f 0 0 0 0\r\n";
 
 static FILE_SAVE_CALLBACK(save_snp) {
-  const char* s_file_format;
-  char* buf_8 = (char*)spi_buffer;
+  const char *s_file_format;
+  char *buf_8 = (char *)spi_buffer;
   FRESULT res;
   UINT size;
   if (format == FMT_S1P_FILE) {
-    s_file_format = s1_file_param;
-    res = f_write(f, s1_file_header, sizeof(s1_file_header) - 1, &size);
+    s_file_format = S1_FILE_PARAM;
+    res = f_write(f, S1_FILE_HEADER, sizeof(S1_FILE_HEADER) - 1, &size);
   } else {
-    s_file_format = s2_file_param;
-    res = f_write(f, s2_file_header, sizeof(s2_file_header) - 1, &size);
+    s_file_format = S2_FILE_PARAM;
+    res = f_write(f, S2_FILE_HEADER, sizeof(S2_FILE_HEADER) - 1, &size);
   }
   for (int i = 0; i < sweep_points && res == FR_OK; i++) {
     size = plot_printf(buf_8, 128, s_file_format, get_frequency(i), measured[0][i][0],
@@ -90,8 +70,8 @@ static FILE_LOAD_CALLBACK(load_snp) {
   UINT size;
   const int buffer_size = 256;
   const int line_size = 128;
-  char* buf_8 = (char*)spi_buffer;
-  char* line = buf_8 + buffer_size;
+  char *buf_8 = (char *)spi_buffer;
+  char *line = buf_8 + buffer_size;
   uint16_t j = 0, i, count = 0;
   freq_t start = 0, stop = 0, freq;
   while (f_read(f, buf_8, buffer_size, &size) == FR_OK && size > 0) {
@@ -100,7 +80,7 @@ static FILE_LOAD_CALLBACK(load_snp) {
       if (c == '\r') {
         line[j] = 0;
         j = 0;
-        char* args[16];
+        char *args[16];
         int nargs = parse_line(line, args, 16);
         if (nargs < 2 || args[0][0] == '#' || args[0][0] == '!')
           continue;
@@ -120,10 +100,11 @@ static FILE_LOAD_CALLBACK(load_snp) {
           measured[1][count][1] = 0.0f;
         }
         count++;
-      } else if (c < 0x20)
+      } else if (c < 0x20) {
         continue;
-      else if (j < line_size)
+      } else if (j < line_size) {
         line[j++] = (char)c;
+}
     }
   }
   if (count != 0) {
@@ -149,20 +130,49 @@ static FILE_LOAD_CALLBACK(load_snp) {
 #define BMP_HEAD_SIZE (BMP_H1_SIZE + BMP_V4_SIZE)
 #define BMP_SIZE (2 * LCD_WIDTH * LCD_HEIGHT)
 #define BMP_FILE_SIZE (BMP_SIZE + BMP_HEAD_SIZE)
-static const uint8_t bmp_header_v4[BMP_H1_SIZE + BMP_V4_SIZE] = {
-    0x42, 0x4D, BMP_UINT32(BMP_FILE_SIZE), BMP_UINT16(0), BMP_UINT16(0), BMP_UINT32(BMP_HEAD_SIZE),
-    BMP_UINT32(BMP_V4_SIZE), BMP_UINT32(LCD_WIDTH), BMP_UINT32(LCD_HEIGHT), BMP_UINT16(1),
-    BMP_UINT16(16), BMP_UINT32(3), BMP_UINT32(BMP_SIZE), BMP_UINT32(0x0EC4), BMP_UINT32(0x0EC4),
-    BMP_UINT32(0), BMP_UINT32(0), BMP_UINT32(0b1111100000000000), BMP_UINT32(0b0000011111100000),
-    BMP_UINT32(0b0000000000011111), BMP_UINT32(0b0000000000000000), 'B', 'G', 'R', 's',
-    BMP_UINT32(0), BMP_UINT32(0), BMP_UINT32(0), BMP_UINT32(0), BMP_UINT32(0), BMP_UINT32(0),
-    BMP_UINT32(0), BMP_UINT32(0), BMP_UINT32(0), BMP_UINT32(0), BMP_UINT32(0), BMP_UINT32(0)};
+static const uint8_t BMP_HEADER_V4[BMP_H1_SIZE + BMP_V4_SIZE] = {0x42,
+                                                                 0x4D,
+                                                                 BMP_UINT32(BMP_FILE_SIZE),
+                                                                 BMP_UINT16(0),
+                                                                 BMP_UINT16(0),
+                                                                 BMP_UINT32(BMP_HEAD_SIZE),
+                                                                 BMP_UINT32(BMP_V4_SIZE),
+                                                                 BMP_UINT32(LCD_WIDTH),
+                                                                 BMP_UINT32(LCD_HEIGHT),
+                                                                 BMP_UINT16(1),
+                                                                 BMP_UINT16(16),
+                                                                 BMP_UINT32(3),
+                                                                 BMP_UINT32(BMP_SIZE),
+                                                                 BMP_UINT32(0x0EC4),
+                                                                 BMP_UINT32(0x0EC4),
+                                                                 BMP_UINT32(0),
+                                                                 BMP_UINT32(0),
+                                                                 BMP_UINT32(0b1111100000000000),
+                                                                 BMP_UINT32(0b0000011111100000),
+                                                                 BMP_UINT32(0b0000000000011111),
+                                                                 BMP_UINT32(0b0000000000000000),
+                                                                 'B',
+                                                                 'G',
+                                                                 'R',
+                                                                 's',
+                                                                 BMP_UINT32(0),
+                                                                 BMP_UINT32(0),
+                                                                 BMP_UINT32(0),
+                                                                 BMP_UINT32(0),
+                                                                 BMP_UINT32(0),
+                                                                 BMP_UINT32(0),
+                                                                 BMP_UINT32(0),
+                                                                 BMP_UINT32(0),
+                                                                 BMP_UINT32(0),
+                                                                 BMP_UINT32(0),
+                                                                 BMP_UINT32(0),
+                                                                 BMP_UINT32(0)};
 
 static FILE_SAVE_CALLBACK(save_bmp) {
   (void)format;
   UINT size;
-  uint16_t* buf_16 = (uint16_t*)spi_buffer;
-  FRESULT res = f_write(f, bmp_header_v4, sizeof(bmp_header_v4), &size);
+  uint16_t *buf_16 = (uint16_t *)spi_buffer;
+  FRESULT res = f_write(f, BMP_HEADER_V4, sizeof(BMP_HEADER_V4), &size);
   lcd_set_background(LCD_SWEEP_LINE_COLOR);
   for (int y = LCD_HEIGHT - 1; y >= 0 && res == FR_OK; y--) {
     lcd_read_memory(0, y, LCD_WIDTH, 1, buf_16);
@@ -176,12 +186,12 @@ static FILE_SAVE_CALLBACK(save_bmp) {
 static FILE_LOAD_CALLBACK(load_bmp) {
   (void)format;
   UINT size;
-  uint16_t* buf_16 = (uint16_t*)spi_buffer;
-  FRESULT res = f_read(f, (void*)buf_16, sizeof(bmp_header_v4), &size);
+  uint16_t *buf_16 = (uint16_t *)spi_buffer;
+  FRESULT res = f_read(f, (void *)buf_16, sizeof(BMP_HEADER_V4), &size);
   if (res != FR_OK || buf_16[9] != LCD_WIDTH || buf_16[11] != LCD_HEIGHT || buf_16[14] != 16)
     return "Format err";
   for (int y = LCD_HEIGHT - 1; y >= 0 && res == FR_OK; y--) {
-    res = f_read(f, (void*)buf_16, LCD_WIDTH * sizeof(uint16_t), &size);
+    res = f_read(f, (void *)buf_16, LCD_WIDTH * sizeof(uint16_t), &size);
     swap_bytes(buf_16, LCD_WIDTH);
     lcd_bulk(0, y, LCD_WIDTH, 1);
   }
@@ -202,24 +212,31 @@ static FILE_LOAD_CALLBACK(load_bmp) {
 #define IFD_ENTRIES_COUNT 7
 #define IFD_DATA_OFFSET (10 + 12 * IFD_ENTRIES_COUNT + 4)
 #define IFD_BPS_OFFSET IFD_DATA_OFFSET
-#define IFD_STRIP_OFFSET IFD_DATA_OFFSET + 6
+#define IFD_STRIP_OFFSET (IFD_DATA_OFFSET + 6)
 
-static const uint8_t tif_header[] = {
-    0x49, 0x49, BMP_UINT16(0x002A), BMP_UINT32(0x0008), BMP_UINT16(IFD_ENTRIES_COUNT),
-    IFD_ENTRY(256, IFD_LONG, 1, LCD_WIDTH), IFD_ENTRY(257, IFD_LONG, 1, LCD_HEIGHT),
-    IFD_ENTRY(258, IFD_SHORT, 3, IFD_BPS_OFFSET), IFD_ENTRY(259, IFD_SHORT, 1, TIFF_PACKBITS),
-    IFD_ENTRY(262, IFD_SHORT, 1, TIFF_PHOTOMETRIC_RGB), IFD_ENTRY(273, IFD_LONG, 1, IFD_STRIP_OFFSET),
-    IFD_ENTRY(277, IFD_SHORT, 1, 3), BMP_UINT32(0)};
+static const uint8_t TIF_HEADER[] = {0x49,
+                                     0x49,
+                                     BMP_UINT16(0x002A),
+                                     BMP_UINT32(0x0008),
+                                     BMP_UINT16(IFD_ENTRIES_COUNT),
+                                     IFD_ENTRY(256, IFD_LONG, 1, LCD_WIDTH),
+                                     IFD_ENTRY(257, IFD_LONG, 1, LCD_HEIGHT),
+                                     IFD_ENTRY(258, IFD_SHORT, 3, IFD_BPS_OFFSET),
+                                     IFD_ENTRY(259, IFD_SHORT, 1, TIFF_PACKBITS),
+                                     IFD_ENTRY(262, IFD_SHORT, 1, TIFF_PHOTOMETRIC_RGB),
+                                     IFD_ENTRY(273, IFD_LONG, 1, IFD_STRIP_OFFSET),
+                                     IFD_ENTRY(277, IFD_SHORT, 1, 3),
+                                     BMP_UINT32(0)};
 
 static FILE_SAVE_CALLBACK(save_tiff) {
   (void)format;
   UINT size;
-  uint16_t* buf_16 = (uint16_t*)spi_buffer;
-  char* buf_8;
-  FRESULT res = f_write(f, tif_header, sizeof(tif_header), &size);
+  uint16_t *buf_16 = (uint16_t *)spi_buffer;
+  char *buf_8;
+  FRESULT res = f_write(f, TIF_HEADER, sizeof(TIF_HEADER), &size);
   lcd_set_background(LCD_SWEEP_LINE_COLOR);
   for (int y = 0; y < LCD_HEIGHT && res == FR_OK; y++) {
-    buf_8 = (char*)buf_16 + 128;
+    buf_8 = (char *)buf_16 + 128;
     lcd_read_memory(0, y, LCD_WIDTH, 1, buf_16);
     for (int x = LCD_WIDTH - 1; x >= 0; x--) {
       uint16_t color = (buf_16[x] << 8) | (buf_16[x] >> 8);
@@ -227,7 +244,7 @@ static FILE_SAVE_CALLBACK(save_tiff) {
       buf_8[3 * x + 1] = (color >> 3) & 0xFC;
       buf_8[3 * x + 2] = (color << 3) & 0xF8;
     }
-    size = packbits(buf_8, (char*)buf_16, LCD_WIDTH * 3);
+    size = packbits(buf_8, (char *)buf_16, LCD_WIDTH * 3);
     res = f_write(f, buf_16, size, &size);
     lcd_fill(LCD_WIDTH - 1, y, 1, 1);
   }
@@ -237,9 +254,9 @@ static FILE_SAVE_CALLBACK(save_tiff) {
 static FILE_LOAD_CALLBACK(load_tiff) {
   (void)format;
   UINT size;
-  uint8_t* buf_8 = (uint8_t*)spi_buffer;
-  uint16_t* buf_16 = (uint16_t*)spi_buffer;
-  FRESULT res = f_read(f, (void*)buf_16, sizeof(tif_header), &size);
+  uint8_t *buf_8 = (uint8_t *)spi_buffer;
+  uint16_t *buf_16 = (uint16_t *)spi_buffer;
+  FRESULT res = f_read(f, (void *)buf_16, sizeof(TIF_HEADER), &size);
   if (res != FR_OK || buf_16[0] != 0x4949 || buf_16[9] != LCD_WIDTH || buf_16[15] != LCD_HEIGHT ||
       buf_16[27] != TIFF_PACKBITS)
     return "Format err";
@@ -268,7 +285,7 @@ static FILE_LOAD_CALLBACK(load_tiff) {
 static FILE_SAVE_CALLBACK(save_cal) {
   (void)format;
   UINT size;
-  const char* src = (char*)&current_props;
+  const char *src = (char *)&current_props;
   const uint32_t total = sizeof(current_props);
   return f_write(f, src, total, &size);
 }
@@ -277,7 +294,7 @@ static FILE_LOAD_CALLBACK(load_cal) {
   (void)format;
   UINT size;
   uint32_t magic;
-  char* src = (char*)&current_props + sizeof(magic);
+  char *src = (char *)&current_props + sizeof(magic);
   uint32_t total = sizeof(current_props) - sizeof(magic);
   if (fno->fsize != sizeof(current_props) || f_read(f, &magic, sizeof(magic), &size) != FR_OK ||
       magic != PROPERTIES_MAGIC || f_read(f, src, total, &size) != FR_OK)
@@ -290,7 +307,7 @@ static FILE_LOAD_CALLBACK(load_cal) {
 static FILE_SAVE_CALLBACK(save_bin) {
   (void)format;
   UINT size;
-  const char* src = (const char*)FLASH_START_ADDRESS;
+  const char *src = (const char *)FLASH_START_ADDRESS;
   const uint32_t total = FLASH_TOTAL_SIZE;
   return f_write(f, src, total, &size);
 }
@@ -303,8 +320,8 @@ static FILE_LOAD_CALLBACK(load_cmd) {
   UINT size;
   const int buffer_size = 256;
   const int line_size = 128;
-  char* buf_8 = (char*)spi_buffer;
-  char* line = buf_8 + buffer_size;
+  char *buf_8 = (char *)spi_buffer;
+  char *line = buf_8 + buffer_size;
   uint16_t j = 0, i;
   while (f_read(f, buf_8, buffer_size, &size) == FR_OK && size > 0) {
     for (i = 0; i < size; i++) {
@@ -313,10 +330,11 @@ static FILE_LOAD_CALLBACK(load_cmd) {
         line[j] = 0;
         j = 0;
         vna_shell_execute_cmd_line(line);
-      } else if (c < 0x20)
+      } else if (c < 0x20) {
         continue;
-      else if (j < line_size)
+      } else if (j < line_size) {
         line[j++] = (char)c;
+}
     }
   }
   if (j > 0) {
@@ -331,8 +349,8 @@ static FILE_LOAD_CALLBACK(load_cmd) {
 _Static_assert(sizeof(spi_buffer) >= FF_MAX_SS, "spi_buffer is too small for mkfs work buffer");
 
 static FRESULT sd_card_format(void) {
-  BYTE* work = (BYTE*)spi_buffer;
-  FATFS* fs = filesystem_volume();
+  BYTE *work = (BYTE *)spi_buffer;
+  FATFS *fs = filesystem_volume();
   f_mount(NULL, "", 0);
   DSTATUS status = disk_initialize(0);
   if (status & STA_NOINIT)
@@ -361,7 +379,7 @@ static UI_FUNCTION_CALLBACK(menu_sdcard_format_cb) {
   char msg[32];
   FRESULT res = result;
   if (res == FR_OK) {
-    uint32_t elapsed_ms = (uint32_t)TIME_I2MS(chVTTimeElapsedSinceX(start));
+    uint32_t elapsed_ms = (uint32_t)ST2MS(chVTTimeElapsedSinceX(start));
     plot_printf(msg, sizeof(msg), "OK %lums", (unsigned long)elapsed_ms);
   } else
     plot_printf(msg, sizeof(msg), "ERR %d", res);
@@ -371,52 +389,54 @@ static UI_FUNCTION_CALLBACK(menu_sdcard_format_cb) {
 #endif
 
 #ifdef __SD_FILE_BROWSER__
-#define FILE_OPTIONS(e, s, l, o) {e, s, l, o}
+#define FILE_OPTIONS(e, s, l, o)                                                                   \
+  { e, s, l, o }
 #else
-#define FILE_OPTIONS(e, s, l, o) {e, s, o}
+#define FILE_OPTIONS(e, s, l, o)                                                                   \
+  { e, s, o }
 #endif
 
 #define FILE_OPT_REDRAW (1 << 0)
 #define FILE_OPT_CONTINUE (1 << 1)
 
 const struct {
-  const char* ext;
+  const char *ext;
   file_save_cb_t save;
 #ifdef __SD_FILE_BROWSER__
   file_load_cb_t load;
 #endif
   uint32_t opt;
-} file_opt[] = {
-    [FMT_S1P_FILE] = FILE_OPTIONS("s1p", save_snp, load_snp, 0),
-    [FMT_S2P_FILE] = FILE_OPTIONS("s2p", save_snp, load_snp, 0),
-    [FMT_BMP_FILE] = FILE_OPTIONS("bmp", save_bmp, load_bmp, FILE_OPT_REDRAW | FILE_OPT_CONTINUE),
+} FILE_OPT[] = {
+  [FMT_S1P_FILE] = FILE_OPTIONS("s1p", save_snp, load_snp, 0),
+  [FMT_S2P_FILE] = FILE_OPTIONS("s2p", save_snp, load_snp, 0),
+  [FMT_BMP_FILE] = FILE_OPTIONS("bmp", save_bmp, load_bmp, FILE_OPT_REDRAW | FILE_OPT_CONTINUE),
 #ifdef __SD_CARD_DUMP_TIFF__
-    [FMT_TIF_FILE] = FILE_OPTIONS("tif", save_tiff, load_tiff, FILE_OPT_REDRAW | FILE_OPT_CONTINUE),
+  [FMT_TIF_FILE] = FILE_OPTIONS("tif", save_tiff, load_tiff, FILE_OPT_REDRAW | FILE_OPT_CONTINUE),
 #endif
-    [FMT_CAL_FILE] = FILE_OPTIONS("cal", save_cal, load_cal, 0),
+  [FMT_CAL_FILE] = FILE_OPTIONS("cal", save_cal, load_cal, 0),
 #ifdef __SD_CARD_DUMP_FIRMWARE__
-    [FMT_BIN_FILE] = FILE_OPTIONS("bin", save_bin, NULL, 0),
+  [FMT_BIN_FILE] = FILE_OPTIONS("bin", save_bin, NULL, 0),
 #endif
 #ifdef __SD_CARD_LOAD__
-    [FMT_CMD_FILE] = FILE_OPTIONS("cmd", NULL, load_cmd, 0),
+  [FMT_CMD_FILE] = FILE_OPTIONS("cmd", NULL, load_cmd, 0),
 #endif
 };
 
-static FRESULT ui_create_file(char* fs_filename) {
+static FRESULT ui_create_file(char *fs_filename) {
   FRESULT res = f_mount(filesystem_volume(), "", 1);
   if (res != FR_OK)
     return res;
-  FIL* const file = filesystem_file();
+  FIL *const file = filesystem_file();
   res = f_open(file, fs_filename, FA_CREATE_ALWAYS | FA_READ | FA_WRITE);
   return res;
 }
 
-static void ui_save_file(char* name, uint8_t format) {
+static void ui_save_file(char *name, uint8_t format) {
   char fs_filename[FF_LFN_BUF];
-  file_save_cb_t save = file_opt[format].save;
+  file_save_cb_t save = FILE_OPT[format].save;
   if (save == NULL)
     return;
-  if (ui_mode != UI_NORMAL && (file_opt[format].opt & FILE_OPT_REDRAW)) {
+  if (ui_mode != UI_NORMAL && (FILE_OPT[format].opt & FILE_OPT_REDRAW)) {
     ui_mode_normal();
     draw_all();
   }
@@ -425,16 +445,16 @@ static void ui_save_file(char* name, uint8_t format) {
 #if FF_USE_LFN >= 1
     uint32_t tr = rtc_get_tr_bcd();
     uint32_t dr = rtc_get_dr_bcd();
-    plot_printf(fs_filename, FF_LFN_BUF, "VNA_%06x_%06x.%s", dr, tr, file_opt[format].ext);
+    plot_printf(fs_filename, FF_LFN_BUF, "VNA_%06x_%06x.%s", dr, tr, FILE_OPT[format].ext);
 #else
-    plot_printf(fs_filename, FF_LFN_BUF, "%08x.%s", rtc_get_fat(), file_opt[format].ext);
+    plot_printf(fs_filename, FF_LFN_BUF, "%08x.%s", rtc_get_fat(), FILE_OPT[format].ext);
 #endif
   } else
-    plot_printf(fs_filename, FF_LFN_BUF, "%s.%s", name, file_opt[format].ext);
+    plot_printf(fs_filename, FF_LFN_BUF, "%s.%s", name, FILE_OPT[format].ext);
 
   FRESULT res = ui_create_file(fs_filename);
   if (res == FR_OK) {
-    FIL* const file = filesystem_file();
+    FIL *const file = filesystem_file();
     res = save(file, format);
     f_close(file);
   }
@@ -473,38 +493,39 @@ UI_FUNCTION_CALLBACK(menu_sdcard_cb) {
   if (keyboard_temp)
     toggle_sweep();
   data = fix_screenshot_format(data);
-  if (VNA_MODE(VNA_MODE_AUTO_NAME))
+  if (VNA_MODE(VNA_MODE_AUTO_NAME)) {
     ui_save_file(NULL, data);
-  else
+  } else {
     ui_mode_keypad(data + KM_S1P_NAME);
+}
 }
 
 #ifdef __SD_FILE_BROWSER__
 const menuitem_t menu_sdcard_browse[] = {
-    {MT_CALLBACK, FMT_BMP_FILE, "LOAD\nSCREENSHOT", menu_sdcard_browse_cb},
-    {MT_CALLBACK, FMT_S1P_FILE, "LOAD S1P", menu_sdcard_browse_cb},
-    {MT_CALLBACK, FMT_S2P_FILE, "LOAD S2P", menu_sdcard_browse_cb},
-    {MT_CALLBACK, FMT_CAL_FILE, "LOAD CAL", menu_sdcard_browse_cb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+  {MT_CALLBACK, FMT_BMP_FILE, "LOAD\nSCREENSHOT", menu_sdcard_browse_cb},
+  {MT_CALLBACK, FMT_S1P_FILE, "LOAD S1P", menu_sdcard_browse_cb},
+  {MT_CALLBACK, FMT_S2P_FILE, "LOAD S2P", menu_sdcard_browse_cb},
+  {MT_CALLBACK, FMT_CAL_FILE, "LOAD CAL", menu_sdcard_browse_cb},
+  {MT_NEXT, 0, NULL, MENU_BACK} // next-> MENU_BACK
 };
 #endif
 
-const menuitem_t menu_sdcard[] = {
+const menuitem_t MENU_SDCARD[] = {
 #ifdef __SD_FILE_BROWSER__
-    {MT_SUBMENU, 0, "LOAD", menu_sdcard_browse},
+  {MT_SUBMENU, 0, "LOAD", menu_sdcard_browse},
 #endif
-    {MT_CALLBACK, FMT_S1P_FILE, "SAVE S1P", menu_sdcard_cb},
-    {MT_CALLBACK, FMT_S2P_FILE, "SAVE S2P", menu_sdcard_cb},
-    {MT_CALLBACK, FMT_BMP_FILE, "SCREENSHOT", menu_sdcard_cb},
-    {MT_CALLBACK, FMT_CAL_FILE, "SAVE\nCALIBRATION", menu_sdcard_cb},
+  {MT_CALLBACK, FMT_S1P_FILE, "SAVE S1P", menu_sdcard_cb},
+  {MT_CALLBACK, FMT_S2P_FILE, "SAVE S2P", menu_sdcard_cb},
+  {MT_CALLBACK, FMT_BMP_FILE, "SCREENSHOT", menu_sdcard_cb},
+  {MT_CALLBACK, FMT_CAL_FILE, "SAVE\nCALIBRATION", menu_sdcard_cb},
 #if FF_USE_MKFS
-    {MT_CALLBACK, 0, "FORMAT SD", menu_sdcard_format_cb},
+  {MT_CALLBACK, 0, "FORMAT SD", menu_sdcard_format_cb},
 #endif
-    {MT_ADV_CALLBACK, VNA_MODE_AUTO_NAME, "AUTO NAME", menu_vna_mode_acb},
+  {MT_ADV_CALLBACK, VNA_MODE_AUTO_NAME, "AUTO NAME", menu_vna_mode_acb},
 #ifdef __SD_CARD_DUMP_TIFF__
-    {MT_ADV_CALLBACK, VNA_MODE_TIFF, "IMAGE FORMAT\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
+  {MT_ADV_CALLBACK, VNA_MODE_TIFF, "IMAGE FORMAT\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
 #endif
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+  {MT_NEXT, 0, NULL, MENU_BACK} // next-> MENU_BACK
 };
 
 #endif // __USE_SD_CARD__

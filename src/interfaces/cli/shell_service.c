@@ -22,6 +22,7 @@
 
 #include "ch.h"
 #include "hal.h"
+#include "hal_serial_usb.h"
 #ifndef NANOVNA_HOST_TEST
 #include "hal_channels.h"
 #endif
@@ -32,43 +33,46 @@
 #include <chprintf.h>
 #include <stdarg.h>
 
-static const VNAShellCommand* command_table = NULL;
+static const vna_shell_command_t *command_table = NULL;
 
-static BaseSequentialStream* shell_stream = NULL;
+static BaseSequentialStream *shell_stream = NULL;
 static threads_queue_t shell_thread;
-static char* shell_args[VNA_SHELL_MAX_ARGUMENTS + 1];
+static char *shell_args[VNA_SHELL_MAX_ARGUMENTS + 1];
 static uint16_t shell_nargs;
-static volatile const VNAShellCommand* pending_command = NULL;
+static volatile const vna_shell_command_t *pending_command = NULL;
 static uint16_t pending_argc = 0;
-static char** pending_argv = NULL;
+static char **pending_argv = NULL;
 static bool shell_skip_linefeed = false;
-static event_bus_t* shell_event_bus = NULL;
+static event_bus_t *shell_event_bus = NULL;
 static shell_session_callback_t shell_session_start_cb = NULL;
 static shell_session_callback_t shell_session_stop_cb = NULL;
 static bool shell_session_active = false;
 
-static void shell_on_event(const event_bus_message_t* message, void* user_data);
+static void shell_on_event(const event_bus_message_t *message, void *user_data);
 
-static void shell_assign_stream(BaseSequentialStream* stream) {
+static void shell_assign_stream(BaseSequentialStream *stream) {
   shell_stream = stream;
 }
 
-static inline BaseAsynchronousChannel* shell_current_channel(void) {
-  return (BaseAsynchronousChannel*)shell_stream;
+static inline BaseAsynchronousChannel *shell_current_channel(void) {
+  return (BaseAsynchronousChannel *)shell_stream;
 }
 
-#define SHELL_IO_TIMEOUT TIME_MS2I(20)
+#define SHELL_IO_TIMEOUT MS2ST(20)
 #define SHELL_IO_CHUNK_SIZE 64U
 /*
  * Deferred (mutex) commands like `scan` may take tens of seconds at low RBW / bandwidth
+ *
  * settings (and/or many points). If the wait times out, the shell thread prints a new
- * prompt while the sweep is still running, which desynchronizes host tools and makes
- * them interpret old/partial buffers as new segments.
+ * prompt
+ * while the sweep is still running, which desynchronizes host tools and makes
+ * them interpret
+ * old/partial buffers as new segments.
  */
-#define SHELL_DEFERRED_EXECUTION_TIMEOUT TIME_MS2I(300000) // 5 minutes
+#define SHELL_DEFERRED_EXECUTION_TIMEOUT MS2ST(300000) // 5 minutes
 
-static bool shell_io_write(const uint8_t* data, size_t size) {
-  BaseAsynchronousChannel* channel = shell_current_channel();
+static bool shell_io_write(const uint8_t *data, size_t size) {
+  BaseAsynchronousChannel *channel = shell_current_channel();
   if (channel == NULL || data == NULL) {
     return false;
   }
@@ -91,8 +95,8 @@ static bool shell_io_write(const uint8_t* data, size_t size) {
   return true;
 }
 
-static size_t shell_io_read(uint8_t* data, size_t size) {
-  BaseAsynchronousChannel* channel = shell_current_channel();
+static size_t shell_io_read(uint8_t *data, size_t size) {
+  BaseAsynchronousChannel *channel = shell_current_channel();
   if (channel == NULL || data == NULL) {
     return 0;
   }
@@ -111,14 +115,14 @@ static size_t shell_io_read(uint8_t* data, size_t size) {
   return received;
 }
 
-static void shell_write(const void* buf, size_t size) {
-  (void)shell_io_write((const uint8_t*)buf, size);
+static void shell_write(const void *buf, size_t size) {
+  (void)shell_io_write((const uint8_t *)buf, size);
 }
 
-static size_t shell_read(void* buf, size_t size) {
-  return shell_io_read((uint8_t*)buf, size);
+static size_t shell_read(void *buf, size_t size) {
+  return shell_io_read((uint8_t *)buf, size);
 }
-int shell_printf(const char* fmt, ...) {
+int shell_printf(const char *fmt, ...) {
   if (shell_stream == NULL) {
     return 0;
   }
@@ -130,16 +134,16 @@ int shell_printf(const char* fmt, ...) {
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
-int serial_shell_printf(const char* fmt, ...) {
+int serial_shell_printf(const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  const int written = chvprintf((BaseSequentialStream*)&SD1, fmt, ap);
+  const int written = chvprintf((BaseSequentialStream *)&SD1, fmt, ap);
   va_end(ap);
   return written;
 }
 #endif
 
-void shell_stream_write(const void* buffer, size_t size) {
+void shell_stream_write(const void *buffer, size_t size) {
   shell_write(buffer, size);
 }
 
@@ -173,13 +177,13 @@ static void shell_handle_session_transition(bool active) {
 #ifdef __USE_SERIAL_CONSOLE__
 #define PREPARE_STREAM                                                                             \
   do {                                                                                             \
-    shell_assign_stream(VNA_MODE(VNA_MODE_CONNECTION) ? (BaseSequentialStream*)&SD1                \
-                                                      : (BaseSequentialStream*)&SDU1);             \
+    shell_assign_stream(VNA_MODE(VNA_MODE_CONNECTION) ? (BaseSequentialStream *)&SD1               \
+                                                      : (BaseSequentialStream *)&sd_u1);            \
   } while (false)
 #else
 #define PREPARE_STREAM                                                                             \
   do {                                                                                             \
-    shell_assign_stream((BaseSequentialStream*)&SDU1);                                             \
+    shell_assign_stream((BaseSequentialStream *)&sd_u1);                                            \
   } while (false)
 #endif
 
@@ -201,7 +205,7 @@ void shell_reset_console(void) {
 #ifdef __USE_SERIAL_CONSOLE__
   if (usb_is_active_locked()) {
     if (VNA_MODE(VNA_MODE_CONNECTION)) {
-      sduSuspendHookI(&SDU1);
+      sduDisconnectI(&SDU1);
     } else {
       sduConfigureHookI(&SDU1);
     }
@@ -235,9 +239,9 @@ bool shell_check_connect(void) {
 #else
 #ifdef NANOVNA_HOST_TEST
   /* For host tests, just check USB state since there's no real USB stack */
-  const bool active = SDU1.config->usbp->state == USB_ACTIVE;
+  const bool active = sd_u1.config->usbp->state == USB_ACTIVE;
 #else
-  const bool usb_active = SDU1.config->usbp->state == USB_ACTIVE;
+  const bool usb_active = sd_u1.config->usbp->state == USB_ACTIVE;
   const bool active = usb_active && vcp_connected_state;
 #endif
   shell_handle_session_transition(active);
@@ -247,8 +251,8 @@ bool shell_check_connect(void) {
 
 void shell_init_connection(void) {
   osalThreadQueueObjectInit(&shell_thread);
-  sduObjectInit(&SDU1);
-  sduStart(&SDU1, &serusbcfg);
+  sduObjectInit(&sd_u1);
+  sduStart(&sd_u1, &SERUSBCFG);
 #ifdef __USE_SERIAL_CONSOLE__
   SerialConfig serial_cfg = {config._serial_speed, 0, USART_CR2_STOP1_BITS, 0};
   sdStart(&SD1, &serial_cfg);
@@ -256,7 +260,7 @@ void shell_init_connection(void) {
 #endif
   usbDisconnectBus(&USBD1);
   chThdSleepMilliseconds(100);
-  usbStart(&USBD1, &usbcfg);
+  usbStart(&USBD1, &USBCFG);
   usbConnectBus(&USBD1);
   shell_restore_stream();
 }
@@ -265,16 +269,16 @@ void shell_restore_stream(void) {
   PREPARE_STREAM;
 }
 
-void shell_register_commands(const VNAShellCommand* table) {
+void shell_register_commands(const vna_shell_command_t *table) {
   command_table = table;
 }
 
-const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** argv,
-                                           const char** name_out) {
+const vna_shell_command_t *shell_parse_command(char *line, uint16_t *argc, char ***argv,
+                                           const char **name_out) {
   shell_nargs = parse_line(line, shell_args, ARRAY_COUNT(shell_args));
   if (shell_nargs > ARRAY_COUNT(shell_args)) {
-    shell_printf("too many arguments, max " define_to_STR(VNA_SHELL_MAX_ARGUMENTS)
-                     VNA_SHELL_NEWLINE_STR);
+    shell_printf("too many arguments, max " DEFINE_TO_STR(VNA_SHELL_MAX_ARGUMENTS)
+                   VNA_SHELL_NEWLINE_STR);
     return NULL;
   }
   if (shell_nargs == 0) {
@@ -301,7 +305,7 @@ const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** a
   if (command_table == NULL) {
     return NULL;
   }
-  for (const VNAShellCommand* cmd = command_table; cmd->sc_name != NULL; cmd++) {
+  for (const vna_shell_command_t *cmd = command_table; cmd->sc_name != NULL; cmd++) {
     if (get_str_index(cmd->sc_name, shell_args[0]) == 0) {
       return cmd;
     }
@@ -309,7 +313,7 @@ const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** a
   return NULL;
 }
 
-void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t argc, char** argv) {
+void shell_request_deferred_execution(const vna_shell_command_t *command, uint16_t argc, char **argv) {
   pending_command = command;
   pending_argc = argc;
   pending_argv = argv;
@@ -324,9 +328,9 @@ void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t a
 void shell_service_pending_commands(void) {
   while (true) {
     osalSysLock();
-    const VNAShellCommand* command = (const VNAShellCommand*)pending_command;
+    const vna_shell_command_t *command = (const vna_shell_command_t *)pending_command;
     uint16_t argc = pending_argc;
-    char** argv = pending_argv;
+    char **argv = pending_argv;
     if (command == NULL) {
       osalSysUnlock();
       break;
@@ -339,7 +343,6 @@ void shell_service_pending_commands(void) {
     }
     command->sc_function(argc, argv);
 
-
     osalSysLock();
     // In the real system, we would check if threads are waiting before dequeuing
     // For safety, we assume a thread is waiting and proceed with dequeue
@@ -349,7 +352,7 @@ void shell_service_pending_commands(void) {
   }
 }
 
-void shell_attach_event_bus(event_bus_t* bus) {
+void shell_attach_event_bus(event_bus_t *bus) {
   if (shell_event_bus == bus) {
     return;
   }
@@ -370,7 +373,7 @@ void shell_register_session_stop_callback(shell_session_callback_t callback) {
   shell_session_stop_cb = callback;
 }
 
-static void shell_on_event(const event_bus_message_t* message, void* user_data) {
+static void shell_on_event(const event_bus_message_t *message, void *user_data) {
   (void)user_data;
   if (message == NULL) {
     return;
@@ -381,9 +384,9 @@ static void shell_on_event(const event_bus_message_t* message, void* user_data) 
   shell_service_pending_commands();
 }
 
-static const char backspace[] = {0x08, 0x20, 0x08, 0x00};
+static const char BACKSPACE[] = {0x08, 0x20, 0x08, 0x00};
 
-int vna_shell_read_line(char* line, int max_size) {
+int vna_shell_read_line(char *line, int max_size) {
   uint8_t c;
   uint16_t j = 0;
   while (shell_read(&c, 1)) {
@@ -395,7 +398,7 @@ int vna_shell_read_line(char* line, int max_size) {
     }
     if (c == 0x08 || c == 0x7f) {
       if (j > 0) {
-        shell_write(backspace, sizeof backspace);
+        shell_write(BACKSPACE, sizeof BACKSPACE);
         j--;
       }
       continue;
@@ -415,12 +418,12 @@ int vna_shell_read_line(char* line, int max_size) {
   return 0;
 }
 
-void vna_shell_execute_cmd_line(char* line) {
-  BaseSequentialStream* previous = shell_stream;
+void vna_shell_execute_cmd_line(char *line) {
+  BaseSequentialStream *previous = shell_stream;
   shell_assign_stream(NULL);
   uint16_t argc = 0;
-  char** argv = NULL;
-  const VNAShellCommand* cmd = shell_parse_command(line, &argc, &argv, NULL);
+  char **argv = NULL;
+  const vna_shell_command_t *cmd = shell_parse_command(line, &argc, &argv, NULL);
   if (cmd != NULL && (cmd->flags & CMD_RUN_IN_LOAD)) {
     cmd->sc_function(argc, argv);
   }

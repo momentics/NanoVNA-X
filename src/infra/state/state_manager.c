@@ -31,8 +31,8 @@
 
 #include <string.h>
 
-#define SWEEP_STATE_AUTOSAVE_DELAY   TIME_MS2I(750)
-#define SWEEP_STATE_AUTOSAVE_MIN_GAP TIME_S2I(3)
+#define SWEEP_STATE_AUTOSAVE_DELAY MS2ST(750)
+#define SWEEP_STATE_AUTOSAVE_MIN_GAP S2ST(3)
 
 static bool sweep_state_dirty = false;
 static systime_t sweep_state_deadline = 0;
@@ -40,7 +40,7 @@ static systime_t sweep_state_last_save = 0;
 
 static void sanitize_rf_preferences(void) {
 #ifdef USE_VARIABLE_OFFSET
-  config._IF_freq = clamp_if_offset(config._IF_freq);
+  config.IF_freq = clamp_if_offset(config.IF_freq);
 #endif
   config._harmonic_freq_threshold = clamp_harmonic_threshold(config._harmonic_freq_threshold);
 }
@@ -60,7 +60,7 @@ static void load_default_properties(void) {
   current_props._trace[2] = (trace_t){true, TRC_SMITH, 0, MS_RX, 1.0f, 0};
   current_props._trace[3] = (trace_t){true, TRC_PHASE, 1, MS_REIM, 90.0f, NGRIDY / 2};
   for (int i = 0; i < MARKERS_MAX; i++) {
-    marker_t* marker = &current_props._markers[i];
+    marker_t *marker = &current_props._markers[i];
     marker->enabled = (i == 0);
     marker->reserved = 0;
     marker->index = (int16_t)(10 * (i + 1) * SWEEP_POINTS_MAX / 100 - 1);
@@ -93,7 +93,7 @@ typedef union {
     uint32_t brightness : 7;
   };
   uint32_t v;
-} backup_0;
+} backup_0_t;
 
 static inline uint16_t active_calibration_slot(void) {
   uint16_t slot = lastsaveid;
@@ -104,10 +104,10 @@ static inline uint16_t active_calibration_slot(void) {
 }
 
 void update_backup_data(void) {
-  backup_0 bk = {.points = sweep_points,
+  backup_0_t bk = {.points = sweep_points,
                  .bw = config._bandwidth,
                  .id = lastsaveid,
-                 .leveler = lever_mode,
+                 .leveler = sweep_mode,
                  .brightness = config._brightness};
   set_backup_data32(0, bk.v);
   set_backup_data32(1, frequency0);
@@ -120,7 +120,7 @@ static void load_settings(void) {
   load_default_properties();
   if (config_recall() == 0 && VNA_MODE(VNA_MODE_BACKUP)) {
     sanitize_rf_preferences();
-    backup_0 bk = {.v = get_backup_data32(0)};
+    backup_0_t bk = {.v = get_backup_data32(0)};
     if (bk.v != 0U) {
       if (bk.id < SAVEAREA_MAX && caldata_recall(bk.id) == 0) {
         sweep_points = bk.points;
@@ -186,7 +186,7 @@ void state_manager_force_save(void) {
   if (!calibration_in_progress) {
     caldata_save(active_calibration_slot());
   }
-  
+
   sweep_state_dirty = false;
   sweep_state_last_save = chVTGetSystemTimeX();
 #endif

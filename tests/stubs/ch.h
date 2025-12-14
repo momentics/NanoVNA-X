@@ -25,7 +25,6 @@
 #include <stdint.h>
 
 typedef uint32_t systime_t;
-typedef systime_t sysinterval_t;
 typedef intptr_t msg_t;
 
 #ifndef CH_CFG_USE_WAITEXIT
@@ -40,25 +39,22 @@ typedef intptr_t msg_t;
 #define TIME_IMMEDIATE 0
 #define TIME_INFINITE (-1)
 
-#define TIME_MS2I(ms) ((sysinterval_t)(ms))
-#define TIME_US2I(us) ((sysinterval_t)(((us) + 999U) / 1000U))
-#define TIME_S2I(s) ((sysinterval_t)((s) * 1000U))
-#define TIME_I2MS(i) ((uint32_t)(i))
-#define TIME_I2US(i) ((uint32_t)(i) * 1000U)
-#define TIME_I2S(i) ((uint32_t)(i) / 1000U)
+#define MS2ST(ms) ((systime_t)(ms))
 
-typedef struct BaseSequentialStream {
-  void* vmt;
-} BaseSequentialStream;
+typedef struct base_sequential_stream {
+  void *vmt;
+} base_sequential_stream_t;
 
-typedef BaseSequentialStream BaseAsynchronousChannel;
+typedef base_sequential_stream_t BaseSequentialStream;
+typedef base_sequential_stream_t base_asynchronous_channel_t;
+typedef base_asynchronous_channel_t BaseAsynchronousChannel;
 
-typedef void (*tfunc_t)(void* arg);
+typedef void (*tfunc_t)(void *arg);
 
-#define THD_FUNCTION(name, arg) void name(void* arg)
+#define THD_FUNCTION(name, arg) void name(void *(arg))
 
 typedef struct {
-  msg_t* buffer;
+  msg_t *buffer;
   size_t length;
   size_t head;
   size_t tail;
@@ -67,7 +63,7 @@ typedef struct {
 
 typedef struct thread {
   tfunc_t entry;
-  void* arg;
+  void *arg;
   bool terminated_flag;
 } thread_t;
 
@@ -77,15 +73,14 @@ typedef struct {
   int dummy;
 } threads_queue_t;
 
-size_t chnWriteTimeout(BaseAsynchronousChannel* chp, const uint8_t* data, size_t size,
+size_t chnWriteTimeout(base_asynchronous_channel_t *chp, const uint8_t *data, size_t size,
                        systime_t timeout);
-size_t chnReadTimeout(BaseAsynchronousChannel* chp, uint8_t* data, size_t size,
-                      systime_t timeout);
+size_t chnReadTimeout(base_asynchronous_channel_t *chp, uint8_t *data, size_t size, systime_t timeout);
 
-void chMBObjectInit(mailbox_t* mbp, msg_t* buf, size_t n);
-msg_t chMBPostTimeout(mailbox_t* mbp, msg_t msg, sysinterval_t timeout);
-msg_t chMBPostI(mailbox_t* mbp, msg_t msg);
-msg_t chMBFetchTimeout(mailbox_t* mbp, msg_t* msgp, sysinterval_t timeout);
+void chMBObjectInit(mailbox_t *mbp, msg_t *buf, size_t n);
+msg_t chMBPost(mailbox_t *mbp, msg_t msg, systime_t timeout);
+msg_t chMBPostI(mailbox_t *mbp, msg_t msg);
+msg_t chMBFetch(mailbox_t *mbp, msg_t *msgp, systime_t timeout);
 
 void chSysLock(void);
 void chSysUnlock(void);
@@ -93,12 +88,12 @@ void chSysLockFromISR(void);
 void chSysUnlockFromISR(void);
 void osalSysLock(void);
 void osalSysUnlock(void);
-void osalThreadQueueObjectInit(threads_queue_t* queue);
-void osalThreadEnqueueTimeoutS(threads_queue_t* queue, systime_t timeout);
-msg_t osalThreadDequeueNextI(threads_queue_t* queue, msg_t msg);
-thread_t* chThdCreateStatic(void* warea, size_t size, tprio_t prio, tfunc_t entry, void* arg);
+void osalThreadQueueObjectInit(threads_queue_t *queue);
+void osalThreadEnqueueTimeoutS(threads_queue_t *queue, systime_t timeout);
+msg_t osalThreadDequeueNextI(threads_queue_t *queue, msg_t msg);
+thread_t *chThdCreateStatic(void *warea, size_t size, tprio_t prio, tfunc_t entry, void *arg);
 void chThdExit(msg_t msg);
-void chThdTerminate(thread_t* tp);
-void chThdWait(thread_t* tp);
-bool chThdTerminatedX(thread_t* tp);
+void chThdTerminate(thread_t *tp);
+void chThdWait(thread_t *tp);
+bool chThdTerminated_x(thread_t *tp);
 void chThdSleepMilliseconds(uint32_t ms);

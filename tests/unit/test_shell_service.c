@@ -39,6 +39,13 @@
 #include "platform/peripherals/usbcfg.h"
 #include "interfaces/cli/shell_service.h"
 #include "chprintf.h"
+#include "hal_serial_usb.h"
+#include "infra/task/scheduler.h"
+
+SerialUSBDriver SDU1;
+USBDriver USBD1;
+SerialUSBConfig SERUSBCFG;
+USBConfig USBCFG;
 
 /* ------------------------------------------------------------------------- */
 /*                  Minimal USB/stream plumbing for the tests                */
@@ -55,7 +62,7 @@ config_t config = {._serial_speed = 115200};
 USBConfig usbcfg = {0};
 SerialUSBConfig serusbcfg = {0};
 USBDriver USBD1 = {.state = USB_ACTIVE};
-SerialUSBDriver SDU1 = {.stream = {.vmt = NULL}, .config = &serusbcfg, .user_data = NULL};
+SerialUSBDriver sd_u1 = {.stream = {.vmt = NULL}, .config = &serusbcfg, .user_data = NULL};
 
 static shell_stream_state_t g_stream_state;
 static int g_queue_enqueues = 0;
@@ -65,7 +72,7 @@ static event_bus_topic_t g_registered_topic = EVENT_SWEEP_STARTED;
 static event_bus_topic_t g_published_events[4];
 static size_t g_published_event_count = 0;
 
-static bool tx_contains(const char* needle) {
+static bool tx_contains(const char *needle) {
   size_t needle_len = strlen(needle);
   if (needle_len == 0 || g_stream_state.tx_len < needle_len) {
     return false;
@@ -78,15 +85,15 @@ static bool tx_contains(const char* needle) {
   return false;
 }
 
-static shell_stream_state_t* stream_from_channel(BaseAsynchronousChannel* chp) {
-  SerialUSBDriver* drv = (SerialUSBDriver*)chp;
-  return (drv != NULL) ? (shell_stream_state_t*)drv->user_data : NULL;
+static shell_stream_state_t *stream_from_channel(BaseAsynchronousChannel *chp) {
+  SerialUSBDriver *drv = (SerialUSBDriver *)chp;
+  return (drv != NULL) ? (shell_stream_state_t *)drv->user_data : NULL;
 }
 
-size_t chnWriteTimeout(BaseAsynchronousChannel* chp, const uint8_t* data, size_t size,
+size_t chnWriteTimeout(BaseAsynchronousChannel *chp, const uint8_t *data, size_t size,
                        systime_t timeout) {
   (void)timeout;
-  shell_stream_state_t* state = stream_from_channel(chp);
+  shell_stream_state_t *state = stream_from_channel(chp);
   if (state == NULL || data == NULL) {
     return 0;
   }
@@ -97,10 +104,9 @@ size_t chnWriteTimeout(BaseAsynchronousChannel* chp, const uint8_t* data, size_t
   return copy;
 }
 
-size_t chnReadTimeout(BaseAsynchronousChannel* chp, uint8_t* data, size_t size,
-                      systime_t timeout) {
+size_t chnReadTimeout(BaseAsynchronousChannel *chp, uint8_t *data, size_t size, systime_t timeout) {
   (void)timeout;
-  shell_stream_state_t* state = stream_from_channel(chp);
+  shell_stream_state_t *state = stream_from_channel(chp);
   if (state == NULL || data == NULL) {
     return 0;
   }
@@ -114,13 +120,13 @@ size_t chnReadTimeout(BaseAsynchronousChannel* chp, uint8_t* data, size_t size,
   return copy;
 }
 
-int chvprintf(BaseSequentialStream* chp, const char* fmt, va_list ap) {
+int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
   char buffer[256];
   int len = vsnprintf(buffer, sizeof(buffer), fmt, ap);
   if (len <= 0) {
     return len;
   }
-  chnWriteTimeout((BaseAsynchronousChannel*)chp, (const uint8_t*)buffer, (size_t)len,
+  chnWriteTimeout((BaseAsynchronousChannel *)chp, (const uint8_t *)buffer, (size_t)len,
                   TIME_IMMEDIATE);
   return len;
 }
@@ -131,60 +137,56 @@ void chThdSleepMilliseconds(uint32_t ms) {
 
 void pause_sweep(void) {}
 
-
 void osalSysLock(void) {}
 void osalSysUnlock(void) {}
-void osalThreadQueueObjectInit(threads_queue_t* queue) {
+void osalThreadQueueObjectInit(threads_queue_t *queue) {
   (void)queue;
 }
-void osalThreadEnqueueTimeoutS(threads_queue_t* queue, systime_t timeout) {
+void osalThreadEnqueueTimeoutS(threads_queue_t *queue, systime_t timeout) {
   (void)queue;
   (void)timeout;
   ++g_queue_enqueues;
 }
-msg_t osalThreadDequeueNextI(threads_queue_t* queue, msg_t msg) {
+msg_t osalThreadDequeueNextI(threads_queue_t *queue, msg_t msg) {
   (void)queue;
   ++g_queue_dequeues;
   return msg;
 }
 
-void osalThreadDequeueAllI(threads_queue_t* queue, msg_t msg) {
+void osalThreadDequeueAllI(threads_queue_t *queue, msg_t msg) {
   (void)queue;
   /* For test purposes we don't track all the waiting threads */
   /* but in real implementation this would wake up all waiting threads */
 }
 
-void sduObjectInit(SerialUSBDriver* driver) {
+void sduObjectInit(SerialUSBDriver *driver) {
   (void)driver;
 }
-void sduStart(SerialUSBDriver* driver, const SerialUSBConfig* cfg) {
-  (void)driver;
-  (void)cfg;
-}
-void sduSuspendHookI(SerialUSBDriver* driver) {
-  (void)driver;
-}
-void sduWakeupHookI(SerialUSBDriver* driver) {
-  (void)driver;
-}
-void sduConfigureHookI(SerialUSBDriver* driver) {
-  (void)driver;
-}
-void usbDisconnectBus(USBDriver* driver) {
-  (void)driver;
-}
-void usbStart(USBDriver* driver, const USBConfig* cfg) {
+void sduStart(SerialUSBDriver *driver, const SerialUSBConfig *cfg) {
   (void)driver;
   (void)cfg;
 }
-void usbConnectBus(USBDriver* driver) {
+void sduDisconnectI(SerialUSBDriver *driver) {
+  (void)driver;
+}
+void sduConfigureHookI(SerialUSBDriver *driver) {
+  (void)driver;
+}
+void usbDisconnectBus(USBDriver *driver) {
+  (void)driver;
+}
+void usbStart(USBDriver *driver, const USBConfig *cfg) {
+  (void)driver;
+  (void)cfg;
+}
+void usbConnectBus(USBDriver *driver) {
   (void)driver;
 }
 
 /* ------------------------------------------------------------------------- */
 /*                          Event bus stub helpers                           */
 
-bool event_bus_publish(event_bus_t* bus, event_bus_topic_t topic, const void* payload) {
+bool event_bus_publish(event_bus_t *bus, event_bus_topic_t topic, const void *payload) {
   (void)bus;
   (void)payload;
   if (g_published_event_count < sizeof(g_published_events) / sizeof(g_published_events[0])) {
@@ -193,8 +195,8 @@ bool event_bus_publish(event_bus_t* bus, event_bus_topic_t topic, const void* pa
   return true;
 }
 
-bool event_bus_subscribe(event_bus_t* bus, event_bus_topic_t topic, event_bus_listener_t listener,
-                         void* user_data) {
+bool event_bus_subscribe(event_bus_t *bus, event_bus_topic_t topic, event_bus_listener_t listener,
+                         void *user_data) {
   (void)bus;
   (void)user_data;
   g_registered_topic = topic;
@@ -206,23 +208,23 @@ bool event_bus_subscribe(event_bus_t* bus, event_bus_topic_t topic, event_bus_li
 
 static int g_failures = 0;
 
-#define CHECK(cond, msg)                                                                         \
-  do {                                                                                           \
-    if (!(cond)) {                                                                               \
-      ++g_failures;                                                                              \
-      fprintf(stderr, "[FAIL] %s:%d: %s\n", __FILE__, __LINE__, msg);                            \
-    }                                                                                            \
+#define CHECK(cond, msg)                                                                           \
+  do {                                                                                             \
+    if (!(cond)) {                                                                                 \
+      ++g_failures;                                                                                \
+      fprintf(stderr, "[FAIL] %s:%d: %s\n", __FILE__, __LINE__, msg);                              \
+    }                                                                                              \
   } while (0)
 
-static void reset_shell_state(const char* scripted_rx) {
+static void reset_shell_state(const char *scripted_rx) {
   memset(&g_stream_state, 0, sizeof(g_stream_state));
   if (scripted_rx != NULL) {
     g_stream_state.rx_len = strlen(scripted_rx);
     memcpy(g_stream_state.rx, scripted_rx, g_stream_state.rx_len);
   }
   serusbcfg.usbp = &USBD1;
-  SDU1.config = &serusbcfg;
-  SDU1.user_data = &g_stream_state;
+  sd_u1.config = &serusbcfg;
+  sd_u1.user_data = &g_stream_state;
   USBD1.state = USB_ACTIVE;
   config._vna_mode = 0;
   config._serial_speed = 115200;
@@ -240,7 +242,7 @@ static int g_command_invocations = 0;
 static int g_last_command_argc = 0;
 static char g_last_command_arg0[32];
 
-static void test_command_callback(int argc, char* argv[]) {
+static void test_command_callback(int argc, char *argv[]) {
   ++g_command_invocations;
   g_last_command_argc = argc;
   if (argc > 0 && argv != NULL && argv[0] != NULL) {
@@ -248,9 +250,9 @@ static void test_command_callback(int argc, char* argv[]) {
   }
 }
 
-static const VNAShellCommand g_test_commands[] = {
-    {.sc_name = "scan", .sc_function = test_command_callback, .flags = 0},
-    {.sc_name = NULL, .sc_function = NULL, .flags = 0},
+static const vna_shell_command_t g_test_commands[] = {
+  {.sc_name = "scan", .sc_function = test_command_callback, .flags = 0},
+  {.sc_name = NULL, .sc_function = NULL, .flags = 0},
 };
 
 static void trigger_pending_event(void) {
@@ -269,10 +271,10 @@ static void test_shell_parse_and_overflow(void) {
   shell_register_commands(g_test_commands);
   char line[] = "scan 123 456";
   uint16_t argc = 0;
-  char** argv = NULL;
-  const char* name = NULL;
+  char **argv = NULL;
+  const char *name = NULL;
 
-  const VNAShellCommand* cmd = shell_parse_command(line, &argc, &argv, &name);
+  const vna_shell_command_t *cmd = shell_parse_command(line, &argc, &argv, &name);
   CHECK(cmd == &g_test_commands[0], "registered command must be returned");
   CHECK(argc == 2, "argc should exclude the command token");
   CHECK(argv != NULL && strcmp(argv[0], "123") == 0, "argv[0] should match first parameter");
@@ -281,12 +283,11 @@ static void test_shell_parse_and_overflow(void) {
 
   char overflow_line[] = "scan 1 2 3 4 5";
   uint16_t overflow_argc = 0;
-  char** overflow_argv = NULL;
-  const VNAShellCommand* overflow_cmd =
-      shell_parse_command(overflow_line, &overflow_argc, &overflow_argv, NULL);
+  char **overflow_argv = NULL;
+  const vna_shell_command_t *overflow_cmd =
+    shell_parse_command(overflow_line, &overflow_argc, &overflow_argv, NULL);
   CHECK(overflow_cmd == &g_test_commands[0], "known commands should still parse when clamped");
-  CHECK(overflow_argc == VNA_SHELL_MAX_ARGUMENTS,
-        "argc must be clamped to the configured maximum");
+  CHECK(overflow_argc == VNA_SHELL_MAX_ARGUMENTS, "argc must be clamped to the configured maximum");
   CHECK(strcmp(overflow_argv[VNA_SHELL_MAX_ARGUMENTS - 1], "4") == 0,
         "excess arguments should be dropped");
 }
@@ -301,8 +302,8 @@ static void test_shell_deferred_queue_and_event_bus(void) {
 
   char line[] = "scan 42";
   uint16_t argc = 0;
-  char** argv = NULL;
-  const VNAShellCommand* cmd = shell_parse_command(line, &argc, &argv, NULL);
+  char **argv = NULL;
+  const vna_shell_command_t *cmd = shell_parse_command(line, &argc, &argv, NULL);
   CHECK(cmd != NULL, "command must parse");
 
   shell_request_deferred_execution(cmd, argc, argv);

@@ -123,7 +123,7 @@ endif
 
 # Imported source files and paths
 #CHIBIOS = ../ChibiOS-RT
-CHIBIOS = third_party/ChibiOS_21.11.4
+CHIBIOS = third_party/ChibiOS
 PROJ = .
 # Startup files.
 # HAL-OSAL files (optional).
@@ -139,23 +139,19 @@ else
  include boards/STM32F072/board.mk
 endif
 
-include $(CHIBIOS)/os/hal/osal/rt-nil/osal.mk
+include $(CHIBIOS)/os/hal/osal/rt/osal.mk
 # RTOS files (optional).
-CHCONFDIR = config
+CHCONF_FILE := config/chconf.h
 include $(CHIBIOS)/os/rt/rt.mk
 ifeq ($(TARGET),F303)
-include $(CHIBIOS)/os/common/ports/ARMv7-M/compilers/GCC/mk/port.mk
+include $(CHIBIOS)/os/common/ports/ARMCMx/compilers/GCC/mk/port_v7m.mk
 else
-include $(CHIBIOS)/os/common/ports/ARMv6-M/compilers/GCC/mk/port.mk
+include $(CHIBIOS)/os/common/ports/ARMCMx/compilers/GCC/mk/port_v6m.mk
 endif
 # Other files (optional).
 #include $(CHIBIOS)/test/rt/test.mk
 include $(CHIBIOS)/os/hal/lib/streams/streams.mk
 #include $(CHIBIOS)/os/various/shell/shell.mk
-
-# ChibiOS 21.11+ streams.mk includes chprintf/chscanf, but the project ships a
-# customized implementation under src/middleware/.
-STREAMSSRC := $(filter-out $(CHIBIOS)/os/hal/lib/streams/chprintf.c $(CHIBIOS)/os/hal/lib/streams/chscanf.c,$(STREAMSSRC))
 
 # Define linker script file here
 ifeq ($(TARGET),F303)
@@ -168,10 +164,8 @@ endif
 # setting.
 CSRC = $(STARTUPSRC) \
        $(KERNSRC) \
-       $(OSLIBSRC) \
        $(PORTSRC) \
        $(OSALSRC) \
-       $(OOPSRC) \
        $(HALSRC) \
        $(PLATFORMSRC) \
        $(BOARDSRC) \
@@ -181,6 +175,8 @@ CSRC = $(STARTUPSRC) \
        src/ui/resources/fonts/numfont16x22.c \
        src/ui/resources/fonts/Font5x7.c \
        src/ui/resources/fonts/Font6x10.c \
+       src/ui/resources/fonts/Font7x11b.c \
+       src/ui/resources/fonts/Font11x14.c \
        src/ui/resources/icons/icons_menu.c \
        src/platform/peripherals/usbcfg.c \
        src/runtime/main.c \
@@ -228,10 +224,6 @@ CSRC = $(STARTUPSRC) \
        src/interfaces/ports/ui_port.c \
        src/interfaces/ports/usb_command_server_port.c
 
-ifeq ($(TARGET),F303)
-CSRC += src/ui/resources/fonts/Font7x11b.c
-endif
-
 # C++ sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.
 CPPSRC =
@@ -257,12 +249,11 @@ TCSRC =
 TCPPSRC =
 
 # List ASM source files here
-ASMSRC = $(filter %.s,$(STARTUPASM) $(PORTASM) $(OSALASM))
-ASMXSRC = $(filter %.S,$(STARTUPASM) $(PORTASM) $(OSALASM))
+ASMSRC = $(STARTUPASM) $(PORTASM) $(OSALASM)
 
 INCDIR = $(STARTUPINC) $(KERNINC) $(PORTINC) $(OSALINC) \
          $(HALINC) $(PLATFORMINC) $(BOARDINC)  \
-         $(STREAMSINC) $(CHIBIOS)/os/license $(OOPINC) $(OSLIBINC) $(PROJ)/third_party/FatFs
+         $(STREAMSINC) $(PROJ)/third_party/FatFs
 
 #
 # Project, sources and paths
@@ -318,9 +309,9 @@ CPPWARN = -Wall -Wextra
 
 # List all user C define here, like -D_DEBUG=1
 ifeq ($(TARGET),F303)
- UDEFS = -DARM_MATH_CM4 -DNANOVNA_F303
+ UDEFS = -DARM_MATH_CM4 -DNANOVNA_F303 -DSTM32F303xC
 else
- UDEFS = -DARM_MATH_CM0
+ UDEFS = -DARM_MATH_CM0 -DSTM32F072xB
 endif
 ifeq ($(TARGET),F072)
 # F072 build targets do not expose TLV320/port diagnostics; trim their commands
@@ -416,7 +407,7 @@ test: tests
 		"$$suite"; \
 	done
 
-RULESPATH = $(CHIBIOS)/os/common/startup/ARMCMx/compilers/GCC/mk
+RULESPATH = $(CHIBIOS)/os/common/startup/ARMCMx/compilers/GCC
 include $(RULESPATH)/rules.mk
 
 VERSION_HEADER := $(BUILDDIR)/generated/version_info.h
@@ -442,8 +433,8 @@ clear: clean
 
 TAGS: Makefile
 ifeq ($(TARGET),F303)
-	@etags *.[ch] boards/STM32F303/*.[ch] $(shell find $(CHIBIOS) -name \*.\[ch\] -print)
+	@etags *.[ch] boards/STM32F303/*.[ch] $(shell find third_party/ChibiOS -name \*.\[ch\] -print)
 else
-	@etags *.[ch] boards/STM32F072/*.[ch] $(shell find $(CHIBIOS) -name \*.\[ch\] -print)
+	@etags *.[ch] boards/STM32F072/*.[ch] $(shell find third_party/ChibiOS -name \*.\[ch\] -print)
 endif
 	@ls -l TAGS

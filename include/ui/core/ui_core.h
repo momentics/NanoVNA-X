@@ -1,23 +1,3 @@
-/*
- * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * All rights reserved.
- *
- * This is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3, or (at your option)
- * any later version.
- *
- * The software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with GNU Radio; see the file COPYING.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street,
- * Boston, MA 02110-1301, USA.
- */
-
 #pragma once
 
 #include <stdint.h>
@@ -70,7 +50,7 @@ void ui_init(void);
 void ui_process(void);
 
 // Attach event bus (exposed for main)
-void ui_attach_event_bus(event_bus_t* bus);
+void ui_attach_event_bus(event_bus_t *bus);
 
 // Status checks (used by menu callbacks?)
 uint16_t ui_input_check(void); // Assuming this is needed
@@ -105,7 +85,7 @@ void ui_touch_cal_exec(void);
 void ui_touch_draw_test(void);
 
 // Helper for message box
-void ui_message_box(const char* header, const char* text, uint32_t delay);
+void ui_message_box(const char *header, const char *text, uint32_t delay);
 
 // Helper for checking touch release (blocking)
 void touch_wait_release(void);
@@ -117,25 +97,24 @@ void touch_stop_watchdog(void);
 extern int16_t last_touch_x;
 extern int16_t last_touch_y;
 
-void touch_position(int* x, int* y);
-void ui_message_box(const char* header, const char* text, uint32_t delay);
-void ui_message_box_draw(const char* header, const char* text);
+void touch_position(int *x, int *y);
+void ui_message_box(const char *header, const char *text, uint32_t delay);
+void ui_message_box_draw(const char *header, const char *text);
 void ui_touch_cal_exec(void);
 void ui_touch_draw_test(void);
 
 // Draw button helper (exposed for menu engine)
-void ui_draw_button(uint16_t x, uint16_t y, uint16_t w, uint16_t h, button_t* b);
+void ui_draw_button(uint16_t x, uint16_t y, uint16_t w, uint16_t h, button_t *b);
 
 // Keyboard callback type and macro
-typedef void (*keyboard_cb_t)(uint16_t data, button_t* b);
+typedef void (*keyboard_cb_t)(uint16_t data, button_t *b);
 #define UI_KEYBOARD_CALLBACK(ui_kb_function_name)                                                  \
-  void ui_kb_function_name(uint16_t data, button_t* b)
+  void ui_kb_function_name(uint16_t data, button_t *b)
 
 // Needed for menu callbacks to invoke keyboard
-void ui_keyboard_cb(uint16_t data, button_t* b);
+void ui_keyboard_cb(uint16_t data, button_t *b);
 void menu_sdcard_cb(uint16_t data);
-void menu_stored_trace_acb(uint16_t data, button_t* b);
-void menu_vna_mode_acb(uint16_t data, button_t* b);
+void menu_stored_trace_acb(uint16_t data, button_t *b);
+void menu_vna_mode_acb(uint16_t data, button_t *b);
 bool select_lever_mode(int mode);
-void apply_vna_mode(uint16_t idx, vna_mode_ops operation);
-
+void apply_vna_mode(uint16_t idx, vna_mode_ops_t operation);

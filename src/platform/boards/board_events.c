@@ -20,7 +20,7 @@
 
 #include "platform/boards/board_events.h"
 
-void board_events_init(board_events_t* events) {
+void board_events_init(board_events_t *events) {
   if (events == NULL) {
     return;
   }
@@ -32,8 +32,8 @@ void board_events_init(board_events_t* events) {
   }
 }
 
-bool board_events_subscribe(board_events_t* events, board_event_type_t topic,
-                            board_event_listener_t listener, void* user_data) {
+bool board_events_subscribe(board_events_t *events, board_event_type_t topic,
+                            board_event_listener_t listener, void *user_data) {
   if (events == NULL || listener == NULL) {
     return false;
   }
@@ -45,7 +45,7 @@ bool board_events_subscribe(board_events_t* events, board_event_type_t topic,
   return true;
 }
 
-static void board_events_store_event(board_events_t* events, const board_event_t* event) {
+static void board_events_store_event(board_events_t *events, const board_event_t *event) {
   if (events == NULL || event == NULL) {
     return;
   }
@@ -59,21 +59,21 @@ static void board_events_store_event(board_events_t* events, const board_event_t
   }
 }
 
-bool board_events_publish(board_events_t* events, const board_event_t* event) {
+bool board_events_publish(board_events_t *events, const board_event_t *event) {
   chSysLock();
   board_events_store_event(events, event);
   chSysUnlock();
   return true;
 }
 
-bool board_events_publish_from_isr(board_events_t* events, const board_event_t* event) {
+bool board_events_publish_from_isr(board_events_t *events, const board_event_t *event) {
   chSysLockFromISR();
   board_events_store_event(events, event);
   chSysUnlockFromISR();
   return true;
 }
 
-bool board_events_dispatch(board_events_t* events) {
+bool board_events_dispatch(board_events_t *events) {
   if (events == NULL) {
     return false;
   }
@@ -99,7 +99,7 @@ bool board_events_dispatch(board_events_t* events) {
   return dispatched;
 }
 
-uint32_t board_events_pending_mask(board_events_t* events) {
+uint32_t board_events_pending_mask(board_events_t *events) {
   if (events == NULL) {
     return 0;
   }

@@ -23,16 +23,15 @@
 #include "platform/boards/board_registry.h"
 
 #if defined(NANOVNA_F303)
-extern const PlatformDrivers* platform_nanovna_f303_drivers(void);
+extern const platform_drivers_t *platform_nanovna_f303_drivers(void);
 #define ACTIVE_DRIVERS platform_nanovna_f303_drivers()
 #else
-extern const PlatformDrivers* platform_nanovna_f072_drivers(void);
+extern const platform_drivers_t *platform_nanovna_f072_drivers(void);
 #define ACTIVE_DRIVERS platform_nanovna_f072_drivers()
 #endif
 
-void platform_board_pre_init(void) {
-}
+void platform_board_pre_init(void) {}
 
-const PlatformDrivers* platform_board_drivers(void) {
+const platform_drivers_t *platform_board_drivers(void) {
   return ACTIVE_DRIVERS;
 }

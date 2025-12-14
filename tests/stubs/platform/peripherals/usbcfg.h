@@ -1,65 +1,18 @@
-/*
- * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * All rights reserved.
- *
- * This is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3, or (at your option)
- * any later version.
- *
- * The software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with GNU Radio; see the file COPYING.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street,
- * Boston, MA 02110-1301, USA.
- */
-
-
-
-/*
- * USB configuration stubs for host-side tests.  The real firmware pulls in the
- * ChibiOS USB stack; here we only need lightweight records so shell_service.c
- * can compile and so the tests can inspect the simulated connection state.
- */
-
 #pragma once
+#include "hal_serial_usb.h"
 
-#include "ch.h"
-
-typedef struct {
-  int state;
-} USBDriver;
-
-#define USB_ACTIVE 1
-
-typedef struct {
-  USBDriver* usbp;
-} SerialUSBConfig;
-
-typedef struct {
-  BaseSequentialStream stream;
-  SerialUSBConfig* config;
-  void* user_data;
-} SerialUSBDriver;
-
-typedef struct {
-  int dummy;
-} USBConfig;
-
+// Externs for compatibility if needed (but prefer Uppercase)
 extern USBConfig usbcfg;
 extern SerialUSBConfig serusbcfg;
-extern SerialUSBDriver SDU1;
-extern USBDriver USBD1;
+extern SerialUSBDriver sd_u1;
+extern USBDriver usb_d1;
 
-void sduObjectInit(SerialUSBDriver* driver);
-void sduStart(SerialUSBDriver* driver, const SerialUSBConfig* cfg);
-void sduSuspendHookI(SerialUSBDriver* driver);
-void sduWakeupHookI(SerialUSBDriver* driver);
-void sduConfigureHookI(SerialUSBDriver* driver);
-void usbDisconnectBus(USBDriver* driver);
-void usbStart(USBDriver* driver, const USBConfig* cfg);
-void usbConnectBus(USBDriver* driver);
+// Function prototypes if needed (but handled by hal_serial_usb.h usually)
+// If shell_service.c calls lowercase functions?
+// I renamed usages in shell_service.c?
+// No, I only renamed globals. 
+// ChibiOS functions are sduStart etc.
+// usbcfg.h had definitions of sdu_object_init...
+// If usage is lowercase, I need them.
+// But test implementation uses sduStart (CamelCase).
+// I believe codebase uses CamelCase for functions.

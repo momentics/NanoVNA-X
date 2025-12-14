@@ -20,13 +20,14 @@
 
 #include "infra/event/event_bus.h"
 
-static bool event_bus_dispatch_to_subscribers(event_bus_t* bus, const event_bus_message_t* message) {
+static bool event_bus_dispatch_to_subscribers(event_bus_t *bus,
+                                              const event_bus_message_t *message) {
   bool handled = false;
   if (bus == NULL || message == NULL || bus->subscriptions == NULL) {
     return false;
   }
   for (size_t i = 0; i < bus->count; ++i) {
-    event_bus_subscription_t* slot = &bus->subscriptions[i];
+    event_bus_subscription_t *slot = &bus->subscriptions[i];
     if (slot->callback == NULL) {
       continue;
     }
@@ -39,8 +40,8 @@ static bool event_bus_dispatch_to_subscribers(event_bus_t* bus, const event_bus_
   return handled;
 }
 
-void event_bus_init(event_bus_t* bus, event_bus_subscription_t* storage, size_t capacity,
-                    msg_t* queue_storage, size_t queue_length, event_bus_queue_node_t* nodes,
+void event_bus_init(event_bus_t *bus, event_bus_subscription_t *storage, size_t capacity,
+                    msg_t *queue_storage, size_t queue_length, event_bus_queue_node_t *nodes,
                     size_t node_count) {
   if (bus == NULL) {
     return;
@@ -66,30 +67,30 @@ void event_bus_init(event_bus_t* bus, event_bus_subscription_t* storage, size_t 
   }
 }
 
-bool event_bus_subscribe(event_bus_t* bus, event_bus_topic_t topic, event_bus_listener_t listener,
-                         void* user_data) {
+bool event_bus_subscribe(event_bus_t *bus, event_bus_topic_t topic, event_bus_listener_t listener,
+                         void *user_data) {
   if (bus == NULL || listener == NULL || bus->subscriptions == NULL) {
     return false;
   }
   if (bus->count >= bus->capacity) {
     return false;
   }
-  event_bus_subscription_t* slot = &bus->subscriptions[bus->count++];
+  event_bus_subscription_t *slot = &bus->subscriptions[bus->count++];
   slot->callback = listener;
   slot->user_data = user_data;
   slot->topic = topic;
   return true;
 }
 
-static event_bus_queue_node_t* event_bus_alloc_node(event_bus_t* bus, event_bus_topic_t topic,
-                                                    const void* payload) {
+static event_bus_queue_node_t *event_bus_alloc_node(event_bus_t *bus, event_bus_topic_t topic,
+                                                    const void *payload) {
   if (bus == NULL || bus->nodes == NULL || bus->node_count == 0U) {
     return NULL;
   }
 
-  event_bus_queue_node_t* node = NULL;
+  event_bus_queue_node_t *node = NULL;
   for (size_t i = 0; i < bus->node_count; ++i) {
-    event_bus_queue_node_t* candidate = &bus->nodes[i];
+    event_bus_queue_node_t *candidate = &bus->nodes[i];
     if (!candidate->in_use) {
       candidate->in_use = true;
       candidate->message.topic = topic;
@@ -101,7 +102,7 @@ static event_bus_queue_node_t* event_bus_alloc_node(event_bus_t* bus, event_bus_
   return node;
 }
 
-static bool event_bus_enqueue(event_bus_t* bus, event_bus_queue_node_t* node, bool from_isr) {
+static bool event_bus_enqueue(event_bus_t *bus, event_bus_queue_node_t *node, bool from_isr) {
   if (bus == NULL || node == NULL) {
     return false;
   }
@@ -110,29 +111,28 @@ static bool event_bus_enqueue(event_bus_t* bus, event_bus_queue_node_t* node, bo
   }
 
   msg_t msg = (msg_t)node;
-  msg_t result = MSG_OK;
+  msg_t result;
   if (from_isr) {
-    chSysLockFromISR();
     result = chMBPostI(&bus->mailbox, msg);
-    if (result != MSG_OK) {
+  } else {
+    result = chMBPost(&bus->mailbox, msg, TIME_IMMEDIATE);
+  }
+  if (result != MSG_OK) {
+    if (from_isr) {
+      chSysLockFromISR();
       node->in_use = false;
       chSysUnlockFromISR();
-      return false;
-    }
-    chSysUnlockFromISR();
-  } else {
-    result = chMBPostTimeout(&bus->mailbox, msg, TIME_IMMEDIATE);
-    if (result != MSG_OK) {
+    } else {
       chSysLock();
       node->in_use = false;
       chSysUnlock();
-      return false;
     }
+    return false;
   }
   return true;
 }
 
-static bool event_bus_publish_common(event_bus_t* bus, event_bus_topic_t topic, const void* payload,
+static bool event_bus_publish_common(event_bus_t *bus, event_bus_topic_t topic, const void *payload,
                                      bool from_isr) {
   if (bus == NULL) {
     return false;
@@ -150,7 +150,7 @@ static bool event_bus_publish_common(event_bus_t* bus, event_bus_topic_t topic, 
   } else {
     chSysLock();
   }
-  event_bus_queue_node_t* node = event_bus_alloc_node(bus, topic, payload);
+  event_bus_queue_node_t *node = event_bus_alloc_node(bus, topic, payload);
   if (from_isr) {
     chSysUnlockFromISR();
   } else {
@@ -170,15 +170,15 @@ static bool event_bus_publish_common(event_bus_t* bus, event_bus_topic_t topic, 
   return success;
 }
 
-bool event_bus_publish(event_bus_t* bus, event_bus_topic_t topic, const void* payload) {
+bool event_bus_publish(event_bus_t *bus, event_bus_topic_t topic, const void *payload) {
   return event_bus_publish_common(bus, topic, payload, false);
 }
 
-bool event_bus_publish_from_isr(event_bus_t* bus, event_bus_topic_t topic, const void* payload) {
+bool event_bus_publish_from_isr(event_bus_t *bus, event_bus_topic_t topic, const void *payload) {
   return event_bus_publish_common(bus, topic, payload, true);
 }
 
-bool event_bus_dispatch(event_bus_t* bus, sysinterval_t timeout) {
+bool event_bus_dispatch(event_bus_t *bus, systime_t timeout) {
   if (bus == NULL) {
     return false;
   }
@@ -189,12 +189,12 @@ bool event_bus_dispatch(event_bus_t* bus, sysinterval_t timeout) {
   }
 
   msg_t raw;
-  msg_t result = chMBFetchTimeout(&bus->mailbox, &raw, timeout);
+  msg_t result = chMBFetch(&bus->mailbox, &raw, timeout);
   if (result != MSG_OK) {
     return false;
   }
 
-  event_bus_queue_node_t* node = (event_bus_queue_node_t*)raw;
+  event_bus_queue_node_t *node = (event_bus_queue_node_t *)raw;
   const event_bus_message_t message = node->message;
   event_bus_dispatch_to_subscribers(bus, &message);
 

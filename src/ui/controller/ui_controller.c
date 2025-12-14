@@ -49,16 +49,13 @@
 
 // Touch screen
 
-
 // Cooperative polling budgets for constrained UI loop. The sweep thread must
 // yield within 16 ms to keep the display responsive on the STM32F303/F072
 // boards (72 MHz Cortex-M4 or 48 MHz Cortex-M0+ with tight SRAM). Keep touch
 // polling slices comfortably below this bound.
 
-
 //==============================================
 // menu_button_height removed
-
 
 // Menu structs moved to UI headers
 
@@ -69,41 +66,29 @@ void ui_enter_dfu(void) {
   lcd_set_colors(LCD_FG_COLOR, LCD_BG_COLOR);
   // leave a last message
   lcd_clear_screen();
-  lcd_drawstring(x, y,
+  LCD_DRAWSTRING(x, y,
                  "DFU: Device Firmware Update Mode\n"
                  "To exit DFU mode, please reset device yourself.");
-  boardDFUEnter();
+  board_dfu_enter();
 }
 #endif
 
 bool select_lever_mode(int mode) {
-  if (lever_mode == mode)
+  if (sweep_mode == mode)
     return false;
   lever_mode = mode;
   request_to_redraw(REDRAW_BACKUP | REDRAW_FREQUENCY | REDRAW_MARKER);
   return true;
 }
 
-extern const menuitem_t menu_trace[];
+extern const menuitem_t MENU_TRACE[];
 
-extern const menuitem_t menu_marker[];
-
-
-
-
-
+extern const menuitem_t MENU_MARKER[];
 
 // Process keyboard button callback, and run keyboard function
 // ui_keyboard_cb prototype removed (impl is below)
 
 // Custom keyboard menu button callback (depend from current trace)
-
-
-
-
-
-
-
 
 //=====================================================================================================
 //                                 SD card save / load functions
@@ -122,14 +107,11 @@ UI_FUNCTION_ADV_CALLBACK(menu_stored_trace_acb) {
 //                                 UI menus
 //=====================================================================================================
 
-
-
 #if defined(__SD_FILE_BROWSER__)
 #define MENU_STATE_SD_ENTRY 1
 #else
 #define MENU_STATE_SD_ENTRY 0
 #endif
-
 
 //====================================== end menu processing
 //==========================================
@@ -138,75 +120,73 @@ UI_FUNCTION_ADV_CALLBACK(menu_stored_trace_acb) {
 //                                  KEYBOARD macros, variables
 //=====================================================================================================
 
-
 // Keyboard size and position data
 // Keypad layouts moved to ui/core/ui_keypad.c
 
 // Get value from keyboard functions
 // Helpers moved to ui/core/ui_keypad.c
 
-
-const keypads_list keypads_mode_tbl[KM_NONE] = {
-    //                      key format     data for cb    text at bottom        callback function
-    [KM_START] = {KEYPAD_FREQ, ST_START, "START", input_freq},          // start
-    [KM_STOP] = {KEYPAD_FREQ, ST_STOP, "STOP", input_freq},             // stop
-    [KM_CENTER] = {KEYPAD_FREQ, ST_CENTER, "CENTER", input_freq},       // center
-    [KM_SPAN] = {KEYPAD_FREQ, ST_SPAN, "SPAN", input_freq},             // span
-    [KM_CW] = {KEYPAD_FREQ, ST_CW, "CW FREQ", input_freq},              // cw freq
-    [KM_STEP] = {KEYPAD_FREQ, ST_STEP, "FREQ STEP", input_freq},        // freq as point step
-    [KM_VAR] = {KEYPAD_FREQ, ST_VAR, "JOG STEP", input_freq},           // VAR freq step
-    [KM_POINTS] = {KEYPAD_UFLOAT, 0, "POINTS", input_points},           // Points num
-    [KM_TOP] = {KEYPAD_MFLOAT, 0, "TOP", input_amplitude},              // top graph value
-    [KM_nTOP] = {KEYPAD_NFLOAT, 0, "TOP", input_amplitude},             // top graph value
-    [KM_BOTTOM] = {KEYPAD_MFLOAT, 1, "BOTTOM", input_amplitude},        // bottom graph value
-    [KM_nBOTTOM] = {KEYPAD_NFLOAT, 1, "BOTTOM", input_amplitude},       // bottom graph value
-    [KM_SCALE] = {KEYPAD_UFLOAT, KM_SCALE, "SCALE", input_scale},       // scale
-    [KM_nSCALE] = {KEYPAD_NFLOAT, KM_nSCALE, "SCALE", input_scale},     // nano / pico scale value
-    [KM_REFPOS] = {KEYPAD_FLOAT, 0, "REFPOS", input_ref},               // refpos
-    [KM_EDELAY] = {KEYPAD_NFLOAT, 0, "E-DELAY", input_edelay},          // electrical delay
-    [KM_VAR_DELAY] = {KEYPAD_NFLOAT, 0, "JOG STEP", input_var_delay},   // VAR electrical delay
-    [KM_S21OFFSET] = {KEYPAD_FLOAT, 0, "S21 OFFSET", input_s21_offset}, // S21 level offset
-    [KM_VELOCITY_FACTOR] = {KEYPAD_PERCENT, 0, "VELOCITY%%", input_velocity}, // velocity factor
+const keypads_list_t KEYPADS_MODE_TBL[KM_NONE] = {
+  //                      key format     data for cb    text at bottom        callback function
+  [KM_START] = {KEYPAD_FREQ, ST_START, "START", input_freq},          // start
+  [KM_STOP] = {KEYPAD_FREQ, ST_STOP, "STOP", input_freq},             // stop
+  [KM_CENTER] = {KEYPAD_FREQ, ST_CENTER, "CENTER", input_freq},       // center
+  [KM_SPAN] = {KEYPAD_FREQ, ST_SPAN, "SPAN", input_freq},             // span
+  [KM_CW] = {KEYPAD_FREQ, ST_CW, "CW FREQ", input_freq},              // cw freq
+  [KM_STEP] = {KEYPAD_FREQ, ST_STEP, "FREQ STEP", input_freq},        // freq as point step
+  [KM_VAR] = {KEYPAD_FREQ, ST_VAR, "JOG STEP", input_freq},           // VAR freq step
+  [KM_POINTS] = {KEYPAD_UFLOAT, 0, "POINTS", input_points},           // Points num
+  [KM_TOP] = {KEYPAD_MFLOAT, 0, "TOP", input_amplitude},              // top graph value
+  [KM_nTOP] = {KEYPAD_NFLOAT, 0, "TOP", input_amplitude},             // top graph value
+  [KM_BOTTOM] = {KEYPAD_MFLOAT, 1, "BOTTOM", input_amplitude},        // bottom graph value
+  [KM_nBOTTOM] = {KEYPAD_NFLOAT, 1, "BOTTOM", input_amplitude},       // bottom graph value
+  [KM_SCALE] = {KEYPAD_UFLOAT, KM_SCALE, "SCALE", input_scale},       // scale
+  [KM_nSCALE] = {KEYPAD_NFLOAT, KM_nSCALE, "SCALE", input_scale},     // nano / pico scale value
+  [KM_REFPOS] = {KEYPAD_FLOAT, 0, "REFPOS", input_ref},               // refpos
+  [KM_EDELAY] = {KEYPAD_NFLOAT, 0, "E-DELAY", input_edelay},          // electrical delay
+  [KM_VAR_DELAY] = {KEYPAD_NFLOAT, 0, "JOG STEP", input_var_delay},   // VAR electrical delay
+  [KM_S21OFFSET] = {KEYPAD_FLOAT, 0, "S21 OFFSET", input_s21_offset}, // S21 level offset
+  [KM_VELOCITY_FACTOR] = {KEYPAD_PERCENT, 0, "VELOCITY%%", input_velocity}, // velocity factor
 #ifdef __S11_CABLE_MEASURE__
-    [KM_ACTUAL_CABLE_LEN] = {KEYPAD_MKUFLOAT, 0, "CABLE LENGTH",
-                             input_cable_len}, // real cable length input for VF calculation
+  [KM_ACTUAL_CABLE_LEN] = {KEYPAD_MKUFLOAT, 0, "CABLE LENGTH",
+                           input_cable_len}, // real cable length input for VF calculation
 #endif
-    [KM_XTAL] = {KEYPAD_FREQ, 0, "TCXO 26M" S_Hz, input_xtal},      // XTAL frequency
-    [KM_THRESHOLD] = {KEYPAD_FREQ, 0, "THRESHOLD", input_harmonic}, // Harmonic threshold frequency
-    [KM_VBAT] = {KEYPAD_UFLOAT, 0, "BAT OFFSET", input_vbat},       // Vbat offset input in mV
+  [KM_XTAL] = {KEYPAD_FREQ, 0, "TCXO 26M" S_HZ, input_xtal},      // XTAL frequency
+  [KM_THRESHOLD] = {KEYPAD_FREQ, 0, "THRESHOLD", input_harmonic}, // Harmonic threshold frequency
+  [KM_VBAT] = {KEYPAD_UFLOAT, 0, "BAT OFFSET", input_vbat},       // Vbat offset input in mV
 #ifdef __S21_MEASURE__
-    [KM_MEASURE_R] = {KEYPAD_UFLOAT, 0, "MEASURE Rl", input_measure_r}, // CH0 port impedance in Om
+  [KM_MEASURE_R] = {KEYPAD_UFLOAT, 0, "MEASURE Rl", input_measure_r}, // CH0 port impedance in Om
 #endif
 #ifdef __VNA_Z_RENORMALIZATION__
-    [KM_Z_PORT] = {KEYPAD_UFLOAT, 0, "PORT Z 50" S_RARROW,
-                   input_portz}, // Port Z renormalization impedance
-    [KM_CAL_LOAD_R] = {KEYPAD_UFLOAT, 1, "STANDARD\n LOAD R",
-                       input_portz}, // Calibration standard load R
+  [KM_Z_PORT] = {KEYPAD_UFLOAT, 0, "PORT Z 50" S_RARROW,
+                 input_portz}, // Port Z renormalization impedance
+  [KM_CAL_LOAD_R] = {KEYPAD_UFLOAT, 1, "STANDARD\n LOAD R",
+                     input_portz}, // Calibration standard load R
 #endif
 #ifdef __USE_RTC__
-    [KM_RTC_DATE] = {KEYPAD_UFLOAT, KM_RTC_DATE, "SET DATE\nYY MM DD", input_date_time}, // Date
-    [KM_RTC_TIME] = {KEYPAD_UFLOAT, KM_RTC_TIME, "SET TIME\nHH MM SS", input_date_time}, // Time
-    [KM_RTC_CAL] = {KEYPAD_FLOAT, 0, "RTC CAL", input_rtc_cal}, // RTC calibration in ppm
+  [KM_RTC_DATE] = {KEYPAD_UFLOAT, KM_RTC_DATE, "SET DATE\nYY MM DD", input_date_time}, // Date
+  [KM_RTC_TIME] = {KEYPAD_UFLOAT, KM_RTC_TIME, "SET TIME\nHH MM SS", input_date_time}, // Time
+  [KM_RTC_CAL] = {KEYPAD_FLOAT, 0, "RTC CAL", input_rtc_cal}, // RTC calibration in ppm
 #endif
 #ifdef __USE_SD_CARD__
-    [KM_S1P_NAME] = {KEYPAD_TEXT, FMT_S1P_FILE, "S1P", input_filename},
-    [KM_S2P_NAME] = {KEYPAD_TEXT, FMT_S2P_FILE, "S2P", input_filename},
-    [KM_BMP_NAME] = {KEYPAD_TEXT, FMT_BMP_FILE, "BMP", input_filename},
+  [KM_S1P_NAME] = {KEYPAD_TEXT, FMT_S1P_FILE, "S1P", input_filename},
+  [KM_S2P_NAME] = {KEYPAD_TEXT, FMT_S2P_FILE, "S2P", input_filename},
+  [KM_BMP_NAME] = {KEYPAD_TEXT, FMT_BMP_FILE, "BMP", input_filename},
 #ifdef __SD_CARD_DUMP_TIFF__
-    [KM_TIF_NAME] = {KEYPAD_TEXT, FMT_TIF_FILE, "TIF", input_filename},
+  [KM_TIF_NAME] = {KEYPAD_TEXT, FMT_TIF_FILE, "TIF", input_filename},
 #endif
-    [KM_CAL_NAME] = {KEYPAD_TEXT, FMT_CAL_FILE, "CAL", input_filename},
+  [KM_CAL_NAME] = {KEYPAD_TEXT, FMT_CAL_FILE, "CAL", input_filename},
 #ifdef __SD_CARD_DUMP_FIRMWARE__
-    [KM_BIN_NAME] = {KEYPAD_TEXT, FMT_BIN_FILE, "BIN", input_filename},
+  [KM_BIN_NAME] = {KEYPAD_TEXT, FMT_BIN_FILE, "BIN", input_filename},
 #endif
 #endif
 };
 
 // Keyboard callback function for UI button
-void ui_keyboard_cb(uint16_t data, button_t* b) {
-  const keyboard_cb_t cb = keypads_mode_tbl[data].cb;
+void ui_keyboard_cb(uint16_t data, button_t *b) {
+  const keyboard_cb_t cb = KEYPADS_MODE_TBL[data].cb;
   if (cb)
-    cb(keypads_mode_tbl[data].data, b);
+    cb(KEYPADS_MODE_TBL[data].data, b);
 }
 
 // Keypad engine moved to ui/core/ui_keypad.c
@@ -281,7 +261,7 @@ static freq_t step_round(freq_t v) {
 static void lever_frequency(uint16_t status) {
   uint16_t mode;
   freq_t freq;
-  if (lever_mode == LM_FREQ_0) {
+  if (sweep_mode == LM_FREQ_0) {
     if (FREQ_IS_STARTSTOP()) {
       mode = ST_START;
       freq = get_sweep_frequency(ST_START);
@@ -456,9 +436,9 @@ static bool touch_apply_ref_scale(int touch_x, int touch_y) {
   float ref = get_trace_refpos(t);
   float scale = get_trace_scale(t);
 
-  if (touch_y < GRIDY * 1 * NGRIDY / 4)
+  if (touch_y < GRIDY * 1 * NGRIDY / 4) {
     ref += 0.5f;
-  else if (touch_y < GRIDY * 2 * NGRIDY / 4) {
+  } else if (touch_y < GRIDY * 2 * NGRIDY / 4) {
     scale *= 2.0f;
     ref = ref / 2.0f - NGRIDY / 4 + NGRIDY / 2;
   } else if (touch_y < GRIDY * 3 * NGRIDY / 4) {

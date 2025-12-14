@@ -1,23 +1,3 @@
-/*
- * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * All rights reserved.
- *
- * This is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3, or (at your option)
- * any later version.
- *
- * The software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with GNU Radio; see the file COPYING.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street,
- * Boston, MA 02110-1301, USA.
- */
-
 #include "interfaces/cli/shell_commands.h"
 #include "runtime/runtime_features.h"
 #include "nanovna.h"
@@ -30,7 +10,7 @@
 #include "rf/sweep/sweep_orchestrator.h"
 #include "infra/storage/config_service.h"
 #include "infra/state/state_manager.h"
-#include "interfaces/ports/ui_port.h"
+#include "interfaces/ports/UI_PORT.h"
 #include "interfaces/ports/processing_port.h"
 #include "interfaces/ports/usb_command_server_port.h"
 #include "version_info.h"
@@ -38,7 +18,9 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define VNA_SHELL_FUNCTION(command_name) static __attribute__((unused)) void command_name(int argc __attribute__((unused)), char* argv[] __attribute__((unused)))
+#define VNA_SHELL_FUNCTION(command_name)                                                           \
+  static __attribute__((unused)) void command_name(int argc __attribute__((unused)),               \
+                                                   char *argv[] __attribute__((unused)))
 #define VNA_FREQ_FMT_STR "%u"
 #if defined(NANOVNA_F303)
 #define CLI_USAGE_ENABLED 1
@@ -49,7 +31,10 @@
 #if CLI_USAGE_ENABLED
 #define PRINT_USAGE(...) shell_printf(__VA_ARGS__)
 #else
-#define PRINT_USAGE(...) do { (void)0; } while (0)
+#define PRINT_USAGE(...)                                                                           \
+  do {                                                                                             \
+    (void)0;                                                                                       \
+  } while (0)
 #endif
 
 // Macros from runtime_entry.c
@@ -72,69 +57,67 @@ void set_power(uint8_t value) {
     si5351_set_power(value);
 }
 
-
-
 // Forward declarations
-static void cmd_dump(int argc, char* argv[]);
-static void cmd_scan(int argc, char* argv[]);
-static void cmd_scan_bin(int argc, char* argv[]);
-static void cmd_data(int argc, char* argv[]);
-static void cmd_frequencies(int argc, char* argv[]);
-static void cmd_freq(int argc, char* argv[]);
-static void cmd_sweep(int argc, char* argv[]);
-static void cmd_power(int argc, char* argv[]);
-static void cmd_offset(int argc, char* argv[]);
-static void cmd_bandwidth(int argc, char* argv[]);
-static void cmd_time(int argc, char* argv[]);
-static void cmd_dac(int argc, char* argv[]);
-static void cmd_saveconfig(int argc, char* argv[]);
-static void cmd_clearconfig(int argc, char* argv[]);
-static void cmd_sd_list(int argc, char* argv[]);
-static void cmd_sd_read(int argc, char* argv[]);
-static void cmd_sd_delete(int argc, char* argv[]);
-static void cmd_port(int argc, char* argv[]);
-static void cmd_stat(int argc, char* argv[]);
-static void cmd_gain(int argc, char* argv[]);
-static void cmd_sample(int argc, char* argv[]);
-static void cmd_test(int argc, char* argv[]);
-static void cmd_touchcal(int argc, char* argv[]);
-static void cmd_touchtest(int argc, char* argv[]);
-static void cmd_pause(int argc, char* argv[]);
-static void cmd_resume(int argc, char* argv[]);
-static void cmd_msg(int argc, char* argv[]);
-static void cmd_cal(int argc, char* argv[]);
-static void cmd_save(int argc, char* argv[]);
-static void cmd_recall(int argc, char* argv[]);
-static void cmd_trace(int argc, char* argv[]);
-static void cmd_marker(int argc, char* argv[]);
-static void cmd_edelay(int argc, char* argv[]);
-static void cmd_s21offset(int argc, char* argv[]);
-static void cmd_capture(int argc, char* argv[]);
-static void cmd_measure(int argc, char* argv[]);
-static void cmd_refresh(int argc, char* argv[]);
-static void cmd_touch(int argc, char* argv[]);
-static void cmd_release(int argc, char* argv[]);
-static void cmd_vbat(int argc, char* argv[]);
-static void cmd_tcxo(int argc, char* argv[]);
-static void cmd_reset(int argc, char* argv[]);
-static void cmd_smooth(int argc, char* argv[]);
-static void cmd_config(int argc, char* argv[]);
-static void cmd_usart_cfg(int argc, char* argv[]);
-static void cmd_usart(int argc, char* argv[]);
-static void cmd_vbat_offset(int argc, char* argv[]);
-static void cmd_transform(int argc, char* argv[]);
-static void cmd_threshold(int argc, char* argv[]);
-static void cmd_help(int argc, char* argv[]);
-static void cmd_info(int argc, char* argv[]);
-static void cmd_version(int argc, char* argv[]);
-static void cmd_color(int argc, char* argv[]);
-static void cmd_i2c(int argc, char* argv[]);
-static void cmd_si5351reg(int argc, char* argv[]);
-static void cmd_lcd(int argc, char* argv[]);
-static void cmd_threads(int argc, char* argv[]);
-static void cmd_si5351time(int argc, char* argv[]);
-static void cmd_i2ctime(int argc, char* argv[]);
-static void cmd_band(int argc, char* argv[]);
+static void cmd_dump(int argc, char *argv[]);
+static void cmd_scan(int argc, char *argv[]);
+static void cmd_scan_bin(int argc, char *argv[]);
+static void cmd_data(int argc, char *argv[]);
+static void cmd_frequencies(int argc, char *argv[]);
+static void cmd_freq(int argc, char *argv[]);
+static void cmd_sweep(int argc, char *argv[]);
+static void cmd_power(int argc, char *argv[]);
+static void cmd_offset(int argc, char *argv[]);
+static void cmd_bandwidth(int argc, char *argv[]);
+static void cmd_time(int argc, char *argv[]);
+static void cmd_dac(int argc, char *argv[]);
+static void cmd_saveconfig(int argc, char *argv[]);
+static void cmd_clearconfig(int argc, char *argv[]);
+static void cmd_sd_list(int argc, char *argv[]);
+static void cmd_sd_read(int argc, char *argv[]);
+static void cmd_sd_delete(int argc, char *argv[]);
+static void cmd_port(int argc, char *argv[]);
+static void cmd_stat(int argc, char *argv[]);
+static void cmd_gain(int argc, char *argv[]);
+static void cmd_sample(int argc, char *argv[]);
+static void cmd_test(int argc, char *argv[]);
+static void cmd_touchcal(int argc, char *argv[]);
+static void cmd_touchtest(int argc, char *argv[]);
+static void cmd_pause(int argc, char *argv[]);
+static void cmd_resume(int argc, char *argv[]);
+static void cmd_msg(int argc, char *argv[]);
+static void cmd_cal(int argc, char *argv[]);
+static void cmd_save(int argc, char *argv[]);
+static void cmd_recall(int argc, char *argv[]);
+static void cmd_trace(int argc, char *argv[]);
+static void cmd_marker(int argc, char *argv[]);
+static void cmd_edelay(int argc, char *argv[]);
+static void cmd_s21offset(int argc, char *argv[]);
+static void cmd_capture(int argc, char *argv[]);
+static void cmd_measure(int argc, char *argv[]);
+static void cmd_refresh(int argc, char *argv[]);
+static void cmd_touch(int argc, char *argv[]);
+static void cmd_release(int argc, char *argv[]);
+static void cmd_vbat(int argc, char *argv[]);
+static void cmd_tcxo(int argc, char *argv[]);
+static void cmd_reset(int argc, char *argv[]);
+static void cmd_smooth(int argc, char *argv[]);
+static void cmd_config(int argc, char *argv[]);
+static void cmd_usart_cfg(int argc, char *argv[]);
+static void cmd_usart(int argc, char *argv[]);
+static void cmd_vbat_offset(int argc, char *argv[]);
+static void cmd_transform(int argc, char *argv[]);
+static void cmd_threshold(int argc, char *argv[]);
+static void cmd_help(int argc, char *argv[]);
+static void cmd_info(int argc, char *argv[]);
+static void cmd_version(int argc, char *argv[]);
+static void cmd_color(int argc, char *argv[]);
+static void cmd_i2c(int argc, char *argv[]);
+static void cmd_si5351reg(int argc, char *argv[]);
+static void cmd_lcd(int argc, char *argv[]);
+static void cmd_threads(int argc, char *argv[]);
+static void cmd_si5351time(int argc, char *argv[]);
+static void cmd_i2ctime(int argc, char *argv[]);
+static void cmd_band(int argc, char *argv[]);
 
 // Implementations
 
@@ -177,7 +160,7 @@ VNA_SHELL_FUNCTION(cmd_time) {
   static const uint8_t idx_to_time[] = {6, 5, 4, 2, 1, 0};
   static const char time_cmd[] = "y|m|d|h|min|sec|ppm";
   // time[] ={sec, min, hr, 0, day, month, year, 0}
-  uint8_t* time = (uint8_t*)dt_buf;
+  uint8_t *time = (uint8_t *)dt_buf;
   if (argc == 3 && get_str_index(argv[0], "b") == 0) {
     rtc_set_time(my_atoui(argv[1]), my_atoui(argv[2]));
     return;
@@ -207,8 +190,9 @@ usage:
 
 VNA_SHELL_FUNCTION(cmd_dac) {
 #ifdef __VNA_ENABLE_DAC__
-  if (argc != 1) return;
-  // si5351_dvc_write(my_atoui(argv[0])); // Assuming this function exists or similar
+  if (argc != 1)
+    return;
+    // si5351_dvc_write(my_atoui(argv[0])); // Assuming this function exists or similar
 #endif
 }
 
@@ -230,12 +214,13 @@ VNA_SHELL_FUNCTION(cmd_measure) {
 #ifdef __S11_RESONANCE_MEASURE__
                                          "|resonance"
 #endif
-      ;
+    ;
   int idx;
-  if (argc == 1 && (idx = get_str_index(argv[0], cmd_measure_list)) >= 0)
+  if (argc == 1 && (idx = get_str_index(argv[0], cmd_measure_list)) >= 0) {
     plot_set_measure_mode((uint8_t)idx);
-  else
+  } else {
     CLI_PRINT_USAGE("usage: measure {%s}" VNA_SHELL_NEWLINE_STR, cmd_measure_list);
+}
 #endif
 }
 
@@ -284,8 +269,8 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   if (argc >= 3) {
     points = my_atoui(argv[2]);
     if (points == 0 || points > SWEEP_POINTS_MAX) {
-      shell_printf("sweep points exceeds range " define_to_STR(SWEEP_POINTS_MAX)
-                       VNA_SHELL_NEWLINE_STR);
+      shell_printf("sweep points exceeds range " DEFINE_TO_STR(SWEEP_POINTS_MAX)
+                     VNA_SHELL_NEWLINE_STR);
       return;
     }
     sweep_points = points;
@@ -312,9 +297,9 @@ VNA_SHELL_FUNCTION(cmd_scan) {
 
   if ((cal_status & CALSTAT_APPLY) && !(mask & SCAN_MASK_NO_CALIBRATION))
     sweep_ch |= SWEEP_APPLY_CALIBRATION;
-  if (electrical_delayS11 && !(mask & SCAN_MASK_NO_EDELAY))
+  if (electrical_delay_s11 && !(mask & SCAN_MASK_NO_EDELAY))
     sweep_ch |= SWEEP_APPLY_EDELAY_S11;
-  if (electrical_delayS21 && !(mask & SCAN_MASK_NO_EDELAY))
+  if (electrical_delay_s21 && !(mask & SCAN_MASK_NO_EDELAY))
     sweep_ch |= SWEEP_APPLY_EDELAY_S21;
   if (s21_offset && !(mask & SCAN_MASK_NO_S21OFFS))
     sweep_ch |= SWEEP_APPLY_S21_OFFSET;
@@ -330,7 +315,7 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     app_measurement_sweep(false, sweep_ch);
   }
   pause_sweep();
-  
+
   if (mask) {
     if (mask & SCAN_MASK_BINARY) {
       shell_stream_write(&mask, sizeof(uint16_t));
@@ -375,17 +360,18 @@ VNA_SHELL_FUNCTION(cmd_scan_bin) {
 
 VNA_SHELL_FUNCTION(cmd_bandwidth) {
   uint16_t user_bw;
-  if (argc == 1)
+  if (argc == 1) {
     user_bw = my_atoui(argv[0]);
-  else if (argc == 2) {
+  } else if (argc == 2) {
     /* Accept bandwidth in Hz and translate to register value like legacy firmware */
     uint16_t f = my_atoui(argv[0]);
-    if (f > MAX_BANDWIDTH)
+    if (f > MAX_BANDWIDTH) {
       user_bw = 0;
-    else if (f < MIN_BANDWIDTH)
+    } else if (f < MIN_BANDWIDTH) {
       user_bw = 511;
-    else
+    } else {
       user_bw = ((AUDIO_ADC_FREQ + AUDIO_SAMPLES_COUNT / 2) / AUDIO_SAMPLES_COUNT) / f - 1;
+}
   } else {
     shell_printf("bandwidth %d (%uHz)" VNA_SHELL_NEWLINE_STR, config._bandwidth,
                  get_bandwidth_frequency(config._bandwidth));
@@ -472,9 +458,9 @@ usage:
 
 VNA_SHELL_FUNCTION(cmd_data) {
   int sel = 0;
-  const float (*array)[2];
+  const float(*array)[2];
   uint16_t points = sweep_points; // Default to current sweep points
-  
+
   if (argc == 1) {
     sel = my_atoi(argv[0]);
   }
@@ -484,10 +470,10 @@ VNA_SHELL_FUNCTION(cmd_data) {
   }
 
   if (sel < 2) {
-      // Use runtime_entry.c logic
+    // Use runtime_entry.c logic
     sweep_service_snapshot_t snapshot;
     if (sweep_mode & SWEEP_ENABLE)
-        sweep_service_wait_for_generation();
+      sweep_service_wait_for_generation();
     while (true) {
       if (!sweep_service_snapshot_acquire((uint8_t)sel, &snapshot)) {
         chThdSleepMilliseconds(1);
@@ -495,9 +481,11 @@ VNA_SHELL_FUNCTION(cmd_data) {
       }
       for (uint16_t i = 0; i < snapshot.points; i++) {
         shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, snapshot.data[i][0], snapshot.data[i][1]);
-        if ((i & 0x0F) == 0x0F) chThdYield();
+        if ((i & 0x0F) == 0x0F)
+          chThdYield();
       }
-      if (sweep_service_snapshot_release(&snapshot)) return;
+      if (sweep_service_snapshot_release(&snapshot))
+        return;
       chThdYield();
     }
   } else {
@@ -509,7 +497,8 @@ VNA_SHELL_FUNCTION(cmd_data) {
 
   for (uint16_t i = 0; i < points; i++) {
     shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, array[i][0], array[i][1]);
-    if ((i & 0x0F) == 0x0F) chThdYield();
+    if ((i & 0x0F) == 0x0F)
+      chThdYield();
   }
 }
 
@@ -517,7 +506,7 @@ VNA_SHELL_FUNCTION(cmd_threshold) {
   uint32_t value;
   if (argc != 1) {
     PRINT_USAGE("usage: %s" VNA_SHELL_NEWLINE_STR "current: %u" VNA_SHELL_NEWLINE_STR,
-                 "threshold {frequency in harmonic mode}", config._harmonic_freq_threshold);
+                "threshold {frequency in harmonic mode}", config._harmonic_freq_threshold);
     return;
   }
   uint32_t requested = my_atoui(argv[0]);
@@ -545,65 +534,99 @@ VNA_SHELL_FUNCTION(cmd_clearconfig) {
     return;
   }
   clear_all_config_prop_data();
-  shell_printf("Config and all cal data cleared." VNA_SHELL_NEWLINE_STR
-               "Do reset manually to take effect. Then do touch cal and save." VNA_SHELL_NEWLINE_STR);
+  shell_printf(
+    "Config and all cal data cleared." VNA_SHELL_NEWLINE_STR
+    "Do reset manually to take effect. Then do touch cal and save." VNA_SHELL_NEWLINE_STR);
 }
 
 VNA_SHELL_FUNCTION(cmd_capture) {
   // read 2 row pixel time force
 #define READ_ROWS 2
   for (int y = 0; y < LCD_HEIGHT; y += READ_ROWS) {
-    lcd_read_memory(0, y, LCD_WIDTH, READ_ROWS, (uint16_t*)spi_buffer);
+    lcd_read_memory(0, y, LCD_WIDTH, READ_ROWS, (uint16_t *)spi_buffer);
     shell_stream_write(spi_buffer, READ_ROWS * LCD_WIDTH * sizeof(uint16_t));
   }
 }
 
 VNA_SHELL_FUNCTION(cmd_sample) {
 #if ENABLE_SAMPLE_COMMAND
-  if (argc != 1) return;
+  if (argc != 1)
+    return;
   static const char cmd_sample_list[] = "gamma|ampl|ref";
   switch (get_str_index(argv[0], cmd_sample_list)) {
-  case 0: sweep_service_set_sample_function(processing_port.api->calculate_gamma); return;
-  case 1: sweep_service_set_sample_function(processing_port.api->fetch_amplitude); return;
-  case 2: sweep_service_set_sample_function(processing_port.api->fetch_amplitude_ref); return;
+  case 0:
+    sweep_service_set_sample_function(processing_port.api->calculate_gamma);
+    return;
+  case 1:
+    sweep_service_set_sample_function(processing_port.api->fetch_amplitude);
+    return;
+  case 2:
+    sweep_service_set_sample_function(processing_port.api->fetch_amplitude_ref);
+    return;
   }
 #endif
 }
 
 VNA_SHELL_FUNCTION(cmd_cal) {
-  static const char* items[] = {"load", "open", "short", "thru", "isoln", "Es", "Er", "Et", "cal'ed"};
+  static const char *items[] = {"load", "open", "short", "thru",  "isoln",
+                                "Es",   "Er",   "Et",    "cal'ed"};
   if (argc == 0) {
-    for (int i = 0; i < 9; i++) if (cal_status & (1 << i)) shell_printf("%s ", items[i]);
+    for (int i = 0; i < 9; i++) {
+      if (cal_status & (1 << i))
+        shell_printf("%s ", items[i]);
+}
     shell_printf(VNA_SHELL_NEWLINE_STR);
     return;
   }
   request_to_redraw(REDRAW_CAL_STATUS);
   static const char cmd_cal_list[] = "load|open|short|thru|isoln|done|on|off|reset";
   switch (get_str_index(argv[0], cmd_cal_list)) {
-  case 0: cal_collect(CAL_LOAD); return;
-  case 1: cal_collect(CAL_OPEN); return;
-  case 2: cal_collect(CAL_SHORT); return;
-  case 3: cal_collect(CAL_THRU); return;
-  case 4: cal_collect(CAL_ISOLN); return;
-  case 5: cal_done(); return;
-  case 6: cal_status |= CALSTAT_APPLY; return;
-  case 7: cal_status &= ~CALSTAT_APPLY; return;
-  case 8: cal_status = 0; return;
+  case 0:
+    cal_collect(CAL_LOAD);
+    return;
+  case 1:
+    cal_collect(CAL_OPEN);
+    return;
+  case 2:
+    cal_collect(CAL_SHORT);
+    return;
+  case 3:
+    cal_collect(CAL_THRU);
+    return;
+  case 4:
+    cal_collect(CAL_ISOLN);
+    return;
+  case 5:
+    cal_done();
+    return;
+  case 6:
+    cal_status |= CALSTAT_APPLY;
+    return;
+  case 7:
+    cal_status &= ~CALSTAT_APPLY;
+    return;
+  case 8:
+    cal_status = 0;
+    return;
   }
 }
 
 VNA_SHELL_FUNCTION(cmd_save) {
-  if (argc != 1) return;
+  if (argc != 1)
+    return;
   uint32_t id = my_atoui(argv[0]);
-  if (id >= SAVEAREA_MAX) return;
+  if (id >= SAVEAREA_MAX)
+    return;
   caldata_save(id);
   request_to_redraw(REDRAW_CAL_STATUS);
 }
 
 VNA_SHELL_FUNCTION(cmd_recall) {
-  if (argc != 1) return;
+  if (argc != 1)
+    return;
   uint32_t id = my_atoui(argv[0]);
-  if (id >= SAVEAREA_MAX) return;
+  if (id >= SAVEAREA_MAX)
+    return;
   load_properties(id);
 }
 
@@ -612,25 +635,28 @@ VNA_SHELL_FUNCTION(cmd_trace) {
   if (argc == 0) {
     for (t = 0; t < TRACES_MAX; t++) {
       if (trace[t].enabled) {
-        const char* type = get_trace_typename(trace[t].type, 0);
-        const char* channel = get_trace_chname(t);
-        shell_printf("%d %s %s %f %f" VNA_SHELL_NEWLINE_STR, t, type, channel, trace[t].scale, trace[t].refpos);
+        const char *type = get_trace_typename(trace[t].type, 0);
+        const char *channel = get_trace_chname(t);
+        shell_printf("%d %s %s %f %f" VNA_SHELL_NEWLINE_STR, t, type, channel, trace[t].scale,
+                     trace[t].refpos);
       }
     }
     return;
   }
   t = (uint32_t)my_atoi(argv[0]);
-  if (t >= TRACES_MAX) return;
+  if (t >= TRACES_MAX)
+    return;
   if (argc >= 2 && get_str_index(argv[1], "off") == 0) {
     set_trace_enable(t, false);
     return;
   }
-  static const char cmd_type_list[] = "logmag|phase|delay|smith|polar|linear|swr|real|imag|r|x|z|zp|g|b|y|rp|xp|cs|ls|cp|lp|q|rser|xser|zser|rsh|xsh|zsh|q21";
+  static const char cmd_type_list[] = "logmag|phase|delay|smith|polar|linear|swr|real|imag|r|x|z|"
+                                      "zp|g|b|y|rp|xp|cs|ls|cp|lp|q|rser|xser|zser|rsh|xsh|zsh|q21";
   int type = get_str_index(argv[1], cmd_type_list);
   if (type >= 0) {
-      int src = trace[t].channel;
-      set_trace_type(t, type, src);
-      set_trace_enable(t, true);
+    int src = trace[t].channel;
+    set_trace_type(t, type, src);
+    set_trace_enable(t, true);
   }
 }
 
@@ -695,8 +721,16 @@ VNA_SHELL_FUNCTION(cmd_edelay) {
   static const char cmd_edelay_list[] = "s11|s21";
   if (argc >= 1) {
     int idx = get_str_index(argv[0], cmd_edelay_list);
-    if (idx == -1) value = my_atof(argv[0]);
-    else { ch = idx; if (argc == 2) value = my_atof(argv[0]); else return; }
+    if (idx == -1) {
+      value = my_atof(argv[0]);
+    } else {
+      ch = idx;
+      if (argc == 2) {
+        value = my_atof(argv[0]);
+      } else {
+        return;
+}
+    }
     set_electrical_delay(ch, value * 1e-12);
     return;
   }
@@ -713,7 +747,7 @@ VNA_SHELL_FUNCTION(cmd_s21offset) {
 
 VNA_SHELL_FUNCTION(cmd_touchcal) {
   shell_printf("first touch upper left, then lower right...");
-  ui_port.api->touch_cal_exec();
+  UI_PORT.api->touch_cal_exec();
   shell_printf("done" VNA_SHELL_NEWLINE_STR "touch cal params: %d %d %d %d" VNA_SHELL_NEWLINE_STR,
                config._touch_cal[0], config._touch_cal[1], config._touch_cal[2],
                config._touch_cal[3]);
@@ -721,7 +755,7 @@ VNA_SHELL_FUNCTION(cmd_touchcal) {
 }
 
 VNA_SHELL_FUNCTION(cmd_touchtest) {
-  ui_port.api->touch_draw_test();
+  UI_PORT.api->touch_draw_test();
 }
 
 VNA_SHELL_FUNCTION(cmd_frequencies) {
@@ -729,7 +763,6 @@ VNA_SHELL_FUNCTION(cmd_frequencies) {
     shell_printf(VNA_FREQ_FMT_STR VNA_SHELL_NEWLINE_STR, get_frequency(i));
   }
 }
-
 
 #ifdef ENABLE_TRANSFORM_COMMAND
 static void set_domain_mode(int mode) // accept DOMAIN_FREQ or DOMAIN_TIME
@@ -742,7 +775,7 @@ static void set_domain_mode(int mode) // accept DOMAIN_FREQ or DOMAIN_TIME
 }
 
 static inline void set_timedomain_func(
-    uint32_t func) // accept TD_FUNC_LOWPASS_IMPULSE, TD_FUNC_LOWPASS_STEP or TD_FUNC_BANDPASS
+  uint32_t func) // accept TD_FUNC_LOWPASS_IMPULSE, TD_FUNC_LOWPASS_STEP or TD_FUNC_BANDPASS
 {
   props_mode = (props_mode & ~TD_FUNC) | func;
 }
@@ -756,7 +789,8 @@ set_timedomain_window(uint32_t func) // accept TD_WINDOW_MINIMUM/TD_WINDOW_NORMA
 VNA_SHELL_FUNCTION(cmd_transform) {
   int i;
   if (argc == 0) {
-    shell_printf("usage: transform {on|off|impulse|step|bandpass|minimum|normal|maximum}" VNA_SHELL_NEWLINE_STR);
+    shell_printf("usage: transform "
+                 "{on|off|impulse|step|bandpass|minimum|normal|maximum}" VNA_SHELL_NEWLINE_STR);
     return;
   }
   //                                         0   1       2    3        4       5      6       7
@@ -799,14 +833,19 @@ VNA_SHELL_FUNCTION(cmd_dump) {
   int i, j;
   alignas(4) audio_sample_t dump[96 * 2];
   int selection = 0;
-  if (argc == 1) selection = (my_atoui(argv[0]) == 1) ? 0 : 1;
+  if (argc == 1)
+    selection = (my_atoui(argv[0]) == 1) ? 0 : 1;
   sweep_service_prepare_dump(dump, ARRAY_COUNT(dump), selection);
   // tlv320aic3204_select(0);
   sweep_service_start_capture(DELAY_SWEEP_START);
-  while (!sweep_service_dump_ready()) __WFI();
+  while (!sweep_service_dump_ready())
+    __WFI();
   for (i = 0, j = 0; i < (int)ARRAY_COUNT(dump); i++) {
     shell_printf("%6d ", dump[i]);
-    if (++j == 12) { shell_printf(VNA_SHELL_NEWLINE_STR); j = 0; }
+    if (++j == 12) {
+      shell_printf(VNA_SHELL_NEWLINE_STR);
+      j = 0;
+    }
   }
 #endif
 }
@@ -906,15 +945,15 @@ VNA_SHELL_FUNCTION(cmd_sd_list) {
 }
 
 VNA_SHELL_FUNCTION(cmd_sd_read) {
-  char* buf = (char*)spi_buffer;
+  char *buf = (char *)spi_buffer;
   if (argc != 1) {
     CLI_PRINT_USAGE("usage: sd_read {filename}" VNA_SHELL_NEWLINE_STR);
     return;
   }
-  const char* filename = argv[0];
+  const char *filename = argv[0];
   if (cmd_sd_card_mount() != FR_OK)
     return;
-  FIL* const file = filesystem_file();
+  FIL *const file = filesystem_file();
   if (f_open(file, filename, FA_OPEN_EXISTING | FA_READ) != FR_OK) {
     shell_printf("err: no file" VNA_SHELL_NEWLINE_STR);
     return;
@@ -934,7 +973,7 @@ VNA_SHELL_FUNCTION(cmd_sd_delete) {
   }
   if (cmd_sd_card_mount() != FR_OK)
     return;
-  const char* filename = argv[0];
+  const char *filename = argv[0];
   const FRESULT res = f_unlink(filename);
   shell_printf("delete: %s %s" VNA_SHELL_NEWLINE_STR, filename, res == FR_OK ? "OK" : "err");
 }
@@ -960,7 +999,7 @@ VNA_SHELL_FUNCTION(cmd_msg) {
     text = argv[1];
   if (argc > 2)
     header = argv[2];
-  ui_port.api->message_box(header, text, delay);
+  UI_PORT.api->message_box(header, text, delay);
 }
 #else
 VNA_SHELL_FUNCTION(cmd_msg) {}
@@ -1000,7 +1039,7 @@ VNA_SHELL_FUNCTION(cmd_config) {
 #ifdef __DIGIT_SEPARATOR__
                                       "|separator"
 #endif
-      ;
+    ;
   int idx;
   if (argc == 2 && (idx = get_str_index(argv[0], cmd_mode_list)) >= 0) {
     const uint32_t value = my_atoui(argv[1]);
@@ -1027,16 +1066,16 @@ VNA_SHELL_FUNCTION(cmd_usart_cfg) {
 }
 
 VNA_SHELL_FUNCTION(cmd_usart) {
-  sysinterval_t timeout = TIME_MS2I(200);
+  uint32_t time = MS2ST(200);
   if (argc == 0 || argc > 2 || VNA_MODE(VNA_MODE_CONNECTION))
     return; // Not work in serial mode
   if (argc == 2)
-    timeout = TIME_MS2I(my_atoui(argv[1]));
-  sdWriteTimeout(&SD1, (uint8_t*)argv[0], strlen(argv[0]), timeout);
-  sdWriteTimeout(&SD1, (uint8_t*)VNA_SHELL_NEWLINE_STR, sizeof(VNA_SHELL_NEWLINE_STR) - 1, timeout);
+    time = MS2ST(my_atoui(argv[1]));
+  sdWriteTimeout(&SD1, (uint8_t *)argv[0], strlen(argv[0]), time);
+  sdWriteTimeout(&SD1, (uint8_t *)VNA_SHELL_NEWLINE_STR, sizeof(VNA_SHELL_NEWLINE_STR) - 1, time);
   uint32_t size;
   uint8_t buffer[64];
-  while ((size = sdReadTimeout(&SD1, buffer, sizeof(buffer), timeout)))
+  while ((size = sdReadTimeout(&SD1, buffer, sizeof(buffer), time)))
     streamWrite(&SDU1, buffer, size);
 }
 #else
@@ -1062,7 +1101,7 @@ VNA_SHELL_FUNCTION(cmd_vbat_offset) {}
 VNA_SHELL_FUNCTION(cmd_help) {
   (void)argc;
   (void)argv;
-  const VNAShellCommand* scp = commands;
+  const vna_shell_command_t *scp = COMMANDS;
   shell_printf("Commands:");
   while (scp->sc_name != NULL) {
     shell_printf(" %s", scp->sc_name);
@@ -1074,11 +1113,13 @@ VNA_SHELL_FUNCTION(cmd_info) {
   (void)argc;
   (void)argv;
   int i = 0;
-  while (info_about[i]) {
-    shell_printf("%s" VNA_SHELL_NEWLINE_STR, info_about[i++]);
+  while (INFO_ABOUT[i]) {
+    shell_printf("%s" VNA_SHELL_NEWLINE_STR, INFO_ABOUT[i++]);
   }
 }
-VNA_SHELL_FUNCTION(cmd_version) { shell_printf("%s" VNA_SHELL_NEWLINE_STR, NANOVNA_VERSION_STRING); }
+VNA_SHELL_FUNCTION(cmd_version) {
+  shell_printf("%s" VNA_SHELL_NEWLINE_STR, NANOVNA_VERSION_STRING);
+}
 #if ENABLE_COLOR_COMMAND
 VNA_SHELL_FUNCTION(cmd_color) {
   uint32_t color;
@@ -1102,25 +1143,25 @@ VNA_SHELL_FUNCTION(cmd_color) {
 #else
 VNA_SHELL_FUNCTION(cmd_color) {}
 #endif
-VNA_SHELL_FUNCTION(cmd_i2c) {} // Keep empty if debug
+VNA_SHELL_FUNCTION(cmd_i2c) {}       // Keep empty if debug
 VNA_SHELL_FUNCTION(cmd_si5351reg) {} // Keep empty if debug
 VNA_SHELL_FUNCTION(cmd_lcd) {
-    // shell_printf("LCD ID: %04x" VNA_SHELL_NEWLINE_STR, lcd_read_id());
+  // shell_printf("LCD ID: %04x" VNA_SHELL_NEWLINE_STR, lcd_read_id());
 }
 VNA_SHELL_FUNCTION(cmd_threads) {
 #if defined(VNA_SHELL_THREAD) || 1
-    // Requires ChibiOS registry access, skip for now to avoid compile error
-    shell_printf("Threads command not fully implemented" VNA_SHELL_NEWLINE_STR);
+  // Requires ChibiOS registry access, skip for now to avoid compile error
+  shell_printf("Threads command not fully implemented" VNA_SHELL_NEWLINE_STR);
 #endif
 }
 VNA_SHELL_FUNCTION(cmd_si5351time) {}
 VNA_SHELL_FUNCTION(cmd_i2ctime) {}
 VNA_SHELL_FUNCTION(cmd_band) {
-    if (argc > 0) {
-        int band = my_atoi(argv[0]);
-        // Implement band switch if applicable
-        (void)band;
-    }
+  if (argc > 0) {
+    int band = my_atoi(argv[0]);
+    // Implement band switch if applicable
+    (void)band;
+  }
 }
 VNA_SHELL_FUNCTION(cmd_reset) {
   (void)argc;
@@ -1129,7 +1170,7 @@ VNA_SHELL_FUNCTION(cmd_reset) {
   if (argc == 1) {
     if (get_str_index(argv[0], "dfu") == 0) {
       shell_printf("Performing reset to DFU mode" VNA_SHELL_NEWLINE_STR);
-      ui_port.api->enter_dfu();
+      UI_PORT.api->enter_dfu();
       return;
     }
   }
@@ -1138,124 +1179,123 @@ VNA_SHELL_FUNCTION(cmd_reset) {
   NVIC_SystemReset();
 }
 
-const VNAShellCommand commands[] = {
-    {"scan", cmd_scan, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
+const vna_shell_command_t COMMANDS[] = {
+  {"scan", cmd_scan, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
 #if ENABLE_SCANBIN_COMMAND
-    {"scan_bin", cmd_scan_bin, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
+  {"scan_bin", cmd_scan_bin, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
 #endif
-    {"data", cmd_data, 0},
-    {"frequencies", cmd_frequencies, 0},
-    {"freq", cmd_freq, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
-    {"sweep", cmd_sweep, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
-    {"power", cmd_power, CMD_RUN_IN_LOAD},
+  {"data", cmd_data, 0},
+  {"frequencies", cmd_frequencies, 0},
+  {"freq", cmd_freq, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
+  {"sweep", cmd_sweep, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
+  {"power", cmd_power, CMD_RUN_IN_LOAD},
 #ifdef USE_VARIABLE_OFFSET
-    {"offset", cmd_offset, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
+  {"offset", cmd_offset, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
-    {"bandwidth", cmd_bandwidth, CMD_RUN_IN_LOAD},
+  {"bandwidth", cmd_bandwidth, CMD_RUN_IN_LOAD},
 #ifdef __USE_RTC__
-    {"time", cmd_time, CMD_RUN_IN_UI},
+  {"time", cmd_time, CMD_RUN_IN_UI},
 #endif
 #ifdef __VNA_ENABLE_DAC__
-    {"dac", cmd_dac, CMD_RUN_IN_LOAD},
+  {"dac", cmd_dac, CMD_RUN_IN_LOAD},
 #endif
-    {"saveconfig", cmd_saveconfig, CMD_RUN_IN_LOAD},
-    {"clearconfig", cmd_clearconfig, CMD_RUN_IN_LOAD},
+  {"saveconfig", cmd_saveconfig, CMD_RUN_IN_LOAD},
+  {"clearconfig", cmd_clearconfig, CMD_RUN_IN_LOAD},
 #if ENABLE_SD_CARD_COMMAND
-    {"sd_list", cmd_sd_list, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
-    {"sd_read", cmd_sd_read, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
-    {"sd_delete", cmd_sd_delete, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
+  {"sd_list", cmd_sd_list, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
+  {"sd_read", cmd_sd_read, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
+  {"sd_delete", cmd_sd_delete, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
 #endif
 #if ENABLED_DUMP_COMMAND
-    {"dump", cmd_dump, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
+  {"dump", cmd_dump, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
 #endif
 #if ENABLE_PORT_COMMAND
-    {"port", cmd_port, CMD_RUN_IN_LOAD},
+  {"port", cmd_port, CMD_RUN_IN_LOAD},
 #endif
 #if ENABLE_STAT_COMMAND
-    {"stat", cmd_stat, CMD_WAIT_MUTEX},
+  {"stat", cmd_stat, CMD_WAIT_MUTEX},
 #endif
 #if ENABLE_GAIN_COMMAND
-    {"gain", cmd_gain, CMD_WAIT_MUTEX},
+  {"gain", cmd_gain, CMD_WAIT_MUTEX},
 #endif
 #if ENABLE_SAMPLE_COMMAND
-    {"sample", cmd_sample, 0},
+  {"sample", cmd_sample, 0},
 #endif
 #if ENABLE_TEST_COMMAND
-    {"test", cmd_test, 0},
+  {"test", cmd_test, 0},
 #endif
-    {"touchcal", cmd_touchcal, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
-    {"touchtest", cmd_touchtest, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
-    {"pause", cmd_pause, CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
-    {"resume", cmd_resume, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
+  {"touchcal", cmd_touchcal, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
+  {"touchtest", cmd_touchtest, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
+  {"pause", cmd_pause, CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
+  {"resume", cmd_resume, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #ifdef __SD_CARD_LOAD__
-    {"msg", cmd_msg, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_LOAD},
+  {"msg", cmd_msg, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_LOAD},
 #endif
-    {"cal", cmd_cal, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
-    {"save", cmd_save, CMD_RUN_IN_LOAD},
-    {"recall", cmd_recall, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
-    {"trace", cmd_trace, CMD_RUN_IN_LOAD},
-    {"marker", cmd_marker, CMD_RUN_IN_LOAD},
-    {"edelay", cmd_edelay, CMD_RUN_IN_LOAD},
-    {"s21offset", cmd_s21offset, CMD_RUN_IN_LOAD},
-    {"capture", cmd_capture, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
+  {"cal", cmd_cal, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
+  {"save", cmd_save, CMD_RUN_IN_LOAD},
+  {"recall", cmd_recall, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
+  {"trace", cmd_trace, CMD_RUN_IN_LOAD},
+  {"marker", cmd_marker, CMD_RUN_IN_LOAD},
+  {"edelay", cmd_edelay, CMD_RUN_IN_LOAD},
+  {"s21offset", cmd_s21offset, CMD_RUN_IN_LOAD},
+  {"capture", cmd_capture, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
 #ifdef __VNA_MEASURE_MODULE__
-    {"measure", cmd_measure, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
+  {"measure", cmd_measure, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
 #ifdef __REMOTE_DESKTOP__
-    {"refresh", cmd_refresh, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
-    {"touch", cmd_touch, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
-    {"release", cmd_release, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
+  {"refresh", cmd_refresh, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
+  {"touch", cmd_touch, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
+  {"release", cmd_release, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
 #endif
-    {"vbat", cmd_vbat, CMD_RUN_IN_LOAD},
-    {"tcxo", cmd_tcxo, CMD_RUN_IN_LOAD},
-    {"reset", cmd_reset, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_LOAD},
+  {"vbat", cmd_vbat, CMD_RUN_IN_LOAD},
+  {"tcxo", cmd_tcxo, CMD_RUN_IN_LOAD},
+  {"reset", cmd_reset, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_LOAD},
 #ifdef __USE_SMOOTH__
-    {"smooth", cmd_smooth, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
+  {"smooth", cmd_smooth, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
 #if ENABLE_CONFIG_COMMAND
-    {"config", cmd_config, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
+  {"config", cmd_config, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
 #ifdef __USE_SERIAL_CONSOLE__
 #if ENABLE_USART_COMMAND
-    {"usart_cfg", cmd_usart_cfg,
-     CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
-    {"usart", cmd_usart, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
+  {"usart_cfg", cmd_usart_cfg, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
+  {"usart", cmd_usart, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
 #endif
 #if ENABLE_VBAT_OFFSET_COMMAND
-    {"vbat_offset", cmd_vbat_offset, CMD_RUN_IN_LOAD},
+  {"vbat_offset", cmd_vbat_offset, CMD_RUN_IN_LOAD},
 #endif
 #if ENABLE_TRANSFORM_COMMAND
-    {"transform", cmd_transform, CMD_RUN_IN_LOAD},
+  {"transform", cmd_transform, CMD_RUN_IN_LOAD},
 #endif
-    {"threshold", cmd_threshold, CMD_RUN_IN_LOAD},
-    {"help", cmd_help, 0},
+  {"threshold", cmd_threshold, CMD_RUN_IN_LOAD},
+  {"help", cmd_help, 0},
 #if ENABLE_INFO_COMMAND
-    {"info", cmd_info, 0},
+  {"info", cmd_info, 0},
 #endif
-    {"version", cmd_version, 0},
+  {"version", cmd_version, 0},
 #if ENABLE_COLOR_COMMAND
-    {"color", cmd_color, CMD_RUN_IN_LOAD},
+  {"color", cmd_color, CMD_RUN_IN_LOAD},
 #endif
 #if ENABLE_I2C_COMMAND
-    {"i2c", cmd_i2c, CMD_WAIT_MUTEX},
+  {"i2c", cmd_i2c, CMD_WAIT_MUTEX},
 #endif
 #if ENABLE_LCD_COMMAND
-    {"lcd", cmd_lcd, CMD_WAIT_MUTEX},
+  {"lcd", cmd_lcd, CMD_WAIT_MUTEX},
 #endif
 #if ENABLE_THREADS_COMMAND
-    {"threads", cmd_threads, 0},
+  {"threads", cmd_threads, 0},
 #endif
 #if ENABLE_SI5351_REG_WRITE
-    {"si", cmd_si5351reg, CMD_WAIT_MUTEX},
+  {"si", cmd_si5351reg, CMD_WAIT_MUTEX},
 #endif
 #if ENABLE_SI5351_TIMINGS
-    {"t", cmd_si5351time, CMD_WAIT_MUTEX},
+  {"t", cmd_si5351time, CMD_WAIT_MUTEX},
 #endif
 #if ENABLE_I2C_TIMINGS
-    {"i", cmd_i2ctime, CMD_WAIT_MUTEX},
+  {"i", cmd_i2ctime, CMD_WAIT_MUTEX},
 #endif
 #if ENABLE_BAND_COMMAND
-    {"b", cmd_band, CMD_WAIT_MUTEX},
+  {"b", cmd_band, CMD_WAIT_MUTEX},
 #endif
-    {NULL, NULL, 0}};
+  {NULL, NULL, 0}};

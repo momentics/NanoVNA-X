@@ -113,7 +113,7 @@ _Static_assert(TRACE_INDEX_COUNT > 0, "Trace index count must be positive");
 // I copied "trace_into_index".
 // Did I copy "render_traces_in_cell"?
 // Let's check my input for step 499.
-// I see "void render_traces_in_cell(RenderCellCtx* rcx) {" in my memory? 
+// I see "void render_traces_in_cell(RenderCellCtx* rcx) {" in my memory?
 // No, I see "void trace_into_index(int t) {...}"
 // I see "mark_line", "mark_set_index", trace info lists...
 // I do NOT see "render_traces_in_cell" in the written traces.c content in step 499.
@@ -130,7 +130,7 @@ _Static_assert(TRACE_INDEX_COUNT > 0, "Trace index count must be positive");
 /**
  * @brief Draw marker icons for every enabled trace.
  */
-static void render_markers_in_cell(RenderCellCtx* rcx) {
+static void render_markers_in_cell(RenderCellCtx *rcx) {
   for (int i = 0; i < MARKERS_MAX; i++) {
     if (!markers[i].enabled)
       continue;
@@ -139,8 +139,8 @@ static void render_markers_in_cell(RenderCellCtx* rcx) {
       if (!trace[t].enabled)
         continue;
       trace_index_const_table_t index = trace_index_const_table(t);
-      const uint8_t* plate;
-      const uint8_t* marker;
+      const uint8_t *plate;
+      const uint8_t *marker;
       int x = TRACE_X(index, mk_idx) - rcx->x0 - X_MARKER_OFFSET;
       int y;
       if (TRACE_Y(index, mk_idx) < MARKER_HEIGHT * 2) {
@@ -162,10 +162,6 @@ static void render_markers_in_cell(RenderCellCtx* rcx) {
     }
   }
 }
-
-
-
-
 
 //**************************************************************************************
 // Cell render functions used to be here (moved to render.c)
@@ -226,9 +222,10 @@ static inline void invalidate_rect_px(int x0, int y0, int x1, int y1) {
 // LINEAR = |S|
 //**************************************************************************************
 // dummy compact_cell_buffer
-static inline void compact_cell_buffer(RenderCellCtx* rcx) {
-  if (rcx->w == CELLWIDTH) return;
-  pixel_t* buf = rcx->buf;
+static inline void compact_cell_buffer(RenderCellCtx *rcx) {
+  if (rcx->w == CELLWIDTH)
+    return;
+  pixel_t *buf = rcx->buf;
   for (int y = 1; y < rcx->h; y++) {
     memmove(buf + y * rcx->w, buf + y * CELLWIDTH, rcx->w * sizeof(pixel_t));
   }
@@ -238,7 +235,7 @@ static inline void compact_cell_buffer(RenderCellCtx* rcx) {
 
 // cartesian_scale moved to traces.c
 
-// trace_info_list and marker_info_list moved to traces.c
+// TRACE_INFO_LIST and MARKER_INFO_LIST moved to traces.c
 
 // Trace printing and helper functions moved to traces.c
 
@@ -273,12 +270,14 @@ void request_to_draw_marker(uint16_t mk_idx) {
 // Calculate marker area size depend from trace/marker count and options
 static int marker_area_max(void) {
   int t_count = 0, m_count = 0, i;
-  for (i = 0; i < TRACES_MAX; i++)
+  for (i = 0; i < TRACES_MAX; i++) {
     if (trace[i].enabled)
       t_count++;
-  for (i = 0; i < MARKERS_MAX; i++)
+}
+  for (i = 0; i < MARKERS_MAX; i++) {
     if (markers[i].enabled)
       m_count++;
+}
   int cnt = t_count > m_count ? t_count : m_count;
   int extra = 0;
   if (get_electrical_delay() != 0.0f)
@@ -394,7 +393,7 @@ static void markmap_all_refpos(void) {
   invalidate_rect_px(0, 0, CELLOFFSETX + 1, AREA_HEIGHT_NORMAL);
 }
 
-static void cell_draw_all_refpos(RenderCellCtx* rcx) {
+static void cell_draw_all_refpos(RenderCellCtx *rcx) {
   int x = -((int)rcx->x0) + CELLOFFSETX - REFERENCE_X_OFFSET;
   if ((uint32_t)(x + REFERENCE_WIDTH) >= CELLWIDTH + REFERENCE_WIDTH)
     return;
@@ -405,7 +404,8 @@ static void cell_draw_all_refpos(RenderCellCtx* rcx) {
     int y = HEIGHT - float2int(get_trace_refpos(t) * GRIDY) - rcx->y0 - REFERENCE_Y_OFFSET;
     if ((uint32_t)(y + REFERENCE_HEIGHT) < CELLHEIGHT + REFERENCE_HEIGHT) {
       lcd_set_foreground(LCD_TRACE_1_COLOR + t);
-      cell_blit_bitmap(rcx, x, y, REFERENCE_WIDTH, REFERENCE_HEIGHT, (const uint8_t*)reference_bitmap);
+      cell_blit_bitmap(rcx, x, y, REFERENCE_WIDTH, REFERENCE_HEIGHT,
+                       (const uint8_t *)REFERENCE_BITMAP);
     }
   }
 }
@@ -416,7 +416,7 @@ static void cell_draw_all_refpos(RenderCellCtx* rcx) {
 void request_to_draw_cells_behind_menu(void) {
   // Values Hardcoded from ui.c
   invalidate_rect_px(LCD_WIDTH - MENU_BUTTON_WIDTH - OFFSETX, 0, LCD_WIDTH - OFFSETX,
-                    LCD_HEIGHT - 1);
+                     LCD_HEIGHT - 1);
   request_to_redraw(REDRAW_CELLS | REDRAW_FREQUENCY);
 }
 
@@ -440,10 +440,10 @@ static uint8_t data_update = 0;
 
 // Include measure functions
 #ifdef __VNA_MEASURE_MODULE__
-#define cell_printf cell_printf_bound
+#define CELL_PRINTF cell_printf_bound
 // legacy_measure.c expects invalidate_rect to be available for marking dirty regions.
 // Provide a compatibility alias to the pixel-based helper defined above.
-#define invalidate_rect invalidate_rect_px
+#define INVALIDATE_RECT invalidate_rect_px
 #include "../../rf/analysis/legacy_measure.c"
 #undef invalidate_rect
 #undef cell_printf
@@ -454,23 +454,23 @@ static const struct {
   uint8_t update;
   measure_cell_cb_t measure_cell;
   measure_prepare_cb_t measure_prepare;
-} measure[] = {
-    [MEASURE_NONE] = {MESAURE_NONE, 0, NULL, NULL},
+} MEASURE[] = {
+  [MEASURE_NONE] = {MESAURE_NONE, 0, NULL, NULL},
 #ifdef __USE_LC_MATCHING__
-    [MEASURE_LC_MATH] = {MESAURE_NONE, MEASURE_UPD_ALL, draw_lc_match, prepare_lc_match},
+  [MEASURE_LC_MATH] = {MESAURE_NONE, MEASURE_UPD_ALL, draw_lc_match, prepare_lc_match},
 #endif
 #ifdef __S21_MEASURE__
-    [MEASURE_SHUNT_LC] = {MESAURE_S21, MEASURE_UPD_SWEEP, draw_serial_result, prepare_series},
-    [MEASURE_SERIES_LC] = {MESAURE_S21, MEASURE_UPD_SWEEP, draw_serial_result, prepare_series},
-    [MEASURE_SERIES_XTAL] = {MESAURE_S21, MEASURE_UPD_SWEEP, draw_serial_result, prepare_series},
-    [MEASURE_FILTER] = {MESAURE_S21, MEASURE_UPD_SWEEP, draw_filter_result, prepare_filter},
+  [MEASURE_SHUNT_LC] = {MESAURE_S21, MEASURE_UPD_SWEEP, draw_serial_result, prepare_series},
+  [MEASURE_SERIES_LC] = {MESAURE_S21, MEASURE_UPD_SWEEP, draw_serial_result, prepare_series},
+  [MEASURE_SERIES_XTAL] = {MESAURE_S21, MEASURE_UPD_SWEEP, draw_serial_result, prepare_series},
+  [MEASURE_FILTER] = {MESAURE_S21, MEASURE_UPD_SWEEP, draw_filter_result, prepare_filter},
 #endif
 #ifdef __S11_CABLE_MEASURE__
-    [MEASURE_S11_CABLE] = {MESAURE_S11, MEASURE_UPD_ALL, draw_s11_cable, prepare_s11_cable},
+  [MEASURE_S11_CABLE] = {MESAURE_S11, MEASURE_UPD_ALL, draw_s11_cable, prepare_s11_cable},
 #endif
 #ifdef __S11_RESONANCE_MEASURE__
-    [MEASURE_S11_RESONANCE] = {MESAURE_S11, MEASURE_UPD_ALL, draw_s11_resonance,
-                               prepare_s11_resonance},
+  [MEASURE_S11_RESONANCE] = {MESAURE_S11, MEASURE_UPD_ALL, draw_s11_resonance,
+                             prepare_s11_resonance},
 #endif
 };
 
@@ -487,23 +487,23 @@ void plot_set_measure_mode(uint8_t mode) {
 }
 
 uint16_t plot_get_measure_channels(void) {
-  return measure[current_props._measure].option;
+  return MEASURE[current_props._measure].option;
 }
 
 static void measure_prepare(void) {
   if (current_props._measure >= MEASURE_END)
     return;
-  measure_prepare_cb_t measure_cb = measure[current_props._measure].measure_prepare;
+  measure_prepare_cb_t measure_cb = MEASURE[current_props._measure].measure_prepare;
   // Do measure and cache data only if update flags some
-  if (measure_cb && (data_update & measure[current_props._measure].update))
+  if (measure_cb && (data_update & MEASURE[current_props._measure].update))
     measure_cb(current_props._measure, data_update);
   data_update = 0;
 }
 
-static void cell_draw_measure(RenderCellCtx* rcx) {
+static void cell_draw_measure(RenderCellCtx *rcx) {
   if (current_props._measure >= MEASURE_END)
     return;
-  measure_cell_cb_t measure_draw_cb = measure[current_props._measure].measure_cell;
+  measure_cell_cb_t measure_draw_cb = MEASURE[current_props._measure].measure_cell;
   if (measure_draw_cb) {
     lcd_set_colors(LCD_MEASURE_COLOR, LCD_BG_COLOR);
     measure_draw_cb(STR_MEASURE_X - rcx->x0, STR_MEASURE_Y - rcx->y0);
@@ -514,7 +514,7 @@ static void cell_draw_measure(RenderCellCtx* rcx) {
 //**************************************************************************************
 //           Calculate and cache point coordinates for trace
 //**************************************************************************************
-// trace_into_index moved to traces.c        
+// trace_into_index moved to traces.c
 
 //**************************************************************************************
 //           Build graph data and cache it for output
@@ -531,9 +531,10 @@ static void plot_into_index(void) {
   markmap_all_markers();
   //  START_PROFILE;
   // Cache trace data indexes, and mark plot area for update
-  for (int t = 0; t < TRACES_MAX; t++)
+  for (int t = 0; t < TRACES_MAX; t++) {
     if (trace[t].enabled)
       trace_into_index(t);
+}
   //  STOP_PROFILE;
   // Marker track on data update
   if (props_mode & TD_MARKER_TRACK)
@@ -550,7 +551,7 @@ static void plot_into_index(void) {
 //            Grid line values
 //**************************************************************************************
 #if VNA_ENABLE_GRID_VALUES
-static void cell_draw_grid_values(RenderCellCtx* rcx) {
+static void cell_draw_grid_values(RenderCellCtx *rcx) {
   // Skip not selected trace
   if (current_trace == TRACE_INVALID)
     return;
@@ -590,31 +591,31 @@ static void markmap_grid_values(void) {}
 // Marker and trace data position
 static const struct {
   uint16_t x, y;
-} marker_pos[MARKERS_MAX] = {
-    {1 + CELLOFFSETX, 1},
-    {1 + (WIDTH / 2) + CELLOFFSETX, 1},
-    {1 + CELLOFFSETX, 1 + FONT_STR_HEIGHT},
-    {1 + (WIDTH / 2) + CELLOFFSETX, 1 + FONT_STR_HEIGHT},
-    {1 + CELLOFFSETX, 1 + 2 * FONT_STR_HEIGHT},
-    {1 + (WIDTH / 2) + CELLOFFSETX, 1 + 2 * FONT_STR_HEIGHT},
-    {1 + CELLOFFSETX, 1 + 3 * FONT_STR_HEIGHT},
-    {1 + (WIDTH / 2) + CELLOFFSETX, 1 + 3 * FONT_STR_HEIGHT},
+} MARKER_POS[MARKERS_MAX] = {
+  {1 + CELLOFFSETX, 1},
+  {1 + (WIDTH / 2) + CELLOFFSETX, 1},
+  {1 + CELLOFFSETX, 1 + FONT_STR_HEIGHT},
+  {1 + (WIDTH / 2) + CELLOFFSETX, 1 + FONT_STR_HEIGHT},
+  {1 + CELLOFFSETX, 1 + 2 * FONT_STR_HEIGHT},
+  {1 + (WIDTH / 2) + CELLOFFSETX, 1 + 2 * FONT_STR_HEIGHT},
+  {1 + CELLOFFSETX, 1 + 3 * FONT_STR_HEIGHT},
+  {1 + (WIDTH / 2) + CELLOFFSETX, 1 + 3 * FONT_STR_HEIGHT},
 };
 
 #ifdef LCD_320x240
 #if _USE_FONT_ < 1
-#define MARKER_FREQ "%.6q" S_Hz
+#define MARKER_FREQ "%.6q" S_HZ
 #else
-#define MARKER_FREQ "%.3q" S_Hz
+#define MARKER_FREQ "%.3q" S_HZ
 #endif
 #define MARKER_FREQ_SIZE 67
 #endif
 #ifdef LCD_480x320
-#define MARKER_FREQ "%q" S_Hz
+#define MARKER_FREQ "%q" S_HZ
 #define MARKER_FREQ_SIZE 116
 #endif
 
-static void cell_draw_marker_info(RenderCellCtx* rcx) {
+static void cell_draw_marker_info(RenderCellCtx *rcx) {
   int t, mk, xpos, ypos;
   if (active_marker == MARKER_INVALID)
     return;
@@ -627,8 +628,8 @@ static void cell_draw_marker_info(RenderCellCtx* rcx) {
     for (mk = 0; mk < MARKERS_MAX; mk++) {
       if (!markers[mk].enabled)
         continue;
-      xpos = (int)marker_pos[j].x - rcx->x0;
-      ypos = (int)marker_pos[j].y - rcx->y0;
+      xpos = (int)MARKER_POS[j].x - rcx->x0;
+      ypos = (int)MARKER_POS[j].y - rcx->y0;
       j++;
       lcd_set_foreground(LCD_TRACE_1_COLOR + t);
       if (mk == active_marker && lever_mode == LM_MARKER)
@@ -663,19 +664,20 @@ static void cell_draw_marker_info(RenderCellCtx* rcx) {
         freq_t freq = get_marker_frequency(active_marker);
         freq_t freq1 = get_marker_frequency(previous_marker);
         freq_t delta = freq >= freq1 ? freq - freq1 : freq1 - freq;
-        cell_printf_ctx(rcx, xpos, ypos, "%c%q" S_Hz, freq >= freq1 ? '+' : '-', delta);
+        cell_printf_ctx(rcx, xpos, ypos, "%c%q" S_HZ, freq >= freq1 ? '+' : '-', delta);
       } else {
         cell_printf_ctx(rcx, xpos, ypos, "%F" S_SECOND " (%F" S_METRE ")",
-                    time_of_index(active_marker_idx) - time_of_index(previous_marker_idx),
-                    distance_of_index(active_marker_idx) - distance_of_index(previous_marker_idx));
+                        time_of_index(active_marker_idx) - time_of_index(previous_marker_idx),
+                        distance_of_index(active_marker_idx) -
+                          distance_of_index(previous_marker_idx));
       }
     }
   } else /*if (active_marker != MARKER_INVALID)*/ { // Trace display mode
     for (t = 0; t < TRACES_MAX; t++) {
       if (!trace[t].enabled)
         continue;
-      xpos = (int)marker_pos[j].x - rcx->x0;
-      ypos = (int)marker_pos[j].y - rcx->y0;
+      xpos = (int)MARKER_POS[j].x - rcx->x0;
+      ypos = (int)MARKER_POS[j].y - rcx->y0;
       j++;
       lcd_set_foreground(LCD_TRACE_1_COLOR + t);
       if (t == current_trace)
@@ -698,11 +700,12 @@ static void cell_draw_marker_info(RenderCellCtx* rcx) {
     xpos += FONT_WIDTH;
     cell_printf_ctx(rcx, xpos, ypos, "M%d:", active_marker + 1);
     xpos += 3 * FONT_WIDTH + 4;
-    if ((props_mode & DOMAIN_MODE) == DOMAIN_FREQ)
-      cell_printf_ctx(rcx, xpos, ypos, "%q" S_Hz, get_marker_frequency(active_marker));
-    else
-      cell_printf_ctx(rcx, xpos, ypos, "%F" S_SECOND " (%F" S_METRE ")", time_of_index(active_marker_idx),
-                  distance_of_index(active_marker_idx));
+    if ((props_mode & DOMAIN_MODE) == DOMAIN_FREQ) {
+      cell_printf_ctx(rcx, xpos, ypos, "%q" S_HZ, get_marker_frequency(active_marker));
+    } else {
+      cell_printf_ctx(rcx, xpos, ypos, "%F" S_SECOND " (%F" S_METRE ")",
+                      time_of_index(active_marker_idx), distance_of_index(active_marker_idx));
+}
   }
 
   xpos = 1 + 18 + CELLOFFSETX - rcx->x0;
@@ -710,12 +713,13 @@ static void cell_draw_marker_info(RenderCellCtx* rcx) {
   float electrical_delay = get_electrical_delay();
   if (electrical_delay != 0.0f) { // draw electrical delay
     char sel = lever_mode == LM_EDELAY ? S_SARROW[0] : ' ';
-    cell_printf_ctx(rcx, xpos, ypos, "%cEdelay: %F" S_SECOND " (%F" S_METRE ")", sel, electrical_delay,
-                electrical_delay * (SPEED_OF_LIGHT / 100.0f) * velocity_factor);
+    cell_printf_ctx(rcx, xpos, ypos, "%cEdelay: %F" S_SECOND " (%F" S_METRE ")", sel,
+                    electrical_delay,
+                    electrical_delay * (SPEED_OF_LIGHT / 100.0f) * velocity_factor);
     ypos += FONT_STR_HEIGHT;
   }
   if (s21_offset != 0.0f) { // draw s21 offset
-    cell_printf_ctx(rcx, xpos, ypos, "S21 offset: %.3F" S_dB, s21_offset);
+    cell_printf_ctx(rcx, xpos, ypos, "S21 offset: %.3F" S_DB, s21_offset);
     ypos += FONT_STR_HEIGHT;
   }
 #ifdef __VNA_Z_RENORMALIZATION__
@@ -726,8 +730,7 @@ static void cell_draw_marker_info(RenderCellCtx* rcx) {
 #endif
 }
 
-
-void render_overlays(RenderCellCtx* rcx) {
+void render_overlays(RenderCellCtx *rcx) {
   cell_draw_all_refpos(rcx);
 #ifdef __VNA_MEASURE_MODULE__
   cell_draw_measure(rcx);
@@ -782,9 +785,10 @@ void draw_all_cells(void) {
 #endif
   for (n = 0; n < h; n++) {
     map_t update_map = markmap[n];
-    for (m = 0; update_map && m < w; update_map >>= 1, m++)
+    for (m = 0; update_map && m < w; update_map >>= 1, m++) {
       if (update_map & 1)
         draw_cell(m * CELLWIDTH, n * CELLHEIGHT);
+}
   }
 
 #if 0
@@ -821,26 +825,26 @@ void redraw_marker(int8_t marker) {
 }
 
 static void draw_frequencies(void) {
-  char lm0 = lever_mode == LM_FREQ_0 ? S_SARROW[0] : ' ';
-  char lm1 = lever_mode == LM_FREQ_1 ? S_SARROW[0] : ' ';
   // Draw frequency string
   lcd_set_colors(LCD_FG_COLOR, LCD_BG_COLOR);
   lcd_fill(0, HEIGHT + OFFSETY + 1, LCD_WIDTH, LCD_HEIGHT - HEIGHT - OFFSETY - 1);
-  lcd_set_font(FONT_SMALL);
+  LCD_SET_FONT(FONT_SMALL);
   // Prepare text for frequency string
   if ((props_mode & DOMAIN_MODE) == DOMAIN_FREQ) {
+    char lm0 = lever_mode == LM_FREQ_0 ? S_SARROW[0] : ' ';
+    char lm1 = lever_mode == LM_FREQ_1 ? S_SARROW[0] : ' ';
     if (FREQ_IS_CW()) {
-      lcd_printf(FREQUENCIES_XPOS1, FREQUENCIES_YPOS, "%c%s %15q" S_Hz, lm0, "CW",
+      lcd_printf(FREQUENCIES_XPOS1, FREQUENCIES_YPOS, "%c%s %15q" S_HZ, lm0, "CW",
                  get_sweep_frequency(ST_CW));
     } else if (FREQ_IS_STARTSTOP()) {
-      lcd_printf(FREQUENCIES_XPOS1, FREQUENCIES_YPOS, "%c%s %15q" S_Hz, lm0, "START",
+      lcd_printf(FREQUENCIES_XPOS1, FREQUENCIES_YPOS, "%c%s %15q" S_HZ, lm0, "START",
                  get_sweep_frequency(ST_START));
-      lcd_printf(FREQUENCIES_XPOS2, FREQUENCIES_YPOS, "%c%s %15q" S_Hz, lm1, "STOP",
+      lcd_printf(FREQUENCIES_XPOS2, FREQUENCIES_YPOS, "%c%s %15q" S_HZ, lm1, "STOP",
                  get_sweep_frequency(ST_STOP));
     } else if (FREQ_IS_CENTERSPAN()) {
-      lcd_printf(FREQUENCIES_XPOS1, FREQUENCIES_YPOS, "%c%s %15q" S_Hz, lm0, "CENTER",
+      lcd_printf(FREQUENCIES_XPOS1, FREQUENCIES_YPOS, "%c%s %15q" S_HZ, lm0, "CENTER",
                  get_sweep_frequency(ST_CENTER));
-      lcd_printf(FREQUENCIES_XPOS2, FREQUENCIES_YPOS, "%c%s %15q" S_Hz, lm1, "SPAN",
+      lcd_printf(FREQUENCIES_XPOS2, FREQUENCIES_YPOS, "%c%s %15q" S_HZ, lm1, "SPAN",
                  get_sweep_frequency(ST_SPAN));
     }
   } else {
@@ -851,9 +855,9 @@ static void draw_frequencies(void) {
   }
   // Draw bandwidth and point count
   lcd_set_foreground(LCD_BW_TEXT_COLOR);
-  lcd_printf(FREQUENCIES_XPOS3, FREQUENCIES_YPOS, "BW:%u" S_Hz " %up",
+  lcd_printf(FREQUENCIES_XPOS3, FREQUENCIES_YPOS, "BW:%u" S_HZ " %up",
              get_bandwidth_frequency(config._bandwidth), sweep_points);
-  lcd_set_font(FONT_NORMAL);
+  LCD_SET_FONT(FONT_NORMAL);
 }
 
 //**************************************************************************************
@@ -865,7 +869,7 @@ static void draw_cal_status(void) {
   int y = CALIBRATION_INFO_POSY;
   lcd_set_colors(LCD_DISABLE_CAL_COLOR, LCD_BG_COLOR);
   lcd_fill(x, y, OFFSETX - x, 10 * (sFONT_STR_HEIGHT));
-  lcd_set_font(FONT_SMALL);
+  LCD_SET_FONT(FONT_SMALL);
   if (cal_status & CALSTAT_APPLY) {
     // Set 'C' string for slot status
     char c[4] = {'C', '0' + lastsaveid, 0, 0};
@@ -876,7 +880,7 @@ static void draw_cal_status(void) {
       c[0] = 'c';
     } else
       lcd_set_foreground(LCD_FG_COLOR);
-    lcd_drawstring(x, y, c);
+    LCD_DRAWSTRING(x, y, c);
     lcd_set_foreground(LCD_FG_COLOR);
   }
 
@@ -884,12 +888,12 @@ static void draw_cal_status(void) {
     char text, zero;
     uint16_t mask;
   } calibration_text[] = {
-      {'O', 0, CALSTAT_OPEN}, {'S', 0, CALSTAT_SHORT}, {'D', 0, CALSTAT_ED},
-      {'R', 0, CALSTAT_ER},   {'S', 0, CALSTAT_ES},    {'T', 0, CALSTAT_ET},
-      {'t', 0, CALSTAT_THRU}, {'X', 0, CALSTAT_EX},    {'E', 0, CALSTAT_ENHANCED_RESPONSE}};
+    {'O', 0, CALSTAT_OPEN}, {'S', 0, CALSTAT_SHORT}, {'D', 0, CALSTAT_ED},
+    {'R', 0, CALSTAT_ER},   {'S', 0, CALSTAT_ES},    {'T', 0, CALSTAT_ET},
+    {'t', 0, CALSTAT_THRU}, {'X', 0, CALSTAT_EX},    {'E', 0, CALSTAT_ENHANCED_RESPONSE}};
   for (i = 0; i < ARRAY_COUNT(calibration_text); i++)
     if (cal_status & calibration_text[i].mask)
-      lcd_drawstring(x, y += sFONT_STR_HEIGHT, &calibration_text[i].text);
+      LCD_DRAWSTRING(x, y += sFONT_STR_HEIGHT, &calibration_text[i].text);
 
   if ((cal_status & CALSTAT_APPLY) && cal_power != current_props._power)
     lcd_set_foreground(LCD_DISABLE_CAL_COLOR);
@@ -905,7 +909,7 @@ static void draw_cal_status(void) {
     lcd_printf(x, y += sFONT_STR_HEIGHT, "s%d", smooth);
   }
 #endif
-  lcd_set_font(FONT_NORMAL);
+  LCD_SET_FONT(FONT_NORMAL);
 }
 
 //**************************************************************************************
@@ -932,7 +936,7 @@ static void draw_battery_status(void) {
   lcd_set_colors(vbat < BATTERY_WARNING_LEVEL ? LCD_LOW_BAT_COLOR : LCD_NORMAL_BAT_COLOR,
                  LCD_BG_COLOR);
   //  plot_printf(string_buf, sizeof string_buf, "V:%d", vbat);
-  //  lcd_drawstringV(string_buf, 1, 60);
+  //  LCD_DRAWSTRINGV(string_buf, 1, 60);
   // Prepare battery bitmap image
   // Battery top
   int x = 0;
@@ -947,7 +951,7 @@ static void draw_battery_status(void) {
       continue;
     }
     string_buf[x++] = (power > vbat) ? 0b10000001 : // Empty line
-                          0b10111101;               // Full line
+                        0b10111101;                 // Full line
     power -= 100;
   }
   // Battery bottom
@@ -975,9 +979,9 @@ void draw_all(void) {
     lcd_set_background(LCD_BG_COLOR);
     lcd_clear_screen();
   }
-  if (redraw_request & REDRAW_AREA)
+  if (redraw_request & REDRAW_AREA) {
     force_set_markmap();
-  else {
+  } else {
     if (redraw_request & REDRAW_MARKER)
       markmap_all_markers();
     if (redraw_request & REDRAW_REFERENCE)

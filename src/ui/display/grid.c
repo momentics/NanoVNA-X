@@ -1,24 +1,4 @@
 /*
- * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * All rights reserved.
- *
- * This is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3, or (at your option)
- * any later version.
- *
- * The software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with GNU Radio; see the file COPYING.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street,
- * Boston, MA 02110-1301, USA.
- */
-
-/*
  * NanoVNA-X grid rendering module
  */
 
@@ -28,12 +8,12 @@
 // Plot area draw grid functions
 //**************************************************************************************
 
-void render_polar_grid_cell(const RenderCellCtx* rcx, pixel_t color) {
+void render_polar_grid_cell(const RenderCellCtx *rcx, pixel_t color) {
   const int32_t base_x = (int32_t)rcx->x0 - P_CENTER_X;
   const int32_t base_y = (int32_t)rcx->y0 - P_CENTER_Y;
 
   const uint32_t radius = P_RADIUS;
-  const uint32_t radius_sq = (uint32_t)radius * radius;
+  const uint32_t radius_sq = radius * radius;
   const uint32_t r_div_5 = radius / 5u;
   const uint32_t r_mul_2_div_5 = (radius * 2u) / 5u;
   const uint32_t r_mul_3_div_5 = (radius * 3u) / 5u;
@@ -90,12 +70,12 @@ void render_polar_grid_cell(const RenderCellCtx* rcx, pixel_t color) {
   }
 }
 
-void render_smith_grid_cell(const RenderCellCtx* rcx, pixel_t color) {
+void render_smith_grid_cell(const RenderCellCtx *rcx, pixel_t color) {
   const int32_t base_x = (int32_t)rcx->x0 - P_CENTER_X;
   const int32_t base_y = (int32_t)rcx->y0 - P_CENTER_Y;
 
   const uint32_t r = P_RADIUS;
-  const uint32_t radius_sq = (uint32_t)r * r;
+  const uint32_t radius_sq = r * r;
   const int32_t r_div_2 = (int32_t)r / 2;
   const int32_t r_div_4 = (int32_t)r / 4;
   const uint32_t r_mul_2 = 2u * r;
@@ -130,8 +110,8 @@ void render_smith_grid_cell(const RenderCellCtx* rcx, pixel_t color) {
             *cell_ptr(rcx, x_offset, y_offset) = color;
             continue;
           }
-          d = (int32_t)distance - (int32_t)(r_mul_3_div_2 * (uint32_t)x) +
-              (int32_t)radius_sq / 2 + r_div_4;
+          d = (int32_t)distance - (int32_t)(r_mul_3_div_2 * (uint32_t)x) + (int32_t)radius_sq / 2 +
+              r_div_4;
           if (d >= 0 && (uint32_t)d <= (uint32_t)r_div_2) {
             *cell_ptr(rcx, x_offset, y_offset) = color;
             continue;
@@ -164,12 +144,12 @@ void render_smith_grid_cell(const RenderCellCtx* rcx, pixel_t color) {
   }
 }
 
-void render_admittance_grid_cell(const RenderCellCtx* rcx, pixel_t color) {
+void render_admittance_grid_cell(const RenderCellCtx *rcx, pixel_t color) {
   const int32_t base_x = P_CENTER_X - (int32_t)rcx->x0;
   const int32_t base_y = (int32_t)rcx->y0 - P_CENTER_Y;
 
   const uint32_t r = P_RADIUS;
-  const uint32_t radius_sq = (uint32_t)r * r;
+  const uint32_t radius_sq = r * r;
   const int32_t r_div_2 = (int32_t)r / 2;
   const int32_t r_div_4 = (int32_t)r / 4;
   const uint32_t r_mul_2 = 2u * r;
@@ -204,8 +184,8 @@ void render_admittance_grid_cell(const RenderCellCtx* rcx, pixel_t color) {
             *cell_ptr(rcx, x_offset, y_offset) = color;
             continue;
           }
-          d = (int32_t)distance - (int32_t)(r_mul_3_div_2 * (uint32_t)x) +
-              (int32_t)radius_sq / 2 + r_div_4;
+          d = (int32_t)distance - (int32_t)(r_mul_3_div_2 * (uint32_t)x) + (int32_t)radius_sq / 2 +
+              r_div_4;
           if (d >= 0 && (uint32_t)d <= (uint32_t)r_div_2) {
             *cell_ptr(rcx, x_offset, y_offset) = color;
             continue;
@@ -243,7 +223,7 @@ static uint16_t grid_offset; // .GRID_BITS fixed point value
 static uint16_t grid_width;  // .GRID_BITS fixed point value
 
 void update_grid(freq_t fstart, freq_t fstop) {
-  uint32_t k, N = 4;
+  uint32_t k, n = 4;
   freq_t fspan = fstop - fstart;
   if (fspan == 0) {
     grid_offset = grid_width = 0;
@@ -253,15 +233,15 @@ void update_grid(freq_t fstart, freq_t fstop) {
   do {                             // Find appropriate grid step (1, 2, 5 pattern)
     grid = dgrid;
     k = fspan / grid;
-    if (k >= N * 5) {
+    if (k >= n * 5) {
       grid *= 5;
       break;
     }
-    if (k >= N * 2) {
+    if (k >= n * 2) {
       grid *= 2;
       break;
     }
-    if (k >= N * 1) {
+    if (k >= n * 1) {
       grid *= 1;
       break;
     }
@@ -286,7 +266,7 @@ int rectangular_grid_y(uint32_t y) {
   return (y % GRIDY) == 0;
 }
 
-void render_rectangular_grid_layer(RenderCellCtx* rcx, pixel_t color) {
+void render_rectangular_grid_layer(RenderCellCtx *rcx, pixel_t color) {
   const uint16_t step = VNA_MODE(VNA_MODE_DOT_GRID) ? 2u : 1u;
   for (uint16_t x = 0; x < rcx->w; ++x) {
     if (!rectangular_grid_x(rcx->x0 + x))
@@ -302,7 +282,8 @@ void render_rectangular_grid_layer(RenderCellCtx* rcx, pixel_t color) {
   }
 }
 
-void render_round_grid_layer(RenderCellCtx* rcx, pixel_t color, uint32_t trace_mask, bool smith_impedance) {
+void render_round_grid_layer(RenderCellCtx *rcx, pixel_t color, uint32_t trace_mask,
+                             bool smith_impedance) {
   if (trace_mask & (1 << TRC_SMITH)) {
     render_smith_grid_cell(rcx, color);
     if (smith_impedance)

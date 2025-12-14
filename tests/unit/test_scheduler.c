@@ -49,11 +49,11 @@ typedef struct {
 } stub_thread_slot_t;
 
 static stub_thread_slot_t g_thread_pool[STUB_MAX_THREADS];
-static thread_t* g_current_thread = NULL;
+static thread_t *g_current_thread = NULL;
 static bool g_force_create_failure = false;
 static bool g_auto_run_threads = false;
 
-static stub_thread_slot_t* stub_find_slot(thread_t* target) {
+static stub_thread_slot_t *stub_find_slot(thread_t *target) {
   if (target == NULL) {
     return NULL;
   }
@@ -65,7 +65,7 @@ static stub_thread_slot_t* stub_find_slot(thread_t* target) {
   return NULL;
 }
 
-static void stub_run_thread(thread_t* thread) {
+static void stub_run_thread(thread_t *thread) {
   if (thread == NULL || thread->entry == NULL) {
     return;
   }
@@ -80,7 +80,7 @@ void chSysUnlock(void) {}
 void chSysLockFromISR(void) {}
 void chSysUnlockFromISR(void) {}
 
-thread_t* chThdCreateStatic(void* warea, size_t size, tprio_t prio, tfunc_t entry, void* arg) {
+thread_t *chThdCreateStatic(void *warea, size_t size, tprio_t prio, tfunc_t entry, void *arg) {
   (void)warea;
   (void)size;
   (void)prio;
@@ -89,7 +89,7 @@ thread_t* chThdCreateStatic(void* warea, size_t size, tprio_t prio, tfunc_t entr
     return NULL;
   }
   for (size_t i = 0; i < STUB_MAX_THREADS; ++i) {
-    stub_thread_slot_t* slot = &g_thread_pool[i];
+    stub_thread_slot_t *slot = &g_thread_pool[i];
     if (!slot->in_use) {
       slot->in_use = true;
       slot->thread.entry = entry;
@@ -109,7 +109,7 @@ void chThdExit(msg_t msg) {
   if (g_current_thread == NULL) {
     return;
   }
-  stub_thread_slot_t* slot = stub_find_slot(g_current_thread);
+  stub_thread_slot_t *slot = stub_find_slot(g_current_thread);
   if (slot != NULL) {
     slot->in_use = false;
     slot->thread.entry = NULL;
@@ -117,18 +117,18 @@ void chThdExit(msg_t msg) {
   }
 }
 
-void chThdTerminate(thread_t* tp) {
+void chThdTerminate(thread_t *tp) {
   if (tp == NULL) {
     return;
   }
   stub_run_thread(tp);
 }
 
-void chThdWait(thread_t* tp) {
+void chThdWait(thread_t *tp) {
   (void)tp;
 }
 
-bool chThdTerminatedX(thread_t* tp) {
+bool chThdTerminatedX(thread_t *tp) {
   if (tp == NULL) {
     return true;
   }
@@ -143,16 +143,16 @@ void chThdSleepMilliseconds(uint32_t ms) {
 
 static int g_failures = 0;
 
-#define CHECK(cond)                                                                           \
-  do {                                                                                        \
-    if (!(cond)) {                                                                            \
-      ++g_failures;                                                                           \
-      fprintf(stderr, "[FAIL] %s:%d: %s\n", __FILE__, __LINE__, #cond);                       \
-    }                                                                                         \
+#define CHECK(cond)                                                                                \
+  do {                                                                                             \
+    if (!(cond)) {                                                                                 \
+      ++g_failures;                                                                                \
+      fprintf(stderr, "[FAIL] %s:%d: %s\n", __FILE__, __LINE__, #cond);                            \
+    }                                                                                              \
   } while (0)
 
-static msg_t counting_entry(void* user_data) {
-  int* counter = (int*)user_data;
+static msg_t counting_entry(void *user_data) {
+  int *counter = (int *)user_data;
   if (counter != NULL) {
     (*counter)++;
   }
@@ -170,8 +170,8 @@ static void test_start_and_stop_runs_entry(void) {
   reset_stub_state();
   uint8_t stack[128];
   int counter = 0;
-  scheduler_task_t task = scheduler_start("worker", 5, stack, sizeof(stack), counting_entry,
-                                          &counter);
+  scheduler_task_t task =
+    scheduler_start("worker", 5, stack, sizeof(stack), counting_entry, &counter);
   CHECK(task.slot != NULL);
   CHECK(counter == 0);
   scheduler_stop(&task);
@@ -188,14 +188,14 @@ static void test_exhausts_slots_then_recovers(void) {
     CHECK(tasks[i].slot != NULL);
   }
   scheduler_task_t overflow =
-      scheduler_start("worker", 5, stacks[4], sizeof(stacks[4]), counting_entry, NULL);
+    scheduler_start("worker", 5, stacks[4], sizeof(stacks[4]), counting_entry, NULL);
   CHECK(overflow.slot == NULL);
   for (size_t i = 0; i < 4; ++i) {
     scheduler_stop(&tasks[i]);
     CHECK(tasks[i].slot == NULL);
   }
   scheduler_task_t recovered =
-      scheduler_start("worker", 5, stacks[0], sizeof(stacks[0]), counting_entry, NULL);
+    scheduler_start("worker", 5, stacks[0], sizeof(stacks[0]), counting_entry, NULL);
   CHECK(recovered.slot != NULL);
   scheduler_stop(&recovered);
 }
@@ -203,17 +203,16 @@ static void test_exhausts_slots_then_recovers(void) {
 static void test_creation_failure_does_not_leak_slot(void) {
   reset_stub_state();
   uint8_t stack[64];
-  scheduler_task_t first =
-      scheduler_start("worker", 5, stack, sizeof(stack), counting_entry, NULL);
+  scheduler_task_t first = scheduler_start("worker", 5, stack, sizeof(stack), counting_entry, NULL);
   CHECK(first.slot != NULL);
 
   g_force_create_failure = true;
   scheduler_task_t failed =
-      scheduler_start("worker", 5, stack, sizeof(stack), counting_entry, NULL);
+    scheduler_start("worker", 5, stack, sizeof(stack), counting_entry, NULL);
   CHECK(failed.slot == NULL);
 
   scheduler_task_t second =
-      scheduler_start("worker", 5, stack, sizeof(stack), counting_entry, NULL);
+    scheduler_start("worker", 5, stack, sizeof(stack), counting_entry, NULL);
   CHECK(second.slot != NULL);
 
   scheduler_stop(&first);
@@ -224,8 +223,7 @@ static void test_stop_handles_completed_thread(void) {
   reset_stub_state();
   g_auto_run_threads = true; /* Threads exit before scheduler_stop observes them. */
   uint8_t stack[64];
-  scheduler_task_t task =
-      scheduler_start("oneshot", 5, stack, sizeof(stack), counting_entry, NULL);
+  scheduler_task_t task = scheduler_start("oneshot", 5, stack, sizeof(stack), counting_entry, NULL);
   CHECK(task.slot != NULL);
   scheduler_stop(&task); /* Should be a no-op because slot->thread is already NULL. */
   CHECK(task.slot == NULL);

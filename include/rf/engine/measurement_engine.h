@@ -43,23 +43,21 @@ typedef struct measurement_engine_result {
 } measurement_engine_result_t;
 
 struct measurement_engine_port {
-  void* context;
-  bool (*can_start_sweep)(measurement_engine_port_t* port,
-                          measurement_engine_request_t* request);
-  void (*handle_result)(measurement_engine_port_t* port,
-                        const measurement_engine_result_t* result);
-  void (*service_loop)(measurement_engine_port_t* port);
+  void *context;
+  bool (*can_start_sweep)(measurement_engine_port_t *port, measurement_engine_request_t *request);
+  void (*handle_result)(measurement_engine_port_t *port, const measurement_engine_result_t *result);
+  void (*service_loop)(measurement_engine_port_t *port);
 };
 
 struct measurement_engine {
-  measurement_engine_port_t* port;
-  event_bus_t* event_bus;
+  measurement_engine_port_t *port;
+  event_bus_t *event_bus;
   measurement_pipeline_t pipeline;
 };
 
-void measurement_engine_init(measurement_engine_t* engine, measurement_engine_port_t* port,
-                             event_bus_t* bus, const PlatformDrivers* drivers);
-void measurement_engine_tick(measurement_engine_t* engine);
+void measurement_engine_init(measurement_engine_t *engine, measurement_engine_port_t *port,
+                             event_bus_t *bus, const platform_drivers_t *drivers);
+void measurement_engine_tick(measurement_engine_t *engine);
 
 #ifdef __cplusplus
 }

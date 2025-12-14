@@ -20,7 +20,7 @@
 
 #include "interfaces/ports/ui_port.h"
 
-const ui_module_port_api_t ui_port_api = {.init = ui_init,
+const ui_module_port_api_t UI_PORT_API = {.init = ui_init,
                                           .process = ui_process,
                                           .enter_dfu = ui_enter_dfu,
                                           .touch_cal_exec = ui_touch_cal_exec,

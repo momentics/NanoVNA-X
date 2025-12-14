@@ -20,7 +20,6 @@
 
 #include "interfaces/ports/processing_port.h"
 
-const processing_port_api_t processing_port_api = {
-    .calculate_gamma = calculate_gamma,
-    .fetch_amplitude = fetch_amplitude,
-    .fetch_amplitude_ref = fetch_amplitude_ref};
+const processing_port_api_t PROCESSING_PORT_API = {.calculate_gamma = calculate_gamma,
+                                                   .fetch_amplitude = fetch_amplitude,
+                                                   .fetch_amplitude_ref = fetch_amplitude_ref};

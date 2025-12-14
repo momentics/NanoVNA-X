@@ -1,0 +1,40 @@
+---
+Checks: >
+  -*,
+  readability-identifier-naming,
+  bugprone-*,
+  performance-*,
+  portability-*,
+  readability-braces-around-statements,
+  readability-function-size,
+  google-readability-casting,
+  misc-definitions-in-headers
+
+CheckOptions:
+  # Naming Conventions (snake_case everywhere, UPPER_CASE for macros)
+  - key:             readability-identifier-naming.FunctionCase
+    value:           lower_case
+  - key:             readability-identifier-naming.VariableCase
+    value:           lower_case
+  - key:             readability-identifier-naming.ParameterCase
+    value:           lower_case
+  - key:             readability-identifier-naming.GlobalConstantCase
+    value:           UPPER_CASE
+  - key:             readability-identifier-naming.MacroDefinitionCase
+    value:           UPPER_CASE
+  - key:             readability-identifier-naming.TypedefCase
+    value:           lower_case
+  - key:             readability-identifier-naming.TypedefSuffix
+    value:           _t
+  - key:             readability-identifier-naming.StructCase
+    value:           lower_case
+
+  # Safety & Readability
+  - key:             readability-function-size.LineThreshold
+    value:           100 # Warn on massive functions
+  - key:             readability-braces-around-statements.ShortStatementLines
+    value:           2 # Force braces even for short blocks if > 1 line
+
+  # Ignore ChibiOS/Vendor specific patterns if needed
+  # (Can be expanded as we find conflicts with HAL)
+...

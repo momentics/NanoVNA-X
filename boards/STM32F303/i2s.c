@@ -20,46 +20,46 @@
  */
 
 // F303 SPI2 RX DMA1 interrupt
-#define STM32_SPI2_RX_DMA_IRQ_NUMBER           DMA1_Channel4_IRQn
+#define STM32_SPI2_RX_DMA_IRQ_NUMBER DMA1_Channel4_IRQn
 
-#define SPI_I2S_FHILLIPS_MODE  (                   0)
-#define SPI_I2S_MSB_MODE       (SPI_I2SCFGR_I2SSTD_0)
-#define SPI_I2S_LSB_MODE       (SPI_I2SCFGR_I2SSTD_1)
-#define SPI_I2S_PCM_MODE       (SPI_I2SCFGR_I2SSTD_0 | SPI_I2SCFGR_I2SSTD_1)
+#define SPI_I2S_FHILLIPS_MODE (0)
+#define SPI_I2S_MSB_MODE (SPI_I2SCFGR_I2SSTD_0)
+#define SPI_I2S_LSB_MODE (SPI_I2SCFGR_I2SSTD_1)
+#define SPI_I2S_PCM_MODE (SPI_I2SCFGR_I2SSTD_0 | SPI_I2SCFGR_I2SSTD_1)
 
 /*
  * Run I2S bus in Circular mode, fill buffer, and handle read in I2S DMA RX interrupt
  */
 void init_i2s(void *buffer, uint16_t count) {
-  const uint16_t  I2S_DMA_RX_ccr = 0
-    | STM32_DMA_CR_PL(3)       // 3 - Very High
-    | STM32_DMA_CR_PSIZE_HWORD // 16 bit
-    | STM32_DMA_CR_MSIZE_HWORD // 16 bit
-    | STM32_DMA_CR_DIR_P2M     // Read from peripheral
-    | STM32_DMA_CR_MINC        // Memory increment mode
-    | STM32_DMA_CR_CIRC        // Circular mode
-    | STM32_DMA_CR_HTIE        // Half transfer complete interrupt enable
-    | STM32_DMA_CR_TCIE        // Full transfer complete interrupt enable
-//  | STM32_DMA_CR_TEIE        // Transfer error interrupt enable
+  const uint16_t i2_s_dma_rx_ccr = 0 | STM32_DMA_CR_PL(3)     // 3 - Very High
+                                  | STM32_DMA_CR_PSIZE_HWORD // 16 bit
+                                  | STM32_DMA_CR_MSIZE_HWORD // 16 bit
+                                  | STM32_DMA_CR_DIR_P2M     // Read from peripheral
+                                  | STM32_DMA_CR_MINC        // Memory increment mode
+                                  | STM32_DMA_CR_CIRC        // Circular mode
+                                  | STM32_DMA_CR_HTIE // Half transfer complete interrupt enable
+                                  | STM32_DMA_CR_TCIE // Full transfer complete interrupt enable
+    //  | STM32_DMA_CR_TEIE        // Transfer error interrupt enable
     ;
   // I2S RX DMA setup.
-  nvicEnableVector(STM32_SPI2_RX_DMA_IRQ_NUMBER, STM32_I2S_SPI2_IRQ_PRIORITY);
-  dmaChannelSetTransactionSize(I2S_DMA_RX, count);                 // number of data register
-  dmaChannelSetPeripheral(I2S_DMA_RX, &SPI2->DR);                  // peripheral address register
-  dmaChannelSetMemory(I2S_DMA_RX, buffer);                         // memory address register
-  dmaChannelSetMode(I2S_DMA_RX, I2S_DMA_RX_ccr | STM32_DMA_CR_EN); // configuration register
+  dmaStreamAllocate((const stm32_dma_stream_t *)I2S_DMA_RX, STM32_I2S_SPI2_IRQ_PRIORITY, (stm32_dmaisr_t)i2s_lld_serve_rx_interrupt, NULL);
+  dmaStreamSetTransactionSize((const stm32_dma_stream_t *)I2S_DMA_RX, count);
+  dmaStreamSetPeripheral((const stm32_dma_stream_t *)I2S_DMA_RX, &SPI2->DR);
+  dmaStreamSetMemory0((const stm32_dma_stream_t *)I2S_DMA_RX, buffer);
+  dmaStreamSetMode((const stm32_dma_stream_t *)I2S_DMA_RX, i2_s_dma_rx_ccr);
+  dmaStreamEnable((const stm32_dma_stream_t *)I2S_DMA_RX);
 
   // Starting I2S
-  rccEnableSPI2(FALSE);           // Enabling I2S unit clock.
-  SPI2->CR1 = 0;                  // CRs settings
-  SPI2->CR2 = SPI_CR2_RXDMAEN;    // Enable RX DMA
-  SPI2->I2SPR   = 0;              // I2S (re)configuration.
-  SPI2->I2SCFGR = 0
-    | SPI_I2SCFGR_I2SCFG_0        // 01: Slave - receive
-//  | SPI_I2SCFGR_I2SCFG_1        //
-    | SPI_I2SCFGR_I2SMOD          // I2S mode is selected
-    | SPI_I2S_PCM_MODE            // I2S PCM standard (aic3204 use DSP mode, short sync)
-    | SPI_I2SCFGR_PCMSYNC         // Short sync
-    | SPI_I2SCFGR_I2SE            // I2S enable
+  rccEnableSPI2(FALSE);        // Enabling I2S unit clock.
+  SPI2->CR1 = 0;               // CRs settings
+  SPI2->CR2 = SPI_CR2_RXDMAEN; // Enable RX DMA
+  SPI2->I2SPR = 0;             // I2S (re)configuration.
+  SPI2->I2SCFGR = 0 |
+                  SPI_I2SCFGR_I2SCFG_0  // 01: Slave - receive
+                                        //  | SPI_I2SCFGR_I2SCFG_1        //
+                  | SPI_I2SCFGR_I2SMOD  // I2S mode is selected
+                  | SPI_I2S_PCM_MODE    // I2S PCM standard (aic3204 use DSP mode, short sync)
+                  | SPI_I2SCFGR_PCMSYNC // Short sync
+                  | SPI_I2SCFGR_I2SE    // I2S enable
     ;
 }

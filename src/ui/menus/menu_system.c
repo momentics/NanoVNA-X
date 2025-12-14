@@ -1,23 +1,3 @@
-/*
- * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * All rights reserved.
- *
- * This is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3, or (at your option)
- * any later version.
- *
- * The software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with GNU Radio; see the file COPYING.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street,
- * Boston, MA 02110-1301, USA.
- */
-
 #include "ch.h"
 #include "hal.h"
 #include "nanovna.h"
@@ -44,7 +24,7 @@ enum {
 #endif
 };
 
-extern const char* const info_about[];
+extern const char *const INFO_ABOUT[];
 
 static void ui_show_version(void) {
   int x = 5, y = 5, i = 1;
@@ -55,16 +35,16 @@ static void ui_show_version(void) {
   uint16_t shift = 0b00010010000;
   lcd_drawstring_size(BOARD_NAME, x, y, 3);
   y += FONT_GET_HEIGHT * 3 + 3 - 5;
-  while (info_about[i]) {
+  while (INFO_ABOUT[i]) {
     do {
       shift >>= 1;
       y += 5;
     } while (shift & 1);
-    lcd_drawstring(x, y += str_height - 5, info_about[i++]);
+    LCD_DRAWSTRING(x, y += str_height - 5, INFO_ABOUT[i++]);
   }
-  lcd_drawstring(x, y += str_height, __DATE__ " " __TIME__);
-//lcd_drawstring(x, y += str_height, USING_OS_NAME);
-//lcd_drawstring(x, y += str_height, MCU_NAME);
+  LCD_DRAWSTRING(x, y += str_height, __DATE__ " " __TIME__);
+  // LCD_DRAWSTRING(x, y += str_height, USING_OS_NAME);
+  // LCD_DRAWSTRING(x, y += str_height, MCU_NAME);
 
   while (ui_input_wait_release() == 0)
     chThdSleepMilliseconds(100);
@@ -79,51 +59,52 @@ static void ui_show_version(void) {
 // VNA Mode Logic
 // ===================================
 typedef struct {
-  const char* text;
+  const char *text;
   uint16_t update_flag;
 } __attribute__((packed)) vna_mode_data_t;
 
-const vna_mode_data_t vna_mode_data[] = {
-    //                        text (if 0 use checkbox) Redraw flags on change
-    [VNA_MODE_AUTO_NAME] = {0, REDRAW_BACKUP},
+const vna_mode_data_t VNA_MODE_DATA[] = {
+  //                        text (if 0 use checkbox) Redraw flags on change
+  [VNA_MODE_AUTO_NAME] = {0, REDRAW_BACKUP},
 #ifdef __USE_SMOOTH__
-    [VNA_MODE_SMOOTH] = {"Geom\0Arith", REDRAW_BACKUP},
+  [VNA_MODE_SMOOTH] = {"Geom\0Arith", REDRAW_BACKUP},
 #endif
 #ifdef __USE_SERIAL_CONSOLE__
-    [VNA_MODE_CONNECTION] = {"USB\0SERIAL", REDRAW_BACKUP},
+  [VNA_MODE_CONNECTION] = {"USB\0SERIAL", REDRAW_BACKUP},
 #endif
-    [VNA_MODE_SEARCH] = {"MAXIMUM\0MINIMUM", REDRAW_BACKUP},
-    [VNA_MODE_SHOW_GRID] = {0, REDRAW_BACKUP | REDRAW_AREA},
-    [VNA_MODE_DOT_GRID] = {0, REDRAW_BACKUP | REDRAW_AREA},
+  [VNA_MODE_SEARCH] = {"MAXIMUM\0MINIMUM", REDRAW_BACKUP},
+  [VNA_MODE_SHOW_GRID] = {0, REDRAW_BACKUP | REDRAW_AREA},
+  [VNA_MODE_DOT_GRID] = {0, REDRAW_BACKUP | REDRAW_AREA},
 #ifdef __USE_BACKUP__
-    [VNA_MODE_BACKUP] = {0, REDRAW_BACKUP},
+  [VNA_MODE_BACKUP] = {0, REDRAW_BACKUP},
 #endif
 #ifdef __FLIP_DISPLAY__
-    [VNA_MODE_FLIP_DISPLAY] = {0, REDRAW_BACKUP | REDRAW_ALL},
+  [VNA_MODE_FLIP_DISPLAY] = {0, REDRAW_BACKUP | REDRAW_ALL},
 #endif
 #ifdef __DIGIT_SEPARATOR__
-    [VNA_MODE_SEPARATOR] = {"DOT '.'\0COMMA ','", REDRAW_BACKUP | REDRAW_MARKER | REDRAW_FREQUENCY},
+  [VNA_MODE_SEPARATOR] = {"DOT '.'\0COMMA ','", REDRAW_BACKUP | REDRAW_MARKER | REDRAW_FREQUENCY},
 #endif
 #ifdef __SD_CARD_DUMP_TIFF__
-    [VNA_MODE_TIFF] = {"BMP\0TIF", REDRAW_BACKUP},
+  [VNA_MODE_TIFF] = {"BMP\0TIF", REDRAW_BACKUP},
 #endif
 #ifdef __USB_UID__
-    [VNA_MODE_USB_UID] = {0, REDRAW_BACKUP},
+  [VNA_MODE_USB_UID] = {0, REDRAW_BACKUP},
 #endif
 };
 
-void apply_vna_mode(uint16_t idx, vna_mode_ops operation) {
+void apply_vna_mode(uint16_t idx, vna_mode_ops_t operation) {
   uint16_t m = 1 << idx;
   uint16_t old = config._vna_mode;
-  if (operation == VNA_MODE_CLR)
+  if (operation == VNA_MODE_CLR) {
     config._vna_mode &= ~m; // clear
-  else if (operation == VNA_MODE_SET)
+  } else if (operation == VNA_MODE_SET) {
     config._vna_mode |= m; // set
-  else
+  } else {
     config._vna_mode ^= m; // toggle
+}
   if (old == config._vna_mode)
     return;
-  request_to_redraw(vna_mode_data[idx].update_flag);
+  request_to_redraw(VNA_MODE_DATA[idx].update_flag);
   config_service_notify_configuration_changed();
   // Custom processing after apply
   switch (idx) {
@@ -149,11 +130,12 @@ void apply_vna_mode(uint16_t idx, vna_mode_ops operation) {
 
 UI_FUNCTION_ADV_CALLBACK(menu_vna_mode_acb) {
   if (b) {
-    const char* t = vna_mode_data[data].text;
-    if (t == 0)
+    const char *t = VNA_MODE_DATA[data].text;
+    if (t == 0) {
       b->icon = VNA_MODE(data) ? BUTTON_ICON_CHECK : BUTTON_ICON_NOCHECK;
-    else
+    } else {
       b->p1.text = VNA_MODE(data) ? t + strlen(t) + 1 : t;
+}
     return;
   }
   apply_vna_mode(data, VNA_MODE_TOGGLE);
@@ -164,16 +146,9 @@ UI_FUNCTION_ADV_CALLBACK(menu_vna_mode_acb) {
 // ===================================
 #ifdef __USE_SERIAL_CONSOLE__
 static const menu_descriptor_t menu_serial_speed_desc[] = {
-    {MT_ADV_CALLBACK, 0},
-    {MT_ADV_CALLBACK, 1},
-    {MT_ADV_CALLBACK, 2},
-    {MT_ADV_CALLBACK, 3},
-    {MT_ADV_CALLBACK, 4},
-    {MT_ADV_CALLBACK, 5},
-    {MT_ADV_CALLBACK, 6},
-    {MT_ADV_CALLBACK, 7},
-    {MT_ADV_CALLBACK, 8},
-    {MT_ADV_CALLBACK, 9},
+  {MT_ADV_CALLBACK, 0}, {MT_ADV_CALLBACK, 1}, {MT_ADV_CALLBACK, 2}, {MT_ADV_CALLBACK, 3},
+  {MT_ADV_CALLBACK, 4}, {MT_ADV_CALLBACK, 5}, {MT_ADV_CALLBACK, 6}, {MT_ADV_CALLBACK, 7},
+  {MT_ADV_CALLBACK, 8}, {MT_ADV_CALLBACK, 9},
 };
 
 static UI_FUNCTION_ADV_CALLBACK(menu_serial_speed_acb) {
@@ -191,11 +166,11 @@ static UI_FUNCTION_ADV_CALLBACK(menu_serial_speed_sel_acb) {
     b->p1.u = shell_speed(shell_get_speed_index());
     return;
   }
-  menuitem_t* cursor = menu_dynamic_acquire();
+  menuitem_t *cursor = menu_dynamic_acquire();
   menu_push_submenu(cursor);
   cursor = ui_menu_list(menu_serial_speed_desc, ARRAY_COUNT(menu_serial_speed_desc), "%u",
                         menu_serial_speed_acb, cursor);
-  menu_set_next(cursor, menu_back);
+  menu_set_next(cursor, MENU_BACK);
 }
 #endif
 
@@ -251,14 +226,14 @@ static UI_FUNCTION_ADV_CALLBACK(menu_offset_acb) {
   si5351_set_frequency_offset(offset);
 }
 
-const menuitem_t menu_offset[]; // Forward declaration
+const menuitem_t MENU_OFFSET[]; // Forward declaration
 UI_FUNCTION_ADV_CALLBACK(menu_offset_sel_acb) {
   (void)data;
   if (b) {
     b->p1.i = IF_OFFSET;
     return;
   }
-  menu_push_submenu(menu_offset);
+  menu_push_submenu(MENU_OFFSET);
 }
 #endif
 
@@ -310,17 +285,16 @@ static UI_FUNCTION_ADV_CALLBACK(menu_brightness_acb) {
 
 // Band Mode Logic
 // Band Mode Logic
-static const option_desc_t band_mode_options[] = {
-    {0, "Direct", BUTTON_ICON_NONE},
-    {1, "Div", BUTTON_ICON_NONE},
-    {2, "Multi", BUTTON_ICON_NONE},
+static const option_desc_t BAND_MODE_OPTIONS[] = {
+  {0, "Direct", BUTTON_ICON_NONE},
+  {1, "Div", BUTTON_ICON_NONE},
+  {2, "Multi", BUTTON_ICON_NONE},
 };
-
 
 static UI_FUNCTION_ADV_CALLBACK(menu_band_sel_acb) {
   (void)data;
   uint16_t mode = config._band_mode;
-  ui_cycle_option(&mode, band_mode_options, ARRAY_COUNT(band_mode_options), b);
+  ui_cycle_option(&mode, BAND_MODE_OPTIONS, ARRAY_COUNT(BAND_MODE_OPTIONS), b);
   if (b)
     return;
   if (config._band_mode == mode)
@@ -349,58 +323,56 @@ static UI_FUNCTION_ADV_CALLBACK(menu_rtc_out_acb) {
 // Menus
 
 #ifdef __DFU_SOFTWARE_MODE__
-const menuitem_t menu_dfu[] = {
-    {MT_CALLBACK, 0, "RESET AND\nENTER DFU", menu_dfu_cb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+const menuitem_t MENU_DFU[] = {
+  {MT_CALLBACK, 0, "RESET AND\nENTER DFU", menu_dfu_cb},
+  {MT_NEXT, 0, NULL, MENU_BACK} // next-> MENU_BACK
 };
 #endif
 
 #ifdef __USE_SERIAL_CONSOLE__
-const menuitem_t menu_connection[] = {
-    {MT_ADV_CALLBACK, VNA_MODE_CONNECTION, "CONNECTION\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
-    {MT_ADV_CALLBACK, 0, "SERIAL SPEED\n " R_LINK_COLOR "%u", menu_serial_speed_sel_acb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+const menuitem_t MENU_CONNECTION[] = {
+  {MT_ADV_CALLBACK, VNA_MODE_CONNECTION, "CONNECTION\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
+  {MT_ADV_CALLBACK, 0, "SERIAL SPEED\n " R_LINK_COLOR "%u", menu_serial_speed_sel_acb},
+  {MT_NEXT, 0, NULL, MENU_BACK} // next-> MENU_BACK
 };
 #endif
 
-const menuitem_t menu_clear[] = {
-    {MT_CALLBACK, MENU_CONFIG_RESET, "CLEAR ALL\nAND RESET", menu_config_cb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+const menuitem_t MENU_CLEAR[] = {
+  {MT_CALLBACK, MENU_CONFIG_RESET, "CLEAR ALL\nAND RESET", menu_config_cb},
+  {MT_NEXT, 0, NULL, MENU_BACK} // next-> MENU_BACK
 };
 
 #ifdef USE_VARIABLE_OFFSET_MENU
-const menuitem_t menu_offset[] = {
-    {MT_ADV_CALLBACK, 0, "%d" S_Hz, menu_offset_acb},
-    {MT_ADV_CALLBACK, 1, "%d" S_Hz, menu_offset_acb},
-    {MT_ADV_CALLBACK, 2, "%d" S_Hz, menu_offset_acb},
-    {MT_ADV_CALLBACK, 3, "%d" S_Hz, menu_offset_acb},
-    {MT_ADV_CALLBACK, 4, "%d" S_Hz, menu_offset_acb},
-    {MT_ADV_CALLBACK, 5, "%d" S_Hz, menu_offset_acb},
-    {MT_ADV_CALLBACK, 6, "%d" S_Hz, menu_offset_acb},
-    {MT_ADV_CALLBACK, 7, "%d" S_Hz, menu_offset_acb},
-    {MT_NEXT, 0, NULL, menu_back}
-};
+const menuitem_t MENU_OFFSET[] = {{MT_ADV_CALLBACK, 0, "%d" S_HZ, menu_offset_acb},
+                                  {MT_ADV_CALLBACK, 1, "%d" S_HZ, menu_offset_acb},
+                                  {MT_ADV_CALLBACK, 2, "%d" S_HZ, menu_offset_acb},
+                                  {MT_ADV_CALLBACK, 3, "%d" S_HZ, menu_offset_acb},
+                                  {MT_ADV_CALLBACK, 4, "%d" S_HZ, menu_offset_acb},
+                                  {MT_ADV_CALLBACK, 5, "%d" S_HZ, menu_offset_acb},
+                                  {MT_ADV_CALLBACK, 6, "%d" S_HZ, menu_offset_acb},
+                                  {MT_ADV_CALLBACK, 7, "%d" S_HZ, menu_offset_acb},
+                                  {MT_NEXT, 0, NULL, MENU_BACK}};
 #endif
 
-const menuitem_t menu_device1[] = {
-    {MT_ADV_CALLBACK, 0, "MODE\n " R_LINK_COLOR "%s", menu_band_sel_acb},
+const menuitem_t MENU_DEVICE1[] = {
+  {MT_ADV_CALLBACK, 0, "MODE\n " R_LINK_COLOR "%s", menu_band_sel_acb},
 #ifdef __DIGIT_SEPARATOR__
-    {MT_ADV_CALLBACK, VNA_MODE_SEPARATOR, "SEPARATOR\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
+  {MT_ADV_CALLBACK, VNA_MODE_SEPARATOR, "SEPARATOR\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
 #endif
 #ifdef __USB_UID__
-    {MT_ADV_CALLBACK, VNA_MODE_USB_UID, "USB DEVICE\nUID", menu_vna_mode_acb},
+  {MT_ADV_CALLBACK, VNA_MODE_USB_UID, "USB DEVICE\nUID", menu_vna_mode_acb},
 #endif
-    {MT_SUBMENU, 0, "CLEAR CONFIG", menu_clear},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+  {MT_SUBMENU, 0, "CLEAR CONFIG", menu_draw},
+  {MT_NEXT, 0, NULL, MENU_BACK} // next-> MENU_BACK
 };
 
 #ifdef __USE_RTC__
-const menuitem_t menu_rtc[] = {
-    {MT_ADV_CALLBACK, KM_RTC_DATE, "SET DATE", menu_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_RTC_TIME, "SET TIME", menu_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_RTC_CAL, "RTC CAL\n " R_LINK_COLOR "%+b.3f" S_PPM, menu_keyboard_acb},
-    {MT_ADV_CALLBACK, 0, "RTC 512" S_Hz "\n Led2 %s", menu_rtc_out_acb},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+const menuitem_t MENU_RTC[] = {
+  {MT_ADV_CALLBACK, KM_RTC_DATE, "SET DATE", menu_keyboard_acb},
+  {MT_ADV_CALLBACK, KM_RTC_TIME, "SET TIME", menu_keyboard_acb},
+  {MT_ADV_CALLBACK, KM_RTC_CAL, "RTC CAL\n " R_LINK_COLOR "%+b.3f" S_PPM, menu_keyboard_acb},
+  {MT_ADV_CALLBACK, 0, "RTC 512" S_HZ "\n Led2 %s", menu_rtc_out_acb},
+  {MT_NEXT, 0, NULL, MENU_BACK} // next-> MENU_BACK
 };
 #endif
 
@@ -445,7 +417,7 @@ UI_KEYBOARD_CALLBACK(input_date_time) {
   dt_buf[1] = rtc_get_dr_bcd(); // DR should be read second
   //            0    1   2       4      5     6
   // time[] ={sec, min, hr, 0, day, month, year, 0}
-  uint8_t* time = (uint8_t*)dt_buf;
+  uint8_t *time = (uint8_t *)dt_buf;
   for (; i < 6 && kp_buf[i] != 0; i++)
     kp_buf[i] -= '0';
   for (; i < 6; i++)
@@ -454,17 +426,19 @@ UI_KEYBOARD_CALLBACK(input_date_time) {
     kp_buf[i] = (kp_buf[2 * i] << 4) | kp_buf[2 * i + 1]; // BCD format
   if (data == KM_RTC_DATE) {
     // Month limit 1 - 12 (in BCD)
-    if (kp_buf[1] < 1)
+    if (kp_buf[1] < 1) {
       kp_buf[1] = 1;
-    else if (kp_buf[1] > 0x12)
+    } else if (kp_buf[1] > 0x12) {
       kp_buf[1] = 0x12;
+}
     // Day limit (depend from month):
     uint8_t day_max = 28 + ((0b11101100000000000010111110111011001100 >> (kp_buf[1] << 1)) & 3);
     day_max = ((day_max / 10) << 4) | (day_max % 10); // to BCD
-    if (kp_buf[2] < 1)
+    if (kp_buf[2] < 1) {
       kp_buf[2] = 1;
-    else if (kp_buf[2] > day_max)
+    } else if (kp_buf[2] > day_max) {
       kp_buf[2] = day_max;
+}
     time[6] = kp_buf[0]; // year
     time[5] = kp_buf[1]; // month
     time[4] = kp_buf[2]; // day
@@ -493,45 +467,45 @@ UI_KEYBOARD_CALLBACK(input_rtc_cal) {
 }
 #endif
 
-const menuitem_t menu_device[] = {
-    {MT_ADV_CALLBACK, KM_THRESHOLD, "THRESHOLD\n " R_LINK_COLOR "%.6q", menu_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_XTAL, "TCXO\n " R_LINK_COLOR "%.6q", menu_keyboard_acb},
-    {MT_ADV_CALLBACK, KM_VBAT, "VBAT OFFSET\n " R_LINK_COLOR "%um" S_VOLT, menu_keyboard_acb},
+const menuitem_t MENU_DEVICE[] = {
+  {MT_ADV_CALLBACK, KM_THRESHOLD, "THRESHOLD\n " R_LINK_COLOR "%.6q", menu_keyboard_acb},
+  {MT_ADV_CALLBACK, KM_XTAL, "TCXO\n " R_LINK_COLOR "%.6q", menu_keyboard_acb},
+  {MT_ADV_CALLBACK, KM_VBAT, "VBAT OFFSET\n " R_LINK_COLOR "%um" S_VOLT, menu_keyboard_acb},
 #ifdef USE_VARIABLE_OFFSET_MENU
-    {MT_ADV_CALLBACK, 0, "IF OFFSET\n " R_LINK_COLOR "%d" S_Hz, menu_offset_sel_acb},
+  {MT_ADV_CALLBACK, 0, "IF OFFSET\n " R_LINK_COLOR "%d" S_HZ, menu_offset_sel_acb},
 #endif
 #ifdef __USE_BACKUP__
-    {MT_ADV_CALLBACK, VNA_MODE_BACKUP, "REMEMBER\nSTATE", menu_vna_mode_acb},
+  {MT_ADV_CALLBACK, VNA_MODE_BACKUP, "REMEMBER\nSTATE", menu_vna_mode_acb},
 #endif
 #ifdef __FLIP_DISPLAY__
-    {MT_ADV_CALLBACK, VNA_MODE_FLIP_DISPLAY, "FLIP\nDISPLAY", menu_vna_mode_acb},
+  {MT_ADV_CALLBACK, VNA_MODE_FLIP_DISPLAY, "FLIP\nDISPLAY", menu_vna_mode_acb},
 #endif
 #ifdef __DFU_SOFTWARE_MODE__
-    {MT_SUBMENU, 0, S_RARROW "DFU", menu_dfu},
+  {MT_SUBMENU, 0, S_RARROW "DFU", MENU_DFU},
 #endif
-    {MT_SUBMENU, 0, S_RARROW " MORE", menu_device1},
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+  {MT_SUBMENU, 0, S_RARROW " MORE", MENU_DEVICE1},
+  {MT_NEXT, 0, NULL, MENU_BACK} // next-> MENU_BACK
 };
 
-const menuitem_t menu_system[] = {
-    {MT_CALLBACK, MENU_CONFIG_TOUCH_CAL, "TOUCH CAL", menu_config_cb},
-    {MT_CALLBACK, MENU_CONFIG_TOUCH_TEST, "TOUCH TEST", menu_config_cb},
+const menuitem_t MENU_SYSTEM[] = {
+  {MT_CALLBACK, MENU_CONFIG_TOUCH_CAL, "TOUCH CAL", menu_config_cb},
+  {MT_CALLBACK, MENU_CONFIG_TOUCH_TEST, "TOUCH TEST", menu_config_cb},
 #ifdef __LCD_BRIGHTNESS__
-    {MT_ADV_CALLBACK, 0, "BRIGHTNESS\n " R_LINK_COLOR "%d%%%%", menu_brightness_acb},
+  {MT_ADV_CALLBACK, 0, "BRIGHTNESS\n " R_LINK_COLOR "%d%%%%", menu_brightness_acb},
 #endif
-    {MT_CALLBACK, MENU_CONFIG_SAVE, "SAVE CONFIG", menu_config_cb},
+  {MT_CALLBACK, MENU_CONFIG_SAVE, "SAVE CONFIG", menu_config_cb},
 #if defined(__SD_CARD_LOAD__) && !defined(__SD_FILE_BROWSER__)
-    {MT_CALLBACK, MENU_CONFIG_LOAD, "LOAD CONFIG", menu_config_cb},
+  {MT_CALLBACK, MENU_CONFIG_LOAD, "LOAD CONFIG", menu_config_cb},
 #endif
-    {MT_CALLBACK, MENU_CONFIG_VERSION, "VERSION", menu_config_cb},
+  {MT_CALLBACK, MENU_CONFIG_VERSION, "VERSION", menu_config_cb},
 #ifdef __USE_RTC__
-    {MT_SUBMENU, 0, "DATE/TIME", menu_rtc},
+  {MT_SUBMENU, 0, "DATE/TIME", MENU_RTC},
 #endif
-    {MT_SUBMENU, 0, "DEVICE", menu_device},
+  {MT_SUBMENU, 0, "DEVICE", MENU_DEVICE},
 #ifdef __USE_SERIAL_CONSOLE__
-    #ifdef __USE_SERIAL_CONSOLE__
-{MT_SUBMENU, 0, "CONNECTION", menu_connection},
+#ifdef __USE_SERIAL_CONSOLE__
+  {MT_SUBMENU, 0, "CONNECTION", MENU_CONNECTION},
 #endif
 #endif
-    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+  {MT_NEXT, 0, NULL, MENU_BACK} // next-> MENU_BACK
 };

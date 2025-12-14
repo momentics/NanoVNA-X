@@ -25,11 +25,11 @@
 #include "hal.h"
 
 // Use macro, std isdigit more big
-#define _isdigit(c) (c >= '0' && c <= '9')
+#define ISDIGIT(c) ((c) >= '0' && (c) <= '9')
 // Rewrite universal standart str to value functions to more compact
 //
 // Convert string to int32
-int32_t my_atoi(const char* p) {
+int32_t my_atoi(const char *p) {
   int32_t value = 0;
   uint32_t c;
   bool neg = false;
@@ -50,7 +50,7 @@ int32_t my_atoi(const char* p) {
 //  0o - for oct radix
 //  0b - for bin radix
 //  default dec radix
-uint32_t my_atoui(const char* p) {
+uint32_t my_atoui(const char *p) {
   uint32_t value = 0, radix = 10, c;
   if (*p == '+')
     p++;
@@ -82,19 +82,19 @@ calculate:
   }
 }
 
-float my_atof(const char* p) {
+float my_atof(const char *p) {
   int neg = false;
   if (*p == '-')
     neg = true;
   if (*p == '-' || *p == '+')
     p++;
   float x = my_atoi(p);
-  while (_isdigit((int)*p))
+  while (ISDIGIT((int)*p))
     p++;
   if (*p == '.' || *p == ',') {
     float d = 1.0f;
     p++;
-    while (_isdigit((int)*p)) {
+    while (ISDIGIT((int)*p)) {
       d *= 1e-1f;
       x += d * (*p - '0');
       p++;
@@ -102,30 +102,33 @@ float my_atof(const char* p) {
   }
   if (*p) {
     int exp = 0;
-    if (*p == 'e' || *p == 'E')
+    if (*p == 'e' || *p == 'E') {
       exp = my_atoi(&p[1]);
-    else if (*p == 'G')
+    } else if (*p == 'G') {
       exp = 9; // Giga
-    else if (*p == 'M')
+    } else if (*p == 'M') {
       exp = 6; // Mega
-    else if (*p == 'k')
+    } else if (*p == 'k') {
       exp = 3; // kilo
-    else if (*p == 'm')
+    } else if (*p == 'm') {
       exp = -3; // milli
-    else if (*p == 'u')
+    } else if (*p == 'u') {
       exp = -6; // micro
-    else if (*p == 'n')
+    } else if (*p == 'n') {
       exp = -9; // nano
-    else if (*p == 'p')
+    } else if (*p == 'p') {
       exp = -12; // pico
-    if (exp > 0)
+}
+    if (exp > 0) {
       do {
         x *= 1e+1f;
       } while (--exp);
-    if (exp < 0)
+}
+    if (exp < 0) {
       do {
         x *= 1e-1f;
       } while (++exp);
+}
   }
   return neg ? -x : x;
 }
@@ -133,7 +136,7 @@ float my_atof(const char* p) {
 static char to_lower(char c) {
   return (c >= 'A' && c <= 'Z') ? c - 'A' + 'a' : c;
 }
-bool strcmpi(const char* t1, const char* t2) {
+bool strcmpi(const char *t1, const char *t2) {
   int i = 0;
   while (1) {
     char ch1 = to_lower(t1[i]), ch2 = to_lower(t2[i]);
@@ -150,10 +153,10 @@ bool strcmpi(const char* t1, const char* t2) {
 // Example need search parameter "center" in "start|stop|center|span|cw" getStringIndex return 2
 // If not found return -1
 // Used for easy parse command arguments
-int get_str_index(const char* v, const char* list) {
+int get_str_index(const char *v, const char *list) {
   int i = 0;
   while (1) {
-    const char* p = v;
+    const char *p = v;
     while (1) {
       char c = *list;
       if (c == '|')
@@ -177,28 +180,28 @@ int get_str_index(const char* v, const char* list) {
     }
     i++;
   }
-  return -1;
-}
+  }
 
-/*
- * Search first symbols (s2) entry in string (s1)
- */
-static inline char* _strpbrk(char* s1, const char* s2) {
-  do {
-    const char* s = s2;
-    while (*s)
-      if (*s++ == *s1)
-        return s1;
-  } while (*++s1);
-  return s1;
+
+// Search first symbols (s2) entry in string (s1)
+static inline char *my_strpbrk(char *s1, const char *s2) {
+  while (*s1) {
+    const char *s = s2;
+    while (*s) {
+      if (*s++ == *s1) return s1;
+    }
+    s1++;
+  }
+  return 0;
 }
 
 /*
  * Split line by arguments, return arguments count
  */
-int parse_line(char* line, char* args[], int max_cnt) {
-  char *lp = line, c;
-  const char* brk;
+int parse_line(char *line, char *args[], int max_cnt) {
+  char *lp = line;
+  char c;
+  const char *brk;
   uint16_t nargs = 0;
 
   if (max_cnt <= 0)
@@ -215,21 +218,19 @@ int parse_line(char* line, char* args[], int max_cnt) {
       } // string end is tab or space or end
 
       if (nargs < max_cnt) {
-        args[nargs] = lp; // Store pointer to start of argument
-        nargs++;          // Increment count
+        args[nargs++] = lp; // Store pointer to start of argument
       } else {
-        // Maximum arguments reached - still need to find end to properly null-terminate
-        char* end_pos = _strpbrk(lp, brk);
-        if (end_pos != NULL && *end_pos != 0) {
-          *end_pos = 0; // Properly terminate the string
-          if (c == '"')
-            end_pos++; // Skip closing quote if it was quoted
+        // Maximum arguments reached - still need to find end
+        char *end_pos = my_strpbrk(lp, brk);
+        if (end_pos != 0 && *end_pos != 0) {
+          *end_pos = 0;
+          if (c == '"') end_pos++;
         }
         break;
       }
 
-      lp = _strpbrk(lp, brk); // Find end of current argument
-      if (lp != NULL && *lp != 0) {
+      lp = my_strpbrk(lp, brk); // Find end of current argument
+      if (lp != 0 && *lp != 0) {
         *lp = 0; // Null-terminate the argument
         if (c == '"')
           lp++; // If quoted, move past the closing quote
@@ -247,7 +248,7 @@ int parse_line(char* line, char* args[], int max_cnt) {
 /*
  * Swap byte order in uint16_t buffer
  */
-void swap_bytes(uint16_t* buf, int size) {
+void swap_bytes(uint16_t *buf, int size) {
   for (int i = 0; i < size; i++)
     buf[i] = __REVSH(buf[i]); // swap byte order (example 0x10FF to 0xFF10)
 }
@@ -255,7 +256,7 @@ void swap_bytes(uint16_t* buf, int size) {
 /*
  * RLE packbits compression algorithm
  */
-int packbits(char* source, char* dest, int size) {
+int packbits(char *source, char *dest, int size) {
   int i = 0, rle, l, pk = 0, sz = 0;
   while ((l = size - i) > 0) {
     if (l > 128)
@@ -266,10 +267,11 @@ int packbits(char* source, char* dest, int size) {
       max_rle = 0;
     for (rle = 0; rle < max_rle && (i + rle) < size && source[i + rle] == c; rle++)
       ;
-    if (sz && rle < 2)
+    if (sz && rle < 2) {
       rle = 0; // Ignore (rle + 1) < 3 sequence on run non RLE input
-    else if (sz == 0 || rle > 0)
+    } else if (sz == 0 || rle > 0) {
       sz = pk++;    // Reset state or RLE sequence found -> start new block
+}
     dest[pk++] = c; // Write char to block
     if (rle > 0) {
       i += rle;
@@ -287,7 +289,7 @@ int packbits(char* source, char* dest, int size) {
 /*
  * Delay 8 core tick function
  */
-void _delay_8t(uint32_t cycles) {
+void delay_8t(uint32_t cycles) {
   if (cycles < 1)
     return;
   __asm("1: \n"
@@ -304,7 +306,7 @@ void _delay_8t(uint32_t cycles) {
   );
 }
 #else
-void _delay_8t(uint32_t cycles) {
+void delay_8t(uint32_t cycles) {
   (void)cycles;
 }
 #endif

@@ -98,14 +98,14 @@ typedef struct {
 static recorded_event_t g_recorded_events[4];
 static size_t g_recorded_event_count = 0;
 
-bool event_bus_publish(event_bus_t* bus, event_bus_topic_t topic, const void* payload) {
+bool event_bus_publish(event_bus_t *bus, event_bus_topic_t topic, const void *payload) {
   (void)bus;
   if (g_recorded_event_count >= sizeof(g_recorded_events) / sizeof(g_recorded_events[0])) {
     return true;
   }
-  recorded_event_t* rec = &g_recorded_events[g_recorded_event_count++];
+  recorded_event_t *rec = &g_recorded_events[g_recorded_event_count++];
   rec->topic = topic;
-  rec->mask = payload ? *(const uint16_t*)payload : 0;
+  rec->mask = payload ? *(const uint16_t *)payload : 0;
   return true;
 }
 
@@ -130,22 +130,22 @@ typedef struct {
   measurement_engine_result_t last_result;
 } fake_port_state_t;
 
-static void fake_port_service_loop(measurement_engine_port_t* port) {
-  fake_port_state_t* state = (fake_port_state_t*)port->context;
+static void fake_port_service_loop(measurement_engine_port_t *port) {
+  fake_port_state_t *state = (fake_port_state_t *)port->context;
   ++state->service_calls;
 }
 
-static bool fake_port_can_start(measurement_engine_port_t* port,
-                                measurement_engine_request_t* request) {
-  fake_port_state_t* state = (fake_port_state_t*)port->context;
+static bool fake_port_can_start(measurement_engine_port_t *port,
+                                measurement_engine_request_t *request) {
+  fake_port_state_t *state = (fake_port_state_t *)port->context;
   ++state->can_start_calls;
   request->break_on_operation = state->next_break_flag;
   return state->allow_start;
 }
 
-static void fake_port_handle_result(measurement_engine_port_t* port,
-                                    const measurement_engine_result_t* result) {
-  fake_port_state_t* state = (fake_port_state_t*)port->context;
+static void fake_port_handle_result(measurement_engine_port_t *port,
+                                    const measurement_engine_result_t *result) {
+  fake_port_state_t *state = (fake_port_state_t *)port->context;
   ++state->handle_result_calls;
   if (result != NULL) {
     state->last_result = *result;
@@ -153,10 +153,10 @@ static void fake_port_handle_result(measurement_engine_port_t* port,
 }
 
 static measurement_engine_port_t g_fake_port = {
-    .context = NULL,
-    .can_start_sweep = fake_port_can_start,
-    .handle_result = fake_port_handle_result,
-    .service_loop = fake_port_service_loop,
+  .context = NULL,
+  .can_start_sweep = fake_port_can_start,
+  .handle_result = fake_port_handle_result,
+  .service_loop = fake_port_service_loop,
 };
 
 static void reset_stubs(void) {
@@ -176,12 +176,12 @@ static void reset_stubs(void) {
 
 static int g_failures = 0;
 
-#define CHECK(cond, msg)                                                                         \
-  do {                                                                                           \
-    if (!(cond)) {                                                                               \
-      ++g_failures;                                                                              \
-      fprintf(stderr, "[FAIL] %s:%d: %s\n", __FILE__, __LINE__, msg);                            \
-    }                                                                                            \
+#define CHECK(cond, msg)                                                                           \
+  do {                                                                                             \
+    if (!(cond)) {                                                                                 \
+      ++g_failures;                                                                                \
+      fprintf(stderr, "[FAIL] %s:%d: %s\n", __FILE__, __LINE__, msg);                              \
+    }                                                                                              \
   } while (0)
 
 static void test_init_calls_sweep_service(void) {
@@ -190,7 +190,7 @@ static void test_init_calls_sweep_service(void) {
   memset(&engine, 0, sizeof(engine));
   fake_port_state_t state = {.allow_start = false, .next_break_flag = true};
   g_fake_port.context = &state;
-  PlatformDrivers drivers = {0};
+  platform_drivers_t drivers = {0};
   event_bus_t bus = {0};
 
   measurement_engine_init(&engine, &g_fake_port, &bus, &drivers);
@@ -212,7 +212,7 @@ static void test_tick_without_trigger_sleeps_and_skips_events(void) {
   memset(&engine, 0, sizeof(engine));
   fake_port_state_t state = {.allow_start = false, .next_break_flag = false};
   g_fake_port.context = &state;
-  PlatformDrivers drivers = {0};
+  platform_drivers_t drivers = {0};
 
   measurement_engine_init(&engine, &g_fake_port, NULL, &drivers);
   measurement_engine_tick(&engine);
@@ -230,7 +230,7 @@ static void test_tick_completed_sweep_publishes_events(void) {
   memset(&engine, 0, sizeof(engine));
   fake_port_state_t state = {.allow_start = true, .next_break_flag = false};
   g_fake_port.context = &state;
-  PlatformDrivers drivers = {0};
+  platform_drivers_t drivers = {0};
   event_bus_t bus = {0};
   measurement_engine_init(&engine, &g_fake_port, &bus, &drivers);
 
@@ -261,7 +261,7 @@ static void test_tick_incomplete_sweep_skips_completed_event(void) {
   memset(&engine, 0, sizeof(engine));
   fake_port_state_t state = {.allow_start = true, .next_break_flag = true};
   g_fake_port.context = &state;
-  PlatformDrivers drivers = {0};
+  platform_drivers_t drivers = {0};
   event_bus_t bus = {0};
   measurement_engine_init(&engine, &g_fake_port, &bus, &drivers);
 

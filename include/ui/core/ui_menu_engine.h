@@ -1,23 +1,3 @@
-/*
- * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * All rights reserved.
- *
- * This is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3, or (at your option)
- * any later version.
- *
- * The software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with GNU Radio; see the file COPYING.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street,
- * Boston, MA 02110-1301, USA.
- */
-
 #pragma once
 
 #include "ui/ui_menu.h"
@@ -33,21 +13,21 @@ void ui_menu_touch(int touch_x, int touch_y);
 
 // Helpers
 void menu_move_back(bool leave_ui);
-void menu_push_submenu(const menuitem_t* submenu);
-void menu_set_submenu(const menuitem_t* submenu);
+void menu_push_submenu(const menuitem_t *submenu);
+void menu_set_submenu(const menuitem_t *submenu);
 
 // Exposed for ui_controller.c to build menus
-const menuitem_t* current_menu_item(int i);
+const menuitem_t *current_menu_item(int i);
 int current_menu_get_count(void);
 void ui_mode_menu(void);
 
-extern const menuitem_t menu_back[];
+extern const menuitem_t MENU_BACK[];
 
 // Generic Menu Callbacks
 UI_FUNCTION_ADV_CALLBACK(menu_keyboard_acb);
 
 // Dynamic Menu Buffer (for dynamic construction)
-menuitem_t* menu_dynamic_acquire(void);
+menuitem_t *menu_dynamic_acquire(void);
 
 // Exposed globals (from engine)
 extern int8_t selection;

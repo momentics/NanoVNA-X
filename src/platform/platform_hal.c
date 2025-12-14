@@ -26,7 +26,7 @@
 
 #include "platform/boards/board_registry.h"
 
-static const PlatformDrivers* drivers = NULL;
+static const platform_drivers_t *drivers = NULL;
 
 void platform_init(void) {
   platform_board_pre_init();
@@ -36,6 +36,6 @@ void platform_init(void) {
   }
 }
 
-const PlatformDrivers* platform_get_drivers(void) {
+const platform_drivers_t *platform_get_drivers(void) {
   return drivers;
 }

@@ -37,23 +37,23 @@
 #include <string.h>
 
 /* Production symbols implemented in src/core/common.c */
-extern int32_t my_atoi(const char* p);
-extern uint32_t my_atoui(const char* p);
-extern float my_atof(const char* p);
-extern int get_str_index(const char* value, const char* list);
-extern bool strcmpi(const char* lhs, const char* rhs);
-extern int parse_line(char* line, char* args[], int max_cnt);
-extern void swap_bytes(uint16_t* buf, int size);
-extern int packbits(char* source, char* dest, int size);
+extern int32_t my_atoi(const char *p);
+extern uint32_t my_atoui(const char *p);
+extern float my_atof(const char *p);
+extern int get_str_index(const char *value, const char *list);
+extern bool strcmpi(const char *lhs, const char *rhs);
+extern int parse_line(char *line, char *args[], int max_cnt);
+extern void swap_bytes(uint16_t *buf, int size);
+extern int packbits(char *source, char *dest, int size);
 
 static int g_failures = 0;
 
-#define CHECK_WITH_MSG(cond, fmt, ...)                                                        \
-  do {                                                                                        \
-    if (!(cond)) {                                                                            \
-      ++g_failures;                                                                           \
-      fprintf(stderr, "[FAIL] %s:%d: " fmt "\n", __FILE__, __LINE__, __VA_ARGS__);             \
-    }                                                                                         \
+#define CHECK_WITH_MSG(cond, fmt, ...)                                                             \
+  do {                                                                                             \
+    if (!(cond)) {                                                                                 \
+      ++g_failures;                                                                                \
+      fprintf(stderr, "[FAIL] %s:%d: " fmt "\n", __FILE__, __LINE__, __VA_ARGS__);                 \
+    }                                                                                              \
   } while (0)
 
 #define CHECK(cond) CHECK_WITH_MSG(cond, "condition '%s' failed", #cond)
@@ -121,7 +121,7 @@ static void test_parse_line(void) {
    * whitespace folding, and argv bounding to ensure the CLI does not regress.
    */
   char buffer[] = "scan 10 \"quoted arg\" tail";
-  char* argv[4];
+  char *argv[4];
   int argc = parse_line(buffer, argv, 4);
   CHECK(argc == 4);
   CHECK(strcmp(argv[0], "scan") == 0);
@@ -130,7 +130,7 @@ static void test_parse_line(void) {
   CHECK(strcmp(argv[3], "tail") == 0);
 
   char small_buf[] = "a b c d";
-  char* small_argv[2];
+  char *small_argv[2];
   int small_argc = parse_line(small_buf, small_argv, 2);
   CHECK(small_argc == 2);
   CHECK(strcmp(small_argv[0], "a") == 0);
@@ -149,7 +149,7 @@ static void test_swap_bytes(void) {
   CHECK(data[2] == 0xFF00);
 }
 
-static void unpack_packbits(const char* packed, size_t packed_len, char* out, size_t* out_len) {
+static void unpack_packbits(const char *packed, size_t packed_len, char *out, size_t *out_len) {
   size_t out_index = 0;
   for (size_t i = 0; i < packed_len;) {
     int8_t header = packed[i++];
@@ -176,7 +176,7 @@ static void test_packbits_roundtrip(void) {
    */
   const char payload[] = "AAAABBBCCXYZDDDDEEEFAAAABBBB"; /* mixes literals and runs */
   char compressed[64];
-  int packed = packbits((char*)payload, compressed, (int)strlen(payload));
+  int packed = packbits((char *)payload, compressed, (int)strlen(payload));
   CHECK(packed > 0);
   char restored[sizeof(payload)];
   size_t restored_len = 0;

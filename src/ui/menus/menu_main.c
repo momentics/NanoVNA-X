@@ -1,23 +1,3 @@
-/*
- * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * All rights reserved.
- *
- * This is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3, or (at your option)
- * any later version.
- *
- * The software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with GNU Radio; see the file COPYING.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street,
- * Boston, MA 02110-1301, USA.
- */
-
 #include "nanovna.h"
 #include "ui/menus/menu_main.h"
 #include "ui/menus/menu_cal.h"
@@ -42,15 +22,15 @@ static UI_FUNCTION_ADV_CALLBACK(menu_pause_acb) {
 }
 
 // Root Menu
-const menuitem_t menu_top[] = {
-    {MT_SUBMENU, 0, "CAL", menu_cal_menu},
-    {MT_SUBMENU, 0, "STIMULUS", menu_stimulus},
-    {MT_SUBMENU, 0, "DISPLAY", menu_display},
-    {MT_SUBMENU, 0, "MEASURE", menu_measure_tools},
+const menuitem_t MENU_TOP[] = {
+  {MT_SUBMENU, 0, "CAL", MENU_CAL_MENU},
+  {MT_SUBMENU, 0, "STIMULUS", MENU_STIMULUS},
+  {MT_SUBMENU, 0, "DISPLAY", MENU_DISPLAY},
+  {MT_SUBMENU, 0, "MEASURE", MENU_MEASURE_TOOLS},
 #ifdef __USE_SD_CARD__
-    {MT_SUBMENU, 0, "SD CARD", menu_sdcard},
+  {MT_SUBMENU, 0, "SD CARD", menu_sdcard_cb},
 #endif
-    {MT_SUBMENU, 0, "SYSTEM", menu_system},
-    {MT_ADV_CALLBACK, 0, "%s\nSWEEP", menu_pause_acb},
-    {MT_NEXT, 0, NULL, NULL} // sentinel
+  {MT_SUBMENU, 0, "SYSTEM", MENU_SYSTEM},
+  {MT_ADV_CALLBACK, 0, "%s\nSWEEP", menu_pause_acb},
+  {MT_NEXT, 0, NULL, NULL} // sentinel
 };

@@ -1,23 +1,3 @@
-/*
- * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * All rights reserved.
- *
- * This is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3, or (at your option)
- * any later version.
- *
- * The software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with GNU Radio; see the file COPYING.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street,
- * Boston, MA 02110-1301, USA.
- */
-
 #include "processing/calibration.h"
 #include <string.h>
 #include "nanovna.h"
@@ -32,15 +12,14 @@ static void eterm_calc_et(void);
 
 // need_interpolate is now extern in nanovna.h
 
-
 static void eterm_set(int term, float re, float im) {
   int i;
   for (i = 0; i < sweep_points; i++) {
     cal_data[term][i][0] = re;
     cal_data[term][i][1] = im;
-    
+
     // Yield periodically to keep UI responsive during intensive computation
-    if ((i & 0xF) == 0) {  // yield every 16 iterations
+    if ((i & 0xF) == 0) { // yield every 16 iterations
       chThdYield();
     }
   }
@@ -59,14 +38,14 @@ static void eterm_calc_es(void) {
     float open_i = cal_data[CAL_OPEN][i][1] - cal_data[ETERM_ED][i][1];
     float short_r = cal_data[CAL_SHORT][i][0] - cal_data[ETERM_ED][i][0];
     float short_i = cal_data[CAL_SHORT][i][1] - cal_data[ETERM_ED][i][1];
-    
-    // ES = (S_open' + S_short') / (S_open' - S_short') 
+
+    // ES = (S_open' + S_short') / (S_open' - S_short')
     // following original DiSlord formula
     float num_r = open_r + short_r;
     float num_i = open_i + short_i;
     float den_r = open_r - short_r;
     float den_i = open_i - short_i;
-    
+
     // Complex division to calculate source match error
     float denom = den_r * den_r + den_i * den_i;
     if (denom > 1e-20f) {
@@ -76,9 +55,9 @@ static void eterm_calc_es(void) {
       cal_data[ETERM_ES][i][0] = 0.0f;
       cal_data[ETERM_ES][i][1] = 0.0f;
     }
-    
+
     // Yield periodically to keep UI responsive during intensive computation
-    if ((i & 0xF) == 0) {  // yield every 16 iterations
+    if ((i & 0xF) == 0) { // yield every 16 iterations
       chThdYield();
     }
   }
@@ -107,9 +86,9 @@ static void eterm_calc_er(int sign) {
     }
     cal_data[ETERM_ER][i][0] = err;
     cal_data[ETERM_ER][i][1] = eri;
-    
+
     // Yield periodically to keep UI responsive during intensive computation
-    if ((i & 0xF) == 0) {  // yield every 16 iterations
+    if ((i & 0xF) == 0) { // yield every 16 iterations
       chThdYield();
     }
   }
@@ -135,9 +114,9 @@ static void eterm_calc_et(void) {
       cal_data[ETERM_ET][i][0] = 1.0f;
       cal_data[ETERM_ET][i][1] = 0.0f;
     }
-    
+
     // Yield periodically to keep UI responsive during intensive computation
-    if ((i & 0xF) == 0) {  // yield every 16 iterations
+    if ((i & 0xF) == 0) { // yield every 16 iterations
       chThdYield();
     }
   }
@@ -154,14 +133,14 @@ void cal_collect(uint16_t type) {
     uint8_t dst;
     uint8_t src;
   } calibration_set[] = {
-      //    type       set data flag                              reset flag  destination source
-      [CAL_LOAD] = {CALSTAT_LOAD, ~(CALSTAT_APPLY), CAL_LOAD, 0},
-      [CAL_OPEN] = {CALSTAT_OPEN, ~(CALSTAT_ES | CALSTAT_ER | CALSTAT_APPLY), CAL_OPEN,
-                    0}, // Reset Es and Er state
-      [CAL_SHORT] = {CALSTAT_SHORT, ~(CALSTAT_ES | CALSTAT_ER | CALSTAT_APPLY), CAL_SHORT,
-                     0}, // Reset Es and Er state
-      [CAL_THRU] = {CALSTAT_THRU, ~(CALSTAT_ET | CALSTAT_APPLY), CAL_THRU, 1}, // Reset Et state
-      [CAL_ISOLN] = {CALSTAT_ISOLN, ~(CALSTAT_APPLY), CAL_ISOLN, 1},
+    //    type       set data flag                              reset flag  destination source
+    [CAL_LOAD] = {CALSTAT_LOAD, ~(CALSTAT_APPLY), CAL_LOAD, 0},
+    [CAL_OPEN] = {CALSTAT_OPEN, ~(CALSTAT_ES | CALSTAT_ER | CALSTAT_APPLY), CAL_OPEN,
+                  0}, // Reset Es and Er state
+    [CAL_SHORT] = {CALSTAT_SHORT, ~(CALSTAT_ES | CALSTAT_ER | CALSTAT_APPLY), CAL_SHORT,
+                   0}, // Reset Es and Er state
+    [CAL_THRU] = {CALSTAT_THRU, ~(CALSTAT_ET | CALSTAT_APPLY), CAL_THRU, 1}, // Reset Et state
+    [CAL_ISOLN] = {CALSTAT_ISOLN, ~(CALSTAT_APPLY), CAL_ISOLN, 1},
   };
   if (type >= ARRAY_COUNT(calibration_set))
     return;
@@ -177,7 +156,7 @@ void cal_collect(uint16_t type) {
     cal_start = b;
     cal_stop = a;
   }
-  
+
   if (need_interpolate(cal_start, cal_stop, sweep_points)) {
     cal_status = 0;
     cal_frequency0 = cal_start;
@@ -197,13 +176,13 @@ void cal_collect(uint16_t type) {
     config._bandwidth = BANDWIDTH_100;
 
   uint16_t mask = (src == 0) ? SWEEP_CH0_MEASURE : SWEEP_CH1_MEASURE;
-  
+
   // Measure calibration data
   app_measurement_sweep(false, mask);
-  
+
   // Mark that we're about to modify calibration data - temporarily set flag during critical copy
   calibration_in_progress = true;
-  
+
   // Copy calibration data - this is critical section that should not be interrupted
   memcpy(cal_data[dst], measured[src], sizeof measured[0]);
 
@@ -223,10 +202,10 @@ void cal_collect(uint16_t type) {
       cal_data[dst][j][1] *= k;
     }
   }
-  
+
   // Clear the flag - calibration data collection complete for this specific measurement
   calibration_in_progress = false;
-  
+
   config._bandwidth = bw; // restore
   request_to_redraw(REDRAW_CAL_STATUS);
 }
@@ -234,7 +213,7 @@ void cal_collect(uint16_t type) {
 void cal_done(void) {
   // Indicate that calibration critical processing is starting
   calibration_in_progress = true;
-  
+
   // Set Load/Ed to default if not calculated
   if (!(cal_status & CALSTAT_LOAD))
     eterm_set(ETERM_ED, 0.0, 0.0);
@@ -271,7 +250,7 @@ void cal_done(void) {
   cal_status |= CALSTAT_APPLY;
   lastsaveid = NO_SAVE_SLOT;
   request_to_redraw(REDRAW_BACKUP | REDRAW_CAL_STATUS);
-  
+
   // Indicate that calibration processing is complete
   calibration_in_progress = false;
 }
