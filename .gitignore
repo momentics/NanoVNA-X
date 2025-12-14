@@ -1,6 +1,7 @@
 # Build outputs
 /build/
 /NanoVNA-D/
+/NanoVNA-X-OOD/
 /build-*/
 *.elf
 *.hex

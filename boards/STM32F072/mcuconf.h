@@ -15,7 +15,7 @@
 #define STM32_PVD_ENABLE                    FALSE
 #define STM32_PLS                           STM32_PLS_LEV0
 #define STM32_HSI_ENABLED                   TRUE
-#define STM32_HSI14_ENABLED                 FALSE
+#define STM32_HSI14_ENABLED                 TRUE
 #define STM32_HSI48_ENABLED                 TRUE
 #define STM32_HSE_ENABLED                   FALSE
 #define STM32_SW                            STM32_SW_PLL
@@ -175,7 +175,7 @@
 #define STM32_SERIAL_USART2_PRIORITY        3
 
 // SPI Settings
-#define STM32_SPI_USE_SPI1                  FALSE
+#define STM32_SPI_USE_SPI1                  TRUE
 #define STM32_SPI_USE_SPI2                  FALSE
 #define STM32_SPI_SPI1_DMA_PRIORITY         1
 #define STM32_SPI_SPI2_DMA_PRIORITY         1
