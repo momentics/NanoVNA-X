@@ -20,7 +20,7 @@
 // #define LCD_BRIGHTNESS
 #endif
 // Use DAC (in H4 used for brightness used DAC, so need enable LCD_BRIGHTNESS for it)
-// #define VNA_ENABLE_DAC
+#define VNA_ENABLE_DAC
 // Allow enter to DFU from menu or command
 #define DFU_SOFTWARE_MODE
 // Add RTC clock support
