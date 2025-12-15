@@ -173,10 +173,10 @@ CSRC = $(STARTUPSRC) \
        third_party/FatFs/ff.c \
        third_party/FatFs/ffunicode.c \
        src/ui/resources/fonts/numfont16x22.c \
-       src/ui/resources/fonts/Font5x7.c \
-       src/ui/resources/fonts/Font6x10.c \
-       src/ui/resources/fonts/Font7x11b.c \
-       src/ui/resources/fonts/Font11x14.c \
+       src/ui/resources/fonts/font_5x7.c \
+       src/ui/resources/fonts/font_6x10.c \
+       src/ui/resources/fonts/font_7x11b.c \
+       src/ui/resources/fonts/font_11x14.c \
        src/ui/resources/icons/icons_menu.c \
        src/platform/peripherals/usbcfg.c \
        src/runtime/main.c \
