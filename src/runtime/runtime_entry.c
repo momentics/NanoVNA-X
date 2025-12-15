@@ -266,8 +266,8 @@ static void app_measurement_service_loop(measurement_engine_port_t *port) {
   state_manager_service();
 }
 
-static THD_WORKING_AREA(waThread1, 768);
-static THD_FUNCTION(Thread1, arg) {
+static THD_WORKING_AREA(wa_sweep_thread, 768);
+static THD_FUNCTION(sweep_thread, arg) {
   (void)arg;
   chRegSetThreadName("sweep");
 #ifdef FLIP_DISPLAY
@@ -700,8 +700,8 @@ bool sd_card_load_config(void) {
 #endif
 
 #ifdef VNA_SHELL_THREAD
-static THD_WORKING_AREA(waThread2, /* cmd_* max stack size + alpha */ 442);
-THD_FUNCTION(myshellThread, p) {
+static THD_WORKING_AREA(wa_shell_thread, /* cmd_* max stack size + alpha */ 442);
+THD_FUNCTION(shell_thread, p) {
   (void)p;
   chRegSetThreadName("shell");
   while (true) {
@@ -810,7 +810,7 @@ int runtime_main(void) {
   /*
    * Startup sweep thread
    */
-  chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO - 1, Thread1, NULL);
+  chThdCreateStatic(wa_sweep_thread, sizeof(wa_sweep_thread), NORMALPRIO - 1, sweep_thread, NULL);
 
   while (1) {
     if (!SHELL_CHECK_CONNECT()) {
@@ -822,7 +822,7 @@ int runtime_main(void) {
 #error "VNA_SHELL_THREAD use chThdWait, need enable CH_CFG_USE_WAITEXIT in chconf.h"
 #endif
     thread_t *shelltp =
-      chThdCreateStatic(waThread2, sizeof(waThread2), NORMALPRIO + 1, myshellThread, NULL);
+      chThdCreateStatic(wa_shell_thread, sizeof(wa_shell_thread), NORMALPRIO + 1, shell_thread, NULL);
     chThdWait(shelltp);
 #else
     do {
