@@ -65,7 +65,7 @@ static uint32_t checksum(const void *start, size_t len) {
   return value;
 }
 
-static int config_save_impl(void) {
+static int execute_config_save(void) {
   // Wait for exclusive access to flash operations with timeout to prevent blocking measurements
   msg_t msg = MSG_OK;
   // During calibration, don't wait for semaphore as it could delay critical measurements
@@ -98,7 +98,7 @@ static int config_save_impl(void) {
   return 0;
 }
 
-static int config_recall_impl(void) {
+static int execute_config_recall(void) {
   const config_t *src = (const config_t *)SAVE_CONFIG_ADDR;
 
   if (src->magic != CONFIG_MAGIC ||
@@ -109,7 +109,7 @@ static int config_recall_impl(void) {
   return 0;
 }
 
-static int caldata_save_impl(uint32_t id) {
+static int execute_caldata_save(uint32_t id) {
   if (id >= SAVEAREA_MAX)
     return -1;
 
@@ -153,7 +153,7 @@ const properties_t *get_properties(uint32_t id) {
   return src;
 }
 
-static int caldata_recall_impl(uint32_t id) {
+static int execute_caldata_recall(uint32_t id) {
   lastsaveid = NO_SAVE_SLOT;
   if (id == NO_SAVE_SLOT)
     return 0;
@@ -179,7 +179,7 @@ static int caldata_recall_impl(uint32_t id) {
   return 0;
 }
 
-static void clear_all_config_prop_data_impl(void) {
+static void execute_clear_config(void) {
   // Wait for exclusive access to flash operations with timeout
   msg_t msg = chSemWaitTimeout(&flash_operation_semaphore,
                                MS2ST(2000)); // 2 second timeout for erase operation
@@ -203,11 +203,11 @@ static void clear_all_config_prop_data_impl(void) {
 }
 
 static const config_service_api_t API = {
-  .save_configuration = config_save_impl,
-  .load_configuration = config_recall_impl,
-  .save_calibration = caldata_save_impl,
-  .load_calibration = caldata_recall_impl,
-  .erase_calibration = clear_all_config_prop_data_impl,
+  .save_configuration = execute_config_save,
+  .load_configuration = execute_config_recall,
+  .save_calibration = execute_caldata_save,
+  .load_calibration = execute_caldata_recall,
+  .erase_calibration = execute_clear_config,
 };
 
 static bool initialized = false;

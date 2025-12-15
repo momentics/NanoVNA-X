@@ -201,11 +201,11 @@ float s21_qualityfactor(int i, const float *v) {
 // series_c/l need checks.
 // X = -1/wC -> C = -1/(wX)
 // X = wL -> L = X/w
-float series_c_impl(int i, const float *v) {
+float calc_series_c(int i, const float *v) {
   return -1.0f / (get_w(i) * reactance(i, v));
   return 0.0f;
 }
-float series_l_impl(int i, const float *v) {
+float calc_series_l(int i, const float *v) {
   return reactance(i, v) / get_w(i);
   return 0.0f;
 }
@@ -233,8 +233,8 @@ const trace_info_t TRACE_INFO_LIST[MAX_TRACE_TYPE] = {
   [TRC_Y] = {"|Y|", "%.3F%s", S_DELTA "%.3F%s", S_SIEMENS, 0, 0.02f, mod_y},
   [TRC_Rp] = {"Rp", "%.3F%s", S_DELTA "%.3F%s", S_OHM, 0, 100.0f, parallel_r},
   [TRC_Xp] = {"Xp", "%.3F%s", S_DELTA "%.3F%s", S_OHM, NGRIDY / 2, 100.0f, parallel_x},
-  [TRC_Cs] = {"Cs", "%.4F%s", S_DELTA "%.4F%s", S_FARAD, NGRIDY / 2, 1e-8f, series_c_impl},
-  [TRC_Ls] = {"Ls", "%.4F%s", S_DELTA "%.4F%s", S_HENRY, NGRIDY / 2, 1e-8f, series_l_impl},
+  [TRC_Cs] = {"Cs", "%.4F%s", S_DELTA "%.4F%s", S_FARAD, NGRIDY / 2, 1e-8f, calc_series_c},
+  [TRC_Ls] = {"Ls", "%.4F%s", S_DELTA "%.4F%s", S_HENRY, NGRIDY / 2, 1e-8f, calc_series_l},
   [TRC_Cp] = {"Cp", "%.4F%s", S_DELTA "%.4F%s", S_FARAD, NGRIDY / 2, 1e-8f, parallel_c},
   [TRC_Lp] = {"Lp", "%.4F%s", S_DELTA "%.4F%s", S_HENRY, NGRIDY / 2, 1e-8f, parallel_l},
   [TRC_Q] = {"Q", "%.4f%s", S_DELTA "%.3f%s", "", 0, 10.0f, qualityfactor},
