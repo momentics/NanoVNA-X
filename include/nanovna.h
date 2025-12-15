@@ -45,9 +45,7 @@
 // Speed of light const
 #define SPEED_OF_LIGHT 299792458
 
-// pi const
-#define VNA_PI 3.14159265358979323846f
-#define VNA_TWOPI 6.28318530717958647692f
+#include "processing/vna_math.h"
 
 #include "core/globals.h"
 #include "ui/ui_style.h"
@@ -250,7 +248,7 @@ void swap_bytes(uint16_t *buf, int size);
 int packbits(char *source, char *dest, int size);
 void delay_8t(uint32_t cycles);
 
-#include "processing/vna_math.h"
+
 
 /*
  * plot.c

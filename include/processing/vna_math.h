@@ -22,6 +22,11 @@
 #define VNA_MATH_H
 // Use math.h functions if need
 #include <math.h>
+#include <stdint.h>
+
+// pi const
+#define VNA_PI 3.14159265358979323846f
+#define VNA_TWOPI 6.28318530717958647692f
 
 #ifndef __FPU_PRESENT
 #define __FPU_PRESENT 0

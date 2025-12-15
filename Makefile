@@ -470,7 +470,10 @@ include $(RULESPATH)/rules.mk
 
 VERSION_HEADER := $(BUILDDIR)/generated/version_info.h
 
-PRE_MAKE_ALL_RULE_HOOK: $(VERSION_HEADER)
+PRE_MAKE_ALL_RULE_HOOK: $(VERSION_HEADER) | createdirs
+
+createdirs:
+	@mkdir -p .dep build/obj
 
 $(VERSION_HEADER): VERSION | $(BUILDDIR)
 	@mkdir -p $(dir $@)
