@@ -730,9 +730,7 @@ int runtime_main(void) {
   platform_init();
   const platform_drivers_t *drivers = platform_get_drivers();
   if (drivers != NULL) {
-    if (drivers->init) {
-      drivers->init();
-    }
+    // drivers->init() is already called in platform_init()
     if (drivers->display && drivers->display->init) {
       drivers->display->init();
     }
