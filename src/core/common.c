@@ -22,6 +22,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <limits.h>
 #include "hal.h"
 
 // Use macro, std isdigit more big
@@ -37,11 +38,27 @@ int32_t my_atoi(const char *p) {
   if (*p == '-') {
     neg = true;
     p++;
-  }
-  if (*p == '+')
+  } else if (*p == '+') {
     p++;
-  while ((c = *p++ - '0') < 10)
+  }
+
+  while ((c = *p++ - '0') < 10) {
+    if (neg) {
+      // Check for underflow: value * 10 - c < INT32_MIN
+      // Rewrite to avoid overflow in check: value < (INT32_MIN + c) / 10
+      // Since we store positive 'value' and negate at end, we check against limit accordingly.
+      // Better approach: accumulate positive, check against INT32_MAX + 1 (for INT32_MIN absolute)
+      if (value > (INT32_MAX - c) / 10) {
+         return INT32_MIN;
+      }
+    } else {
+      // Check for overflow: value * 10 + c > INT32_MAX
+      if (value > (INT32_MAX - c) / 10) {
+        return INT32_MAX;
+      }
+    }
     value = value * 10 + c;
+  }
   return neg ? -value : value;
 }
 
@@ -78,6 +95,12 @@ calculate:
       c = (c & (~0x20)) - ('A' - '0') + 10;
     if (c >= radix)
       return value;
+    
+    // Check for overflow: value * radix + c > UINT32_MAX
+    if (value > (UINT32_MAX - c) / radix) {
+      return UINT32_MAX;
+    }
+    
     value = value * radix + c;
   }
 }
