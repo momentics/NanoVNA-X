@@ -150,7 +150,7 @@
  * @brief   Enables the SPI subsystem.
  */
 #if !defined(HAL_USE_SPI) || defined(__DOXYGEN__)
-#define HAL_USE_SPI TRUE
+#define HAL_USE_SPI FALSE
 #endif
 
 /**
@@ -174,7 +174,7 @@
 #define HAL_USE_WDG FALSE
 #endif
 
-// #define STM32_DMA_REQUIRED
+#define STM32_DMA_REQUIRED
 /*===========================================================================*/
 /* ADC driver related settings.                                              */
 /*===========================================================================*/
