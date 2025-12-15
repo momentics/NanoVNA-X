@@ -868,7 +868,7 @@ static void put_normal(lcd_print_stream_t *ps, uint8_t ch) {
     return;
   }
   uint16_t w = FONT_GET_WIDTH(ch);
-#if _USE_FONT_ < 3
+#if USE_FONT_ID < 3
   lcd_blit_bitmap(ps->x, ps->y, w, FONT_GET_HEIGHT, FONT_GET_DATA(ch));
 #else
   lcd_blit_bitmap(ps->x, ps->y, w < 9 ? 9 : w, FONT_GET_HEIGHT, FONT_GET_DATA(ch));
@@ -876,21 +876,21 @@ static void put_normal(lcd_print_stream_t *ps, uint8_t ch) {
   ps->x += w;
 }
 
-#if _USE_FONT_ != _USE_SMALL_FONT_
+#if USE_FONT_ID != USE_SMALL_FONT_ID
 typedef void (*font_put_t)(lcd_print_stream_t *ps, uint8_t ch);
 static font_put_t put_char = put_normal;
 #define PUT_CHAR put_char
 static void put_small(lcd_print_stream_t *ps, uint8_t ch) {
   if (ch == '\n') {
     ps->x = ps->start_x;
-    ps->y += sFONT_STR_HEIGHT;
+    ps->y += SFONT_STR_HEIGHT;
     return;
   }
-  uint16_t w = sFONT_GET_WIDTH(ch);
-#if _USE_SMALL_FONT_ < 3
-  lcd_blit_bitmap(ps->x, ps->y, w, sFONT_GET_HEIGHT, sFONT_GET_DATA(ch));
+  uint16_t w = SFONT_GET_WIDTH(ch);
+#if USE_SMALL_FONT_ID < 3
+  lcd_blit_bitmap(ps->x, ps->y, w, SFONT_GET_HEIGHT, SFONT_GET_DATA(ch));
 #else
-  lcd_blit_bitmap(ps->x, ps->y, w < 9 ? 9 : w, sFONT_GET_HEIGHT, sFONT_GET_DATA(ch));
+  lcd_blit_bitmap(ps->x, ps->y, w < 9 ? 9 : w, SFONT_GET_HEIGHT, SFONT_GET_DATA(ch));
 #endif
   ps->x += w;
 }

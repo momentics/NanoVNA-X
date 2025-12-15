@@ -265,8 +265,8 @@ void delay_8t(uint32_t cycles);
 // Used marker image settings
 #define _USE_MARKER_SET_ 1
 // Used font settings
-#define _USE_FONT_ 1
-#define _USE_SMALL_FONT_ 0
+#define USE_FONT_ID 1
+#define USE_SMALL_FONT_ID 0
 
 // Plot area size settings
 // Offset of plot area (size of additional info at left side)
@@ -306,8 +306,8 @@ void delay_8t(uint32_t cycles);
 #define CALIBRATION_INFO_POSY 100
 
 #define FREQUENCIES_XPOS1 OFFSETX
-#define FREQUENCIES_XPOS2 (LCD_WIDTH - sFONT_STR_WIDTH(23))
-#define FREQUENCIES_XPOS3 (LCD_WIDTH / 2 + OFFSETX - sFONT_STR_WIDTH(16) / 2)
+#define FREQUENCIES_XPOS2 (LCD_WIDTH - SFONT_STR_WIDTH(23))
+#define FREQUENCIES_XPOS3 (LCD_WIDTH / 2 + OFFSETX - SFONT_STR_WIDTH(16) / 2)
 #define FREQUENCIES_YPOS (AREA_HEIGHT_NORMAL)
 #endif // end 320x240 display plot definitions
 
@@ -320,8 +320,8 @@ void delay_8t(uint32_t cycles);
 // Used marker image settings
 #define _USE_MARKER_SET_ 2
 // Used font settings
-#define _USE_FONT_ 2
-#define _USE_SMALL_FONT_ 2
+#define USE_FONT_ID 2
+#define USE_SMALL_FONT_ID 2
 
 // Plot area size settings
 // Offset of plot area (size of additional info at left side)
@@ -361,8 +361,8 @@ void delay_8t(uint32_t cycles);
 #define CALIBRATION_INFO_POSY 100
 
 #define FREQUENCIES_XPOS1 OFFSETX
-#define FREQUENCIES_XPOS2 (LCD_WIDTH - sFONT_STR_WIDTH(22))
-#define FREQUENCIES_XPOS3 (LCD_WIDTH / 2 + OFFSETX - sFONT_STR_WIDTH(14) / 2)
+#define FREQUENCIES_XPOS2 (LCD_WIDTH - SFONT_STR_WIDTH(22))
+#define FREQUENCIES_XPOS3 (LCD_WIDTH / 2 + OFFSETX - SFONT_STR_WIDTH(14) / 2)
 #define FREQUENCIES_YPOS (AREA_HEIGHT_NORMAL + 2)
 #endif // end 480x320 display plot definitions
 
@@ -420,7 +420,7 @@ void delay_8t(uint32_t cycles);
 #define KPF_Y_OFFSET (LCD_HEIGHT - NUM_INPUT_HEIGHT - 4 * KPF_HEIGHT)   // text keypad Y offset
 #endif
 
-#if _USE_FONT_ == 0
+#if USE_FONT_ID == 0
 extern const uint8_t X5X7_BITS[];
 #define FONT_START_CHAR 0x16
 #define FONT_WIDTH 5
@@ -430,7 +430,7 @@ extern const uint8_t X5X7_BITS[];
 #define FONT_GET_DATA(ch) (&X5X7_BITS[((ch) - FONT_START_CHAR) * FONT_GET_HEIGHT])
 #define FONT_GET_WIDTH(ch) (8 - (X5X7_BITS[((ch) - FONT_START_CHAR) * FONT_GET_HEIGHT] & 0x7))
 
-#elif _USE_FONT_ == 1
+#elif USE_FONT_ID == 1
 extern const uint8_t X6X10_BITS[];
 #define FONT_START_CHAR 0x16
 #define FONT_WIDTH 6
@@ -440,7 +440,7 @@ extern const uint8_t X6X10_BITS[];
 #define FONT_GET_DATA(ch) (&X6X10_BITS[(ch - FONT_START_CHAR) * FONT_GET_HEIGHT])
 #define FONT_GET_WIDTH(ch) (8 - (X6X10_BITS[(ch - FONT_START_CHAR) * FONT_GET_HEIGHT] & 0x7))
 
-#elif _USE_FONT_ == 2
+#elif USE_FONT_ID == 2
 extern const uint8_t X7X11B_BITS[];
 #define FONT_START_CHAR 0x16
 #define FONT_WIDTH 7
@@ -450,7 +450,7 @@ extern const uint8_t X7X11B_BITS[];
 #define FONT_GET_DATA(ch) (&X7X11B_BITS[(ch - FONT_START_CHAR) * FONT_GET_HEIGHT])
 #define FONT_GET_WIDTH(ch) (8 - (X7X11B_BITS[(ch - FONT_START_CHAR) * FONT_GET_HEIGHT] & 7))
 
-#elif _USE_FONT_ == 3
+#elif USE_FONT_ID == 3
 extern const uint8_t X11X14_BITS[];
 #define FONT_START_CHAR 0x16
 #define FONT_WIDTH 11
@@ -462,51 +462,51 @@ extern const uint8_t X11X14_BITS[];
   (14 - (X11X14_BITS[(ch - FONT_START_CHAR) * 2 * FONT_GET_HEIGHT + 1] & 0x7))
 #endif
 
-#if _USE_SMALL_FONT_ == 0
+#if USE_SMALL_FONT_ID == 0
 extern const uint8_t X5X7_BITS[];
-#define sFONT_START_CHAR 0x16
-#define sFONT_WIDTH 5
-#define sFONT_GET_HEIGHT 7
-#define sFONT_STR_WIDTH(n) ((n) * sFONT_WIDTH)
-#define sFONT_STR_HEIGHT 8
-#define sFONT_GET_DATA(ch) (&X5X7_BITS[((ch) - sFONT_START_CHAR) * sFONT_GET_HEIGHT])
-#define sFONT_GET_WIDTH(ch) (8 - (X5X7_BITS[((ch) - sFONT_START_CHAR) * sFONT_GET_HEIGHT] & 0x7))
+#define SFONT_START_CHAR 0x16
+#define SFONT_WIDTH 5
+#define SFONT_GET_HEIGHT 7
+#define SFONT_STR_WIDTH(n) ((n) * SFONT_WIDTH)
+#define SFONT_STR_HEIGHT 8
+#define SFONT_GET_DATA(ch) (&X5X7_BITS[((ch) - SFONT_START_CHAR) * SFONT_GET_HEIGHT])
+#define SFONT_GET_WIDTH(ch) (8 - (X5X7_BITS[((ch) - SFONT_START_CHAR) * SFONT_GET_HEIGHT] & 0x7))
 
-#elif _USE_SMALL_FONT_ == 1
+#elif USE_SMALL_FONT_ID == 1
 extern const uint8_t X6X10_BITS[];
-#define sFONT_START_CHAR 0x16
-#define sFONT_WIDTH 6
-#define sFONT_GET_HEIGHT 10
-#define sFONT_STR_WIDTH(n) ((n) * sFONT_WIDTH)
-#define sFONT_STR_HEIGHT 11
-#define sFONT_GET_DATA(ch) (&X6X10_BITS[(ch - sFONT_START_CHAR) * sFONT_GET_HEIGHT])
-#define sFONT_GET_WIDTH(ch) (8 - (X6X10_BITS[(ch - sFONT_START_CHAR) * sFONT_GET_HEIGHT] & 0x7))
+#define SFONT_START_CHAR 0x16
+#define SFONT_WIDTH 6
+#define SFONT_GET_HEIGHT 10
+#define SFONT_STR_WIDTH(n) ((n) * SFONT_WIDTH)
+#define SFONT_STR_HEIGHT 11
+#define SFONT_GET_DATA(ch) (&X6X10_BITS[(ch - SFONT_START_CHAR) * SFONT_GET_HEIGHT])
+#define SFONT_GET_WIDTH(ch) (8 - (X6X10_BITS[(ch - SFONT_START_CHAR) * SFONT_GET_HEIGHT] & 0x7))
 
-#elif _USE_SMALL_FONT_ == 2
+#elif USE_SMALL_FONT_ID == 2
 extern const uint8_t X7X11B_BITS[];
-#define sFONT_START_CHAR 0x16
-#define sFONT_WIDTH 7
-#define sFONT_GET_HEIGHT 11
-#define sFONT_STR_WIDTH(n) ((n) * sFONT_WIDTH)
-#define sFONT_STR_HEIGHT 11
-#define sFONT_GET_DATA(ch) (&X7X11B_BITS[(ch - sFONT_START_CHAR) * sFONT_GET_HEIGHT])
-#define sFONT_GET_WIDTH(ch) (8 - (X7X11B_BITS[(ch - sFONT_START_CHAR) * sFONT_GET_HEIGHT] & 7))
+#define SFONT_START_CHAR 0x16
+#define SFONT_WIDTH 7
+#define SFONT_GET_HEIGHT 11
+#define SFONT_STR_WIDTH(n) ((n) * SFONT_WIDTH)
+#define SFONT_STR_HEIGHT 11
+#define SFONT_GET_DATA(ch) (&X7X11B_BITS[(ch - SFONT_START_CHAR) * SFONT_GET_HEIGHT])
+#define SFONT_GET_WIDTH(ch) (8 - (X7X11B_BITS[(ch - SFONT_START_CHAR) * SFONT_GET_HEIGHT] & 7))
 
-#elif _USE_SMALL_FONT_ == 3
+#elif USE_SMALL_FONT_ID == 3
 extern const uint8_t X11X14_BITS[];
-#define sFONT_START_CHAR 0x16
-#define sFONT_WIDTH 11
-#define sFONT_GET_HEIGHT 14
-#define sFONT_STR_WIDTH(n) ((n) * sFONT_WIDTH)
-#define sFONT_STR_HEIGHT 16
-#define sFONT_GET_DATA(ch) (&X11X14_BITS[(ch - sFONT_START_CHAR) * 2 * sFONT_GET_HEIGHT])
-#define sFONT_GET_WIDTH(ch)                                                                        \
-  (14 - (X11X14_BITS[(ch - sFONT_START_CHAR) * 2 * sFONT_GET_HEIGHT + 1] & 0x7))
+#define SFONT_START_CHAR 0x16
+#define SFONT_WIDTH 11
+#define SFONT_GET_HEIGHT 14
+#define SFONT_STR_WIDTH(n) ((n) * SFONT_WIDTH)
+#define SFONT_STR_HEIGHT 16
+#define SFONT_GET_DATA(ch) (&X11X14_BITS[(ch - SFONT_START_CHAR) * 2 * SFONT_GET_HEIGHT])
+#define SFONT_GET_WIDTH(ch)                                                                        \
+  (14 - (X11X14_BITS[(ch - SFONT_START_CHAR) * 2 * SFONT_GET_HEIGHT + 1] & 0x7))
 #endif
 
 // Font type defines
 enum { FONT_SMALL = 0, FONT_NORMAL };
-#if _USE_FONT_ != _USE_SMALL_FONT_
+#if USE_FONT_ID != USE_SMALL_FONT_ID
 void lcd_set_font(int type);
 #define LCD_SET_FONT(type) lcd_set_font(type)
 #else
@@ -570,7 +570,7 @@ enum {
 #endif
 
 #ifdef USE_GRID_VALUES
-#define GRID_X_TEXT (WIDTH - sFONT_STR_WIDTH(5))
+#define GRID_X_TEXT (WIDTH - SFONT_STR_WIDTH(5))
 #endif
 
 // Render control chars
@@ -856,7 +856,7 @@ static inline uint32_t clamp_harmonic_threshold(uint32_t value) {
   }
   return value;
 }
-#ifdef DIGIT_SEPARATOR
+#ifdef USE_DIGIT_SEPARATOR
 #define DIGIT_SEPARATOR (VNA_MODE(VNA_MODE_SEPARATOR) ? ',' : '.')
 #else
 #define DIGIT_SEPARATOR '.'

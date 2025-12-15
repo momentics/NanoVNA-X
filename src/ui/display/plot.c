@@ -868,7 +868,7 @@ static void draw_cal_status(void) {
   int x = CALIBRATION_INFO_POSX;
   int y = CALIBRATION_INFO_POSY;
   lcd_set_colors(LCD_DISABLE_CAL_COLOR, LCD_BG_COLOR);
-  lcd_fill(x, y, OFFSETX - x, 10 * (sFONT_STR_HEIGHT));
+  lcd_fill(x, y, OFFSETX - x, 10 * (SFONT_STR_HEIGHT));
   LCD_SET_FONT(FONT_SMALL);
   if (cal_status & CALSTAT_APPLY) {
     // Set 'C' string for slot status
@@ -893,20 +893,20 @@ static void draw_cal_status(void) {
     {'t', 0, CALSTAT_THRU}, {'X', 0, CALSTAT_EX},    {'E', 0, CALSTAT_ENHANCED_RESPONSE}};
   for (i = 0; i < ARRAY_COUNT(calibration_text); i++)
     if (cal_status & calibration_text[i].mask)
-      LCD_DRAWSTRING(x, y += sFONT_STR_HEIGHT, &calibration_text[i].text);
+      LCD_DRAWSTRING(x, y += SFONT_STR_HEIGHT, &calibration_text[i].text);
 
   if ((cal_status & CALSTAT_APPLY) && cal_power != current_props._power)
     lcd_set_foreground(LCD_DISABLE_CAL_COLOR);
 
   // 2,4,6,8 mA power or auto
-  lcd_printf(x, y += sFONT_STR_HEIGHT, "P%c",
+  lcd_printf(x, y += SFONT_STR_HEIGHT, "P%c",
              current_props._power > 3 ? ('a') : (current_props._power * 2 + '2'));
 #ifdef USE_SMOOTH
   y += FONT_STR_HEIGHT;
   uint8_t smooth = get_smooth_factor();
   if (smooth > 0) {
     lcd_set_foreground(LCD_FG_COLOR);
-    lcd_printf(x, y += sFONT_STR_HEIGHT, "s%d", smooth);
+    lcd_printf(x, y += SFONT_STR_HEIGHT, "s%d", smooth);
   }
 #endif
   LCD_SET_FONT(FONT_NORMAL);

@@ -1036,7 +1036,7 @@ VNA_SHELL_FUNCTION(cmd_config) {
 #ifdef FLIP_DISPLAY
                                       "|flip"
 #endif
-#ifdef DIGIT_SEPARATOR
+#ifdef USE_DIGIT_SEPARATOR
                                       "|separator"
 #endif
     ;

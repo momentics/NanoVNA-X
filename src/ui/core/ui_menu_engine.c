@@ -16,6 +16,7 @@
 #define LCD_FILL(...) display_presenter_fill(__VA_ARGS__)
 #define LCD_SET_BACKGROUND(...) display_presenter_set_background(__VA_ARGS__)
 #define LCD_SET_COLORS(...) display_presenter_set_colors(__VA_ARGS__)
+#undef LCD_SET_FONT
 #define LCD_SET_FONT(...) display_presenter_set_font(__VA_ARGS__)
 #define LCD_BLIT_BITMAP(...) display_presenter_blit_bitmap(__VA_ARGS__)
 
@@ -221,7 +222,7 @@ static void menu_draw_buttons(const menuitem_t *m, uint32_t mask) {
 #if _USE_FONT_ != _USE_SMALL_FONT_
     if (menu_button_height < lines * FONT_GET_HEIGHT + 2) {
       LCD_SET_FONT(FONT_SMALL);
-      LCD_DRAWSTRING(text_offs, y + (menu_button_height - lines * sFONT_STR_HEIGHT - 1) / 2, text);
+      LCD_DRAWSTRING(text_offs, y + (menu_button_height - lines * SFONT_STR_HEIGHT - 1) / 2, text);
     } else {
       LCD_SET_FONT(FONT_NORMAL);
       lcd_printf(

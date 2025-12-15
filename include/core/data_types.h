@@ -169,7 +169,7 @@ enum {
 #ifdef FLIP_DISPLAY
   VNA_MODE_FLIP_DISPLAY, // Flip display
 #endif
-#ifdef DIGIT_SEPARATOR
+#ifdef USE_DIGIT_SEPARATOR
   VNA_MODE_SEPARATOR, // Comma or dot digit separator (0: dot, 1: comma)
 #endif
 #ifdef SD_CARD_DUMP_TIFF

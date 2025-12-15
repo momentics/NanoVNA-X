@@ -60,7 +60,7 @@
 #define USE_SMOOTH
 // Enable optional change digit separator for locales (dot or comma, need for correct work some
 // external software)
-#define DIGIT_SEPARATOR
+#define USE_DIGIT_SEPARATOR
 // Use table for frequency list (if disabled use real time calc)
 // #define USE_FREQ_TABLE
 // Enable DSP instruction (support only by Cortex M4 and higher)

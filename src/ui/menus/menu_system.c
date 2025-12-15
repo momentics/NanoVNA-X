@@ -81,7 +81,7 @@ const vna_mode_data_t VNA_MODE_DATA[] = {
 #ifdef FLIP_DISPLAY
   [VNA_MODE_FLIP_DISPLAY] = {0, REDRAW_BACKUP | REDRAW_ALL},
 #endif
-#ifdef DIGIT_SEPARATOR
+#ifdef USE_DIGIT_SEPARATOR
   [VNA_MODE_SEPARATOR] = {"DOT '.'\0COMMA ','", REDRAW_BACKUP | REDRAW_MARKER | REDRAW_FREQUENCY},
 #endif
 #ifdef SD_CARD_DUMP_TIFF
@@ -356,7 +356,7 @@ const menuitem_t MENU_OFFSET[] = {{MT_ADV_CALLBACK, 0, "%d" S_HZ, menu_offset_ac
 
 const menuitem_t MENU_DEVICE1[] = {
   {MT_ADV_CALLBACK, 0, "MODE\n " R_LINK_COLOR "%s", menu_band_sel_acb},
-#ifdef DIGIT_SEPARATOR
+#ifdef USE_DIGIT_SEPARATOR
   {MT_ADV_CALLBACK, VNA_MODE_SEPARATOR, "SEPARATOR\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
 #endif
 #ifdef USB_UID

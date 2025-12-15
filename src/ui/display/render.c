@@ -150,14 +150,14 @@ typedef void (*font_put_t)(cell_print_stream_t *ps, uint8_t ch);
 static font_put_t put_char;
 static void put_small(cell_print_stream_t *ps, uint8_t ch) {
 #define PUT_CHAR put_char
-  uint16_t w = sFONT_GET_WIDTH(ch);
+  uint16_t w = SFONT_GET_WIDTH(ch);
 #if VNA_ENABLE_SHADOW_TEXT
-  cell_blit_bitmap_shadow(ps->ctx, ps->x, ps->y, w, sFONT_GET_HEIGHT, sFONT_GET_DATA(ch));
+  cell_blit_bitmap_shadow(ps->ctx, ps->x, ps->y, w, SFONT_GET_HEIGHT, SFONT_GET_DATA(ch));
 #endif
 #if _USE_SMALL_FONT_ < 3
-  cell_blit_bitmap(ps->ctx, ps->x, ps->y, w, sFONT_GET_HEIGHT, sFONT_GET_DATA(ch));
+  cell_blit_bitmap(ps->ctx, ps->x, ps->y, w, SFONT_GET_HEIGHT, SFONT_GET_DATA(ch));
 #else
-  cell_blit_bitmap(ps->ctx, ps->x, ps->y, w < 9 ? 9 : w, sFONT_GET_HEIGHT, sFONT_GET_DATA(ch));
+  cell_blit_bitmap(ps->ctx, ps->x, ps->y, w < 9 ? 9 : w, SFONT_GET_HEIGHT, SFONT_GET_DATA(ch));
 #endif
   ps->x += w;
 }

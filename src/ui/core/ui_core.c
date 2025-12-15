@@ -356,6 +356,7 @@ void touch_wait_release(void) {
 #define LCD_SET_BACKGROUND(...) display_presenter_set_background(__VA_ARGS__)
 #define LCD_SET_COLORS(...) display_presenter_set_colors(__VA_ARGS__)
 #define LCD_SET_FLIP(...) display_presenter_set_flip(__VA_ARGS__)
+#undef LCD_SET_FONT
 #define LCD_SET_FONT(...) display_presenter_set_font(__VA_ARGS__)
 #define LCD_BLIT_BITMAP(...) display_presenter_blit_bitmap(__VA_ARGS__)
 

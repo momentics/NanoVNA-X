@@ -972,6 +972,6 @@ void app_measurement_transform_domain(uint16_t ch_mask) {
         tmp[i * 2 + 0] += tmp[(i - 1) * 2 + 0];
       }
     }
-    memcpy(measured[ch], tmp, sizeof(measured[0]));
+    memcpy(measured[ch], tmp, sweep_points * 2 * sizeof(float));
   }
 }
