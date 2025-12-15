@@ -441,8 +441,8 @@ uint32_t lcd_send_register(uint8_t cmd, uint8_t len, const uint8_t *data) {
 //******************************************************************************
 // ILI9341 and ST7789V Lcd init sequence + lcd depend image rotate function
 #if defined(LCD_DRIVER_ILI9341) || defined(LCD_DRIVER_ST7789)
-typedef enum { ili9341_type = 0, st7789v } lcd_type_t;
-static lcd_type_t lcd_type = ili9341_type;
+typedef enum { LCD_TYPE_ILI9341 = 0, LCD_TYPE_ST7789V } lcd_type_t;
+static lcd_type_t lcd_type = LCD_TYPE_ILI9341;
 static const uint8_t ILI9341_INIT_SEQ[] = {
   // ILI9341 init sequence
   // cmd,           len, data...,
@@ -482,7 +482,7 @@ static const uint8_t ILI9341_INIT_SEQ[] = {
 // ST7789 LCD_RDDID read return 0x42C2A97F (need shift right by 7 bit, so ID1 = 0x85, ID2 = 0x85,
 // ID3 = 0x52)
 #define ST7789V_ID 0x858552
-static const uint8_t S_T7789_V_INIT_SEQ[] = {
+static const uint8_t ST7789V_INIT_SEQ[] = {
   // ST7789V init sequence
   // cmd,           len, data...,
   LCD_SWRESET, 0, // SW reset
@@ -506,12 +506,12 @@ static const uint8_t S_T7789_V_INIT_SEQ[] = {
 static const uint8_t *get_lcd_init(void) {
   uint32_t id = lcd_send_register(LCD_RDDID, 0, 0) >> 7;
   if (id == ST7789V_ID)
-    lcd_type = st7789v;
-  return lcd_type == ili9341_type ? ILI9341_INIT_SEQ : S_T7789_V_INIT_SEQ;
+    lcd_type = LCD_TYPE_ST7789V;
+  return lcd_type == LCD_TYPE_ILI9341 ? ILI9341_INIT_SEQ : ST7789V_INIT_SEQ;
 }
 
 void lcd_set_rotation(uint8_t r) {
-  static const uint8_t lcd_rotation_const[] = {
+  static const uint8_t ILI9341_ROTATION_CONST[] = {
     // ILI9341 LCD_MADCTL rotation settings
     (LCD_MADCTL_MV | LCD_MADCTL_BGR), (LCD_MADCTL_MY | LCD_MADCTL_BGR),
     (LCD_MADCTL_MX | LCD_MADCTL_MY | LCD_MADCTL_MV | LCD_MADCTL_BGR),
@@ -520,13 +520,13 @@ void lcd_set_rotation(uint8_t r) {
     (LCD_MADCTL_MX | LCD_MADCTL_MV | LCD_MADCTL_RGB), (LCD_MADCTL_RGB),
     (LCD_MADCTL_MY | LCD_MADCTL_MV | LCD_MADCTL_RGB),
     (LCD_MADCTL_MX | LCD_MADCTL_MY | LCD_MADCTL_RGB)};
-  lcd_send_command(LCD_MADCTL, 1, &lcd_rotation_const[lcd_type * 4 + r]);
+  lcd_send_command(LCD_MADCTL, 1, &ILI9341_ROTATION_CONST[lcd_type * 4 + r]);
 }
 
 #endif
 
 #ifdef LCD_DRIVER_ST7796S
-static const uint8_t ST7796S_init_seq[] = {
+static const uint8_t ST7796S_INIT_SEQ[] = {
   // ST7996s init sequence
   // cmd,           len, data...,
   LCD_SWRESET, 0,                                // SW reset
@@ -556,15 +556,15 @@ static const uint8_t ST7796S_init_seq[] = {
 };
 
 static const uint8_t *get_lcd_init(void) {
-  return ST7796S_init_seq;
+  return ST7796S_INIT_SEQ;
 }
 
 void lcd_set_rotation(uint8_t r) {
-  static const uint8_t ST7796S_rotation_const[] = {
+  static const uint8_t ST7796S_ROTATION_CONST[] = {
     (LCD_MADCTL_MV | LCD_MADCTL_BGR), (LCD_MADCTL_MY | LCD_MADCTL_BGR),
     (LCD_MADCTL_MX | LCD_MADCTL_MY | LCD_MADCTL_MV | LCD_MADCTL_BGR),
     (LCD_MADCTL_MX | LCD_MADCTL_BGR)};
-  lcd_send_command(LCD_MADCTL, 1, &ST7796S_rotation_const[r]);
+  lcd_send_command(LCD_MADCTL, 1, &ST7796S_ROTATION_CONST[r]);
 }
 #endif
 
@@ -607,7 +607,7 @@ void lcd_read_memory(int x, int y, int w, int h, uint16_t *out) {
   uint16_t len = w * h;
   lcd_set_window(x, y, w, h, LCD_RAMRD);
   // Set read speed (if different from write speed)
-  if (lcd_type == st7789v && ST7789V_SPI_RX_SPEED != LCD_SPI_SPEED) {
+  if (lcd_type == LCD_TYPE_ST7789V && ST7789V_SPI_RX_SPEED != LCD_SPI_SPEED) {
     SPI_BR_SET(LCD_SPI, ST7789V_SPI_RX_SPEED);
   } else if (ILI9341_SPI_RX_SPEED != LCD_SPI_SPEED) {
     SPI_BR_SET(LCD_SPI, ILI9341_SPI_RX_SPEED);

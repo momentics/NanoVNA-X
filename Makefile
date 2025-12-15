@@ -162,7 +162,8 @@ endif
 
 # C sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.
-CSRC = $(STARTUPSRC) \
+# ChibiOS and Third Party Sources
+CHIBIOS_CSRC = $(STARTUPSRC) \
        $(KERNSRC) \
        $(PORTSRC) \
        $(OSALSRC) \
@@ -171,8 +172,10 @@ CSRC = $(STARTUPSRC) \
        $(BOARDSRC) \
        $(STREAMSSRC) \
        third_party/FatFs/ff.c \
-       third_party/FatFs/ffunicode.c \
-       src/ui/resources/fonts/numfont16x22.c \
+       third_party/FatFs/ffunicode.c
+
+# Project Specific Sources
+PROJECT_CSRC = src/ui/resources/fonts/numfont16x22.c \
        src/ui/resources/fonts/font_5x7.c \
        src/ui/resources/fonts/font_6x10.c \
        src/ui/resources/fonts/font_7x11b.c \
@@ -223,6 +226,14 @@ CSRC = $(STARTUPSRC) \
        src/interfaces/ports/processing_port.c \
        src/interfaces/ports/ui_port.c \
        src/interfaces/ports/usb_command_server_port.c
+
+# Combine sources
+CSRC = $(CHIBIOS_CSRC) $(PROJECT_CSRC)
+
+# Suppress warnings for ChibiOS sources
+# Calculate object file names for ChibiOS sources since rules.mk flattens them into $(OBJDIR) aka build/obj
+CHIBIOS_OBJS = $(addprefix build/obj/, $(notdir $(CHIBIOS_CSRC:.c=.o)))
+$(CHIBIOS_OBJS): CWARN = -w
 
 # C++ sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.
