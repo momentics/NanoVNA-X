@@ -36,135 +36,12 @@
 #include "platform/boards/stm32_peripherals.h"
 #include "platform/hal.h"
 
-#define AUDIO_ADC_FREQ (AUDIO_ADC_FREQ_K * 1000)
-#define FREQUENCY_OFFSET (FREQUENCY_IF_K * 1000)
-
-// Apply calibration after made sweep, (if set 1, then calibration move out from sweep cycle)
-#define APPLY_CALIBRATION_AFTER_SWEEP 0
-
-// Speed of light const
-#define SPEED_OF_LIGHT 299792458
-
+#include "rf/sweep_core.h"
 #include "processing/vna_math.h"
-
 #include "core/globals.h"
 #include "ui/ui_style.h"
 #include "ui/core/ui_core.h"
 #include "processing/calibration.h"
-
-// Optional sweep point (in UI menu)
-#if SWEEP_POINTS_MAX >= 401
-#define POINTS_SET_COUNT 5
-#define POINTS_SET                                                                                 \
-  { 51, 101, 201, 301, SWEEP_POINTS_MAX }
-#define POINTS_COUNT_DEFAULT SWEEP_POINTS_MAX
-#elif SWEEP_POINTS_MAX >= 301
-#define POINTS_SET_COUNT 4
-#define POINTS_SET                                                                                 \
-  { 51, 101, 201, SWEEP_POINTS_MAX }
-#define POINTS_COUNT_DEFAULT SWEEP_POINTS_MAX
-#elif SWEEP_POINTS_MAX >= 201
-#define POINTS_SET_COUNT 3
-#define POINTS_SET                                                                                 \
-  { 51, 101, SWEEP_POINTS_MAX }
-#define POINTS_COUNT_DEFAULT SWEEP_POINTS_MAX
-#elif SWEEP_POINTS_MAX >= 101
-#define POINTS_SET_COUNT 2
-#define POINTS_SET                                                                                 \
-  { 51, SWEEP_POINTS_MAX }
-#define POINTS_COUNT_DEFAULT SWEEP_POINTS_MAX
-#endif
-
-#if SWEEP_POINTS_MAX <= 256
-#define FFT_SIZE 256
-#elif SWEEP_POINTS_MAX <= 512
-#define FFT_SIZE 512
-#endif
-
-freq_t get_frequency(uint16_t idx);
-freq_t get_frequency_step(void);
-
-void set_marker_index(int m, int idx);
-freq_t get_marker_frequency(int marker);
-
-void reset_sweep_frequency(void);
-void set_sweep_frequency(uint16_t type, freq_t frequency);
-
-void set_bandwidth(uint16_t bw_count);
-uint32_t get_bandwidth_frequency(uint16_t bw_freq);
-
-void set_power(uint8_t value);
-
-void set_smooth_factor(uint8_t factor);
-uint8_t get_smooth_factor(void);
-
-int32_t my_atoi(const char *p);
-uint32_t my_atoui(const char *p);
-float my_atof(const char *p);
-bool strcmpi(const char *t1, const char *t2);
-int get_str_index(const char *v, const char *list);
-int parse_line(char *line, char *args[], int max_cnt);
-void swap_bytes(uint16_t *buf, int size);
-int packbits(char *source, char *dest, int size);
-void delay_8t(uint32_t cycles);
-inline void delay_microseconds(uint32_t us) {
-  delay_8t(us * STM32_CORE_CLOCK / 8);
-}
-inline void delay_milliseconds(uint32_t ms) {
-  delay_8t(ms * 125 * STM32_CORE_CLOCK);
-}
-
-void pause_sweep(void);
-void resume_sweep(void);
-void toggle_sweep(void);
-int load_properties(uint32_t id);
-
-#ifdef USE_BACKUP
-#endif
-
-void set_sweep_points(uint16_t points);
-
-#ifdef REMOTE_DESKTOP
-// State flags for remote touch state
-
-void remote_touch_set(uint16_t state, int16_t x, int16_t y);
-void send_region(remote_region_t *rd, uint8_t *buf, uint16_t size);
-#endif
-
-#define SWEEP_ENABLE 0x01
-#define SWEEP_ONCE 0x02
-#define SWEEP_BINARY 0x08
-#define SWEEP_REMOTE 0x40
-#define SWEEP_UI_MODE 0x80
-
-// Global flag to indicate when calibration is in critical phase to prevent UI flash operations
-
-/*
- * Measure timings for si5351 generator, after ready
- */
-// Enable si5351 timing command, used for debug align times
-// #define ENABLE_SI5351_TIMINGS
-#if defined(NANOVNA_F303)
-// Generator ready delays, values in us
-#define DELAY_BAND_1_2 US2ST(100)       // Delay for bands 1-2
-#define DELAY_BAND_3_4 US2ST(120)       // Delay for bands 3-4
-#define DELAY_BANDCHANGE US2ST(2000)    // Band changes need set additional delay after reset PLL
-#define DELAY_CHANNEL_CHANGE US2ST(100) // Switch channel delay
-#define DELAY_SWEEP_START US2ST(2000)   // Delay at sweep start
-// Delay after set new PLL values in ms, and send reset
-#define DELAY_RESET_PLL_BEFORE 0   //    0 (0 for disabled)
-#define DELAY_RESET_PLL_AFTER 4000 // 4000 (0 for disabled)
-#else
-// Generator ready delays, values in us
-#define DELAY_BAND_1_2 US2ST(100)       // 0 Delay for bands 1-2
-#define DELAY_BAND_3_4 US2ST(140)       // 1 Delay for bands 3-4
-#define DELAY_BANDCHANGE US2ST(5000)    // 2 Band changes need set additional delay after reset PLL
-#define DELAY_CHANNEL_CHANGE US2ST(100) // 3 Switch channel delay
-#define DELAY_SWEEP_START US2ST(100)    // 4 Delay at sweep start
-// Delay after before/after set new PLL values in ms
-#define DELAY_RESET_PLL_BEFORE 0        // 5    0 (0 for disabled)
-#define DELAY_RESET_PLL_AFTER 4000      // 6 4000 (0 for disabled)
-#endif
 
 /*
  * dsp.c
@@ -338,21 +215,7 @@ extern config_t config;
 float groupdelay_from_array(int i, const float *v);
 
 // Runtime control functions exposed for shell
-void pause_sweep(void);
-void resume_sweep(void);
-void toggle_sweep(void);
-void set_power(uint8_t value);
-void set_bandwidth(uint16_t bw_count);
-uint32_t get_bandwidth_frequency(uint16_t bw_freq);
-void set_sweep_points(uint16_t points);
-void set_sweep_frequency(uint16_t type, freq_t freq);
-void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforce_order); // Exposed
-void reset_sweep_frequency(void);
-void app_measurement_update_frequencies(void);
-bool need_interpolate(freq_t start, freq_t stop, uint16_t points);
-void sweep_get_ordered(freq_t *start, freq_t *stop);
-int load_properties(uint32_t id);
-void set_marker_index(int m, int idx);
+
 
 // Stat helper
 struct stat_t {
@@ -440,6 +303,23 @@ void lcd_set_foreground(uint16_t fg_idx);
 void lcd_set_background(uint16_t bg_idx);
 void lcd_set_colors(uint16_t fg_idx, uint16_t bg_idx);
 void lcd_clear_screen(void);
+
+// Common utilities
+int32_t my_atoi(const char *p);
+uint32_t my_atoui(const char *p);
+float my_atof(const char *p);
+bool strcmpi(const char *t1, const char *t2);
+int get_str_index(const char *v, const char *list);
+int parse_line(char *line, char *args[], int max_cnt);
+void swap_bytes(uint16_t *buf, int size);
+int packbits(char *source, char *dest, int size);
+void delay_8t(uint32_t cycles);
+inline void delay_microseconds(uint32_t us) {
+  delay_8t(us * STM32_CORE_CLOCK / 8);
+}
+inline void delay_milliseconds(uint32_t ms) {
+  delay_8t(ms * 125 * STM32_CORE_CLOCK);
+}
 void lcd_blit_bitmap(uint16_t x, uint16_t y, uint16_t width, uint16_t height,
                      const uint8_t *bitmap);
 void lcd_blit_bitmap_scale(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t size,
