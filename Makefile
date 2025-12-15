@@ -372,41 +372,88 @@ $(TEST_BUILD_DIR):
 	@mkdir -p $@
 
 $(TEST_BUILD_DIR)/test_common: tests/unit/test_common.c src/core/common.c | $(TEST_BUILD_DIR)
-	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	@echo "  [HOST_CC] $@"
+	@$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
-$(TEST_BUILD_DIR)/test_vna_math: tests/unit/test_vna_math.c src/processing/vna_math.c | $(TEST_BUILD_DIR)
-	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+TEST_OBJCOPY ?= objcopy
+
+# F072 build of vna_math
+$(TEST_BUILD_DIR)/vna_math_f072.o: src/processing/vna_math.c | $(TEST_BUILD_DIR)
+	@echo "  [HOST_CC] $@"
+	@$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_F072 -DVNA_USE_MATH_TABLES -Itests/stubs -Iinclude -Isrc -c $< -o $@
+	@echo "  [OBJCOPY] $@"
+	@$(TEST_OBJCOPY) --redefine-sym vna_sincosf=vna_sincosf_f072 \
+									--redefine-sym vna_modff=vna_modff_f072 \
+									--redefine-sym vna_sqrtf=vna_sqrtf_f072 \
+									--redefine-sym vna_cbrtf=vna_cbrtf_f072 \
+									--redefine-sym vna_logf=vna_logf_f072 \
+									--redefine-sym vna_log10f_x_10=vna_log10f_x_10_f072 \
+									--redefine-sym vna_atanf=vna_atanf_f072 \
+									--redefine-sym vna_atan2f=vna_atan2f_f072 \
+									--redefine-sym vna_expf=vna_expf_f072 \
+									--redefine-sym fft=fft_f072 \
+									$@
+
+# F303 build of vna_math
+$(TEST_BUILD_DIR)/vna_math_f303.o: src/processing/vna_math.c | $(TEST_BUILD_DIR)
+	@echo "  [HOST_CC] $@"
+	@$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_F303 -DVNA_USE_MATH_TABLES -Itests/stubs -Iinclude -Isrc -c $< -o $@
+	@echo "  [OBJCOPY] $@"
+	@$(TEST_OBJCOPY) --redefine-sym vna_sincosf=vna_sincosf_f303 \
+									--redefine-sym vna_modff=vna_modff_f303 \
+									--redefine-sym vna_sqrtf=vna_sqrtf_f303 \
+									--redefine-sym vna_cbrtf=vna_cbrtf_f303 \
+									--redefine-sym vna_logf=vna_logf_f303 \
+									--redefine-sym vna_log10f_x_10=vna_log10f_x_10_f303 \
+									--redefine-sym vna_atanf=vna_atanf_f303 \
+									--redefine-sym vna_atan2f=vna_atan2f_f303 \
+									--redefine-sym vna_expf=vna_expf_f303 \
+									--redefine-sym fft=fft_f303 \
+									$@
+
+$(TEST_BUILD_DIR)/test_vna_math: tests/unit/test_vna_math.c $(TEST_BUILD_DIR)/vna_math_f072.o $(TEST_BUILD_DIR)/vna_math_f303.o | $(TEST_BUILD_DIR)
+	@echo "  [HOST_CC] $@"
+	@$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_measurement_pipeline: tests/unit/test_measurement_pipeline.c \
 		src/rf/pipeline/measurement_pipeline.c | $(TEST_BUILD_DIR)
-	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	@echo "  [HOST_CC] $@"
+	@$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_dsp_backend: tests/unit/test_dsp_backend.c src/processing/dsp_backend.c | $(TEST_BUILD_DIR)
-	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	@echo "  [HOST_CC] $@"
+	@$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_legacy_measure: tests/unit/test_legacy_measure.c src/processing/vna_math.c | $(TEST_BUILD_DIR)
-	$(HOST_CC) $(HOST_CFLAGS) -Wno-unused-function -Wno-unused-variable -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	@echo "  [HOST_CC] $@"
+	@$(HOST_CC) $(HOST_CFLAGS) -Wno-unused-function -Wno-unused-variable -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_event_bus: tests/unit/test_event_bus.c src/infra/event/event_bus.c | $(TEST_BUILD_DIR)
-	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	@echo "  [HOST_CC] $@"
+	@$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_scheduler: tests/unit/test_scheduler.c src/infra/task/scheduler.c | $(TEST_BUILD_DIR)
-	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	@echo "  [HOST_CC] $@"
+	@$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_measurement_engine: tests/unit/test_measurement_engine.c \
 		src/rf/engine/measurement_engine.c src/rf/pipeline/measurement_pipeline.c | $(TEST_BUILD_DIR)
-	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	@echo "  [HOST_CC] $@"
+	@$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_shell_service: tests/unit/test_shell_service.c src/interfaces/cli/shell_service.c \
 		src/core/common.c | $(TEST_BUILD_DIR)
-	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	@echo "  [HOST_CC] $@"
+	@$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_display_presenter: tests/unit/test_display_presenter.c \
 		src/ui/display/display_presenter.c | $(TEST_BUILD_DIR)
-	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	@echo "  [HOST_CC] $@"
+	@$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_accuracy_analysis: tests/unit/test_accuracy_analysis.c src/processing/vna_math.c | $(TEST_BUILD_DIR)
-	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	@echo "  [HOST_CC] $@"
+	@$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 .PHONY: test tests
 tests: $(TEST_SUITES)

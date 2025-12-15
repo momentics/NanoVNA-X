@@ -395,7 +395,7 @@ void vna_sincosf(float angle, float *p_sin_val, float *p_cos_val) {
   float fract = scaled - full_index;
 
   // Determine quadrant (0-3 for 4 quadrants of 90 degrees each)
-  uint8_t quad = full_index / (uint8_t)table_size_per_quarter;          // which quadrant (0-3)
+  uint8_t quad = full_index / (uint16_t)table_size_per_quarter;          // which quadrant (0-3)
   uint16_t in_quad_pos = full_index % (uint16_t)table_size_per_quarter; // position within quadrant
 
   // Get sin value using common quadratic interpolation function

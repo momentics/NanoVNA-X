@@ -48,12 +48,12 @@ int32_t my_atoi(const char *p) {
       // Rewrite to avoid overflow in check: value < (INT32_MIN + c) / 10
       // Since we store positive 'value' and negate at end, we check against limit accordingly.
       // Better approach: accumulate positive, check against INT32_MAX + 1 (for INT32_MIN absolute)
-      if (value > (INT32_MAX - c) / 10) {
+      if (value > (INT32_MAX - (int32_t)c) / 10) {
          return INT32_MIN;
       }
     } else {
       // Check for overflow: value * 10 + c > INT32_MAX
-      if (value > (INT32_MAX - c) / 10) {
+      if (value > (INT32_MAX - (int32_t)c) / 10) {
         return INT32_MAX;
       }
     }
