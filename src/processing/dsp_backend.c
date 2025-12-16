@@ -247,19 +247,29 @@ void calculate_gamma(float* gamma) {
   static acc_t rc_acc;
   dsp_snapshot(&ss_acc, &sc_acc, &rs_acc, &rc_acc);
 
-  // Calculate reflection coeff. by samp divide by ref (legacy DiSlord algorithm).
+  // Gamma = Sample / Ref
+  // Sample = (sc_acc + j*ss_acc)  [Note: Cos=Real/InPhase, Sin=Imag/Quadrature]
+  // Ref    = (rc_acc + j*rs_acc)
+  // Gamma = (Sc + j*Ss) * (Rc - j*Rs) / (Rc^2 + Rs^2)
+  // Re(Gamma) = (Sc*Rc + Ss*Rs) / MagSq
+  // Im(Gamma) = (Ss*Rc - Sc*Rs) / MagSq
+
   const measure_t rc = (measure_t)rc_acc;
-  if (rc == 0.0f) {
+  const measure_t rs = (measure_t)rs_acc;
+  const measure_t mag_sq = rc * rc + rs * rs;
+
+  if (mag_sq == 0.0f) {
     gamma[0] = 0.0f;
     gamma[1] = 0.0f;
     return;
   }
-  const measure_t rs_rc = (measure_t)rs_acc / rc;
-  const measure_t sc_rc = (measure_t)sc_acc / rc;
-  const measure_t ss_rc = (measure_t)ss_acc / rc;
-  const measure_t rr = rs_rc * rs_rc + 1.0f;
-  gamma[0] = (sc_rc + ss_rc * rs_rc) / rr;
-  gamma[1] = (ss_rc - sc_rc * rs_rc) / rr;
+
+  const measure_t inv_mag = 1.0f / mag_sq;
+  const measure_t sc = (measure_t)sc_acc;
+  const measure_t ss = (measure_t)ss_acc;
+
+  gamma[0] = (sc * rc + ss * rs) * inv_mag;
+  gamma[1] = (ss * rc - sc * rs) * inv_mag;
 }
 
 void fetch_amplitude(float* gamma) {
