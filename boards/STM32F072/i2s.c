@@ -60,6 +60,7 @@ void init_i2s(void *buffer, uint16_t count) {
     | SPI_I2SCFGR_I2SMOD          // I2S mode is selected
     | SPI_I2S_PCM_MODE            // I2S PCM standard (aic3204 use DSP mode, short sync)
 //  | SPI_I2SCFGR_PCMSYNC         // Short sync
+    | SPI_I2SCFGR_CKPOL           // Invert clock polarity (sample on falling edge)
     | SPI_I2SCFGR_I2SE            // I2S enable
     ;
 }
