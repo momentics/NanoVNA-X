@@ -171,7 +171,7 @@ static const float sin_table_qtr[257] = {
 };
 
 #define QTR_WAVE_TABLE_SIZE 257
-#define FAST_MATH_TABLE_SIZE 1024 
+
 
 // Use F072-specific table (from above)
 static const float *sin_table_qtr_ptr = sin_table_qtr;
