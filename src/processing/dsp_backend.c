@@ -208,39 +208,17 @@ void dsp_process(audio_sample_t* capture, size_t length) {
 // Cortex M4 DSP instruction use
 #include "processing/dsp_backend.h"
 
-static inline int32_t pack_sincos_pair(size_t index) {
-  const int16_t* pair = &sincos_tbl[index][0];
-  uint32_t low = (uint32_t)(uint16_t)pair[0];
-  uint32_t high = ((uint32_t)(uint16_t)pair[1]) << 16;
-  return (int32_t)(high | low);
-}
-
-static inline int32_t pack_capture_pair(const audio_sample_t* capture, size_t pair_index) {
-  size_t base = pair_index * 2U;
-  // Standard channel order: Ref=low, Smp=high
-  uint32_t low = (uint32_t)(uint16_t)capture[base];
-  uint32_t high = ((uint32_t)(uint16_t)capture[base + 1U]) << 16;
-  uint32_t val = high | low;
-
-#ifdef NANOVNA_F303
-  // Fix byte ordering issue on F303 by swapping bytes in each 16-bit halfword
-  // 0xAABBCCDD -> 0xBBAADDCC
-  val = ((val & 0xFF00FF00) >> 8) | ((val & 0x00FF00FF) << 8);
-#endif
-  
-  return (int32_t)val;
-}
-
 void dsp_process(audio_sample_t* capture, size_t length) {
   uint32_t i = 0;
-  //  int64_t samp_s = 0;
-  //  int64_t samp_c = 0;
-  //  int64_t ref_s = 0;
-  //  int64_t ref_c = 0;
+//  int64_t samp_s = 0;
+//  int64_t samp_c = 0;
+//  int64_t ref_s = 0;
+//  int64_t ref_c = 0;
 
   do {
-    int32_t sc = pack_sincos_pair(i);
-    int32_t sr = pack_capture_pair(capture, i);
+    int32_t sc = ((int32_t *)sincos_tbl)[i];
+    int32_t sr = ((int32_t *)capture)[i];
+
     // int32_t acc DSP functions, but int32 can overflow
     //    samp_s = __smlatb(sr, sc, samp_s); // samp_s+= smp * sin
     //    samp_c = __smlatt(sr, sc, samp_c); // samp_c+= smp * cos
