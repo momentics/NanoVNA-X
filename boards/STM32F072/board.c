@@ -75,9 +75,18 @@ static bool needDFU(void) {
 //  GPIOA->AFR[0]  = VAL_GPIOA_AFRL;
 //  GPIOA->AFR[1]  = VAL_GPIOA_AFRH;
   GPIOA->MODER   = VAL_GPIOA_MODER;
+
+  // Wait for pull-down to settle
+  for (volatile int i = 0; i < 20000; i++) __NOP();
+
   if (GPIOA->IDR & (1<<GPIOA_PUSH)) {
-    while(GPIOA->IDR & (1<<GPIOA_PUSH)) {}; // Wait press
-    return true;
+    // Debounce: Wait and check again to confirm it's a real press
+    for (volatile int i = 0; i < 100000; i++) __NOP();
+
+    if (GPIOA->IDR & (1<<GPIOA_PUSH)) {
+        while(GPIOA->IDR & (1<<GPIOA_PUSH)) {}; // Wait press release
+        return true;
+    }
   }
   return false;
 }
