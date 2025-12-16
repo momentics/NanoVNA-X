@@ -821,7 +821,8 @@ VNA_SHELL_FUNCTION(cmd_tcxo) {
   si5351_set_tcxo(my_atoui(argv[0]));
 }
 
-#if defined(__REMOTE_DESKTOP__)
+// Remote desktop commands are only available on F303 due to driver support
+#if defined(__REMOTE_DESKTOP__) && defined(NANOVNA_F303)
 VNA_SHELL_FUNCTION(cmd_refresh) {
   static const char cmd_enable_list[] = "on|off";
   if (argc != 1)

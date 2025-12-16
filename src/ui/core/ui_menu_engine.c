@@ -278,7 +278,7 @@ void ui_mode_menu(void) {
   if (ui_mode == UI_MENU)
     return;
   // Reduce plot area to avoid overwriting the menu
-  set_area_size(LCD_WIDTH - MENU_BUTTON_WIDTH - 12, AREA_HEIGHT_NORMAL);
+  set_area_size(LCD_WIDTH - MENU_BUTTON_WIDTH - OFFSETX - 2, AREA_HEIGHT_NORMAL);
   ui_mode = UI_MENU;
   menu_draw(-1);
 }

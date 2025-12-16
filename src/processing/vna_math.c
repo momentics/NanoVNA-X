@@ -366,117 +366,21 @@ static inline float quadratic_interpolation(float x) {
     }
 }
 
-#define QTR_WAVE_TABLE_SIZE_FOR_CALC 256.0f
 
-#if FFT_SIZE == 256
-#if !defined(__VNA_USE_MATH_TABLES__) || defined(NANOVNA_HOST_TEST)
-static inline float fft_sin_256(uint16_t i) {
-    float angle = (2.0f * VNA_PI * i) / 256.0f;
-    return sinf(angle);
-}
-static inline float fft_cos_256(uint16_t i) {
-    float angle = (2.0f * VNA_PI * i) / 256.0f;
-    return cosf(angle);
-}
-#else
-static inline float fft_sin_256(uint16_t i) {
-    uint8_t quad = i >> 6;  
-    uint8_t in_quad_pos = i & 0x3F;  
-    float table_float_idx = in_quad_pos * (QTR_WAVE_TABLE_SIZE_FOR_CALC / 64.0f);
-    float sin_interp = quadratic_interpolation(table_float_idx);
-    float comp_float_idx = (QTR_WAVE_TABLE_SIZE_FOR_CALC - table_float_idx);
-    float cos_interp;
-    if (comp_float_idx >= QTR_WAVE_TABLE_SIZE_FOR_CALC) {
-        cos_interp = sin_table_qtr_ptr[QTR_WAVE_TABLE_SIZE - 1];
-    } else if (comp_float_idx < 0.0f) {
-        cos_interp = sin_table_qtr_ptr[0];
-    } else {
-        cos_interp = quadratic_interpolation(comp_float_idx);
-    }
-    if (quad == 0) { return sin_interp; } 
-    else if (quad == 1) { return cos_interp; } 
-    else if (quad == 2) { return -sin_interp; } 
-    else { return -cos_interp; }
-}
+// FFT macros for F072
+// Adaptive scaling based on FFT_SIZE
+// QTR_WAVE_TABLE_SIZE is 257 (indices 0..256)
+#define FFT_Q (FFT_SIZE/4)
+#define FFT_H (FFT_SIZE/2)
+// Steps in quarter: 256
+#define TABLE_QUARTER_STEPS (QTR_WAVE_TABLE_SIZE - 1) 
+#define FFT_TABLE_SCALE (TABLE_QUARTER_STEPS / FFT_Q)
 
-static inline float fft_cos_256(uint16_t i) {
-    uint8_t quad = i >> 6;  
-    uint8_t in_quad_pos = i & 0x3F;  
-    float table_float_idx = in_quad_pos * (QTR_WAVE_TABLE_SIZE_FOR_CALC / 64.0f);
-    float sin_interp = quadratic_interpolation(table_float_idx);
-    float comp_float_idx = (QTR_WAVE_TABLE_SIZE_FOR_CALC - table_float_idx);
-    float cos_interp;
-    if (comp_float_idx >= QTR_WAVE_TABLE_SIZE_FOR_CALC) {
-        cos_interp = sin_table_qtr_ptr[QTR_WAVE_TABLE_SIZE - 1];
-    } else if (comp_float_idx < 0.0f) {
-        cos_interp = sin_table_qtr_ptr[0];
-    } else {
-        cos_interp = quadratic_interpolation(comp_float_idx);
-    }
-    if (quad == 0) { return cos_interp; } 
-    else if (quad == 1) { return -sin_interp; } 
-    else if (quad == 2) { return -cos_interp; } 
-    else { return sin_interp; }
-}
-#endif 
-#define FFT_SIN(i) fft_sin_256(i)
-#define FFT_COS(i) fft_cos_256(i)
-#elif FFT_SIZE == 512
-#if !defined(__VNA_USE_MATH_TABLES__) || defined(NANOVNA_HOST_TEST)
-static inline float fft_sin_512(uint16_t i) {
-    float angle = (2.0f * VNA_PI * i) / 512.0f;
-    return sinf(angle);
-}
-static inline float fft_cos_512(uint16_t i) {
-    float angle = (2.0f * VNA_PI * i) / 512.0f;
-    return cosf(angle);
-}
-#else
-static inline float fft_sin_512(uint16_t i) {
-    uint8_t quad = i >> 7;  
-    uint8_t in_quad_pos = i & 0x7F;  
-    float table_float_idx = in_quad_pos * (QTR_WAVE_TABLE_SIZE_FOR_CALC / 128.0f);
-    float sin_interp = quadratic_interpolation(table_float_idx);
-    float comp_float_idx = (QTR_WAVE_TABLE_SIZE_FOR_CALC - table_float_idx);
-    float cos_interp;
-    if (comp_float_idx >= QTR_WAVE_TABLE_SIZE_FOR_CALC) {
-        cos_interp = sin_table_qtr_ptr[QTR_WAVE_TABLE_SIZE - 1];
-    } else if (comp_float_idx < 0.0f) {
-        cos_interp = sin_table_qtr_ptr[0];
-    } else {
-        cos_interp = quadratic_interpolation(comp_float_idx);
-    }
-    if (quad == 0) { return sin_interp; } 
-    else if (quad == 1) { return cos_interp; } 
-    else if (quad == 2) { return -sin_interp; } 
-    else { return -cos_interp; }
-}
+// Use direct table lookup for performance and code size on Cortex-M0
+// Avoids software float multiplication/branching in inner loop
+#define FFT_SIN(i) ((i) > FFT_Q ? sin_table_qtr[(FFT_H-(i))*FFT_TABLE_SCALE] : sin_table_qtr[(i)*FFT_TABLE_SCALE])
+#define FFT_COS(i) ((i) > FFT_Q ?-sin_table_qtr[((i)-FFT_Q)*FFT_TABLE_SCALE] : sin_table_qtr[(FFT_Q-(i))*FFT_TABLE_SCALE])
 
-static inline float fft_cos_512(uint16_t i) {
-    uint8_t quad = i >> 7;  
-    uint8_t in_quad_pos = i & 0x7F;  
-    float table_float_idx = in_quad_pos * (QTR_WAVE_TABLE_SIZE_FOR_CALC / 128.0f);
-    float sin_interp = quadratic_interpolation(table_float_idx);
-    float comp_float_idx = (QTR_WAVE_TABLE_SIZE_FOR_CALC - table_float_idx);
-    float cos_interp;
-    if (comp_float_idx >= QTR_WAVE_TABLE_SIZE_FOR_CALC) {
-        cos_interp = sin_table_qtr_ptr[QTR_WAVE_TABLE_SIZE - 1];
-    } else if (comp_float_idx < 0.0f) {
-        cos_interp = sin_table_qtr_ptr[0];
-    } else {
-        cos_interp = quadratic_interpolation(comp_float_idx);
-    }
-    if (quad == 0) { return cos_interp; } 
-    else if (quad == 1) { return -sin_interp; } 
-    else if (quad == 2) { return -cos_interp; } 
-    else { return sin_interp; }
-}
-#endif 
-#define FFT_SIN(i) fft_sin_512(i)
-#define FFT_COS(i) fft_cos_512(i)
-#else
-#error "Need use bigger sin/cos table for new FFT size"
-#endif
 
 // Original modff
 float vna_modff(float x, float* iptr) {
