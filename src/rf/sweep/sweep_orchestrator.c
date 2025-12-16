@@ -229,41 +229,17 @@ static void duplicate_buffer_to_dump(audio_sample_t* p, size_t n) {
 
 void i2s_lld_serve_rx_interrupt(uint32_t flags) {
   uint16_t wait = wait_count;
-  if (wait == 0U) {
+  if (wait == 0U || chVTGetSystemTimeX() < ready_time) {
     return;
   }
-  // Check if we start capture too early
-  if (chVTGetSystemTimeX() < ready_time) {
-    if (wait == config._bandwidth + 2U) {
-       reset_dsp_accumerator();
-    }
-    return;
-  }
-
   audio_sample_t* p = (flags & STM32_DMA_ISR_TCIF) ? rx_buffer + AUDIO_BUFFER_LEN : rx_buffer;
   if (wait > config._bandwidth + 2U) {
     // More than expected buffers - this shouldn't happen, but handle gracefully
     --wait_count;
     return;
   } else if (wait == config._bandwidth + 2U) {
-    // First buffer after reset
-    // Check if this buffer contains valid data (captured AFTER ready_time)
-    // Buffer duration in us = SAMPLES * 1000000 / FREQ
-    // We check if (now - duration) >= ready_time
-    #define BUFFER_DURATION_US ((AUDIO_SAMPLES_COUNT * 1000000U) / AUDIO_ADC_FREQ)
-    systime_t now = chVTGetSystemTimeX();
-    systime_t buffer_start = now - US2ST(BUFFER_DURATION_US);
-    
-    // reset accumulator to clear any initial noise
+    // First buffer after reset - always reset accumulator to clear any initial noise
     reset_dsp_accumerator();
-
-    // If buffer started after ready_time, we can process it!
-    if ((int32_t)(buffer_start - ready_time) >= 0) {
-      dsp_process(p, AUDIO_BUFFER_LEN);
-      // We processed one buffer, so we need decrement wait count once more
-      // (one for this check, and one at end of function)
-      --wait_count;
-    }
   } else {
     // Process actual measurement data
     dsp_process(p, AUDIO_BUFFER_LEN);
