@@ -123,8 +123,8 @@
 #define REG_27_INTERFACE_RJF (2 << 6)
 #define REG_27_INTERFACE_LJF (3 << 6)
 
-// Set the interface mode: 16 bit, BCLK, WCLK as output, I2S mode
-#define REG_27 (REG_27_DATA_16 | REG_27_INTERFACE_I2S | REG_27_WCLK_OUT | REG_27_BCLK_OUT)
+// Set the interface mode: 16 bit, BCLK, WCLK as output, LJF mode
+#define REG_27 (REG_27_DATA_16 | REG_27_INTERFACE_LJF | REG_27_WCLK_OUT | REG_27_BCLK_OUT)
 #define REG_30(n) (0x80 + ((n) * sizeof(int16_t) / sizeof(audio_sample_t)))
 
 static const uint8_t conf_data[] = {
