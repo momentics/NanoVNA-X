@@ -34,7 +34,7 @@
  * @brief   Enables the PAL subsystem.
  */
 #if !defined(HAL_USE_PAL) || defined(__DOXYGEN__)
-#define HAL_USE_PAL TRUE
+#define HAL_USE_PAL FALSE
 #endif
 
 /**
@@ -62,7 +62,7 @@
  * @brief   Enables the EXT subsystem.
  */
 #if !defined(HAL_USE_EXT) || defined(__DOXYGEN__)
-#define HAL_USE_EXT TRUE
+#define HAL_USE_EXT FALSE
 #endif
 
 /**
