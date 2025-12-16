@@ -48,8 +48,8 @@ static void ui_show_version(void) {
 
   // Wait for release of entry button first
   systime_t start = chVTGetSystemTimeX();
-  while (ui_input_wait_release() == 0) {
-    chThdSleepMilliseconds(100);
+  while (ui_input_get_buttons() != 0) {
+    chThdSleepMilliseconds(10);
     if (chVTTimeElapsedSinceX(start) > MS2ST(30000))
       return;
   }
@@ -71,7 +71,7 @@ static void ui_show_version(void) {
   // Wait for release
   if (tstat != 0)
     touch_wait_release();
-  while (ui_input_wait_release() != 0)
+  while (ui_input_get_buttons() != 0)
     chThdSleepMilliseconds(100);
   request_to_redraw(REDRAW_ALL);
 }
