@@ -1,8 +1,8 @@
-#ifndef INTERFACES_CLI_SHELL_COMMANDS_H
-#define INTERFACES_CLI_SHELL_COMMANDS_H
+#ifndef __INTERFACES_CLI_SHELL_COMMANDS_H__
+#define __INTERFACES_CLI_SHELL_COMMANDS_H__
 
 #include "interfaces/cli/shell_service.h"
 
-extern const vna_shell_command_t COMMANDS[];
+extern const VNAShellCommand commands[];
 
-#endif // INTERFACES_CLI_SHELL_COMMANDS_H
+#endif // __INTERFACES_CLI_SHELL_COMMANDS_H__

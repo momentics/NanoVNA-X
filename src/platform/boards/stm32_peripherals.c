@@ -43,7 +43,7 @@
 #include "boards/STM32F072/i2c_v2.c"
 #endif
 
-#ifdef USE_RTC
+#ifdef __USE_RTC__
 // Compact STM32 RTC time library
 #if HAL_USE_RTC == TRUE
 #error "Error VNA use self RTC lib, define HAL_USE_RTC = FALSE in halconf.h"
@@ -92,12 +92,10 @@
 #endif
 
 // Compact STM32 DMA library
-#if 0
 #ifdef NANOVNA_F303
 #include "boards/STM32F303/dma_v1.c"
 #else
 #include "boards/STM32F072/dma_v1.c"
-#endif
 #endif
 
 // Compact STM32 EXT library
@@ -123,7 +121,7 @@ void board_init_timers(void) {
 }
 
 //
-void board_start_timer(TIM_TypeDef *timer, uint32_t period) {
+void board_start_timer(TIM_TypeDef* timer, uint32_t period) {
   timer->ARR = period - 1;
   timer->EGR = STM32_TIM_EGR_UG;
   timer->CNT = 0;

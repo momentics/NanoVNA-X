@@ -40,7 +40,7 @@
 /* ------------------------------------------------------------------------- */
 /* Minimal ChibiOS mailbox/syslock emulation used by the event bus during tests. */
 
-static msg_t mailbox_push(mailbox_t *mbp, msg_t msg) {
+static msg_t mailbox_push(mailbox_t* mbp, msg_t msg) {
   if (mbp == NULL || mbp->buffer == NULL || mbp->length == 0) {
     return MSG_TIMEOUT;
   }
@@ -53,7 +53,7 @@ static msg_t mailbox_push(mailbox_t *mbp, msg_t msg) {
   return MSG_OK;
 }
 
-void chMBObjectInit(mailbox_t *mbp, msg_t *buf, size_t n) {
+void chMBObjectInit(mailbox_t* mbp, msg_t* buf, size_t n) {
   if (mbp == NULL) {
     return;
   }
@@ -64,16 +64,16 @@ void chMBObjectInit(mailbox_t *mbp, msg_t *buf, size_t n) {
   mbp->count = 0;
 }
 
-msg_t chMBPost(mailbox_t *mbp, msg_t msg, systime_t timeout) {
+msg_t chMBPost(mailbox_t* mbp, msg_t msg, systime_t timeout) {
   (void)timeout;
   return mailbox_push(mbp, msg);
 }
 
-msg_t chMBPostI(mailbox_t *mbp, msg_t msg) {
+msg_t chMBPostI(mailbox_t* mbp, msg_t msg) {
   return mailbox_push(mbp, msg);
 }
 
-msg_t chMBFetch(mailbox_t *mbp, msg_t *msgp, systime_t timeout) {
+msg_t chMBFetch(mailbox_t* mbp, msg_t* msgp, systime_t timeout) {
   (void)timeout;
   if (mbp == NULL || mbp->count == 0U) {
     return MSG_TIMEOUT;
@@ -95,7 +95,7 @@ void chSysUnlockFromISR(void) {}
 
 typedef struct {
   event_bus_topic_t topic;
-  const char *payload_tag;
+  const char* payload_tag;
   uintptr_t user_token;
 } event_record_t;
 
@@ -108,22 +108,22 @@ static void reset_records(void) {
   memset(g_records, 0, sizeof(g_records));
 }
 
-static void recording_listener(const event_bus_message_t *message, void *user_data) {
+static void recording_listener(const event_bus_message_t* message, void* user_data) {
   if (g_record_count >= sizeof(g_records) / sizeof(g_records[0])) {
     return;
   }
-  event_record_t *rec = &g_records[g_record_count++];
+  event_record_t* rec = &g_records[g_record_count++];
   rec->topic = message->topic;
-  rec->payload_tag = (const char *)message->payload;
+  rec->payload_tag = (const char*)message->payload;
   rec->user_token = (uintptr_t)user_data;
 }
 
-#define CHECK(cond)                                                                                \
-  do {                                                                                             \
-    if (!(cond)) {                                                                                 \
-      ++g_failures;                                                                                \
-      fprintf(stderr, "[FAIL] %s:%d: %s\n", __FILE__, __LINE__, #cond);                            \
-    }                                                                                              \
+#define CHECK(cond)                                                                           \
+  do {                                                                                        \
+    if (!(cond)) {                                                                            \
+      ++g_failures;                                                                           \
+      fprintf(stderr, "[FAIL] %s:%d: %s\n", __FILE__, __LINE__, #cond);                       \
+    }                                                                                         \
   } while (0)
 
 static void test_synchronous_publish_without_mailbox(void) {
@@ -138,8 +138,8 @@ static void test_synchronous_publish_without_mailbox(void) {
   CHECK(bus.mailbox_ready == false);
 
   reset_records();
-  CHECK(event_bus_subscribe(&bus, EVENT_SWEEP_STARTED, recording_listener, (void *)1));
-  CHECK(event_bus_subscribe(&bus, EVENT_SWEEP_STARTED, recording_listener, (void *)2));
+  CHECK(event_bus_subscribe(&bus, EVENT_SWEEP_STARTED, recording_listener, (void*)1));
+  CHECK(event_bus_subscribe(&bus, EVENT_SWEEP_STARTED, recording_listener, (void*)2));
 
   CHECK(event_bus_publish(&bus, EVENT_SWEEP_STARTED, "sync0"));
   CHECK(event_bus_publish_from_isr(&bus, EVENT_SWEEP_STARTED, "sync1"));
@@ -167,7 +167,7 @@ static void test_queue_allocation_and_recycle(void) {
   CHECK(bus.mailbox_ready == true);
 
   reset_records();
-  CHECK(event_bus_subscribe(&bus, EVENT_SWEEP_COMPLETED, recording_listener, (void *)42));
+  CHECK(event_bus_subscribe(&bus, EVENT_SWEEP_COMPLETED, recording_listener, (void*)42));
 
   CHECK(event_bus_publish(&bus, EVENT_SWEEP_COMPLETED, "fifo0"));
   CHECK(event_bus_publish_from_isr(&bus, EVENT_SWEEP_COMPLETED, "fifo1"));

@@ -25,20 +25,19 @@
 
 #include "rf/sweep/sweep_orchestrator.h"
 
-void measurement_pipeline_init(measurement_pipeline_t *pipeline,
-                               const platform_drivers_t *drivers) {
+void measurement_pipeline_init(measurement_pipeline_t* pipeline, const PlatformDrivers* drivers) {
   if (pipeline == NULL) {
     return;
   }
   pipeline->drivers = drivers;
 }
 
-uint16_t measurement_pipeline_active_mask(measurement_pipeline_t *pipeline) {
+uint16_t measurement_pipeline_active_mask(measurement_pipeline_t* pipeline) {
   (void)pipeline;
   return app_measurement_get_sweep_mask();
 }
 
-bool measurement_pipeline_execute(measurement_pipeline_t *pipeline, bool break_on_operation,
+bool measurement_pipeline_execute(measurement_pipeline_t* pipeline, bool break_on_operation,
                                   uint16_t channel_mask) {
   (void)pipeline;
   return app_measurement_sweep(break_on_operation, channel_mask);

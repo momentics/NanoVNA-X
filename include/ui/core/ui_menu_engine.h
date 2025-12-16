@@ -13,21 +13,21 @@ void ui_menu_touch(int touch_x, int touch_y);
 
 // Helpers
 void menu_move_back(bool leave_ui);
-void menu_push_submenu(const menuitem_t *submenu);
-void menu_set_submenu(const menuitem_t *submenu);
+void menu_push_submenu(const menuitem_t* submenu);
+void menu_set_submenu(const menuitem_t* submenu);
 
 // Exposed for ui_controller.c to build menus
-const menuitem_t *current_menu_item(int i);
+const menuitem_t* current_menu_item(int i);
 int current_menu_get_count(void);
 void ui_mode_menu(void);
 
-extern const menuitem_t MENU_BACK[];
+extern const menuitem_t menu_back[];
 
 // Generic Menu Callbacks
 UI_FUNCTION_ADV_CALLBACK(menu_keyboard_acb);
 
 // Dynamic Menu Buffer (for dynamic construction)
-menuitem_t *menu_dynamic_acquire(void);
+menuitem_t* menu_dynamic_acquire(void);
 
 // Exposed globals (from engine)
 extern int8_t selection;

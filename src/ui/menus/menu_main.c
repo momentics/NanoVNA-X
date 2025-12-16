@@ -22,15 +22,15 @@ static UI_FUNCTION_ADV_CALLBACK(menu_pause_acb) {
 }
 
 // Root Menu
-const menuitem_t MENU_TOP[] = {
-  {MT_SUBMENU, 0, "CAL", MENU_CAL_MENU},
-  {MT_SUBMENU, 0, "STIMULUS", MENU_STIMULUS},
-  {MT_SUBMENU, 0, "DISPLAY", MENU_DISPLAY},
-  {MT_SUBMENU, 0, "MEASURE", MENU_MEASURE_TOOLS},
-#ifdef USE_SD_CARD
-  {MT_SUBMENU, 0, "SD CARD", menu_sdcard_cb},
+const menuitem_t menu_top[] = {
+    {MT_SUBMENU, 0, "CAL", menu_cal_menu},
+    {MT_SUBMENU, 0, "STIMULUS", menu_stimulus},
+    {MT_SUBMENU, 0, "DISPLAY", menu_display},
+    {MT_SUBMENU, 0, "MEASURE", menu_measure_tools},
+#ifdef __USE_SD_CARD__
+    {MT_SUBMENU, 0, "SD CARD", menu_sdcard},
 #endif
-  {MT_SUBMENU, 0, "SYSTEM", MENU_SYSTEM},
-  {MT_ADV_CALLBACK, 0, "%s\nSWEEP", menu_pause_acb},
-  {MT_NEXT, 0, NULL, NULL} // sentinel
+    {MT_SUBMENU, 0, "SYSTEM", menu_system},
+    {MT_ADV_CALLBACK, 0, "%s\nSWEEP", menu_pause_acb},
+    {MT_NEXT, 0, NULL, NULL} // sentinel
 };

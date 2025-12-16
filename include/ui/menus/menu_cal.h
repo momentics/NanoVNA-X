@@ -1,8 +1,8 @@
-#ifndef UI_MENU_CAL_H
-#define UI_MENU_CAL_H
+#ifndef __UI_MENU_CAL_H__
+#define __UI_MENU_CAL_H__
 
 #include "ui/ui_menu.h"
 
-extern const menuitem_t MENU_CAL_MENU[];
+extern const menuitem_t menu_cal_menu[];
 
-#endif // UI_MENU_CAL_H
+#endif // __UI_MENU_CAL_H__

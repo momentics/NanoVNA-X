@@ -38,7 +38,7 @@ void ui_input_reset_state(void) {
 
 uint16_t ui_input_get_buttons(void) {
   uint16_t cur_button = read_buttons();
-#ifdef FLIP_DISPLAY
+#ifdef __FLIP_DISPLAY__
   if (VNA_MODE(VNA_MODE_FLIP_DISPLAY) &&
       (((cur_button >> GPIOA_LEVER1) ^ (cur_button >> GPIOA_LEVER2)) & 1)) {
     cur_button ^= (1 << GPIOA_LEVER1) | (1 << GPIOA_LEVER2);

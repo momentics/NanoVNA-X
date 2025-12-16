@@ -69,25 +69,25 @@ void lcd_drawfont(uint8_t ch, int x, int y) {
   (void)x;
   (void)y;
 }
-void lcd_drawstring(int x, int y, const char *str) {
+void lcd_drawstring(int x, int y, const char* str) {
   (void)x;
   (void)y;
   (void)str;
 }
-void lcd_drawstring_size(const char *str, int x, int y, uint8_t size) {
+void lcd_drawstring_size(const char* str, int x, int y, uint8_t size) {
   (void)str;
   (void)x;
   (void)y;
   (void)size;
 }
-int lcd_printf_va(int16_t x, int16_t y, const char *fmt, va_list args) {
+int lcd_printf_va(int16_t x, int16_t y, const char* fmt, va_list args) {
   (void)x;
   (void)y;
   char buffer[64];
   int len = vsnprintf(buffer, sizeof(buffer), fmt, args);
   return len;
 }
-void lcd_read_memory(int x, int y, int w, int h, uint16_t *out) {
+void lcd_read_memory(int x, int y, int w, int h, uint16_t* out) {
   (void)x;
   (void)y;
   (void)w;
@@ -114,7 +114,7 @@ void lcd_set_font(int type) {
   (void)type;
 }
 void lcd_blit_bitmap(uint16_t x, uint16_t y, uint16_t width, uint16_t height,
-                     const uint8_t *bitmap) {
+                     const uint8_t* bitmap) {
   (void)x;
   (void)y;
   (void)width;
@@ -125,7 +125,7 @@ void lcd_blit_bitmap(uint16_t x, uint16_t y, uint16_t width, uint16_t height,
 /* ------------------------------------------------------------------------- */
 
 typedef struct {
-  void *context_seen;
+  void* context_seen;
   int fill_calls;
   int drawstring_calls;
   int set_colors_calls;
@@ -144,7 +144,7 @@ typedef struct {
 
 static mock_presenter_state_t g_mock_state;
 
-static void mock_fill(void *ctx, int x, int y, int w, int h) {
+static void mock_fill(void* ctx, int x, int y, int w, int h) {
   g_mock_state.context_seen = ctx;
   ++g_mock_state.fill_calls;
   g_mock_state.last_fill[0] = x;
@@ -153,7 +153,7 @@ static void mock_fill(void *ctx, int x, int y, int w, int h) {
   g_mock_state.last_fill[3] = h;
 }
 
-static void mock_drawstring(void *ctx, int16_t x, int16_t y, const char *str) {
+static void mock_drawstring(void* ctx, int16_t x, int16_t y, const char* str) {
   g_mock_state.context_seen = ctx;
   ++g_mock_state.drawstring_calls;
   g_mock_state.last_string_x = x;
@@ -161,14 +161,14 @@ static void mock_drawstring(void *ctx, int16_t x, int16_t y, const char *str) {
   strncpy(g_mock_state.last_string, str, sizeof(g_mock_state.last_string) - 1);
 }
 
-static void mock_set_colors(void *ctx, uint16_t fg, uint16_t bg) {
+static void mock_set_colors(void* ctx, uint16_t fg, uint16_t bg) {
   g_mock_state.context_seen = ctx;
   ++g_mock_state.set_colors_calls;
   g_mock_state.last_fg = fg;
   g_mock_state.last_bg = bg;
 }
 
-static int mock_vprintf(void *ctx, int16_t x, int16_t y, const char *fmt, va_list args) {
+static int mock_vprintf(void* ctx, int16_t x, int16_t y, const char* fmt, va_list args) {
   g_mock_state.context_seen = ctx;
   ++g_mock_state.vprintf_calls;
   g_mock_state.last_printf_x = x;
@@ -178,27 +178,27 @@ static int mock_vprintf(void *ctx, int16_t x, int16_t y, const char *fmt, va_lis
   return (int)strlen(g_mock_state.last_printf_buf);
 }
 
-static const display_presenter_api_t G_MOCK_API = {
-  .fill = mock_fill,
-  .drawstring = mock_drawstring,
-  .set_colors = mock_set_colors,
-  .vprintf = mock_vprintf,
+static const display_presenter_api_t g_mock_api = {
+    .fill = mock_fill,
+    .drawstring = mock_drawstring,
+    .set_colors = mock_set_colors,
+    .vprintf = mock_vprintf,
 };
 
 static int g_failures = 0;
 
-#define CHECK(cond, msg)                                                                           \
-  do {                                                                                             \
-    if (!(cond)) {                                                                                 \
-      ++g_failures;                                                                                \
-      fprintf(stderr, "[FAIL] %s:%d: %s\n", __FILE__, __LINE__, msg);                              \
-    }                                                                                              \
+#define CHECK(cond, msg)                                                                         \
+  do {                                                                                           \
+    if (!(cond)) {                                                                               \
+      ++g_failures;                                                                              \
+      fprintf(stderr, "[FAIL] %s:%d: %s\n", __FILE__, __LINE__, msg);                            \
+    }                                                                                            \
   } while (0)
 
 static void test_presenter_forwards_calls(void) {
   memset(&g_mock_state, 0, sizeof(g_mock_state));
   int context = 42;
-  display_presenter_t presenter = {.context = &context, .api = &G_MOCK_API};
+  display_presenter_t presenter = {.context = &context, .api = &g_mock_api};
   display_presenter_bind(&presenter);
 
   display_presenter_fill(1, 2, 3, 4);

@@ -21,9 +21,9 @@
 #include "infra/task/scheduler.h"
 
 typedef struct scheduler_slot {
-  thread_t *thread;
+  thread_t* thread;
   scheduler_entry_t entry;
-  void *user_data;
+  void* user_data;
 } scheduler_slot_t;
 
 #define SCHEDULER_MAX_TASKS 4U
@@ -31,7 +31,7 @@ typedef struct scheduler_slot {
 static scheduler_slot_t scheduler_slots[SCHEDULER_MAX_TASKS];
 
 static THD_FUNCTION(scheduler_entry_adapter, arg) {
-  scheduler_slot_t *slot = (scheduler_slot_t *)arg;
+  scheduler_slot_t* slot = (scheduler_slot_t*)arg;
   msg_t exit_code = MSG_OK;
   if (slot != NULL && slot->entry != NULL) {
     exit_code = slot->entry(slot->user_data);
@@ -46,15 +46,15 @@ static THD_FUNCTION(scheduler_entry_adapter, arg) {
   chThdExit(exit_code);
 }
 
-scheduler_task_t scheduler_start(const char *name, tprio_t priority, void *working_area,
+scheduler_task_t scheduler_start(const char* name, tprio_t priority, void* working_area,
                                  size_t working_area_size, scheduler_entry_t entry,
-                                 void *user_data) {
+                                 void* user_data) {
   scheduler_task_t task = {.slot = NULL};
   if (entry == NULL || working_area == NULL || working_area_size == 0U) {
     return task;
   }
 
-  scheduler_slot_t *slot = NULL;
+  scheduler_slot_t* slot = NULL;
   chSysLock();
   for (size_t i = 0; i < SCHEDULER_MAX_TASKS; ++i) {
     if (scheduler_slots[i].thread == NULL) {
@@ -70,8 +70,8 @@ scheduler_task_t scheduler_start(const char *name, tprio_t priority, void *worki
     return task;
   }
 
-  thread_t *thread =
-    chThdCreateStatic(working_area, working_area_size, priority, scheduler_entry_adapter, slot);
+  thread_t* thread = chThdCreateStatic(working_area, working_area_size, priority,
+                                       scheduler_entry_adapter, slot);
   if (thread == NULL) {
     chSysLock();
     slot->entry = NULL;
@@ -96,13 +96,13 @@ scheduler_task_t scheduler_start(const char *name, tprio_t priority, void *worki
   return task;
 }
 
-void scheduler_stop(scheduler_task_t *task) {
+void scheduler_stop(scheduler_task_t* task) {
   if (task == NULL || task->slot == NULL) {
     return;
   }
 
-  scheduler_slot_t *slot = task->slot;
-  thread_t *thread;
+  scheduler_slot_t* slot = task->slot;
+  thread_t* thread;
 
   chSysLock();
   thread = slot->thread;

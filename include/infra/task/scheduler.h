@@ -22,16 +22,16 @@
 
 #include "ch.h"
 
-typedef msg_t (*scheduler_entry_t)(void *user_data);
+typedef msg_t (*scheduler_entry_t)(void* user_data);
 
 struct scheduler_slot;
 
 typedef struct {
-  struct scheduler_slot *slot;
+  struct scheduler_slot* slot;
 } scheduler_task_t;
 
-scheduler_task_t scheduler_start(const char *name, tprio_t priority, void *working_area,
+scheduler_task_t scheduler_start(const char* name, tprio_t priority, void* working_area,
                                  size_t working_area_size, scheduler_entry_t entry,
-                                 void *user_data);
+                                 void* user_data);
 
-void scheduler_stop(scheduler_task_t *task);
+void scheduler_stop(scheduler_task_t* task);

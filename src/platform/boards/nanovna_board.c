@@ -33,10 +33,10 @@ static void board_peripherals_init(void) {
 #if HAL_USE_PAL == FALSE
   init_pal();
 #endif
-#ifdef USE_RTC
+#ifdef __USE_RTC__
   rtc_init();
 #endif
-#if defined(VNA_ENABLE_DAC) || defined(LCD_BRIGHTNESS)
+#if defined(__VNA_ENABLE_DAC__) || defined(__LCD_BRIGHTNESS__)
   dac_init();
 #endif
   i2c_start();
@@ -47,7 +47,7 @@ static void display_driver_init(void) {
 }
 
 static void display_driver_set_backlight(uint16_t level) {
-#if defined(VNA_ENABLE_DAC) || defined(LCD_BRIGHTNESS)
+#if defined(__VNA_ENABLE_DAC__) || defined(__LCD_BRIGHTNESS__)
   dac_setvalue_ch2(level);
 #else
   (void)level;
@@ -82,9 +82,10 @@ static void generator_driver_set_power(uint16_t drive_strength) {
   si5351_set_power((uint8_t)drive_strength);
 }
 
-static void storage_driver_init(void) {}
+static void storage_driver_init(void) {
+}
 
-static void storage_driver_program(uint16_t *dst, uint16_t *data, uint16_t size) {
+static void storage_driver_program(uint16_t* dst, uint16_t* data, uint16_t size) {
   flash_program_half_word_buffer(dst, data, size);
 }
 
@@ -92,43 +93,43 @@ static void storage_driver_erase(uint32_t address, uint32_t size) {
   flash_erase_pages(address, size);
 }
 
-static const display_driver_t DISPLAY_DRIVER = {
-  .init = display_driver_init,
-  .set_backlight = display_driver_set_backlight,
+static const display_driver_t display_driver = {
+    .init = display_driver_init,
+    .set_backlight = display_driver_set_backlight,
 };
 
-static const adc_driver_t ADC_DRIVER = {
-  .init = adc_driver_init,
-  .start_watchdog = adc_driver_start_watchdog,
-  .stop_watchdog = adc_driver_stop_watchdog,
-  .read_channel = adc_driver_read,
+static const adc_driver_t adc_driver = {
+    .init = adc_driver_init,
+    .start_watchdog = adc_driver_start_watchdog,
+    .stop_watchdog = adc_driver_stop_watchdog,
+    .read_channel = adc_driver_read,
 };
 
-static const generator_driver_t GENERATOR_DRIVER = {
-  .init = generator_driver_init,
-  .set_frequency = generator_driver_set_frequency,
-  .set_power = generator_driver_set_power,
+static const generator_driver_t generator_driver = {
+    .init = generator_driver_init,
+    .set_frequency = generator_driver_set_frequency,
+    .set_power = generator_driver_set_power,
 };
 
-static const storage_driver_t STORAGE_DRIVER = {
-  .init = storage_driver_init,
-  .program_half_words = storage_driver_program,
-  .erase_pages = storage_driver_erase,
+static const storage_driver_t storage_driver = {
+    .init = storage_driver_init,
+    .program_half_words = storage_driver_program,
+    .erase_pages = storage_driver_erase,
 };
 
-static const platform_drivers_t DRIVERS = {
-  .init = board_peripherals_init,
-  .display = &DISPLAY_DRIVER,
-  .adc = &ADC_DRIVER,
-  .generator = &GENERATOR_DRIVER,
-  .touch = NULL,
-  .storage = &STORAGE_DRIVER,
+static const PlatformDrivers drivers = {
+    .init = board_peripherals_init,
+    .display = &display_driver,
+    .adc = &adc_driver,
+    .generator = &generator_driver,
+    .touch = NULL,
+    .storage = &storage_driver,
 };
 
-const platform_drivers_t *platform_nanovna_f072_drivers(void) {
-  return &DRIVERS;
+const PlatformDrivers* platform_nanovna_f072_drivers(void) {
+  return &drivers;
 }
 
-const platform_drivers_t *platform_nanovna_f303_drivers(void) {
-  return &DRIVERS;
+const PlatformDrivers* platform_nanovna_f303_drivers(void) {
+  return &drivers;
 }

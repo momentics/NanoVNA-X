@@ -4,7 +4,7 @@
  * Each macro defaults to enabled but can be overridden at compile time
  * by defining the symbol before including this header (for example via
  * compiler command line options).
- *
+ * 
  * Copyright (c) 2024, @momentics <momentics@gmail.com>
  * All rights reserved.
  *
@@ -25,6 +25,7 @@
  */
 
 #pragma once
+
 
 #ifndef ENABLED_DUMP_COMMAND
 #define ENABLED_DUMP_COMMAND 1
@@ -117,3 +118,4 @@
 #ifndef DEBUG_CONSOLE_SHOW
 #define DEBUG_CONSOLE_SHOW 0
 #endif
+

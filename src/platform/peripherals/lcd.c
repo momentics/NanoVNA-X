@@ -25,10 +25,6 @@
 #include "chprintf.h"
 #include "platform/peripherals/spi.h"
 
-#ifdef USE_DISPLAY_DMA
-#define __USE_DISPLAY_DMA__
-#endif
-
 // Pin macros for LCD
 #define LCD_CS_LOW palClearPad(GPIOB, GPIOB_LCD_CS)
 #define LCD_CS_HIGH palSetPad(GPIOB, GPIOB_LCD_CS)
@@ -1026,7 +1022,7 @@ void lcd_drawstring_size(const char* str, int x, int y, uint8_t size) {
     x += lcd_drawchar_size(*str++, x, y, size);
 }
 
-void lcd_vector_draw(int x, int y, const vector_data_t* v) {
+void lcd_vector_draw(int x, int y, const vector_data* v) {
   while (v->shift_x || v->shift_y) {
     int x1 = x + (int)v->shift_x;
     int y1 = y + (int)v->shift_y;
@@ -1642,7 +1638,3 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff) {
   return res;
 }
 #endif
-
-void lcd_set_font(int font) {
-  (void)font;
-}

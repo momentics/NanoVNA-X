@@ -22,8 +22,8 @@
 
 #if HAL_USE_UART == TRUE
 
-static size_t uart_dma_send_buffer(UARTDriver *driver, const uint8_t *buffer, size_t size,
-                                   systime_t timeout, msg_t *last_status) {
+static size_t uart_dma_send_buffer(UARTDriver* driver, const uint8_t* buffer, size_t size,
+                                   systime_t timeout, msg_t* last_status) {
   size_t transmitted = 0;
   *last_status = MSG_OK;
   while (transmitted < size) {
@@ -43,8 +43,8 @@ static size_t uart_dma_send_buffer(UARTDriver *driver, const uint8_t *buffer, si
   return transmitted;
 }
 
-static size_t uart_dma_receive_buffer(UARTDriver *driver, uint8_t *buffer, size_t size,
-                                      systime_t timeout, msg_t *last_status) {
+static size_t uart_dma_receive_buffer(UARTDriver* driver, uint8_t* buffer, size_t size,
+                                      systime_t timeout, msg_t* last_status) {
   size_t received = 0;
   *last_status = MSG_OK;
   while (received < size) {
@@ -64,37 +64,37 @@ static size_t uart_dma_receive_buffer(UARTDriver *driver, uint8_t *buffer, size_
   return received;
 }
 
-static size_t uart_stream_write(void *instance, const uint8_t *buffer, size_t size) {
+static size_t uart_stream_write(void* instance, const uint8_t* buffer, size_t size) {
   if (size == 0U) {
     return 0;
   }
-  UARTDriver *driver = (UARTDriver *)instance;
+  UARTDriver* driver = (UARTDriver*)instance;
   msg_t status;
   size_t written = uart_dma_send_buffer(driver, buffer, size, TIME_INFINITE, &status);
   (void)status;
   return written;
 }
 
-static size_t uart_stream_read(void *instance, uint8_t *buffer, size_t size) {
+static size_t uart_stream_read(void* instance, uint8_t* buffer, size_t size) {
   if (size == 0U) {
     return 0;
   }
-  UARTDriver *driver = (UARTDriver *)instance;
+  UARTDriver* driver = (UARTDriver*)instance;
   msg_t status;
   size_t read = uart_dma_receive_buffer(driver, buffer, size, TIME_INFINITE, &status);
   (void)status;
   return read;
 }
 
-static msg_t uart_stream_put(void *instance, uint8_t value) {
-  UARTDriver *driver = (UARTDriver *)instance;
+static msg_t uart_stream_put(void* instance, uint8_t value) {
+  UARTDriver* driver = (UARTDriver*)instance;
   msg_t status;
   (void)uart_dma_send_buffer(driver, &value, 1U, TIME_INFINITE, &status);
   return status;
 }
 
-static msg_t uart_stream_get(void *instance) {
-  UARTDriver *driver = (UARTDriver *)instance;
+static msg_t uart_stream_get(void* instance) {
+  UARTDriver* driver = (UARTDriver*)instance;
   uint8_t value = 0U;
   msg_t status;
   size_t received = uart_dma_receive_buffer(driver, &value, 1U, TIME_INFINITE, &status);
@@ -105,30 +105,30 @@ static msg_t uart_stream_get(void *instance) {
 }
 
 static const struct BaseSequentialStreamVMT uart_stream_vmt = {
-  uart_stream_write,
-  uart_stream_read,
-  uart_stream_put,
-  uart_stream_get,
+    uart_stream_write,
+    uart_stream_read,
+    uart_stream_put,
+    uart_stream_get,
 };
 
 static UARTConfig uart_config = {
-  .txend1_cb = NULL,
-  .txend2_cb = NULL,
-  .rxend_cb = NULL,
-  .rxchar_cb = NULL,
-  .rxerr_cb = NULL,
-  .speed = 115200,
-  .cr1 = 0,
-  .cr2 = 0U,
-  .cr3 = 0,
+    .txend1_cb = NULL,
+    .txend2_cb = NULL,
+    .rxend_cb = NULL,
+    .rxchar_cb = NULL,
+    .rxerr_cb = NULL,
+    .speed = 115200,
+    .cr1 = 0,
+    .cr2 = 0U,
+    .cr3 = 0,
 };
 
-static UARTDriver *uart_driver = &UARTD1;
+static UARTDriver* uart_driver = &UARTD1;
 static BaseSequentialStream uart_stream = {
-  .vmt = &uart_stream_vmt,
+    .vmt = &uart_stream_vmt,
 };
 
-BaseSequentialStream *uart_dma_stream(void) {
+BaseSequentialStream* uart_dma_stream(void) {
   return &uart_stream;
 }
 
@@ -162,7 +162,7 @@ void uart_dma_flush_queues(void) {
   (void)uartStopReceive(uart_driver);
 }
 
-size_t uart_dma_write_timeout(const uint8_t *data, size_t size, systime_t timeout) {
+size_t uart_dma_write_timeout(const uint8_t* data, size_t size, systime_t timeout) {
   if ((uart_driver->state != UART_READY) || (size == 0U)) {
     return 0;
   }
@@ -170,7 +170,7 @@ size_t uart_dma_write_timeout(const uint8_t *data, size_t size, systime_t timeou
   return uart_dma_send_buffer(uart_driver, data, size, timeout, &status);
 }
 
-size_t uart_dma_read_timeout(uint8_t *data, size_t size, systime_t timeout) {
+size_t uart_dma_read_timeout(uint8_t* data, size_t size, systime_t timeout) {
   if ((uart_driver->state != UART_READY) || (size == 0U)) {
     return 0;
   }
@@ -187,7 +187,7 @@ msg_t uart_dma_put_timeout(uint8_t value, systime_t timeout) {
   return status;
 }
 
-msg_t uart_dma_get_timeout(uint8_t *value, systime_t timeout) {
+msg_t uart_dma_get_timeout(uint8_t* value, systime_t timeout) {
   if ((uart_driver->state != UART_READY) || (value == NULL)) {
     return MSG_RESET;
   }
@@ -202,16 +202,16 @@ msg_t uart_dma_get_timeout(uint8_t *value, systime_t timeout) {
 #else /* HAL_USE_UART == TRUE */
 
 static SerialConfig serial_config = {
-  .speed = 115200,
-  .cr1 = 0,
-  .cr2 = USART_CR2_STOP1_BITS,
-  .cr3 = 0,
+    .speed = 115200,
+    .cr1 = 0,
+    .cr2 = USART_CR2_STOP1_BITS,
+    .cr3 = 0,
 };
 
-static SerialDriver *serial_driver = &SD1;
+static SerialDriver* serial_driver = &SD1;
 
-BaseSequentialStream *uart_dma_stream(void) {
-  return (BaseSequentialStream *)serial_driver;
+BaseSequentialStream* uart_dma_stream(void) {
+  return (BaseSequentialStream*)serial_driver;
 }
 
 static void serial_restart(uint32_t baudrate) {
@@ -250,14 +250,14 @@ void uart_dma_flush_queues(void) {
   osalSysUnlock();
 }
 
-size_t uart_dma_write_timeout(const uint8_t *data, size_t size, systime_t timeout) {
+size_t uart_dma_write_timeout(const uint8_t* data, size_t size, systime_t timeout) {
   if ((serial_driver->state != SD_READY) || (data == NULL) || (size == 0U)) {
     return 0;
   }
   return sdWriteTimeout(serial_driver, data, size, timeout);
 }
 
-size_t uart_dma_read_timeout(uint8_t *data, size_t size, systime_t timeout) {
+size_t uart_dma_read_timeout(uint8_t* data, size_t size, systime_t timeout) {
   if ((serial_driver->state != SD_READY) || (data == NULL) || (size == 0U)) {
     return 0;
   }
@@ -271,7 +271,7 @@ msg_t uart_dma_put_timeout(uint8_t value, systime_t timeout) {
   return sdPutTimeout(serial_driver, value, timeout);
 }
 
-msg_t uart_dma_get_timeout(uint8_t *value, systime_t timeout) {
+msg_t uart_dma_get_timeout(uint8_t* value, systime_t timeout) {
   if ((serial_driver->state != SD_READY) || (value == NULL)) {
     return MSG_RESET;
   }

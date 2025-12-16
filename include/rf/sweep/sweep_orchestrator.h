@@ -57,15 +57,15 @@ uint32_t sweep_service_increment_generation(void);
 uint32_t sweep_service_current_generation(void);
 void sweep_service_wait_for_generation(void);
 void sweep_service_reset_progress(void);
-bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t *snapshot);
-bool sweep_service_snapshot_release(const sweep_service_snapshot_t *snapshot);
+bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* snapshot);
+bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot);
 
 void sweep_service_start_capture(systime_t delay_ticks);
 bool sweep_service_wait_for_capture(void);
-const audio_sample_t *sweep_service_rx_buffer(void);
+const audio_sample_t* sweep_service_rx_buffer(void);
 
 #if ENABLED_DUMP_COMMAND
-void sweep_service_prepare_dump(audio_sample_t *buffer, size_t count, int selection);
+void sweep_service_prepare_dump(audio_sample_t* buffer, size_t count, int selection);
 bool sweep_service_dump_ready(void);
 #endif
 
@@ -82,7 +82,7 @@ void measurement_data_smooth(uint16_t ch_mask);
 void set_smooth_factor(uint8_t factor);
 uint8_t get_smooth_factor(void);
 
-void sweep_service_set_sample_function(void (*func)(float *));
+void sweep_service_set_sample_function(void (*func)(float*));
 
 void i2s_lld_serve_rx_interrupt(uint32_t flags);
 

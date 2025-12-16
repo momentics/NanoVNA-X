@@ -11,13 +11,13 @@ typedef uint8_t trace_coord_t;
 #endif
 
 typedef struct {
-  uint16_t *x;
-  trace_coord_t *y;
+  uint16_t* x;
+  trace_coord_t* y;
 } trace_index_table_t;
 
 typedef struct {
-  const uint16_t *x;
-  const trace_coord_t *y;
+  const uint16_t* x;
+  const trace_coord_t* y;
 } trace_index_const_table_t;
 
 // Extern data for inline access
@@ -39,53 +39,54 @@ static inline trace_index_const_table_t trace_index_const_table(int trace_id) {
 #define TRACE_Y(table, idx) ((table).y[(idx)])
 
 // Function declarations
-uint32_t gather_trace_mask(bool *smith_is_impedance);
+uint32_t gather_trace_mask(bool* smith_is_impedance);
 
-void trace_print_value_string(render_cell_ctx_t *rcx, int xpos, int ypos, int t, int index,
+void trace_print_value_string(RenderCellCtx* rcx, int xpos, int ypos, int t, int index,
                               int index_ref);
 
 // Measurement callbacks
-float logmag(int i, const float *v);
-float phase(int i, const float *v);
-float groupdelay(const float *v, const float *w, uint32_t deltaf);
-float groupdelay_from_array(int i, const float *v);
-float real(int i, const float *v);
-float imag(int i, const float *v);
-float linear(int i, const float *v);
-float swr(int i, const float *v);
-float resistance(int i, const float *v);
-float reactance(int i, const float *v);
-float mod_z(int i, const float *v);
-float phase_z(int i, const float *v);
-float qualityfactor(int i, const float *v);
-float susceptance(int i, const float *v);
-float conductance(int i, const float *v);
-float parallel_r(int i, const float *v);
-float parallel_x(int i, const float *v);
-float parallel_c(int i, const float *v);
-float parallel_l(int i, const float *v);
-float mod_y(int i, const float *v);
-float s21shunt_r(int i, const float *v);
-float s21shunt_x(int i, const float *v);
-float s21shunt_z(int i, const float *v);
-float s21series_r(int i, const float *v);
-float s21series_x(int i, const float *v);
-float s21series_z(int i, const float *v);
-float s21_qualityfactor(int i, const float *v);
-float series_c_impl(int i, const float *v);
-float series_l_impl(int i, const float *v);
+float logmag(int i, const float* v);
+float phase(int i, const float* v);
+float groupdelay(const float* v, const float* w, uint32_t deltaf);
+float groupdelay_from_array(int i, const float* v);
+float real(int i, const float* v);
+float imag(int i, const float* v);
+float linear(int i, const float* v);
+float swr(int i, const float* v);
+float resistance(int i, const float* v);
+float reactance(int i, const float* v);
+float mod_z(int i, const float* v);
+float phase_z(int i, const float* v);
+float qualityfactor(int i, const float* v);
+float susceptance(int i, const float* v);
+float conductance(int i, const float* v);
+float parallel_r(int i, const float* v);
+float parallel_x(int i, const float* v);
+float parallel_c(int i, const float* v);
+float parallel_l(int i, const float* v);
+float mod_y(int i, const float* v);
+float s21shunt_r(int i, const float* v);
+float s21shunt_x(int i, const float* v);
+float s21shunt_z(int i, const float* v);
+float s21series_r(int i, const float* v);
+float s21series_x(int i, const float* v);
+float s21series_z(int i, const float* v);
+float s21_qualityfactor(int i, const float* v);
+float series_c_impl(int i, const float* v);
+float series_l_impl(int i, const float* v);
 
 // Public API
-const char *get_trace_typename(int t, int marker_smith_format);
-const char *get_smith_format_names(int m);
-void format_smith_value(render_cell_ctx_t *rcx, int xpos, int ypos, const float *coeff, uint16_t idx,
+const char* get_trace_typename(int t, int marker_smith_format);
+const char* get_smith_format_names(int m);
+void format_smith_value(RenderCellCtx* rcx, int xpos, int ypos, const float* coeff, uint16_t idx,
                         uint16_t m);
-int trace_print_info(render_cell_ctx_t *rcx, int xpos, int ypos, int t);
+int trace_print_info(RenderCellCtx* rcx, int xpos, int ypos, int t);
+
 
 float time_of_index(int idx);
 float distance_of_index(int idx);
 
-trace_index_range_t search_index_range_x(uint16_t x_start, uint16_t x_end,
+TraceIndexRange search_index_range_x(uint16_t x_start, uint16_t x_end,
                                      trace_index_const_table_t index);
 
 void toggle_stored_trace(int idx);
@@ -93,6 +94,6 @@ uint8_t get_stored_traces(void);
 bool need_process_trace(uint16_t idx);
 
 void trace_into_index(int t);
-void render_traces_in_cell(render_cell_ctx_t *rcx);
+void render_traces_in_cell(RenderCellCtx* rcx);
 
 #endif // UI_DISPLAY_TRACES_H

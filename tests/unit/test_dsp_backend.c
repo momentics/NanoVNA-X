@@ -20,7 +20,7 @@
 
 /*
  * Unit tests for the scalar dsp_process() path in src/processing/dsp_backend.c.
- * When the firmware is built on a host (without USE_DSP) this path performs
+ * When the firmware is built on a host (without __USE_DSP__) this path performs
  * plain C accumulation of quadrature samples; accurate results are critical for
  * the SNR of the measurement pipeline.  By driving it with synthetic capture
  * buffers we ensure regressions are caught in CI.
@@ -35,21 +35,21 @@
 
 #include "nanovna.h"
 
-void dsp_process(audio_sample_t *capture, size_t length);
-void fetch_amplitude(float *gamma);
-void fetch_amplitude_ref(float *gamma);
+void dsp_process(audio_sample_t* capture, size_t length);
+void fetch_amplitude(float* gamma);
+void fetch_amplitude_ref(float* gamma);
 extern void reset_dsp_accumerator(void);
 
 static int g_failures = 0;
 
-static void expect_close(float expected, float actual, float tol, const char *label) {
+static void expect_close(float expected, float actual, float tol, const char* label) {
   if (fabsf(expected - actual) > tol) {
     ++g_failures;
     fprintf(stderr, "[FAIL] %s expected=%f actual=%f\n", label, expected, actual);
   }
 }
 
-static void snapshot(float *samp_s, float *samp_c, float *ref_s, float *ref_c) {
+static void snapshot(float* samp_s, float* samp_c, float* ref_s, float* ref_c) {
   if (samp_s != NULL || samp_c != NULL) {
     float gamma[2];
     fetch_amplitude(gamma);
@@ -116,10 +116,10 @@ static void test_quadrature_sine(void) {
 
 static void test_calculate_gamma_sign(void) {
   // Test that calculate_gamma produces correct sign for imaginary part.
-
+  
   // Define helper prototype
   extern void set_dsp_accumulator(float ss, float sc, float rs, float rc);
-  extern void calculate_gamma(float *gamma);
+  extern void calculate_gamma(float* gamma);
   float gamma[2];
 
   // Case 1: S=1 (Real), R=1 (Real). Gamma=1.
@@ -137,20 +137,20 @@ static void test_calculate_gamma_sign(void) {
   set_dsp_accumulator(1e9f, 0.0f, 0.0f, 1e9f);
   calculate_gamma(gamma);
   expect_close(0.0f, gamma[0], 0.001f, "Real part S=j,R=1");
-
+  
   // This is where we expect failure if the bug exists.
   // Current code: Imag = (sc*rs - ss*rc)/rr = (0*0 - 1*1)/1 = -1.
   // Correct code: Imag = (ss*rc - sc*rs)/rr = (1*1 - 0*0)/1 = 1.
   if (gamma[1] < 0.5f) {
-    fprintf(stderr, "[FAIL] Imag part expected 1.0, got %f. Confirmed Sign Inversion Bug.\n",
-            gamma[1]);
-    g_failures++;
+      fprintf(stderr, "[FAIL] Imag part expected 1.0, got %f. Confirmed Sign Inversion Bug.\n", gamma[1]);
+      g_failures++;
   } else {
-    // If it passes here, then maybe my understanding of ss/sc mapping is wrong,
-    // but let's see the result.
-    expect_close(1.0f, gamma[1], 0.001f, "Imag part S=j,R=1");
+      // If it passes here, then maybe my understanding of ss/sc mapping is wrong, 
+      // but let's see the result.
+      expect_close(1.0f, gamma[1], 0.001f, "Imag part S=j,R=1");
   }
 }
+
 
 int main(void) {
   test_dc_signal();

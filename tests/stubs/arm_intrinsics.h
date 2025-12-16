@@ -20,8 +20,6 @@
 
 #pragma once
 
-static inline uint32_t __get_PRIMASK(void) {
-  return 1U;
-}
+static inline uint32_t __get_PRIMASK(void) { return 1U; }
 static inline void __disable_irq(void) {}
 static inline void __enable_irq(void) {}

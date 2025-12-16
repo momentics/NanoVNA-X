@@ -19,7 +19,6 @@
  */
 
 #include "rf/sweep/sweep_orchestrator.h"
-#include "processing/vna_math.h"
 
 #include "hal.h"
 #include "platform/peripherals/si5351.h"
@@ -30,7 +29,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#ifdef VNA_Z_RENORMALIZATION
+#ifdef __VNA_Z_RENORMALIZATION__
 #include "../analysis/vna_renorm.c"
 #endif
 
@@ -42,7 +41,7 @@ static volatile uint16_t wait_count = 0;
 static alignas(4) audio_sample_t rx_buffer[AUDIO_BUFFER_LEN * 2];
 
 #if ENABLED_DUMP_COMMAND
-static audio_sample_t *dump_buffer = NULL;
+static audio_sample_t* dump_buffer = NULL;
 static volatile int16_t dump_len = 0;
 static int16_t dump_selection = 0;
 #endif
@@ -59,9 +58,9 @@ static uint16_t sweep_bar_drawn_pixels = 0;
 static uint8_t sweep_bar_pending = 0;
 
 static uint8_t smooth_factor = 0;
-static void (*volatile sample_func)(float *gamma) = NULL;
+static void (*volatile sample_func)(float* gamma) = NULL;
 
-void sweep_service_set_sample_function(void (*func)(float *)) {
+void sweep_service_set_sample_function(void (*func)(float*)) {
   if (func == NULL) {
     func = calculate_gamma;
   }
@@ -79,13 +78,13 @@ static inline bool sweep_ui_input_pending(void) {
   return (pending & (UI_CONTROLLER_REQUEST_TOUCH | UI_CONTROLLER_REQUEST_LEVER)) != 0;
 }
 
-#ifdef USE_FREQ_TABLE
+#ifdef __USE_FREQ_TABLE__
 static freq_t frequencies[SWEEP_POINTS_MAX];
 #else
-static freq_t f_start_val __attribute__((used));
-static freq_t f_delta_val __attribute__((used));
-static freq_t f_error_val __attribute__((used));
-static uint16_t f_points_val __attribute__((used));
+static freq_t _f_start __attribute__((used));
+static freq_t _f_delta __attribute__((used));
+static freq_t _f_error __attribute__((used));
+static uint16_t _f_points __attribute__((used));
 #endif
 
 static float arifmetic_mean(float v0, float v1, float v2) __attribute__((unused));
@@ -214,7 +213,7 @@ static void apply_offset(float data[2], float offset) {
 }
 
 #if ENABLED_DUMP_COMMAND
-static void duplicate_buffer_to_dump(audio_sample_t *p, size_t n) {
+static void duplicate_buffer_to_dump(audio_sample_t* p, size_t n) {
   p += dump_selection;
   while (n > 0U) {
     if (dump_len == 0) {
@@ -233,7 +232,7 @@ void i2s_lld_serve_rx_interrupt(uint32_t flags) {
   if (wait == 0U || chVTGetSystemTimeX() < ready_time) {
     return;
   }
-  audio_sample_t *p = (flags & STM32_DMA_ISR_TCIF) ? rx_buffer + AUDIO_BUFFER_LEN : rx_buffer;
+  audio_sample_t* p = (flags & STM32_DMA_ISR_TCIF) ? rx_buffer + AUDIO_BUFFER_LEN : rx_buffer;
   if (wait > config._bandwidth + 2U) {
     // More than expected buffers - this shouldn't happen, but handle gracefully
     --wait_count;
@@ -313,7 +312,7 @@ uint32_t sweep_service_current_generation(void) {
 void sweep_service_wait_for_generation(void) {
   systime_t start_time = chVTGetSystemTimeX();
   systime_t timeout = MS2ST(1000); // 1 second timeout to prevent infinite wait
-
+  
   while (sweep_service_current_generation() == 0U) {
     if (chVTGetSystemTimeX() - start_time >= timeout) {
       // Timeout occurred, break to prevent hanging
@@ -323,13 +322,13 @@ void sweep_service_wait_for_generation(void) {
   }
 }
 
-bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t *snapshot) {
+bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* snapshot) {
   if (snapshot == NULL || channel >= 2U) {
     return false;
   }
   systime_t start_time = chVTGetSystemTimeX();
   systime_t timeout = MS2ST(2000); // 2 second timeout to prevent infinite wait
-
+  
   while (true) {
     osalSysLock();
     bool busy = sweep_in_progress || sweep_copy_in_progress;
@@ -342,17 +341,17 @@ bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t *s
       return true;
     }
     osalSysUnlock();
-
+    
     // Check for timeout
     if (chVTGetSystemTimeX() - start_time >= timeout) {
       return false; // Timeout occurred, unable to acquire snapshot
     }
-
+    
     chThdSleepMilliseconds(1);
   }
 }
 
-bool sweep_service_snapshot_release(const sweep_service_snapshot_t *snapshot) {
+bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
   bool stable = false;
   osalSysLock();
   if (snapshot != NULL) {
@@ -385,12 +384,12 @@ bool sweep_service_wait_for_capture(void) {
   return true;
 }
 
-const audio_sample_t *sweep_service_rx_buffer(void) {
+const audio_sample_t* sweep_service_rx_buffer(void) {
   return rx_buffer;
 }
 
 #if ENABLED_DUMP_COMMAND
-void sweep_service_prepare_dump(audio_sample_t *buffer, size_t count, int selection) {
+void sweep_service_prepare_dump(audio_sample_t* buffer, size_t count, int selection) {
   chDbgAssert(((uintptr_t)buffer & 0x3U) == 0U, "audio sample buffer must be 4-byte aligned");
   dump_buffer = buffer;
   dump_len = (int16_t)count;
@@ -418,10 +417,10 @@ uint16_t app_measurement_get_sweep_mask(void) {
 #else
   ch_mask |= SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE;
 #endif
-#ifdef VNA_MEASURE_MODULE
+#ifdef __VNA_MEASURE_MODULE__
   ch_mask |= plot_get_measure_channels();
 #endif
-#ifdef VNA_Z_RENORMALIZATION
+#ifdef __VNA_Z_RENORMALIZATION__
   if (current_props._portz != cal_load_r) {
     ch_mask |= SWEEP_USE_RENORMALIZATION;
   }
@@ -432,10 +431,10 @@ uint16_t app_measurement_get_sweep_mask(void) {
   if (cal_status & CALSTAT_INTERPOLATED) {
     ch_mask |= SWEEP_USE_INTERPOLATION;
   }
-  if (electrical_delay_s11) {
+  if (electrical_delayS11) {
     ch_mask |= SWEEP_APPLY_EDELAY_S11;
   }
-  if (electrical_delay_s21) {
+  if (electrical_delayS21) {
     ch_mask |= SWEEP_APPLY_EDELAY_S21;
   }
   if (s21_offset) {
@@ -451,7 +450,7 @@ static void apply_ch0_error_term(float data[4], float c_data[CAL_TYPE_COUNT][2])
   float s11mi = data[1] - c_data[ETERM_ED][1];
   float err = c_data[ETERM_ER][0] + s11mr * c_data[ETERM_ES][0] - s11mi * c_data[ETERM_ES][1];
   float eri = c_data[ETERM_ER][1] + s11mr * c_data[ETERM_ES][1] + s11mi * c_data[ETERM_ES][0];
-  float sq = err * err + eri * eri;
+  float sq = err*err + eri*eri;
   if (sq != 0.0f) {
     float inv = 1.0f / sq;
     data[0] = (s11mr * err + s11mi * eri) * inv;
@@ -470,7 +469,7 @@ static void apply_ch1_error_term(float data[4], float c_data[CAL_TYPE_COUNT][2])
   // Apply transmission tracking correction (ET is inverted for efficiency)
   data[2] = s21mr * c_data[ETERM_ET][0] - s21mi * c_data[ETERM_ET][1];
   data[3] = s21mi * c_data[ETERM_ET][0] + s21mr * c_data[ETERM_ET][1];
-
+  
   // Enhanced Response: S21a *= 1 - Es * S11a (if enabled)
   if (cal_status & CALSTAT_ENHANCED_RESPONSE) {
     float esr = 1.0f - (c_data[ETERM_ES][0] * data[0] - c_data[ETERM_ES][1] * data[1]);
@@ -492,7 +491,7 @@ static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
     }
     return;
   }
-
+  
   if (f <= cal_frequency0) {
     idx = 0;
     for (uint16_t eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
@@ -501,7 +500,7 @@ static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
     }
     return;
   }
-
+  
   if (f >= cal_frequency1) {
     idx = src_points;
     for (uint16_t eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
@@ -510,14 +509,14 @@ static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
     }
     return;
   }
-
+  
   // Calculate k for linear interpolation
   freq_t span = cal_frequency1 - cal_frequency0;
   idx = (uint64_t)(f - cal_frequency0) * (uint64_t)src_points / span;
-  uint64_t v = (uint64_t)span * idx + src_points / 2;
-  freq_t src_f0 = cal_frequency0 + (v) / src_points;
+  uint64_t v = (uint64_t)span * idx + src_points/2;
+  freq_t src_f0 = cal_frequency0 + (v       ) / src_points;
   freq_t src_f1 = cal_frequency0 + (v + span) / src_points;
-
+  
   freq_t delta = src_f1 - src_f0;
   // Not need interpolate
   if (f == src_f0) {
@@ -527,16 +526,16 @@ static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
     }
     return;
   }
-
+  
   float k = (delta == 0) ? 0.0f : (float)(f - src_f0) / delta;
 
   // avoid glitch between freqs in different harmonics mode
   uint32_t hf0 = si5351_get_harmonic_lvl(src_f0);
   if (hf0 != si5351_get_harmonic_lvl(src_f1)) {
     // f in prev harmonic, need extrapolate from prev 2 points
-    if (hf0 == si5351_get_harmonic_lvl(f)) {
+    if (hf0 == si5351_get_harmonic_lvl(f)){
       if (idx < 1) {
-        // point limit, direct copy (matches copy logic above)
+         // point limit, direct copy (matches copy logic above)
         for (uint16_t eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
           data[eterm][0] = cal_data[eterm][idx][0];
           data[eterm][1] = cal_data[eterm][idx][1];
@@ -544,7 +543,7 @@ static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
         return;
       }
       idx--;
-      k += 1.0f;
+      k+= 1.0f;
     }
     // f in next harmonic, need extrapolate from next 2 points
     else {
@@ -557,16 +556,14 @@ static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
         return;
       }
       idx++;
-      k -= 1.0f;
+      k-= 1.0f;
     }
   }
 
   // Interpolate by k
   for (uint16_t eterm = 0; eterm < CAL_TYPE_COUNT; eterm++) {
-    data[eterm][0] =
-      cal_data[eterm][idx][0] + k * (cal_data[eterm][idx + 1][0] - cal_data[eterm][idx][0]);
-    data[eterm][1] =
-      cal_data[eterm][idx][1] + k * (cal_data[eterm][idx + 1][1] - cal_data[eterm][idx][1]);
+    data[eterm][0] = cal_data[eterm][idx][0] + k * (cal_data[eterm][idx+1][0] - cal_data[eterm][idx][0]);
+    data[eterm][1] = cal_data[eterm][idx][1] + k * (cal_data[eterm][idx+1][1] - cal_data[eterm][idx][1]);
   }
 }
 
@@ -636,7 +633,7 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
         tlv320aic3204_select(0);
         sweep_service_start_capture(cycle_delay + cycle_st_delay);
         cycle_delay = DELAY_CHANNEL_CHANGE;
-
+        
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
           cal_interpolate(interpolation_idx, frequency, sweep_cal_data);
         }
@@ -645,17 +642,17 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
           goto capture_failure;
         }
 
-        void (*sample_cb)(float *) = sample_func;
-        sample_cb(&sweep_data[0]); // Process S11 data[0], data[1]
+        void (*sample_cb)(float*) = sample_func;
+        sample_cb(&sweep_data[0]);  // Process S11 data[0], data[1]
 
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
           apply_ch0_error_term(sweep_data, sweep_cal_data);
         }
 
         if (mask & SWEEP_APPLY_EDELAY_S11) {
-          apply_edelay(electrical_delay_s11 * frequency, &sweep_data[0]);
+             apply_edelay(electrical_delayS11 * frequency, &sweep_data[0]);
         }
-
+        
         // Store results
         measured[0][p_sweep][0] = sweep_data[0];
         measured[0][p_sweep][1] = sweep_data[1];
@@ -671,24 +668,24 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
         tlv320aic3204_select(1);
         sweep_service_start_capture(cycle_delay + cycle_st_delay);
         cycle_delay = DELAY_CHANNEL_CHANGE;
-
+        
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-          cal_interpolate(interpolation_idx, frequency, sweep_cal_data);
+             cal_interpolate(interpolation_idx, frequency, sweep_cal_data);
         }
 
         if (!sweep_service_wait_for_capture()) {
           goto capture_failure;
         }
-
-        void (*sample_cb)(float *) = sample_func;
-        sample_cb(&sweep_data[2]); // Process S21 data[2], data[3]
-
+        
+        void (*sample_cb)(float*) = sample_func;
+        sample_cb(&sweep_data[2]);  // Process S21 data[2], data[3]
+        
         if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-          apply_ch1_error_term(sweep_data, sweep_cal_data);
+            apply_ch1_error_term(sweep_data, sweep_cal_data);
         }
-
+        
         if (mask & SWEEP_APPLY_EDELAY_S21) {
-          apply_edelay(electrical_delay_s21 * frequency, &sweep_data[2]);
+             apply_edelay(electrical_delayS21 * frequency, &sweep_data[2]);
         }
 
         // Apply S21 offset if needed
@@ -702,7 +699,7 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
       }
     }
 
-#ifdef VNA_Z_RENORMALIZATION
+#ifdef __VNA_Z_RENORMALIZATION__
     if (mask & SWEEP_USE_RENORMALIZATION) {
       // Use the sweep_data buffer for renormalization
       // Note: This may need to process both channels differently
@@ -751,7 +748,7 @@ void measurement_data_smooth(uint16_t ch_mask) {
     return;
   }
   float (*smooth_func)(float, float, float) =
-    VNA_MODE(VNA_MODE_SMOOTH) ? arifmetic_mean : geometry_mean;
+      VNA_MODE(VNA_MODE_SMOOTH) ? arifmetic_mean : geometry_mean;
   for (int ch = 0; ch < 2; ch++, ch_mask >>= 1) {
     if ((ch_mask & 1U) == 0U) {
       continue;
@@ -764,7 +761,7 @@ void measurement_data_smooth(uint16_t ch_mask) {
       count = max_passes;
     if (count == 0U)
       continue;
-    float *data = measured[ch][0];
+    float* data = measured[ch][0];
     for (uint32_t n = 0; n < count; n++) {
       float prev_re = data[0];
       float prev_im = data[1];
@@ -797,17 +794,17 @@ int app_measurement_set_frequency(freq_t freq) {
   // Different values are returned based on frequency range changes, PLL resets, etc.
   // This ensures proper synchronization between frequency setting and measurement
   int delay = si5351_set_frequency(freq, current_props._power);
-
+  
   // Use the original delay calculation from DiSlord firmware for proper timing
   // If no specific delay returned, use default channel change delay
   if (delay == 0) {
     delay = DELAY_CHANNEL_CHANGE;
   }
-
+  
   return delay;
 }
 
-#ifdef USE_FREQ_TABLE
+#ifdef __USE_FREQ_TABLE__
 void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points) {
   freq_t step = points - 1U;
   freq_t span = stop - start;
@@ -841,18 +838,18 @@ freq_t get_frequency_step(void) {
 #else
 void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points) {
   freq_t span = stop - start;
-  f_start_val = start;
-  f_points_val = points - 1U;
-  f_delta_val = span / f_points_val;
-  f_error_val = span % f_points_val;
+  _f_start = start;
+  _f_points = points - 1U;
+  _f_delta = span / _f_points;
+  _f_error = span % _f_points;
 }
 
 freq_t get_frequency(uint16_t idx) {
-  return f_start_val + f_delta_val * idx + (f_points_val / 2U + f_error_val * idx) / f_points_val;
+  return _f_start + _f_delta * idx + (_f_points / 2U + _f_error * idx) / _f_points;
 }
 
 freq_t get_frequency_step(void) {
-  return f_delta_val;
+  return _f_delta;
 }
 #endif
 
@@ -860,12 +857,12 @@ float bessel_i0_ext(float z) {
 #define BESSEL_SIZE 12
   int i = BESSEL_SIZE - 1;
   static const float besseli0_k[BESSEL_SIZE - 1] = {
-    2.5000000000000000000000000000000e-01f, 2.7777777777777777777777777777778e-02f,
-    1.7361111111111111111111111111111e-03f, 6.9444444444444444444444444444444e-05f,
-    1.9290123456790123456790123456790e-06f, 3.9367598891408415217939027462837e-08f,
-    6.1511873267825648778029730410683e-10f, 7.5940584281266233059295963469979e-12f,
-    7.5940584281266233059295963469979e-14f, 6.2760813455591928148178482206594e-16f,
-    4.3583898233049950102901723754579e-18f};
+      2.5000000000000000000000000000000e-01f, 2.7777777777777777777777777777778e-02f,
+      1.7361111111111111111111111111111e-03f, 6.9444444444444444444444444444444e-05f,
+      1.9290123456790123456790123456790e-06f, 3.9367598891408415217939027462837e-08f,
+      6.1511873267825648778029730410683e-10f, 7.5940584281266233059295963469979e-12f,
+      7.5940584281266233059295963469979e-14f, 6.2760813455591928148178482206594e-16f,
+      4.3583898233049950102901723754579e-18f};
   float term = z;
   float ret = 1.0f + z;
   do {
@@ -888,7 +885,7 @@ static float kaiser_window_ext(uint32_t k, uint32_t n, uint16_t beta) {
 void app_measurement_transform_domain(uint16_t ch_mask) {
   uint16_t offset = 0;
   uint8_t is_lowpass = FALSE;
-  switch (DOMAIN_FUNC) {
+  switch (domain_func) {
   case TD_FUNC_LOWPASS_IMPULSE:
   case TD_FUNC_LOWPASS_STEP:
     is_lowpass = TRUE;
@@ -899,7 +896,7 @@ void app_measurement_transform_domain(uint16_t ch_mask) {
   }
   uint16_t window_size = sweep_points + offset;
   uint16_t beta = 0;
-  switch (DOMAIN_WINDOW) {
+  switch (domain_window) {
   case TD_WINDOW_NORMAL:
     beta = 6;
     break;
@@ -915,14 +912,14 @@ void app_measurement_transform_domain(uint16_t ch_mask) {
   uint16_t td_check = (props_mode & (TD_WINDOW | TD_FUNC)) | (sweep_points << 5);
   if (td_cache != td_check) {
     td_cache = td_check;
-    if (DOMAIN_FUNC == TD_FUNC_LOWPASS_STEP) {
+    if (domain_func == TD_FUNC_LOWPASS_STEP) {
       window_scale = FFT_SIZE * bessel_i0_ext(beta * beta / 4.0f);
     } else {
       window_scale = 0.0f;
       for (int i = 0; i < sweep_points; i++) {
         window_scale += kaiser_window_ext(i + offset, window_size, beta);
       }
-      if (DOMAIN_FUNC == TD_FUNC_LOWPASS_IMPULSE) {
+      if (domain_func == TD_FUNC_LOWPASS_IMPULSE) {
         window_scale *= 2.0f;
       }
     }
@@ -938,8 +935,8 @@ void app_measurement_transform_domain(uint16_t ch_mask) {
     if ((ch_mask & 1U) == 0U) {
       continue;
     }
-    float *tmp = (float *)spi_buffer;
-    float *data = measured[ch][0];
+    float* tmp = (float*)spi_buffer;
+    float* data = measured[ch][0];
     int i;
     for (i = 0; i < sweep_points; i++) {
 #ifdef USE_FFT_WINDOW_BUFFER
@@ -960,17 +957,17 @@ void app_measurement_transform_domain(uint16_t ch_mask) {
         tmp[(FFT_SIZE - i) * 2 + 1] = -tmp[i * 2 + 1];
       }
     }
-    FFT_INVERSE((float(*)[2])tmp);
+    fft_inverse((float (*)[2])tmp);
     if (is_lowpass) {
       for (i = 0; i < sweep_points; i++) {
         tmp[i * 2 + 1] = 0.0f;
       }
     }
-    if (DOMAIN_FUNC == TD_FUNC_LOWPASS_STEP) {
+    if (domain_func == TD_FUNC_LOWPASS_STEP) {
       for (i = 1; i < sweep_points; i++) {
         tmp[i * 2 + 0] += tmp[(i - 1) * 2 + 0];
       }
     }
-    memcpy(measured[ch], tmp, sweep_points * 2 * sizeof(float));
+    memcpy(measured[ch], tmp, sizeof(measured[0]));
   }
 }

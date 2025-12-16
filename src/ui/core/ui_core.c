@@ -5,7 +5,7 @@
 #include "nanovna.h"
 #include "ui/core/ui_core.h"
 #include "ui/core/ui_menu_engine.h" // For ui_draw_button
-#include "ui/core/ui_keypad.h"      // For ui_keypad_lever
+#include "ui/core/ui_keypad.h" // For ui_keypad_lever
 #include "ui/ui_menu.h"
 #include "ui/input/hardware_input.h"
 #include "../resources/icons/icons_menu.h"
@@ -16,6 +16,7 @@
 
 #include "infra/storage/config_service.h"
 
+
 #define TOUCH_INTERRUPT_ENABLED 1
 
 static uint8_t touch_status_flag = 0;
@@ -24,12 +25,12 @@ static uint8_t last_touch_status = 0; // Fixed type to match usage if needed or 
 int16_t last_touch_x;
 int16_t last_touch_y;
 
-static event_bus_t *ui_event_bus = NULL;
-static board_events_t *ui_board_events = NULL;
+static event_bus_t* ui_event_bus = NULL;
+static board_events_t* ui_board_events = NULL;
 static bool ui_board_events_subscribed = false;
 static uint8_t ui_request_flags = UI_CONTROLLER_REQUEST_NONE;
 
-#ifdef REMOTE_DESKTOP
+#ifdef __REMOTE_DESKTOP__
 static uint8_t touch_remote = REMOTE_NONE;
 #endif
 
@@ -43,7 +44,7 @@ extern void ui_menu_lever(uint16_t status);
 extern void ui_menu_touch(int x, int y);
 extern void ui_keypad_lever(uint16_t status);
 extern void ui_keypad_touch(int x, int y);
-#ifdef SD_FILE_BROWSER
+#ifdef __SD_FILE_BROWSER__
 extern void ui_browser_lever(uint16_t status);
 extern void ui_browser_touch(int x, int y);
 #endif
@@ -52,12 +53,12 @@ extern void ui_browser_touch(int x, int y);
 static const struct {
   void (*button)(uint16_t status);
   void (*touch)(int touch_x, int touch_y);
-} UI_HANDLER[] = {
-  [UI_NORMAL] = {ui_normal_lever, ui_normal_touch},
-  [UI_MENU] = {ui_menu_lever, ui_menu_touch},
-  [UI_KEYPAD] = {ui_keypad_lever, ui_keypad_touch},
-#ifdef SD_FILE_BROWSER
-  [UI_BROWSER] = {ui_browser_lever, ui_browser_touch},
+} ui_handler[] = {
+    [UI_NORMAL] = {ui_normal_lever, ui_normal_touch},
+    [UI_MENU] = {ui_menu_lever, ui_menu_touch},
+    [UI_KEYPAD] = {ui_keypad_lever, ui_keypad_touch},
+#ifdef __SD_FILE_BROWSER__
+    [UI_BROWSER] = {ui_browser_lever, ui_browser_touch},
 #endif
 };
 
@@ -114,19 +115,20 @@ static void ui_controller_dispatch_board_events(void) {
   }
 }
 
-static void ui_controller_on_button_event(const board_event_t *event, void *user_data) {
+static void ui_controller_on_button_event(const board_event_t* event, void* user_data) {
   (void)user_data;
   (void)event;
   ui_controller_set_request(UI_CONTROLLER_REQUEST_LEVER);
 }
 
-static void ui_controller_on_touch_event(const board_event_t *event, void *user_data) {
+static void ui_controller_on_touch_event(const board_event_t* event, void* user_data) {
   (void)user_data;
   (void)event;
   ui_controller_set_request(UI_CONTROLLER_REQUEST_TOUCH);
 }
 
-void ui_controller_publish_board_event(board_event_type_t topic, uint16_t channel, bool from_isr) {
+void ui_controller_publish_board_event(board_event_type_t topic, uint16_t channel,
+                                              bool from_isr) {
   if (ui_board_events == NULL) {
     return;
   }
@@ -143,7 +145,7 @@ void ui_controller_publish_board_event(board_event_type_t topic, uint16_t channe
   }
 }
 
-static void ui_on_event(const event_bus_message_t *message, void *user_data) {
+static void ui_on_event(const event_bus_message_t* message, void* user_data) {
   (void)user_data;
   if (message == NULL) {
     return;
@@ -163,7 +165,7 @@ static void ui_on_event(const event_bus_message_t *message, void *user_data) {
   }
 }
 
-void ui_attach_event_bus(event_bus_t *bus) {
+void ui_attach_event_bus(event_bus_t* bus) {
   if (ui_event_bus == bus) {
     return;
   }
@@ -175,7 +177,7 @@ void ui_attach_event_bus(event_bus_t *bus) {
   }
 }
 
-void ui_controller_configure(const ui_controller_port_t *port) {
+void ui_controller_configure(const ui_controller_port_t* port) {
   if (port == NULL) {
     display_presenter_bind(NULL);
     ui_board_events = NULL;
@@ -187,8 +189,7 @@ void ui_controller_configure(const ui_controller_port_t *port) {
   ui_attach_event_bus(port->config_events);
   ui_board_events = port->board_events;
   if (ui_board_events != NULL && !ui_board_events_subscribed) {
-    board_events_subscribe(ui_board_events, BOARD_EVENT_BUTTON, ui_controller_on_button_event,
-                           NULL);
+    board_events_subscribe(ui_board_events, BOARD_EVENT_BUTTON, ui_controller_on_button_event, NULL);
     board_events_subscribe(ui_board_events, BOARD_EVENT_TOUCH, ui_controller_on_touch_event, NULL);
     ui_board_events_subscribed = true;
   }
@@ -240,7 +241,7 @@ static void touch_prepare_sense(void) {
   palSetPadMode(GPIOA, GPIOA_XP, PAL_MODE_OUTPUT_PUSHPULL);
 }
 
-#ifdef REMOTE_DESKTOP
+#ifdef __REMOTE_DESKTOP__
 void remote_touch_set(uint16_t state, int16_t x, int16_t y) {
   touch_remote = state;
   if (x != -1)
@@ -310,7 +311,7 @@ int touch_check(void) {
       last_touch_x = x;
       last_touch_y = y;
     }
-#ifdef REMOTE_DESKTOP
+#ifdef __REMOTE_DESKTOP__
     touch_remote = REMOTE_NONE;
   } else {
     stat = touch_remote == REMOTE_PRESS;
@@ -342,48 +343,46 @@ void touch_wait_release(void) {
 
 // Re-define for core UI use if needed, but undef first to avoid warning
 #undef lcd_drawstring
-#undef LCD_DRAWSTRING
-#define LCD_DRAWSTRING(...) display_presenter_drawstring(__VA_ARGS__)
-#define LCD_DRAWSTRING_SIZE(...) display_presenter_drawstring_size(__VA_ARGS__)
-#define LCD_PRINTF(...) display_presenter_printf(__VA_ARGS__)
-#define LCD_DRAWCHAR(...) display_presenter_drawchar(__VA_ARGS__)
-#define LCD_DRAWCHAR_SIZE(...) display_presenter_drawchar_size(__VA_ARGS__)
-#define LCD_DRAWFONT(...) display_presenter_drawfont(__VA_ARGS__)
-#define LCD_FILL(...) display_presenter_fill(__VA_ARGS__)
-#define LCD_BULK(...) display_presenter_bulk(__VA_ARGS__)
-#define LCD_READ_MEMORY(...) display_presenter_read_memory(__VA_ARGS__)
-#define LCD_LINE(...) display_presenter_line(__VA_ARGS__)
-#define LCD_SET_BACKGROUND(...) display_presenter_set_background(__VA_ARGS__)
-#define LCD_SET_COLORS(...) display_presenter_set_colors(__VA_ARGS__)
-#define LCD_SET_FLIP(...) display_presenter_set_flip(__VA_ARGS__)
-#undef LCD_SET_FONT
-#define LCD_SET_FONT(...) display_presenter_set_font(__VA_ARGS__)
-#define LCD_BLIT_BITMAP(...) display_presenter_blit_bitmap(__VA_ARGS__)
+#define lcd_drawstring(...) display_presenter_drawstring(__VA_ARGS__)
+#define lcd_drawstring_size(...) display_presenter_drawstring_size(__VA_ARGS__)
+#define lcd_printf(...) display_presenter_printf(__VA_ARGS__)
+#define lcd_drawchar(...) display_presenter_drawchar(__VA_ARGS__)
+#define lcd_drawchar_size(...) display_presenter_drawchar_size(__VA_ARGS__)
+#define lcd_drawfont(...) display_presenter_drawfont(__VA_ARGS__)
+#define lcd_fill(...) display_presenter_fill(__VA_ARGS__)
+#define lcd_bulk(...) display_presenter_bulk(__VA_ARGS__)
+#define lcd_read_memory(...) display_presenter_read_memory(__VA_ARGS__)
+#define lcd_line(...) display_presenter_line(__VA_ARGS__)
+#define lcd_set_background(...) display_presenter_set_background(__VA_ARGS__)
+#define lcd_set_colors(...) display_presenter_set_colors(__VA_ARGS__)
+#define lcd_set_flip(...) display_presenter_set_flip(__VA_ARGS__)
+#define lcd_set_font(...) display_presenter_set_font(__VA_ARGS__)
+#define lcd_blit_bitmap(...) display_presenter_blit_bitmap(__VA_ARGS__)
 
-void ui_draw_button(uint16_t x, uint16_t y, uint16_t w, uint16_t h, button_t *b) {
+void ui_draw_button(uint16_t x, uint16_t y, uint16_t w, uint16_t h, button_t* b) {
   uint16_t type = b->border;
   uint16_t bw = type & BUTTON_BORDER_WIDTH_MASK;
   // Draw border if width > 0
   if (bw) {
     uint16_t br = LCD_RISE_EDGE_COLOR;
     uint16_t bd = LCD_FALLEN_EDGE_COLOR;
-    LCD_SET_BACKGROUND(type & BUTTON_BORDER_TOP ? br : bd);
-    LCD_FILL(x, y, w, bw); // top
-    LCD_SET_BACKGROUND(type & BUTTON_BORDER_LEFT ? br : bd);
-    LCD_FILL(x, y, bw, h); // left
-    LCD_SET_BACKGROUND(type & BUTTON_BORDER_RIGHT ? br : bd);
-    LCD_FILL(x + w - bw, y, bw, h); // right
-    LCD_SET_BACKGROUND(type & BUTTON_BORDER_BOTTOM ? br : bd);
-    LCD_FILL(x, y + h - bw, w, bw); // bottom
+    lcd_set_background(type & BUTTON_BORDER_TOP ? br : bd);
+    lcd_fill(x, y, w, bw); // top
+    lcd_set_background(type & BUTTON_BORDER_LEFT ? br : bd);
+    lcd_fill(x, y, bw, h); // left
+    lcd_set_background(type & BUTTON_BORDER_RIGHT ? br : bd);
+    lcd_fill(x + w - bw, y, bw, h); // right
+    lcd_set_background(type & BUTTON_BORDER_BOTTOM ? br : bd);
+    lcd_fill(x, y + h - bw, w, bw); // bottom
   }
   // Set colors for button and text
-  LCD_SET_COLORS(b->fg, b->bg);
+  lcd_set_colors(b->fg, b->bg);
   if (type & BUTTON_BORDER_NO_FILL)
     return;
-  LCD_FILL(x + bw, y + bw, w - (bw * 2), h - (bw * 2));
+  lcd_fill(x + bw, y + bw, w - (bw * 2), h - (bw * 2));
 }
 
-void ui_message_box_draw(const char *header, const char *text) {
+void ui_message_box_draw(const char* header, const char* text) {
   button_t b;
   int x, y;
   b.bg = LCD_MENU_COLOR;
@@ -394,21 +393,21 @@ void ui_message_box_draw(const char *header, const char *text) {
                    &b);
     x = (LCD_WIDTH - MESSAGE_BOX_WIDTH) / 2 + 10;
     y = LCD_HEIGHT / 2 - 40 + 5;
-    LCD_DRAWSTRING(x, y, header);
+    lcd_drawstring(x, y, header);
     request_to_redraw(REDRAW_AREA);
   }
   if (text) { // Draw window
-    LCD_SET_COLORS(LCD_MENU_TEXT_COLOR, LCD_FG_COLOR);
-    LCD_FILL((LCD_WIDTH - MESSAGE_BOX_WIDTH) / 2 + 3, LCD_HEIGHT / 2 - 40 + FONT_STR_HEIGHT + 8,
+    lcd_set_colors(LCD_MENU_TEXT_COLOR, LCD_FG_COLOR);
+    lcd_fill((LCD_WIDTH - MESSAGE_BOX_WIDTH) / 2 + 3, LCD_HEIGHT / 2 - 40 + FONT_STR_HEIGHT + 8,
              MESSAGE_BOX_WIDTH - 6, 60 - FONT_STR_HEIGHT - 8 - 3);
     x = (LCD_WIDTH - MESSAGE_BOX_WIDTH) / 2 + 20;
     y = LCD_HEIGHT / 2 - 40 + FONT_STR_HEIGHT + 8 + 14;
-    LCD_DRAWSTRING(x, y, text);
+    lcd_drawstring(x, y, text);
     request_to_redraw(REDRAW_AREA);
   }
 }
 
-void ui_message_box(const char *header, const char *text, uint32_t delay) {
+void ui_message_box(const char* header, const char* text, uint32_t delay) {
   ui_message_box_draw(header, text);
 
   do {
@@ -418,22 +417,22 @@ void ui_message_box(const char *header, const char *text, uint32_t delay) {
 }
 
 // Touch calibration
-// Includes touch_bitmap - need to verify if available.
+// Includes touch_bitmap - need to verify if available. 
 // It was in ui_controller.c... included via #include "icon_menu.h" ? No.
 // Let's assume touch_bitmap is available or include it.
-// In ui_controller.c: extern const uint8_t touch_bitmap[]; (found via get_touch_point in
-// ui_controller.c?) I need `get_touch_point` too.
+// In ui_controller.c: extern const uint8_t touch_bitmap[]; (found via get_touch_point in ui_controller.c?)
+// I need `get_touch_point` too.
 
 // Touch bitmap definition is likely in a resource file.
 // I'll implement get_touch_point here.
-extern const uint8_t TOUCH_BITMAP[]; // Assuming it exists or I need to find where it is defined.
+extern const uint8_t touch_bitmap[]; // Assuming it exists or I need to find where it is defined.
 
-static void get_touch_point(uint16_t x, uint16_t y, const char *name, int16_t *data) {
+static void get_touch_point(uint16_t x, uint16_t y, const char* name, int16_t* data) {
   // Clear screen and ask for press
-  LCD_SET_COLORS(LCD_FG_COLOR, LCD_BG_COLOR);
+  lcd_set_colors(LCD_FG_COLOR, LCD_BG_COLOR);
   lcd_clear_screen();
-  LCD_BLIT_BITMAP(x, y, TOUCH_MARK_W, TOUCH_MARK_H, (const uint8_t *)TOUCH_BITMAP);
-  LCD_PRINTF((LCD_WIDTH - FONT_STR_WIDTH(18)) / 2, (LCD_HEIGHT - FONT_GET_HEIGHT) / 2, "TOUCH %s *",
+  lcd_blit_bitmap(x, y, TOUCH_MARK_W, TOUCH_MARK_H, (const uint8_t*)touch_bitmap);
+  lcd_printf((LCD_WIDTH - FONT_STR_WIDTH(18)) / 2, (LCD_HEIGHT - FONT_GET_HEIGHT) / 2, "TOUCH %s *",
              name);
   // Wait release, and fill data
   touch_wait_release();
@@ -447,7 +446,7 @@ void ui_touch_cal_exec(void) {
   const uint16_t x2 = LCD_WIDTH - 1 - CALIBRATION_OFFSET - TOUCH_MARK_X;
   const uint16_t y2 = LCD_HEIGHT - 1 - CALIBRATION_OFFSET - TOUCH_MARK_Y;
   uint16_t p1 = 0, p2 = 2;
-#ifdef FLIP_DISPLAY
+#ifdef __FLIP_DISPLAY__
   if (VNA_MODE(VNA_MODE_FLIP_DISPLAY)) {
     p1 = 2, p2 = 0;
   }
@@ -457,8 +456,8 @@ void ui_touch_cal_exec(void) {
   config_service_notify_configuration_changed();
 }
 
-void touch_position(int *x, int *y) {
-#ifdef REMOTE_DESKTOP
+void touch_position(int* x, int* y) {
+#ifdef __REMOTE_DESKTOP__
   if (touch_remote != REMOTE_NONE) {
     *x = last_touch_x;
     *y = last_touch_y;
@@ -495,20 +494,18 @@ void touch_position(int *x, int *y) {
 
   int tx, ty;
   tx = (int)(((int64_t)scale_x * (last_touch_x - config._touch_cal[0])) >> 16) + CALIBRATION_OFFSET;
-  if (tx < 0) {
+  if (tx < 0)
     tx = 0;
-  } else if (tx >= LCD_WIDTH) {
+  else if (tx >= LCD_WIDTH)
     tx = LCD_WIDTH - 1;
-  }
 
   ty = (int)(((int64_t)scale_y * (last_touch_y - config._touch_cal[1])) >> 16) + CALIBRATION_OFFSET;
-  if (ty < 0) {
+  if (ty < 0)
     ty = 0;
-  } else if (ty >= LCD_HEIGHT) {
+  else if (ty >= LCD_HEIGHT)
     ty = LCD_HEIGHT - 1;
-  }
 
-#ifdef FLIP_DISPLAY
+#ifdef __FLIP_DISPLAY__
   if (VNA_MODE(VNA_MODE_FLIP_DISPLAY)) {
     tx = LCD_WIDTH - 1 - tx;
     ty = LCD_HEIGHT - 1 - ty;
@@ -521,9 +518,9 @@ void touch_position(int *x, int *y) {
 void ui_touch_draw_test(void) {
   int x0, y0;
   int x1, y1;
-  LCD_SET_COLORS(LCD_FG_COLOR, LCD_BG_COLOR);
+  lcd_set_colors(LCD_FG_COLOR, LCD_BG_COLOR);
   lcd_clear_screen();
-  LCD_DRAWSTRING(OFFSETX, LCD_HEIGHT - FONT_GET_HEIGHT,
+  lcd_drawstring(OFFSETX, LCD_HEIGHT - FONT_GET_HEIGHT,
                  "TOUCH TEST: DRAG PANEL, PRESS BUTTON TO FINISH");
 
   while (1) {
@@ -532,10 +529,10 @@ void ui_touch_draw_test(void) {
     if (touch_check() == EVT_TOUCH_PRESSED) {
       touch_position(&x0, &y0);
       do {
-        LCD_PRINTF(10, 30, "%3d %3d ", x0, y0);
+        lcd_printf(10, 30, "%3d %3d ", x0, y0);
         chThdSleepMilliseconds(50);
         touch_position(&x1, &y1);
-        LCD_LINE(x0, y0, x1, y1);
+        lcd_line(x0, y0, x1, y1);
         x0 = x1;
         y0 = y1;
       } while (touch_check() != EVT_TOUCH_RELEASED);
@@ -547,7 +544,7 @@ void ui_touch_draw_test(void) {
 static void ui_process_lever(void) {
   uint16_t status = ui_input_check();
   if (status)
-    UI_HANDLER[ui_mode].button(status);
+    ui_handler[ui_mode].button(status);
 }
 
 static void ui_process_touch(void) {
@@ -555,14 +552,14 @@ static void ui_process_touch(void) {
   int status = touch_check();
   if (status == EVT_TOUCH_PRESSED || status == EVT_TOUCH_DOWN) {
     touch_position(&touch_x, &touch_y);
-    UI_HANDLER[ui_mode].touch(touch_x, touch_y);
+    ui_handler[ui_mode].touch(touch_x, touch_y);
   }
 }
 
 void ui_process(void) {
   ui_controller_dispatch_board_events();
-  uint8_t requests =
-    ui_controller_acquire_requests(UI_CONTROLLER_REQUEST_LEVER | UI_CONTROLLER_REQUEST_TOUCH);
+  uint8_t requests = ui_controller_acquire_requests(UI_CONTROLLER_REQUEST_LEVER |
+                                                    UI_CONTROLLER_REQUEST_TOUCH);
   if (requests & UI_CONTROLLER_REQUEST_LEVER) {
     ui_process_lever();
   }
@@ -582,35 +579,35 @@ void handle_touch_interrupt(void) {
 }
 
 #if HAL_USE_EXT == TRUE
-static void handle_button_ext(EXTDriver *extp, expchannel_t channel) {
+static void handle_button_ext(EXTDriver* extp, expchannel_t channel) {
   (void)extp;
   handle_button_interrupt((uint16_t)channel);
 }
 
 static const EXTConfig extcfg = {
-  {{EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_RISING_EDGE | EXT_CH_MODE_AUTOSTART | EXT_MODE_GPIOA, handle_button_ext}, // EXT1
-   {EXT_CH_MODE_RISING_EDGE | EXT_CH_MODE_AUTOSTART | EXT_MODE_GPIOA, handle_button_ext}, // EXT2
-   {EXT_CH_MODE_RISING_EDGE | EXT_CH_MODE_AUTOSTART | EXT_MODE_GPIOA, handle_button_ext}, // EXT3
-   {EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_DISABLED, NULL},
-   {EXT_CH_MODE_DISABLED, NULL}}};
+    {{EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_RISING_EDGE | EXT_CH_MODE_AUTOSTART | EXT_MODE_GPIOA, handle_button_ext}, // EXT1
+     {EXT_CH_MODE_RISING_EDGE | EXT_CH_MODE_AUTOSTART | EXT_MODE_GPIOA, handle_button_ext}, // EXT2
+     {EXT_CH_MODE_RISING_EDGE | EXT_CH_MODE_AUTOSTART | EXT_MODE_GPIOA, handle_button_ext}, // EXT3
+     {EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_DISABLED, NULL},
+     {EXT_CH_MODE_DISABLED, NULL}}};
 
 static void ui_init_ext(void) {
   extStart(&EXTD1, &extcfg);
@@ -634,7 +631,7 @@ void ui_init(void) {
   ui_input_reset_state();
   ui_init_ext();
   touch_init();
-#ifdef LCD_BRIGHTNESS
+#ifdef __LCD_BRIGHTNESS__
   lcd_set_brightness(config._brightness);
 #endif
 }

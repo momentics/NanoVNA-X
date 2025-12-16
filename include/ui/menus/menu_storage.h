@@ -1,15 +1,15 @@
-#ifndef UI_MENUS_MENU_STORAGE_H
-#define UI_MENUS_MENU_STORAGE_H
+#ifndef _UI_MENUS_MENU_STORAGE_H_
+#define _UI_MENUS_MENU_STORAGE_H_
 
 #include "ui/ui_menu.h"
 
 // Expose the SD Card menu for usage in menu_main.c
-extern const menuitem_t MENU_SDCARD[];
+extern const menuitem_t menu_sdcard[];
 
-#ifdef SD_FILE_BROWSER
+#ifdef __SD_FILE_BROWSER__
 extern const menuitem_t menu_sdcard_browse[];
 #endif
 
-void input_filename(uint16_t data, button_t *b);
+void input_filename(uint16_t data, button_t* b);
 
-#endif // UI_MENUS_MENU_STORAGE_H
+#endif // _UI_MENUS_MENU_STORAGE_H_

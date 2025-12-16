@@ -19,30 +19,29 @@
  */
 
 // Get RTC time as binary structure in 0x00HHMMSS
-uint32_t rtc_get_tr_bin(void) {
+uint32_t rtc_get_tr_bin(void){
   uint32_t tr = RTC->TR;
-  uint32_t v = (tr & 0x0F0F0F) + ((tr & 0x707070) >> 1) + ((tr & 0x707070) >> 3);
+  uint32_t v = (tr&0x0F0F0F) + ((tr&0x707070)>>1) + ((tr&0x707070)>>3);
   return v;
 }
 
 // Get RTC time as binary structure in 0x00YYMMDD
-uint32_t rtc_get_dr_bin(void) {
+uint32_t rtc_get_dr_bin(void){
   uint32_t dr = RTC->DR;
-  uint32_t v = (dr & 0x000F0F0F) + ((dr & 0x00F01030) >> 1) + ((dr & 0x00F01030) >> 3);
-  return v; // | ((dr&0xE000)<<15); // day of week at end
+  uint32_t v = (dr&0x000F0F0F) + ((dr&0x00F01030)>>1) + ((dr&0x00F01030)>>3);
+  return v;// | ((dr&0xE000)<<15); // day of week at end
 }
 
 uint32_t rtc_get_fat(void) {
   uint32_t fattime;
   uint32_t tr = rtc_get_tr_bin();
   uint32_t dr = rtc_get_dr_bin();
-  fattime = ((tr >> 0) & 0xFF) >> 1U;    // Seconds / 2
-  fattime |= ((tr >> 8) & 0xFF) << 5U;   // Minutes
-  fattime |= ((tr >> 16) & 0xFF) << 11U; // Hour
-  fattime |= ((dr >> 0) & 0xFF) << 16U;  // Day
-  fattime |= ((dr >> 8) & 0xFF) << 21U;  // Month
-  fattime |= (((dr >> 16) & 0xFF) + RTC_START_YEAR - 1980)
-             << 25U; // Local year begin from 2000, fat from 1980
+  fattime  = ((tr>> 0)&0xFF) >>  1U; // Seconds / 2
+  fattime |= ((tr>> 8)&0xFF) <<  5U; // Minutes
+  fattime |= ((tr>>16)&0xFF) << 11U; // Hour
+  fattime |= ((dr>> 0)&0xFF) << 16U; // Day
+  fattime |= ((dr>> 8)&0xFF) << 21U; // Month
+  fattime |= (((dr>>16)&0xFF) + RTC_START_YEAR - 1980) << 25U; // Local year begin from 2000, fat from 1980
   return fattime;
 }
 
@@ -52,9 +51,9 @@ static void rtc_exit_init(void) {
 }
 
 // Beginning of configuration procedure.
-static bool rtc_enter_init(void) {
+static bool rtc_enter_init(void){
   RTC->ISR |= RTC_ISR_INIT;
-  uint32_t count = 4 * 65536;
+  uint32_t count = 4*65536;
   while (--count)
     if (RTC->ISR & RTC_ISR_INITF)
       return true;
@@ -62,9 +61,9 @@ static bool rtc_enter_init(void) {
 }
 
 void rtc_set_time(uint32_t dr, uint32_t tr) {
-  if (rtc_enter_init()) {
-    RTC->TR = tr; // Write TR register
-    RTC->DR = dr; // Write TD register
+  if (rtc_enter_init()){
+    RTC->TR = tr;     // Write TR register
+    RTC->DR = dr;     // Write TD register
   }
   rtc_exit_init();
 }
@@ -73,42 +72,39 @@ void rtc_set_time(uint32_t dr, uint32_t tr) {
 
 // Enable LSE bypass if need
 #if defined(STM32_LSE_BYPASS)
-#define STM32_LSE_BYPASS RCC_BDCR_LSEBYP
+#define STM32_LSE_BYPASS     RCC_BDCR_LSEBYP
 #else
-#define STM32_LSE_BYPASS 0
+#define STM32_LSE_BYPASS     0
 #endif
 
 // Startup LSE or if not work, LSI generator
-static void rtc_start_source(void) {
+static void rtc_start_source(void){
   // LSE already work (enabled and ready)
-  if ((RCC->BDCR & (RCC_BDCR_LSEON | RCC_BDCR_LSERDY | STM32_LSE_BYPASS)) ==
-      (RCC_BDCR_LSEON | RCC_BDCR_LSERDY | STM32_LSE_BYPASS))
+  if ((RCC->BDCR & (RCC_BDCR_LSEON|RCC_BDCR_LSERDY|STM32_LSE_BYPASS)) == (RCC_BDCR_LSEON|RCC_BDCR_LSERDY|STM32_LSE_BYPASS))
     return;
 
   // If LSE not enabled, try startup
   RCC->BDCR |= STM32_LSEDRV | STM32_LSE_BYPASS | RCC_BDCR_LSEON;
   // Waits until LSE is stable (need ~150ms for startup).
   chThdSleepMilliseconds(200);
-  if (RCC->BDCR & RCC_BDCR_LSERDY)
-    return;
+  if (RCC->BDCR & RCC_BDCR_LSERDY) return;
 
   // Startup LSI if not allow start LSE
   RCC->CSR |= RCC_CSR_LSION;
-  while ((RCC->CSR & RCC_CSR_LSIRDY) == 0)
-    ;
+  while ((RCC->CSR & RCC_CSR_LSIRDY) == 0);
 }
 
-static void reset_bcdr(uint32_t rtc_drv) {
+static void resetBCDR(uint32_t rtc_drv){
   // Backup domain reset, for change source.
   RCC->BDCR = RCC_BDCR_BDRST;
   RCC->BDCR = 0;
   // Startup again source generator
   rtc_start_source();
   // Select new clock source. And enable
-  RCC->BDCR |= rtc_drv;
+  RCC->BDCR|= rtc_drv;
 }
 
-void auto_backup_domain_init(void) {
+void auto_backup_domain_init(void){
   // Init Backup domain, RTC clock source
   uint32_t rtc_drv;
   // Backup domain access enabled and left open.
@@ -116,25 +112,23 @@ void auto_backup_domain_init(void) {
   // Start/check source
   rtc_start_source();
   // Check LSE ready, if ok, select as source
-  rtc_drv = RCC->BDCR & RCC_BDCR_LSERDY ? STM32_RTCSEL_LSE | RCC_BDCR_RTCEN
-                                        :        // Select LSE as source
-              STM32_RTCSEL_LSI | RCC_BDCR_RTCEN; // Select LSI as source
-  // If the backup domain hasn't been initialized yet or work on different source, then proceed with
-  // initialization
-  if ((RCC->BDCR & (STM32_RTCSEL_MASK | RCC_BDCR_RTCEN)) != rtc_drv)
-    reset_bcdr(rtc_drv);
-  /*
-    // Check RTC clock, and reset backup domain to LSI if clock not start
-    if (rtc_enter_init())
-      rtc_exit_init();
-    else
-      reset_bcdr(STM32_RTCSEL_LSI|RCC_BDCR_RTCEN);
-  */
+  rtc_drv = RCC->BDCR & RCC_BDCR_LSERDY ? STM32_RTCSEL_LSE|RCC_BDCR_RTCEN :  // Select LSE as source
+                                          STM32_RTCSEL_LSI|RCC_BDCR_RTCEN;   // Select LSI as source
+  // If the backup domain hasn't been initialized yet or work on different source, then proceed with initialization
+  if ((RCC->BDCR & (STM32_RTCSEL_MASK|RCC_BDCR_RTCEN)) != rtc_drv)
+    resetBCDR(rtc_drv);
+/*
+  // Check RTC clock, and reset backup domain to LSI if clock not start
+  if (rtc_enter_init())
+    rtc_exit_init();
+  else
+    resetBCDR(STM32_RTCSEL_LSI|RCC_BDCR_RTCEN);
+*/
 }
 #endif
 
 // Initiate RTC clock
-void rtc_init(void) {
+void rtc_init(void){
 #ifdef VNA_AUTO_SELECT_RTC_SOURCE
   // Auto start LSE or LSI source for RTC
   auto_backup_domain_init();
@@ -145,31 +139,32 @@ void rtc_init(void) {
   // Default RTC clock is LSE, but it possible not launch if no quartz installed
 #endif
   uint32_t src = RCC->BDCR & STM32_RTCSEL_MASK;
-  if (src == STM32_RTCSEL_NOCLOCK)
-    return;
-  // If calendar has not been initialized yet or different PRER settings then proceed with the
-  // initial setup. Disable write protection.
+  if (src == STM32_RTCSEL_NOCLOCK) return;
+  // If calendar has not been initialized yet or different PRER settings then proceed with the initial setup.
+  // Disable write protection.
   RTC->WPR = 0xCA;
   RTC->WPR = 0x53;
-  uint32_t rtc_prer = (src == STM32_RTCSEL_LSE) ? STM32_RTC_LSE_PRER : STM32_RTC_LSI_PRER;
+  uint32_t rtc_prer = (src == STM32_RTCSEL_LSE) ? STM32_RTC_LSE_PRER :
+                                                  STM32_RTC_LSI_PRER;
   // If calendar has not been initialized yet then proceed with the initial setup.
   if ((RTC->ISR & RTC_ISR_INITS) == 0 || RTC->PRER != rtc_prer) {
-    if (rtc_enter_init()) {
-      RTC->CR = 0
-        //              | RTC_CR_COSEL    // RTC output 1Hz (or 512Hz if disabled)
-        ;
-      RTC->ISR = RTC_ISR_INIT; // Clearing all but RTC_ISR_INIT.
-      RTC->PRER = rtc_prer;    // Prescaler value loaded in registers 2 times
+    if (rtc_enter_init()){
+      RTC->CR   = 0
+//              | RTC_CR_COSEL    // RTC output 1Hz (or 512Hz if disabled)
+                 ;
+      RTC->ISR  = RTC_ISR_INIT;     // Clearing all but RTC_ISR_INIT.
+      RTC->PRER = rtc_prer;         // Prescaler value loaded in registers 2 times
       RTC->PRER = rtc_prer;
     }
     // Finalizing of configuration procedure.
     rtc_exit_init();
-  } else
+  }
+  else
     RTC->ISR &= ~RTC_ISR_RSF;
 }
 
 void rtc_set_cal(float ppm) {
-  int32_t cal = ppm * (1 << 20) / 1000000.0f + 511.5f;
+  int32_t cal = ppm * (1<<20) / 1000000.0f + 511.5f;
   if ((RTC->ISR & RTC_ISR_RECALPF) || (uint32_t)cal > 1024)
     return;
   RTC->CALR = ((511 - cal) & (RTC_CALR_CALP | RTC_CALR_CALM));
@@ -179,5 +174,5 @@ float rtc_get_cal(void) {
   int32_t cal = -(RTC->CALR & RTC_CALR_CALM);
   if (RTC->CALR & RTC_CALR_CALP)
     cal += 512;
-  return cal * (1000000.0f / (1 << 20));
+  return cal * (1000000.0f / (1<<20));
 }

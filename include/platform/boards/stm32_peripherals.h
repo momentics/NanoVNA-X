@@ -22,24 +22,6 @@
 
 #pragma once
 #include "halconf.h"
-#include "core/config_macros.h"
-
-#ifndef USE_RTC
-#define USE_RTC
-#endif
-#ifdef USE_RTC
-#define __USE_RTC__
-#endif
-#ifdef USE_BACKUP
-#define __USE_BACKUP__
-#endif
-#ifdef REMOTE_DESKTOP
-#define __REMOTE_DESKTOP__
-#endif
-#ifdef USE_SD_CARD
-#define __USE_SD_CARD__
-#endif
-
 /*
  * adc.c
  * Used for:
@@ -151,7 +133,7 @@ float rtc_get_cal(void);
  * Backup
  */
 #ifdef __USE_BACKUP__
-static inline uint32_t get_backup_data32(uint16_t id) {
+inline uint32_t get_backup_data32(uint16_t id) {
   switch (id) {
   case 0:
     return RTC->BKP0R;
@@ -166,7 +148,7 @@ static inline uint32_t get_backup_data32(uint16_t id) {
   }
   return 0;
 }
-static inline void set_backup_data32(uint16_t id, uint32_t data) {
+inline void set_backup_data32(uint16_t id, uint32_t data) {
   switch (id) {
   case 0:
     RTC->BKP0R = data;
@@ -397,7 +379,7 @@ void ext_channel_enable(uint16_t channel, uint16_t mode);
 // Run TIM3 as ms timer counter
 void board_init_timers(void);
 void board_start_timer(TIM_TypeDef* timer, uint32_t period);
-static inline uint32_t board_get_counter(TIM_TypeDef *timer) {
+inline uint32_t board_get_counter(TIM_TypeDef* timer) {
   return timer->CNT;
 }
 #endif

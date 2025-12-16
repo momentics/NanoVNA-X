@@ -18,7 +18,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+ #pragma once
 
 #include <stdint.h>
 

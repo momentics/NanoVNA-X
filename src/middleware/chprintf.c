@@ -65,20 +65,20 @@ typedef int32_t longval_t;
 
 #pragma pack(push, 2)
 
-static const uint32_t POW10[FLOAT_PRECISION + 1] = {
-  1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
+static const uint32_t pow10[FLOAT_PRECISION + 1] = {
+    1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
 // Prefixes for values bigger then 1000.0
 //                                 1  1e3, 1e6, 1e9, 1e12, 1e15, 1e18, 1e21, 1e24
-static const char BIG_PREFIX[] = {' ', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y', 0};
+static const char bigPrefix[] = {' ', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y', 0};
 // Prefixes for values less   then 1.0
 //                                 1e-3,    1e-6   , 1e-9, 1e-12, 1e-15, 1e-18, 1e-21, 1e-24
-static const char SMALL_PREFIX[] = {'m', S_MICRO[0], 'n', 'p', 'f', 'a', 'z', 'y', 0};
+static const char smallPrefix[] = {'m', S_MICRO[0], 'n', 'p', 'f', 'a', 'z', 'y', 0};
 
 #pragma pack(pop)
 
-static char *long_to_string_with_divisor(char *p, longval_t num, uint32_t radix, int precision) {
-  char *q = p + MAX_FILLER;
-  char *b = q;
+static char* long_to_string_with_divisor(char* p, longval_t num, uint32_t radix, int precision) {
+  char* q = p + MAX_FILLER;
+  char* b = q;
   // convert to string from end buffer to begin
   do {
     uint8_t c = num % radix;
@@ -87,9 +87,9 @@ static char *long_to_string_with_divisor(char *p, longval_t num, uint32_t radix,
   } while ((precision && --precision) || num);
   // copy string at begin
   int i = (int)(b - q);
-  do {
+  do
     *p++ = *q++;
-  } while (--i);
+  while (--i);
   return p;
 }
 
@@ -99,14 +99,14 @@ static char *long_to_string_with_divisor(char *p, longval_t num, uint32_t radix,
 #define FREQ_PSET 1
 #define FREQ_PREFIX_SPACE 2
 
-static char *ulong_freq(char *p, pfreq_t freq, int precision) {
+static char* ulong_freq(char* p, pfreq_t freq, int precision) {
   uint8_t flag = FREQ_PSET;
   if (precision == 0)
     flag |= FREQ_PREFIX_SPACE;
   if (precision == 0 || precision > MAX_FREQ_PRESCISION)
     precision = MAX_FREQ_PRESCISION;
-  char *q = p + MAX_FREQ_PRESCISION;
-  char *b = q;
+  char* q = p + MAX_FREQ_PRESCISION;
+  char* b = q;
   // Prefix counter
   uint32_t s = 0;
   // Set format (every 3 digits add ' ' up to GHz)
@@ -143,7 +143,7 @@ static char *ulong_freq(char *p, pfreq_t freq, int precision) {
     }
     format >>= 1;
   } while (1);
-  s = BIG_PREFIX[s];
+  s = bigPrefix[s];
 
   // Get string size
   int i = (b - q);
@@ -171,11 +171,11 @@ static char *ulong_freq(char *p, pfreq_t freq, int precision) {
 }
 
 #if CHPRINTF_USE_FLOAT
-static char *ftoa(char *p, float num, int precision) {
+static char* ftoa(char* p, float num, int precision) {
   // Check precision limit
   if (precision > FLOAT_PRECISION)
     precision = FLOAT_PRECISION;
-  uint32_t multi = POW10[precision];
+  uint32_t multi = pow10[precision];
   uint32_t l = num;
   // Round value
   uint32_t k = ((num - l) * multi + 0.5);
@@ -192,15 +192,15 @@ static char *ftoa(char *p, float num, int precision) {
   return p;
 }
 
-static char *ftoa_s(char *p, float num, int16_t precision) {
+static char* ftoaS(char* p, float num, int16_t precision) {
   char prefix = 0;
-  const char *ptr;
+  const char* ptr;
   if (num >= 1000.0f) {
-    for (ptr = BIG_PREFIX + 1; *ptr && num >= 1000.0f; num /= 1000.0f, ptr++)
+    for (ptr = bigPrefix + 1; *ptr && num >= 1000.0f; num /= 1000.0f, ptr++)
       ;
     prefix = ptr[-1];
   } else if (num < 1.0f) {
-    for (ptr = SMALL_PREFIX; *ptr && num < 1.0f; num *= 1000.0f, ptr++)
+    for (ptr = smallPrefix; *ptr && num < 1.0f; num *= 1000.0f, ptr++)
       ;
     prefix = num > 1e-3 ? ptr[-1] : 0;
   }
@@ -209,11 +209,10 @@ static char *ftoa_s(char *p, float num, int16_t precision) {
 
   // Auto set precision in place of value
   uint32_t l = num;
-  if (l >= 100) {
+  if (l >= 100)
     precision -= 2;
-  } else if (l >= 10) {
+  else if (l >= 10)
     precision -= 1;
-  }
   if (precision < 0)
     precision = 0;
   p = ftoa(p, num, precision);
@@ -269,7 +268,7 @@ static char *ftoa_s(char *p, float num, int16_t precision) {
 #define COMPLEX 0x0080
 #define SHORT_FLOAT 0x0100
 
-int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
+int chvprintf(BaseSequentialStream* chp, const char* fmt, va_list ap) {
   char *p, *s, c, filler = ' ';
   int precision, width;
   int n = 0;
@@ -309,36 +308,34 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
     // zeros for numeric types. (The default prepends spaces.) 'j' Then add 'j' before '+' or '-',
     // need for complex values.
     while (true) {
-      if (*fmt == '-') {
+      if (*fmt == '-')
         state |= LEFT_ALIGN;
-      } else if (*fmt == '+') {
+      else if (*fmt == '+')
         state |= POSITIVE;
-      } else if (*fmt == '0') {
+      else if (*fmt == '0')
         state |= PAD_ZERO;
-      } else if (*fmt == 'j') {
+      else if (*fmt == 'j')
         state |= COMPLEX;
 #ifdef CHPRINTF_USE_SPACE_FLAG
-      } else if (*fmt == ' ') {
+      else if (*fmt == ' ')
         state |= PLUS_SPACE;
 #endif
-      } else if (*fmt == 'b') {
+      else if (*fmt == 'b')
         state |= SHORT_FLOAT;
-      } else {
+      else
         break;
-      }
       fmt++;
     }
     // Get [width|*] - The Width field specifies a minimum number of characters to output
     // if set *, get width as argument
     while (true) {
       c = *fmt++;
-      if (c >= '0' && c <= '9') {
+      if (c >= '0' && c <= '9')
         c -= '0';
-      } else if (c == '*') {
+      else if (c == '*')
         c = va_arg(ap, int);
-      } else {
+      else
         break;
-      }
       width = width * 10 + c;
     }
     // Get [.precision|*]
@@ -346,18 +343,17 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
     if (c == '.') {
       while (true) {
         c = *fmt++;
-        if (c >= '0' && c <= '9') {
+        if (c >= '0' && c <= '9')
           c -= '0';
-        } else if (c == '*') {
+        else if (c == '*')
           c = va_arg(ap, int);
-        } else {
+        else
           break;
-        }
         precision = precision * 10 + c;
       }
     } else
       state |= DEFAULT_PRESCISION;
-      // Get type (or skip [l|L] for int64_t) support
+    // Get type (or skip [l|L] for int64_t) support
 #ifdef CHPRINTF_USE_INT_64
     if (c == 'l' || c == 'L') {
       state |= IS_LONG;
@@ -374,8 +370,8 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
       break;
     case 's':
       state &= ~PAD_ZERO;
-      if ((s = va_arg(ap, char *)) == 0)
-        s = (char *)"(null)";
+      if ((s = va_arg(ap, char*)) == 0)
+        s = (char*)"(null)";
       if (state & DEFAULT_PRESCISION)
         precision = 32767;
       for (p = s; *p && (--precision >= 0); p++)
@@ -395,12 +391,11 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
         state |= NEGATIVE;
         *p++ = '-';
         value.l = -value.l;
-      } else if (state & POSITIVE) {
+      } else if (state & POSITIVE)
         *p++ = '+';
 #ifdef CHPRINTF_USE_SPACE_FLAG
-      } else if (state & PLUS_SPACE) {
+      else if (state & PLUS_SPACE)
         *p++ = ' ';
-      }
 #endif
       if (state & COMPLEX)
         *p++ = 'j';
@@ -412,21 +407,19 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
 #if CHPRINTF_USE_FLOAT
     case 'F':
     case 'f':
-      if (state & SHORT_FLOAT) {
+      if (state & SHORT_FLOAT)
         value.u = va_arg(ap, uint32_t);
-      } else {
+      else
         value.f = va_arg(ap, double);
-      }
       if (value.f < 0) {
         state |= NEGATIVE;
         *p++ = '-';
         value.f = -value.f;
-      } else if (state & POSITIVE) {
+      } else if (state & POSITIVE)
         *p++ = '+';
 #ifdef CHPRINTF_USE_SPACE_FLAG
-      } else if (state & PLUS_SPACE) {
+      else if (state & PLUS_SPACE)
         *p++ = ' ';
-      }
 #endif
       if (state & COMPLEX)
         *p++ = 'j';
@@ -438,7 +431,7 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
       // Set default precision
       if (state & DEFAULT_PRESCISION)
         precision = (c == 'F') ? FLOAT_PREFIX_PRECISION : FLOAT_PRECISION;
-      p = (c == 'F') ? ftoa_s(p, value.f, precision) : ftoa(p, value.f, precision);
+      p = (c == 'F') ? ftoaS(p, value.f, precision) : ftoa(p, value.f, precision);
 #ifdef CHPRINTF_FORCE_TRAILING_ZEROS
       if (state & PAD_ZERO) { // remove zeros at end
         state ^= PAD_ZERO;
@@ -476,11 +469,10 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
     }
     // Now need print buffer s[{sign}XXXXXXXXXXXX]p and align it on width
     // Check filler width (if buffer less then width) and prepare filler if need fill
-    if ((width -= (int)(p - s)) < 0) {
+    if ((width -= (int)(p - s)) < 0)
       width = 0;
-    } else {
+    else
       filler = (state & PAD_ZERO) ? '0' : ' ';
-    }
     // if left align, put sign digit, and fill
     // [{sign}ffffffXXXXXXXXXXXX]
     if (!(state & LEFT_ALIGN)) {
@@ -608,18 +600,18 @@ int chsnprintf(char *str, size_t size, const char *fmt, ...) {
 //
 // Small memory stream object, only put function
 //
-struct print_stream_vmt {
+struct printStreamVMT {
   _base_sequential_stream_methods
 };
 
 typedef struct {
-  const struct print_stream_vmt *vmt;
-  uint8_t *buffer;
+  const struct printStreamVMT* vmt;
+  uint8_t* buffer;
   uint16_t size;
-} print_stream_t;
+} printStream;
 
-static msg_t put(void *ip, uint8_t b) {
-  print_stream_t *ps = ip;
+static msg_t put(void* ip, uint8_t b) {
+  printStream* ps = ip;
   if (ps->size > 1) {
     *(ps->buffer++) = b;
     ps->size--;
@@ -627,21 +619,21 @@ static msg_t put(void *ip, uint8_t b) {
   return MSG_OK;
 }
 
-static const struct print_stream_vmt VMT = {NULL, NULL, put, NULL};
+static const struct printStreamVMT vmt = {NULL, NULL, put, NULL};
 // Simple print in buffer function
-int plot_printf(char *str, int size, const char *fmt, ...) {
+int plot_printf(char* str, int size, const char* fmt, ...) {
   va_list ap;
-  print_stream_t ps;
+  printStream ps;
   int retval;
   if (size <= 0)
     return 0;
   // Init small memory stream for print
-  ps.vmt = &VMT;
-  ps.buffer = (uint8_t *)str;
+  ps.vmt = &vmt;
+  ps.buffer = (uint8_t*)str;
   ps.size = size;
   // Performing the print operation using the common code.
   va_start(ap, fmt);
-  retval = chvprintf((BaseSequentialStream *)(void *)&ps, fmt, ap);
+  retval = chvprintf((BaseSequentialStream*)(void*)&ps, fmt, ap);
   va_end(ap);
   *(ps.buffer) = 0;
   if (retval > size - 1)

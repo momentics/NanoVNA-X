@@ -31,7 +31,7 @@
 
 #include <string.h>
 
-#define SWEEP_STATE_AUTOSAVE_DELAY MS2ST(750)
+#define SWEEP_STATE_AUTOSAVE_DELAY   MS2ST(750)
 #define SWEEP_STATE_AUTOSAVE_MIN_GAP S2ST(3)
 
 static bool sweep_state_dirty = false;
@@ -40,7 +40,7 @@ static systime_t sweep_state_last_save = 0;
 
 static void sanitize_rf_preferences(void) {
 #ifdef USE_VARIABLE_OFFSET
-  config.IF_freq = clamp_if_offset(config.IF_freq);
+  config._IF_freq = clamp_if_offset(config._IF_freq);
 #endif
   config._harmonic_freq_threshold = clamp_harmonic_threshold(config._harmonic_freq_threshold);
 }
@@ -60,7 +60,7 @@ static void load_default_properties(void) {
   current_props._trace[2] = (trace_t){true, TRC_SMITH, 0, MS_RX, 1.0f, 0};
   current_props._trace[3] = (trace_t){true, TRC_PHASE, 1, MS_REIM, 90.0f, NGRIDY / 2};
   for (int i = 0; i < MARKERS_MAX; i++) {
-    marker_t *marker = &current_props._markers[i];
+    marker_t* marker = &current_props._markers[i];
     marker->enabled = (i == 0);
     marker->reserved = 0;
     marker->index = (int16_t)(10 * (i + 1) * SWEEP_POINTS_MAX / 100 - 1);
@@ -83,7 +83,7 @@ static void load_default_properties(void) {
   current_props._measure = 0;
 }
 
-#ifdef USE_BACKUP
+#ifdef __USE_BACKUP__
 typedef union {
   struct {
     uint32_t points : 9;
@@ -93,7 +93,7 @@ typedef union {
     uint32_t brightness : 7;
   };
   uint32_t v;
-} backup_0_t;
+} backup_0;
 
 static inline uint16_t active_calibration_slot(void) {
   uint16_t slot = lastsaveid;
@@ -104,11 +104,11 @@ static inline uint16_t active_calibration_slot(void) {
 }
 
 void update_backup_data(void) {
-  backup_0_t bk = {.points = sweep_points,
-                   .bw = config._bandwidth,
-                   .id = lastsaveid,
-                   .leveler = sweep_mode,
-                   .brightness = config._brightness};
+  backup_0 bk = {.points = sweep_points,
+                 .bw = config._bandwidth,
+                 .id = lastsaveid,
+                 .leveler = lever_mode,
+                 .brightness = config._brightness};
   set_backup_data32(0, bk.v);
   set_backup_data32(1, frequency0);
   set_backup_data32(2, frequency1);
@@ -120,7 +120,7 @@ static void load_settings(void) {
   load_default_properties();
   if (config_recall() == 0 && VNA_MODE(VNA_MODE_BACKUP)) {
     sanitize_rf_preferences();
-    backup_0_t bk = {.v = get_backup_data32(0)};
+    backup_0 bk = {.v = get_backup_data32(0)};
     if (bk.v != 0U) {
       if (bk.id < SAVEAREA_MAX && caldata_recall(bk.id) == 0) {
         sweep_points = bk.points;
@@ -147,7 +147,7 @@ static void load_settings(void) {
     sanitize_rf_preferences();
   }
   app_measurement_update_frequencies();
-#ifdef VNA_MEASURE_MODULE
+#ifdef __VNA_MEASURE_MODULE__
   plot_set_measure_mode(current_props._measure);
 #endif
 }
@@ -174,26 +174,26 @@ void state_manager_init(void) {
 }
 
 void state_manager_mark_dirty(void) {
-#ifdef USE_BACKUP
+#ifdef __USE_BACKUP__
   sweep_state_dirty = true;
   sweep_state_deadline = chVTGetSystemTimeX() + SWEEP_STATE_AUTOSAVE_DELAY;
 #endif
 }
 
 void state_manager_force_save(void) {
-#ifdef USE_BACKUP
+#ifdef __USE_BACKUP__
   // Don't save during calibration to avoid conflicts with measurement process
   if (!calibration_in_progress) {
     caldata_save(active_calibration_slot());
   }
-
+  
   sweep_state_dirty = false;
   sweep_state_last_save = chVTGetSystemTimeX();
 #endif
 }
 
 void state_manager_service(void) {
-#ifdef USE_BACKUP
+#ifdef __USE_BACKUP__
   if (!VNA_MODE(VNA_MODE_BACKUP) || !sweep_state_dirty) {
     return;
   }

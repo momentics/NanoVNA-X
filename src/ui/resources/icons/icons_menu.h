@@ -22,7 +22,7 @@
 #define TOUCH_MARK_Y 7
 #endif
 
-extern const uint8_t TOUCH_BITMAP[];
+extern const uint8_t touch_bitmap[];
 
 #if _USE_FONT_ < 3
 #define ICON_SIZE 14
@@ -34,5 +34,6 @@ extern const uint8_t TOUCH_BITMAP[];
 #define ICON_HEIGHT 14
 #endif
 
-extern const uint8_t BUTTON_ICONS[];
-#define ICON_GET_DATA(i) (&BUTTON_ICONS[2 * ICON_HEIGHT * (i)])
+extern const uint8_t button_icons[];
+#define ICON_GET_DATA(i) (&button_icons[2 * ICON_HEIGHT * (i)])
+

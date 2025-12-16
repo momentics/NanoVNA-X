@@ -18,44 +18,44 @@
 // Little slower on easy traces, but slow if need lot of clip and draw long lines
 /**
  * @brief Draw a line in the cell buffer using optimized Bresenham's algorithm.
- *
+ * 
  * This function draws a line between two points in the cell buffer, with optimized
  * boundary checking and clipping to avoid expensive operations outside the cell.
  */
-void cell_drawline(const render_cell_ctx_t *rcx, int x0, int y0, int x1, int y1, pixel_t c) {
+void cell_drawline(const RenderCellCtx* rcx, int x0, int y0, int x1, int y1, pixel_t c) {
   // Quick out-of-bounds check to avoid expensive computation
-  if ((x0 < 0 && x1 < 0) || (y0 < 0 && y1 < 0) || (x0 >= CELLWIDTH && x1 >= CELLWIDTH) ||
-      (y0 >= CELLHEIGHT && y1 >= CELLHEIGHT))
+  if ((x0 < 0 && x1 < 0) || (y0 < 0 && y1 < 0) || 
+      (x0 >= CELLWIDTH && x1 >= CELLWIDTH) || (y0 >= CELLHEIGHT && y1 >= CELLHEIGHT))
     return;
 
   // Optimized Bresenham's algorithm implementation
   int dx = x1 - x0;
   int dy = y1 - y0;
-
+  
   // Determine direction
   int sx = (dx > 0) ? 1 : -1;
   int sy = (dy > 0) ? 1 : -1;
-
+  
   // Work with absolute values
   dx = (dx < 0) ? -dx : dx;
   dy = (dy < 0) ? -dy : dy;
-
+  
   int err = dx - dy;
   int x = x0;
   int y = y0;
-
+  
   // Keep looping while we're within bounds
   while (1) {
     // Only draw pixel if within cell bounds
     if ((uint32_t)x < rcx->w && (uint32_t)y < rcx->h)
       *cell_ptr(rcx, (uint16_t)x, (uint16_t)y) = c;
-
+    
     // Check if we've reached the end point
     if (x == x1 && y == y1)
       break;
-
+      
     int e2 = 2 * err;
-
+    
     if (e2 > -dy) {
       err -= dy;
       x += sx;
@@ -68,8 +68,8 @@ void cell_drawline(const render_cell_ctx_t *rcx, int x0, int y0, int x1, int y1,
 }
 
 // Slower, but allow any width bitmaps
-void cell_blit_bitmap(render_cell_ctx_t *rcx, int16_t x, int16_t y, uint16_t w, uint16_t h,
-                      const uint8_t *bmp) {
+void cell_blit_bitmap(RenderCellCtx* rcx, int16_t x, int16_t y, uint16_t w, uint16_t h,
+                             const uint8_t* bmp) {
   int16_t x1, y1;
   if ((x1 = x + w) < 0 || (y1 = y + h) < 0)
     return;
@@ -94,8 +94,8 @@ void cell_blit_bitmap(render_cell_ctx_t *rcx, int16_t x, int16_t y, uint16_t w, 
 #endif
 
 #ifdef VNA_ENABLE_SHADOW_TEXT
-void cell_blit_bitmap_shadow(render_cell_ctx_t *rcx, int16_t x, int16_t y, uint16_t w, uint16_t h,
-                             const uint8_t *bmp) {
+void cell_blit_bitmap_shadow(RenderCellCtx* rcx, int16_t x, int16_t y, uint16_t w, uint16_t h,
+                                    const uint8_t* bmp) {
   int i;
   if (x + w < 0 || h + y < 0)
     return; // Clipping
@@ -117,7 +117,7 @@ void cell_blit_bitmap_shadow(render_cell_ctx_t *rcx, int16_t x, int16_t y, uint1
   lcd_set_foreground(LCD_TXT_SHADOW_COLOR); // set shadow color
   w += 2;
   h += 2; // Shadow size > by 2 pixel
-  cell_blit_bitmap(rcx, x - 1, y - 1, w < 9 ? 9 : w, h, (uint8_t *)dst);
+  cell_blit_bitmap(rcx, x - 1, y - 1, w < 9 ? 9 : w, h, (uint8_t*)dst);
   foreground_color = t; // restore color
 }
 #endif
@@ -126,13 +126,13 @@ void cell_blit_bitmap_shadow(render_cell_ctx_t *rcx, int16_t x, int16_t y, uint1
 // Cell printf function
 //**************************************************************************************
 typedef struct {
-  const void *vmt;
-  render_cell_ctx_t *ctx;
+  const void* vmt;
+  RenderCellCtx* ctx;
   int16_t x;
   int16_t y;
-} cell_print_stream_t;
+} cellPrintStream;
 
-static void put_normal(cell_print_stream_t *ps, uint8_t ch) {
+static void put_normal(cellPrintStream* ps, uint8_t ch) {
   uint16_t w = FONT_GET_WIDTH(ch);
 #if VNA_ENABLE_SHADOW_TEXT
   cell_blit_bitmap_shadow(ps->ctx, ps->x, ps->y, w, FONT_GET_HEIGHT, FONT_GET_DATA(ch));
@@ -146,18 +146,17 @@ static void put_normal(cell_print_stream_t *ps, uint8_t ch) {
 }
 
 #if _USE_FONT_ != _USE_SMALL_FONT_
-typedef void (*font_put_t)(cell_print_stream_t *ps, uint8_t ch);
+typedef void (*font_put_t)(cellPrintStream* ps, uint8_t ch);
 static font_put_t put_char;
-static void put_small(cell_print_stream_t *ps, uint8_t ch) {
-#define PUT_CHAR put_char
-  uint16_t w = SFONT_GET_WIDTH(ch);
+static void put_small(cellPrintStream* ps, uint8_t ch) {
+  uint16_t w = sFONT_GET_WIDTH(ch);
 #if VNA_ENABLE_SHADOW_TEXT
-  cell_blit_bitmap_shadow(ps->ctx, ps->x, ps->y, w, SFONT_GET_HEIGHT, SFONT_GET_DATA(ch));
+  cell_blit_bitmap_shadow(ps->ctx, ps->x, ps->y, w, sFONT_GET_HEIGHT, sFONT_GET_DATA(ch));
 #endif
 #if _USE_SMALL_FONT_ < 3
-  cell_blit_bitmap(ps->ctx, ps->x, ps->y, w, SFONT_GET_HEIGHT, SFONT_GET_DATA(ch));
+  cell_blit_bitmap(ps->ctx, ps->x, ps->y, w, sFONT_GET_HEIGHT, sFONT_GET_DATA(ch));
 #else
-  cell_blit_bitmap(ps->ctx, ps->x, ps->y, w < 9 ? 9 : w, SFONT_GET_HEIGHT, SFONT_GET_DATA(ch));
+  cell_blit_bitmap(ps->ctx, ps->x, ps->y, w < 9 ? 9 : w, sFONT_GET_HEIGHT, sFONT_GET_DATA(ch));
 #endif
   ps->x += w;
 }
@@ -169,33 +168,33 @@ void cell_set_font(int type) {
 void cell_set_font(int type) {
   (void)type;
 }
-#define PUT_CHAR put_normal
+#define put_char put_normal
 #endif
 
-static msg_t cell_put(void *ip, uint8_t ch) {
-  cell_print_stream_t *ps = ip;
+static msg_t cell_put(void* ip, uint8_t ch) {
+  cellPrintStream* ps = ip;
   if (ps->x < CELLWIDTH && ps->y < CELLHEIGHT)
-    PUT_CHAR(ps, ch);
+    put_char(ps, ch);
   return MSG_OK;
 }
 
 // Simple print in buffer function
-static int cell_vprintf(render_cell_ctx_t *rcx, int16_t x, int16_t y, const char *fmt, va_list ap) {
-  static const struct lcd_print_stream_vmt {
+static int cell_vprintf(RenderCellCtx* rcx, int16_t x, int16_t y, const char* fmt, va_list ap) {
+  static const struct lcd_printStreamVMT {
     _base_sequential_stream_methods
   } cell_vmt = {NULL, NULL, cell_put, NULL};
   // Skip print if not on cell (at top/bottom/right)
   if ((uint32_t)(y + FONT_GET_HEIGHT) >= CELLHEIGHT + FONT_GET_HEIGHT || x >= CELLWIDTH)
     return 0;
   // Init small cell print stream
-  cell_print_stream_t ps = {&cell_vmt, rcx, x, y};
+  cellPrintStream ps = {&cell_vmt, rcx, x, y};
   // Performing the print operation using the common code.
-  int retval = chvprintf((BaseSequentialStream *)(void *)&ps, fmt, ap);
+  int retval = chvprintf((BaseSequentialStream*)(void*)&ps, fmt, ap);
   // Return number of bytes that would have been written.
   return retval;
 }
 
-int cell_printf_ctx(render_cell_ctx_t *rcx, int16_t x, int16_t y, const char *fmt, ...) {
+int cell_printf_ctx(RenderCellCtx* rcx, int16_t x, int16_t y, const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
   int retval = cell_vprintf(rcx, x, y, fmt, ap);
@@ -204,13 +203,13 @@ int cell_printf_ctx(render_cell_ctx_t *rcx, int16_t x, int16_t y, const char *fm
 }
 
 // Bound during draw_cell() so measurement helpers can reuse printf utilities.
-static render_cell_ctx_t *active_cell_ctx = NULL;
+static RenderCellCtx* active_cell_ctx = NULL;
 
-void set_active_cell_ctx(render_cell_ctx_t *ctx) {
+void set_active_cell_ctx(RenderCellCtx* ctx) {
   active_cell_ctx = ctx;
 }
 
-int cell_printf_bound(int16_t x, int16_t y, const char *fmt, ...) {
+int cell_printf_bound(int16_t x, int16_t y, const char* fmt, ...) {
   chDbgAssert(active_cell_ctx != NULL, "No active cell context");
   va_list ap;
   va_start(ap, fmt);

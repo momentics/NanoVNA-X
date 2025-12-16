@@ -25,7 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define VNA_MEASURE_MODULE 1
+#define __VNA_MEASURE_MODULE__ 1
 #include "nanovna.h"
 
 /*
@@ -53,15 +53,15 @@ static int g_failures = 0;
 static int g_last_marker_slot = -1;
 static int g_last_marker_index = -1;
 
-#define CHECK(cond)                                                                                \
-  do {                                                                                             \
-    if (!(cond)) {                                                                                 \
-      ++g_failures;                                                                                \
-      fprintf(stderr, "[FAIL] %s:%d: %s\n", __FILE__, __LINE__, #cond);                            \
-    }                                                                                              \
+#define CHECK(cond)                                                                           \
+  do {                                                                                        \
+    if (!(cond)) {                                                                            \
+      ++g_failures;                                                                           \
+      fprintf(stderr, "[FAIL] %s:%d: %s\n", __FILE__, __LINE__, #cond);                       \
+    }                                                                                         \
   } while (0)
 
-static void expect_float_close(float expected, float actual, float tol, const char *label) {
+static void expect_float_close(float expected, float actual, float tol, const char* label) {
   if (fabsf(expected - actual) > tol) {
     ++g_failures;
     fprintf(stderr, "[FAIL] %s expected=%f actual=%f tol=%f\n", label, expected, actual, tol);

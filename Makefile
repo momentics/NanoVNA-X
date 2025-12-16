@@ -162,8 +162,7 @@ endif
 
 # C sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.
-# ChibiOS and Third Party Sources
-CHIBIOS_CSRC = $(STARTUPSRC) \
+CSRC = $(STARTUPSRC) \
        $(KERNSRC) \
        $(PORTSRC) \
        $(OSALSRC) \
@@ -172,14 +171,12 @@ CHIBIOS_CSRC = $(STARTUPSRC) \
        $(BOARDSRC) \
        $(STREAMSSRC) \
        third_party/FatFs/ff.c \
-       third_party/FatFs/ffunicode.c
-
-# Project Specific Sources
-PROJECT_CSRC = src/ui/resources/fonts/numfont16x22.c \
-       src/ui/resources/fonts/font_5x7.c \
-       src/ui/resources/fonts/font_6x10.c \
-       src/ui/resources/fonts/font_7x11b.c \
-       src/ui/resources/fonts/font_11x14.c \
+       third_party/FatFs/ffunicode.c \
+       src/ui/resources/fonts/numfont16x22.c \
+       src/ui/resources/fonts/Font5x7.c \
+       src/ui/resources/fonts/Font6x10.c \
+       src/ui/resources/fonts/Font7x11b.c \
+       src/ui/resources/fonts/Font11x14.c \
        src/ui/resources/icons/icons_menu.c \
        src/platform/peripherals/usbcfg.c \
        src/runtime/main.c \
@@ -226,14 +223,6 @@ PROJECT_CSRC = src/ui/resources/fonts/numfont16x22.c \
        src/interfaces/ports/processing_port.c \
        src/interfaces/ports/ui_port.c \
        src/interfaces/ports/usb_command_server_port.c
-
-# Combine sources
-CSRC = $(CHIBIOS_CSRC) $(PROJECT_CSRC)
-
-# Suppress warnings for ChibiOS sources
-# Calculate object file names for ChibiOS sources since rules.mk flattens them into $(OBJDIR) aka build/obj
-CHIBIOS_OBJS = $(addprefix build/obj/, $(notdir $(CHIBIOS_CSRC:.c=.o)))
-$(CHIBIOS_OBJS): CWARN = -w
 
 # C++ sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.
@@ -320,9 +309,9 @@ CPPWARN = -Wall -Wextra
 
 # List all user C define here, like -D_DEBUG=1
 ifeq ($(TARGET),F303)
- UDEFS = -DARM_MATH_CM4 -DNANOVNA_F303 -DSTM32F303xC
+ UDEFS = -DARM_MATH_CM4 -DNANOVNA_F303
 else
- UDEFS = -DARM_MATH_CM0 -DSTM32F072xB
+ UDEFS = -DARM_MATH_CM0
 endif
 ifeq ($(TARGET),F072)
 # F072 build targets do not expose TLV320/port diagnostics; trim their commands
@@ -372,88 +361,41 @@ $(TEST_BUILD_DIR):
 	@mkdir -p $@
 
 $(TEST_BUILD_DIR)/test_common: tests/unit/test_common.c src/core/common.c | $(TEST_BUILD_DIR)
-	@echo "  [HOST_CC] $@"
-	@$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
-TEST_OBJCOPY ?= objcopy
-
-# F072 build of vna_math
-$(TEST_BUILD_DIR)/vna_math_f072.o: src/processing/vna_math.c | $(TEST_BUILD_DIR)
-	@echo "  [HOST_CC] $@"
-	@$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_F072 -DVNA_USE_MATH_TABLES -Itests/stubs -Iinclude -Isrc -c $< -o $@
-	@echo "  [OBJCOPY] $@"
-	@$(TEST_OBJCOPY) --redefine-sym vna_sincosf=vna_sincosf_f072 \
-									--redefine-sym vna_modff=vna_modff_f072 \
-									--redefine-sym vna_sqrtf=vna_sqrtf_f072 \
-									--redefine-sym vna_cbrtf=vna_cbrtf_f072 \
-									--redefine-sym vna_logf=vna_logf_f072 \
-									--redefine-sym vna_log10f_x_10=vna_log10f_x_10_f072 \
-									--redefine-sym vna_atanf=vna_atanf_f072 \
-									--redefine-sym vna_atan2f=vna_atan2f_f072 \
-									--redefine-sym vna_expf=vna_expf_f072 \
-									--redefine-sym fft=fft_f072 \
-									$@
-
-# F303 build of vna_math
-$(TEST_BUILD_DIR)/vna_math_f303.o: src/processing/vna_math.c | $(TEST_BUILD_DIR)
-	@echo "  [HOST_CC] $@"
-	@$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_F303 -DVNA_USE_MATH_TABLES -Itests/stubs -Iinclude -Isrc -c $< -o $@
-	@echo "  [OBJCOPY] $@"
-	@$(TEST_OBJCOPY) --redefine-sym vna_sincosf=vna_sincosf_f303 \
-									--redefine-sym vna_modff=vna_modff_f303 \
-									--redefine-sym vna_sqrtf=vna_sqrtf_f303 \
-									--redefine-sym vna_cbrtf=vna_cbrtf_f303 \
-									--redefine-sym vna_logf=vna_logf_f303 \
-									--redefine-sym vna_log10f_x_10=vna_log10f_x_10_f303 \
-									--redefine-sym vna_atanf=vna_atanf_f303 \
-									--redefine-sym vna_atan2f=vna_atan2f_f303 \
-									--redefine-sym vna_expf=vna_expf_f303 \
-									--redefine-sym fft=fft_f303 \
-									$@
-
-$(TEST_BUILD_DIR)/test_vna_math: tests/unit/test_vna_math.c $(TEST_BUILD_DIR)/vna_math_f072.o $(TEST_BUILD_DIR)/vna_math_f303.o | $(TEST_BUILD_DIR)
-	@echo "  [HOST_CC] $@"
-	@$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+$(TEST_BUILD_DIR)/test_vna_math: tests/unit/test_vna_math.c src/processing/vna_math.c | $(TEST_BUILD_DIR)
+	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_measurement_pipeline: tests/unit/test_measurement_pipeline.c \
 		src/rf/pipeline/measurement_pipeline.c | $(TEST_BUILD_DIR)
-	@echo "  [HOST_CC] $@"
-	@$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_dsp_backend: tests/unit/test_dsp_backend.c src/processing/dsp_backend.c | $(TEST_BUILD_DIR)
-	@echo "  [HOST_CC] $@"
-	@$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_legacy_measure: tests/unit/test_legacy_measure.c src/processing/vna_math.c | $(TEST_BUILD_DIR)
-	@echo "  [HOST_CC] $@"
-	@$(HOST_CC) $(HOST_CFLAGS) -Wno-unused-function -Wno-unused-variable -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	$(HOST_CC) $(HOST_CFLAGS) -Wno-unused-function -Wno-unused-variable -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_event_bus: tests/unit/test_event_bus.c src/infra/event/event_bus.c | $(TEST_BUILD_DIR)
-	@echo "  [HOST_CC] $@"
-	@$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_scheduler: tests/unit/test_scheduler.c src/infra/task/scheduler.c | $(TEST_BUILD_DIR)
-	@echo "  [HOST_CC] $@"
-	@$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_measurement_engine: tests/unit/test_measurement_engine.c \
 		src/rf/engine/measurement_engine.c src/rf/pipeline/measurement_pipeline.c | $(TEST_BUILD_DIR)
-	@echo "  [HOST_CC] $@"
-	@$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_shell_service: tests/unit/test_shell_service.c src/interfaces/cli/shell_service.c \
 		src/core/common.c | $(TEST_BUILD_DIR)
-	@echo "  [HOST_CC] $@"
-	@$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_display_presenter: tests/unit/test_display_presenter.c \
 		src/ui/display/display_presenter.c | $(TEST_BUILD_DIR)
-	@echo "  [HOST_CC] $@"
-	@$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_accuracy_analysis: tests/unit/test_accuracy_analysis.c src/processing/vna_math.c | $(TEST_BUILD_DIR)
-	@echo "  [HOST_CC] $@"
-	@$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 .PHONY: test tests
 tests: $(TEST_SUITES)
@@ -470,10 +412,7 @@ include $(RULESPATH)/rules.mk
 
 VERSION_HEADER := $(BUILDDIR)/generated/version_info.h
 
-PRE_MAKE_ALL_RULE_HOOK: $(VERSION_HEADER) | createdirs
-
-createdirs:
-	@mkdir -p .dep build/obj
+PRE_MAKE_ALL_RULE_HOOK: $(VERSION_HEADER)
 
 $(VERSION_HEADER): VERSION | $(BUILDDIR)
 	@mkdir -p $(dir $@)

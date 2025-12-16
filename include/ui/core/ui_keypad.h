@@ -23,33 +23,33 @@ enum {
   KM_VAR_DELAY,
   KM_S21OFFSET,
   KM_VELOCITY_FACTOR,
-#ifdef S11_CABLE_MEASURE
+#ifdef __S11_CABLE_MEASURE__
   KM_ACTUAL_CABLE_LEN,
 #endif
   KM_XTAL,
   KM_THRESHOLD,
   KM_VBAT,
-#ifdef S21_MEASURE
+#ifdef __S21_MEASURE__
   KM_MEASURE_R,
 #endif
-#ifdef VNA_Z_RENORMALIZATION
+#ifdef __VNA_Z_RENORMALIZATION__
   KM_Z_PORT,
   KM_CAL_LOAD_R,
 #endif
-#ifdef USE_RTC
+#ifdef __USE_RTC__
   KM_RTC_DATE,
   KM_RTC_TIME,
   KM_RTC_CAL,
 #endif
-#ifdef USE_SD_CARD
+#ifdef __USE_SD_CARD__
   KM_S1P_NAME,
   KM_S2P_NAME,
   KM_BMP_NAME,
-#ifdef SD_CARD_DUMP_TIFF
+#ifdef __SD_CARD_DUMP_TIFF__
   KM_TIF_NAME,
 #endif
   KM_CAL_NAME,
-#ifdef SD_CARD_DUMP_FIRMWARE
+#ifdef __SD_CARD_DUMP_FIRMWARE__
   KM_BIN_NAME,
 #endif
 #endif
@@ -70,9 +70,9 @@ enum {
 typedef struct {
   uint8_t keypad_type;
   uint8_t data;
-  const char *name;
+  const char* name;
   const keyboard_cb_t cb;
-} __attribute__((packed)) keypads_list_t;
+} __attribute__((packed)) keypads_list;
 
 // Buffer for input
 // Max keyboard input length
@@ -96,6 +96,6 @@ void ui_keypad_lever(uint16_t status);
 void ui_keypad_touch(int touch_x, int touch_y);
 
 // Callback
-void ui_keyboard_cb(uint16_t data, button_t *b);
+void ui_keyboard_cb(uint16_t data, button_t* b);
 
 extern uint8_t keypad_mode;

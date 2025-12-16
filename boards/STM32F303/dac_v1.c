@@ -20,13 +20,9 @@
  */
 
 void dac_init(void) {
-  rccEnableDAC1(false);  // Use DAC1
-  DAC->CR |= DAC_CR_EN2; // Enable DAC1 ch2
+  rccEnableDAC1(false); // Use DAC1
+  DAC->CR|= DAC_CR_EN2; // Enable DAC1 ch2
 }
 
-void dac_setvalue_ch1(uint16_t v) {
-  DAC->DHR12R1 = v;
-}
-void dac_setvalue_ch2(uint16_t v) {
-  DAC->DHR12R2 = v;
-}
+void dac_setvalue_ch1(uint16_t v) {DAC->DHR12R1 = v;}
+void dac_setvalue_ch2(uint16_t v) {DAC->DHR12R2 = v;}

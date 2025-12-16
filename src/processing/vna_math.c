@@ -23,12 +23,12 @@
 
 // Use table increase transform speed, but increase code size
 // Use compact table, need 1/4 code size, and not decrease speed
-// Used only if not defined VNA_USE_MATH_TABLES (use self table for TTF or direct sin/cos
+// Used only if not defined __VNA_USE_MATH_TABLES__ (use self table for TTF or direct sin/cos
 // calculations)
 #define FFT_USE_SIN_COS_TABLE
 
 // Use sin table and interpolation for sin/sos calculations
-#ifdef VNA_USE_MATH_TABLES
+#ifdef __VNA_USE_MATH_TABLES__
 
 // Platform-specific quarter-wave table configuration
 #ifdef NANOVNA_F303
@@ -37,7 +37,7 @@
 #define FAST_MATH_TABLE_SIZE 1024 // Keep for compatibility with FFT_SIZE calculations
 #else
 // F072: Use smaller quarter-wave table balancing memory usage vs accuracy (0 to 90 degrees)
-#define QTR_WAVE_TABLE_SIZE 257   // 256 entries for 0-90 degrees + 1 for interpolation
+#define QTR_WAVE_TABLE_SIZE 257  // 256 entries for 0-90 degrees + 1 for interpolation
 #define FAST_MATH_TABLE_SIZE 1024 // Keep for compatibility with FFT_SIZE calculations
 #endif
 
@@ -54,241 +54,231 @@ static const float *sin_table_qtr = SIN_TABLE_QTR_F072;
 //
 // Common function for quadratic interpolation using the quarter-wave table
 static inline float quadratic_interpolation(float x) {
-  int idx = (int)x;
-  float fract = x - idx;
-
-  // Handle negative indices by wrapping or clamping to 0
-  if (idx < 0) {
-    idx = 0;
-    fract = 0.0f; // For negative values, just return value at index 0
-  }
-
-  // Clamp to prevent out-of-bounds access
-  if (idx >= QTR_WAVE_TABLE_SIZE - 1) {
-    // At or beyond the last index, return the last value
-    return sin_table_qtr[QTR_WAVE_TABLE_SIZE - 1];
-  }
-
-  float y0, y1, y2;
-  if (idx >= QTR_WAVE_TABLE_SIZE - 2) {
-    // At or near the end of table, use linear interpolation to avoid out-of-bounds
-    y0 = sin_table_qtr[idx];
-    y1 = sin_table_qtr[idx + 1];
-    y2 = y1; // Use same value for quadratic computation (effectively linear)
-  } else {
-    y0 = sin_table_qtr[idx];
-    y1 = sin_table_qtr[idx + 1];
-    y2 = sin_table_qtr[idx + 2];
-  }
-
-  if (idx >= QTR_WAVE_TABLE_SIZE - 2) {
-    // Use linear interpolation near boundaries
-    float t = (idx >= QTR_WAVE_TABLE_SIZE - 1) ? 1.0f : fract;
-    return y0 + t * (y1 - y0);
-  } else {
-    // Use quadratic interpolation: f(x) = f0 + t*(f1-f0) + t*(t-1)*(f2-2*f1+f0)/2
-    return y0 + fract * (y1 - y0) + fract * (fract - 1.0f) * (y2 - 2.0f * y1 + y0) * 0.5f;
-  }
+    int idx = (int)x;
+    float fract = x - idx;
+    
+    // Handle negative indices by wrapping or clamping to 0
+    if (idx < 0) {
+        idx = 0;
+        fract = 0.0f; // For negative values, just return value at index 0
+    }
+    
+    // Clamp to prevent out-of-bounds access
+    if (idx >= QTR_WAVE_TABLE_SIZE - 1) {
+        // At or beyond the last index, return the last value
+        return sin_table_qtr[QTR_WAVE_TABLE_SIZE - 1];
+    }
+    
+    float y0, y1, y2;
+    if (idx >= QTR_WAVE_TABLE_SIZE - 2) {
+        // At or near the end of table, use linear interpolation to avoid out-of-bounds
+        y0 = sin_table_qtr[idx];
+        y1 = sin_table_qtr[idx + 1];
+        y2 = y1;  // Use same value for quadratic computation (effectively linear)
+    } else {
+        y0 = sin_table_qtr[idx];
+        y1 = sin_table_qtr[idx + 1];
+        y2 = sin_table_qtr[idx + 2];
+    }
+    
+    if (idx >= QTR_WAVE_TABLE_SIZE - 2) {
+        // Use linear interpolation near boundaries
+        float t = (idx >= QTR_WAVE_TABLE_SIZE - 1) ? 1.0f : fract;
+        return y0 + t * (y1 - y0);
+    } else {
+        // Use quadratic interpolation: f(x) = f0 + t*(f1-f0) + t*(t-1)*(f2-2*f1+f0)/2
+        return y0 + fract * (y1 - y0) + fract * (fract - 1.0f) * (y2 - 2.0f * y1 + y0) * 0.5f;
+    }
 }
 
 // Define the quarter-wave table size for mapping FFT calculations
 #ifdef NANOVNA_F303
-#define QTR_WAVE_TABLE_SIZE_FOR_CALC 1023.0f // Actual size - 1 for interpolation (1024 points)
+#define QTR_WAVE_TABLE_SIZE_FOR_CALC 1023.0f  // Actual size - 1 for interpolation (1024 points)
 #else
-#define QTR_WAVE_TABLE_SIZE_FOR_CALC 256.0f // Actual size - 1 for interpolation (257 points)
+#define QTR_WAVE_TABLE_SIZE_FOR_CALC 256.0f   // Actual size - 1 for interpolation (257 points) 
 #endif
 
 #if FFT_SIZE == 256
 // For FFT_SIZE = 256, table index maps to angle (i/256)*360 degrees
-// Using quarter-wave table (0-90 degrees) with variable intervals depending on platform, we need to
-// map accordingly
-#if !defined(VNA_USE_MATH_TABLES) || defined(NANOVNA_HOST_TEST)
+// Using quarter-wave table (0-90 degrees) with variable intervals depending on platform, we need to map accordingly
+#if !defined(__VNA_USE_MATH_TABLES__) || defined(NANOVNA_HOST_TEST)
 static inline float fft_sin_256(uint16_t i) {
-  float angle = (2.0f * VNA_PI * i) / 256.0f;
-  return sinf(angle);
+    float angle = (2.0f * VNA_PI * i) / 256.0f;
+    return sinf(angle);
 }
 
 static inline float fft_cos_256(uint16_t i) {
-  float angle = (2.0f * VNA_PI * i) / 256.0f;
-  return cosf(angle);
+    float angle = (2.0f * VNA_PI * i) / 256.0f;
+    return cosf(angle);
 }
 #else
 static inline float fft_sin_256(uint16_t i) {
-  // i ranges from 0 to 255, representing angles from 0 to 358.59... degrees
-  uint8_t quad = i >> 6;          // i / 64 = quadrant (0-3)
-  uint8_t in_quad_pos = i & 0x3F; // i % 64 = position within quadrant (0-63)
+    // i ranges from 0 to 255, representing angles from 0 to 358.59... degrees
+    uint8_t quad = i >> 6;  // i / 64 = quadrant (0-3)
+    uint8_t in_quad_pos = i & 0x3F;  // i % 64 = position within quadrant (0-63)
 
-  // Each FFT quadrant (64 steps) represents 90 degrees
-  // Our table has QTR_WAVE_TABLE_SIZE_FOR_CALC intervals for 90 degrees, so each FFT step
-  // corresponds to QTR_WAVE_TABLE_SIZE_FOR_CALC/64 table steps
-  float table_float_idx = in_quad_pos * (QTR_WAVE_TABLE_SIZE_FOR_CALC / 64.0f);
+    // Each FFT quadrant (64 steps) represents 90 degrees
+    // Our table has QTR_WAVE_TABLE_SIZE_FOR_CALC intervals for 90 degrees, so each FFT step corresponds to QTR_WAVE_TABLE_SIZE_FOR_CALC/64 table steps
+    float table_float_idx = in_quad_pos * (QTR_WAVE_TABLE_SIZE_FOR_CALC / 64.0f);
+    
+    // Get sin value using common quadratic interpolation function
+    float sin_interp = quadratic_interpolation(table_float_idx);
 
-  // Get sin value using common quadratic interpolation function
-  float sin_interp = quadratic_interpolation(table_float_idx);
+    // Calculate complementary angle for cosine (cos(x) = sin(90° - x))
+    float comp_float_idx = (QTR_WAVE_TABLE_SIZE_FOR_CALC - table_float_idx);
+    float cos_interp;
+    if (comp_float_idx >= QTR_WAVE_TABLE_SIZE_FOR_CALC) {
+        // When cos_scaled is at or above table size, directly use the value at last index (sin of 90° = 1)
+        cos_interp = sin_table_qtr[QTR_WAVE_TABLE_SIZE - 1];
+    } else if (comp_float_idx < 0.0f) {
+        // When cos_scaled is below 0, directly use the value at index 0 (sin of 0° = 0)
+        cos_interp = sin_table_qtr[0];
+    } else {
+        // Get cosine value using common quadratic interpolation function
+        cos_interp = quadratic_interpolation(comp_float_idx);
+    }
 
-  // Calculate complementary angle for cosine (cos(x) = sin(90° - x))
-  float comp_float_idx = (QTR_WAVE_TABLE_SIZE_FOR_CALC - table_float_idx);
-  float cos_interp;
-  if (comp_float_idx >= QTR_WAVE_TABLE_SIZE_FOR_CALC) {
-    // When cos_scaled is at or above table size, directly use the value at last index (sin of 90° =
-    // 1)
-    cos_interp = sin_table_qtr[QTR_WAVE_TABLE_SIZE - 1];
-  } else if (comp_float_idx < 0.0f) {
-    // When cos_scaled is below 0, directly use the value at index 0 (sin of 0° = 0)
-    cos_interp = sin_table_qtr[0];
-  } else {
-    // Get cosine value using common quadratic interpolation function
-    cos_interp = quadratic_interpolation(comp_float_idx);
-  }
-
-  // Apply quadrant-specific transformations
-  if (quad == 0) { // 0-90 degrees
-    return sin_interp;
-  } else if (quad == 1) { // 90-180 degrees: sin(90°+x) = cos(x)
-    return cos_interp;
-  } else if (quad == 2) { // 180-270 degrees: sin(180°+x) = -sin(x)
-    return -sin_interp;
-  } else { // 270-360 degrees: sin(270°+x) = -cos(x)
-    return -cos_interp;
-  }
+    // Apply quadrant-specific transformations
+    if (quad == 0) { // 0-90 degrees
+        return sin_interp;
+    } else if (quad == 1) { // 90-180 degrees: sin(90°+x) = cos(x)
+        return cos_interp;
+    } else if (quad == 2) { // 180-270 degrees: sin(180°+x) = -sin(x)  
+        return -sin_interp;
+    } else { // 270-360 degrees: sin(270°+x) = -cos(x)
+        return -cos_interp;
+    }
 }
 
 static inline float fft_cos_256(uint16_t i) {
-  uint8_t quad = i >> 6;          // i / 64 = quadrant (0-3)
-  uint8_t in_quad_pos = i & 0x3F; // i % 64 = position within quadrant (0-63)
+    uint8_t quad = i >> 6;  // i / 64 = quadrant (0-3)  
+    uint8_t in_quad_pos = i & 0x3F;  // i % 64 = position within quadrant (0-63)
 
-  // Each FFT quadrant (64 steps) represents 90 degrees
-  // Our table has QTR_WAVE_TABLE_SIZE_FOR_CALC intervals for 90 degrees, so each FFT step
-  // corresponds to QTR_WAVE_TABLE_SIZE_FOR_CALC/64 table steps
-  float table_float_idx = in_quad_pos * (QTR_WAVE_TABLE_SIZE_FOR_CALC / 64.0f);
+    // Each FFT quadrant (64 steps) represents 90 degrees
+    // Our table has QTR_WAVE_TABLE_SIZE_FOR_CALC intervals for 90 degrees, so each FFT step corresponds to QTR_WAVE_TABLE_SIZE_FOR_CALC/64 table steps
+    float table_float_idx = in_quad_pos * (QTR_WAVE_TABLE_SIZE_FOR_CALC / 64.0f);
+    
+    // Get sin value using common quadratic interpolation function
+    float sin_interp = quadratic_interpolation(table_float_idx);
 
-  // Get sin value using common quadratic interpolation function
-  float sin_interp = quadratic_interpolation(table_float_idx);
+    // Calculate complementary angle for cosine (cos(x) = sin(90° - x))
+    float comp_float_idx = (QTR_WAVE_TABLE_SIZE_FOR_CALC - table_float_idx);
+    float cos_interp;
+    if (comp_float_idx >= QTR_WAVE_TABLE_SIZE_FOR_CALC) {
+        // When cos_scaled is at or above table size, directly use the value at last index (sin of 90° = 1)
+        cos_interp = sin_table_qtr[QTR_WAVE_TABLE_SIZE - 1];
+    } else if (comp_float_idx < 0.0f) {
+        // When cos_scaled is below 0, directly use the value at index 0 (sin of 0° = 0)
+        cos_interp = sin_table_qtr[0];
+    } else {
+        // Get cosine value using common quadratic interpolation function
+        cos_interp = quadratic_interpolation(comp_float_idx);
+    }
 
-  // Calculate complementary angle for cosine (cos(x) = sin(90° - x))
-  float comp_float_idx = (QTR_WAVE_TABLE_SIZE_FOR_CALC - table_float_idx);
-  float cos_interp;
-  if (comp_float_idx >= QTR_WAVE_TABLE_SIZE_FOR_CALC) {
-    // When cos_scaled is at or above table size, directly use the value at last index (sin of 90° =
-    // 1)
-    cos_interp = sin_table_qtr[QTR_WAVE_TABLE_SIZE - 1];
-  } else if (comp_float_idx < 0.0f) {
-    // When cos_scaled is below 0, directly use the value at index 0 (sin of 0° = 0)
-    cos_interp = sin_table_qtr[0];
-  } else {
-    // Get cosine value using common quadratic interpolation function
-    cos_interp = quadratic_interpolation(comp_float_idx);
-  }
-
-  // Apply quadrant-specific transformations
-  if (quad == 0) { // 0-90 degrees: cos(x) -> sin(90° - x)
-    return cos_interp;
-  } else if (quad == 1) { // 90-180 degrees: cos(90°+x) = -sin(x)
-    return -sin_interp;
-  } else if (quad == 2) { // 180-270 degrees: cos(180°+x) = -cos(x)
-    return -cos_interp;
-  } else { // 270-360 degrees: cos(270°+x) = sin(x)
-    return sin_interp;
-  }
+    // Apply quadrant-specific transformations
+    if (quad == 0) { // 0-90 degrees: cos(x) -> sin(90° - x)
+        return cos_interp;
+    } else if (quad == 1) { // 90-180 degrees: cos(90°+x) = -sin(x)
+        return -sin_interp;
+    } else if (quad == 2) { // 180-270 degrees: cos(180°+x) = -cos(x)
+        return -cos_interp;
+    } else { // 270-360 degrees: cos(270°+x) = sin(x)
+        return sin_interp;
+    }
 }
-#endif // !defined(VNA_USE_MATH_TABLES) || defined(NANOVNA_HOST_TEST)
+#endif // !defined(__VNA_USE_MATH_TABLES__) || defined(NANOVNA_HOST_TEST)
 
 #define FFT_SIN(i) fft_sin_256(i)
 #define FFT_COS(i) fft_cos_256(i)
 #elif FFT_SIZE == 512
-// For FFT_SIZE = 512, table index maps to angle (i/512)*360 degrees
-// Using quarter-wave table (0-90 degrees) with variable intervals depending on platform, we need to
-// map accordingly
-#if !defined(VNA_USE_MATH_TABLES) || defined(NANOVNA_HOST_TEST)
+// For FFT_SIZE = 512, table index maps to angle (i/512)*360 degrees  
+// Using quarter-wave table (0-90 degrees) with variable intervals depending on platform, we need to map accordingly
+#if !defined(__VNA_USE_MATH_TABLES__) || defined(NANOVNA_HOST_TEST)
 static inline float fft_sin_512(uint16_t i) {
-  float angle = (2.0f * VNA_PI * i) / 512.0f;
-  return sinf(angle);
+    float angle = (2.0f * VNA_PI * i) / 512.0f;
+    return sinf(angle);
 }
 static inline float fft_cos_512(uint16_t i) {
-  float angle = (2.0f * VNA_PI * i) / 512.0f;
-  return cosf(angle);
+    float angle = (2.0f * VNA_PI * i) / 512.0f;
+    return cosf(angle);
 }
 #else
 static inline float fft_sin_512(uint16_t i) {
-  // i ranges from 0 to 511, representing angles from 0 to 359.29... degrees
-  // For 512-point FFT, each step is 360/512 degrees
-  uint8_t quad = i >> 7;          // i / 128 = quadrant (0-3), 512/4 = 128 steps per quadrant
-  uint8_t in_quad_pos = i & 0x7F; // i % 128 = position within quadrant (0-127)
+    // i ranges from 0 to 511, representing angles from 0 to 359.29... degrees
+    // For 512-point FFT, each step is 360/512 degrees
+    uint8_t quad = i >> 7;  // i / 128 = quadrant (0-3), 512/4 = 128 steps per quadrant
+    uint8_t in_quad_pos = i & 0x7F;  // i % 128 = position within quadrant (0-127)
 
-  // Each FFT quadrant (128 steps) represents 90 degrees
-  // Our table has QTR_WAVE_TABLE_SIZE_FOR_CALC intervals for 90 degrees, so each FFT step
-  // corresponds to QTR_WAVE_TABLE_SIZE_FOR_CALC/128 table steps
-  float table_float_idx = in_quad_pos * (QTR_WAVE_TABLE_SIZE_FOR_CALC / 128.0f);
+    // Each FFT quadrant (128 steps) represents 90 degrees
+    // Our table has QTR_WAVE_TABLE_SIZE_FOR_CALC intervals for 90 degrees, so each FFT step corresponds to QTR_WAVE_TABLE_SIZE_FOR_CALC/128 table steps
+    float table_float_idx = in_quad_pos * (QTR_WAVE_TABLE_SIZE_FOR_CALC / 128.0f);
+    
+    // Get sin value using common quadratic interpolation function
+    float sin_interp = quadratic_interpolation(table_float_idx);
 
-  // Get sin value using common quadratic interpolation function
-  float sin_interp = quadratic_interpolation(table_float_idx);
+    // Calculate complementary angle for cosine
+    float comp_float_idx = (QTR_WAVE_TABLE_SIZE_FOR_CALC - table_float_idx);
+    float cos_interp;
+    if (comp_float_idx >= QTR_WAVE_TABLE_SIZE_FOR_CALC) {
+        // When cos_scaled is at or above table size, directly use the value at last index (sin of 90° = 1)
+        cos_interp = sin_table_qtr[QTR_WAVE_TABLE_SIZE - 1];
+    } else if (comp_float_idx < 0.0f) {
+        // When cos_scaled is below 0, directly use the value at index 0 (sin of 0° = 0)
+        cos_interp = sin_table_qtr[0];
+    } else {
+        // Get cosine value using common quadratic interpolation function
+        cos_interp = quadratic_interpolation(comp_float_idx);
+    }
 
-  // Calculate complementary angle for cosine
-  float comp_float_idx = (QTR_WAVE_TABLE_SIZE_FOR_CALC - table_float_idx);
-  float cos_interp;
-  if (comp_float_idx >= QTR_WAVE_TABLE_SIZE_FOR_CALC) {
-    // When cos_scaled is at or above table size, directly use the value at last index (sin of 90° =
-    // 1)
-    cos_interp = sin_table_qtr[QTR_WAVE_TABLE_SIZE - 1];
-  } else if (comp_float_idx < 0.0f) {
-    // When cos_scaled is below 0, directly use the value at index 0 (sin of 0° = 0)
-    cos_interp = sin_table_qtr[0];
-  } else {
-    // Get cosine value using common quadratic interpolation function
-    cos_interp = quadratic_interpolation(comp_float_idx);
-  }
-
-  // Apply quadrant-specific transformations
-  if (quad == 0) { // 0-90 degrees
-    return sin_interp;
-  } else if (quad == 1) { // 90-180 degrees: sin(90°+x) = cos(x)
-    return cos_interp;
-  } else if (quad == 2) { // 180-270 degrees: sin(180°+x) = -sin(x)
-    return -sin_interp;
-  } else { // 270-360 degrees: sin(270°+x) = -cos(x)
-    return -cos_interp;
-  }
+    // Apply quadrant-specific transformations
+    if (quad == 0) { // 0-90 degrees
+        return sin_interp;
+    } else if (quad == 1) { // 90-180 degrees: sin(90°+x) = cos(x)
+        return cos_interp;
+    } else if (quad == 2) { // 180-270 degrees: sin(180°+x) = -sin(x)  
+        return -sin_interp;
+    } else { // 270-360 degrees: sin(270°+x) = -cos(x)
+        return -cos_interp;
+    }
 }
 
 static inline float fft_cos_512(uint16_t i) {
-  uint8_t quad = i >> 7;          // i / 128 = quadrant (0-3)
-  uint8_t in_quad_pos = i & 0x7F; // i % 128 = position within quadrant (0-127)
+    uint8_t quad = i >> 7;  // i / 128 = quadrant (0-3)  
+    uint8_t in_quad_pos = i & 0x7F;  // i % 128 = position within quadrant (0-127)
 
-  // Each FFT quadrant (128 steps) represents 90 degrees
-  // Our table has QTR_WAVE_TABLE_SIZE_FOR_CALC intervals for 90 degrees, so each FFT step
-  // corresponds to QTR_WAVE_TABLE_SIZE_FOR_CALC/128 table steps
-  float table_float_idx = in_quad_pos * (QTR_WAVE_TABLE_SIZE_FOR_CALC / 128.0f);
+    // Each FFT quadrant (128 steps) represents 90 degrees
+    // Our table has QTR_WAVE_TABLE_SIZE_FOR_CALC intervals for 90 degrees, so each FFT step corresponds to QTR_WAVE_TABLE_SIZE_FOR_CALC/128 table steps
+    float table_float_idx = in_quad_pos * (QTR_WAVE_TABLE_SIZE_FOR_CALC / 128.0f);
+    
+    // Get sin value using common quadratic interpolation function
+    float sin_interp = quadratic_interpolation(table_float_idx);
 
-  // Get sin value using common quadratic interpolation function
-  float sin_interp = quadratic_interpolation(table_float_idx);
+    // Calculate complementary angle for cosine
+    float comp_float_idx = (QTR_WAVE_TABLE_SIZE_FOR_CALC - table_float_idx);
+    float cos_interp;
+    if (comp_float_idx >= QTR_WAVE_TABLE_SIZE_FOR_CALC) {
+        // When cos_scaled is at or above table size, directly use the value at last index (sin of 90° = 1)
+        cos_interp = sin_table_qtr[QTR_WAVE_TABLE_SIZE - 1];
+    } else if (comp_float_idx < 0.0f) {
+        // When cos_scaled is below 0, directly use the value at index 0 (sin of 0° = 0)
+        cos_interp = sin_table_qtr[0];
+    } else {
+        // Get cosine value using common quadratic interpolation function
+        cos_interp = quadratic_interpolation(comp_float_idx);
+    }
 
-  // Calculate complementary angle for cosine
-  float comp_float_idx = (QTR_WAVE_TABLE_SIZE_FOR_CALC - table_float_idx);
-  float cos_interp;
-  if (comp_float_idx >= QTR_WAVE_TABLE_SIZE_FOR_CALC) {
-    // When cos_scaled is at or above table size, directly use the value at last index (sin of 90° =
-    // 1)
-    cos_interp = sin_table_qtr[QTR_WAVE_TABLE_SIZE - 1];
-  } else if (comp_float_idx < 0.0f) {
-    // When cos_scaled is below 0, directly use the value at index 0 (sin of 0° = 0)
-    cos_interp = sin_table_qtr[0];
-  } else {
-    // Get cosine value using common quadratic interpolation function
-    cos_interp = quadratic_interpolation(comp_float_idx);
-  }
-
-  // Apply quadrant-specific transformations
-  if (quad == 0) { // 0-90 degrees: cos(x) -> sin(90° - x)
-    return cos_interp;
-  } else if (quad == 1) { // 90-180 degrees: cos(90°+x) = -sin(x)
-    return -sin_interp;
-  } else if (quad == 2) { // 180-270 degrees: cos(180°+x) = -cos(x)
-    return -cos_interp;
-  } else { // 270-360 degrees: cos(270°+x) = sin(x)
-    return sin_interp;
-  }
+    // Apply quadrant-specific transformations
+    if (quad == 0) { // 0-90 degrees: cos(x) -> sin(90° - x)
+        return cos_interp;
+    } else if (quad == 1) { // 90-180 degrees: cos(90°+x) = -sin(x)
+        return -sin_interp;
+    } else if (quad == 2) { // 180-270 degrees: cos(180°+x) = -cos(x)
+        return -cos_interp;
+    } else { // 270-360 degrees: cos(270°+x) = sin(x)
+        return sin_interp;
+    }
 }
-#endif // !defined(VNA_USE_MATH_TABLES) || defined(NANOVNA_HOST_TEST)
+#endif // !defined(__VNA_USE_MATH_TABLES__) || defined(NANOVNA_HOST_TEST)
 
 #define FFT_SIN(i) fft_sin_512(i)
 #define FFT_COS(i) fft_cos_512(i)
@@ -299,7 +289,7 @@ static inline float fft_cos_512(uint16_t i) {
 // Clean up the temporary macro
 #undef QTR_WAVE_TABLE_SIZE_FOR_CALC
 
-#endif // VNA_USE_MATH_TABLES
+#endif // __VNA_USE_MATH_TABLES__
 
 #ifdef ARM_MATH_CM4
 // Use CORTEX M4 rbit instruction (reverse bit order in 32bit value)
@@ -345,8 +335,8 @@ void fft(float array[][2], const uint8_t dir) {
   uint16_t tablestep = n / size;
   // Cooley-Tukey decimation-in-time radix-2 FFT
   for (; tablestep; tablestep >>= 1, halfsize <<= 1) {
-    for (i = 0; i < n; i += halfsize * 2) { // Fixed: corrected outer loop increment
-      for (j = 0; j < halfsize; j++) {      // Fixed: removed i++ from j loop
+    for (i = 0; i < n; i += halfsize * 2) {  // Fixed: corrected outer loop increment
+      for (j = 0; j < halfsize; j++) {        // Fixed: removed i++ from j loop
         const uint16_t k = i + j;
         const uint16_t l = k + halfsize;
         const uint16_t w_index = j * tablestep;
@@ -364,27 +354,27 @@ void fft(float array[][2], const uint8_t dir) {
 }
 
 // Return sin/cos value angle in range 0.0 to 1.0 (0 is 0 degree, 1 is 360 degree)
-void vna_sincosf(float angle, float *p_sin_val, float *p_cos_val) {
-#if !defined(VNA_USE_MATH_TABLES) || defined(NANOVNA_HOST_TEST)
+void vna_sincosf(float angle, float* pSinVal, float* pCosVal) {
+#if !defined(__VNA_USE_MATH_TABLES__) || defined(NANOVNA_HOST_TEST)
   // Use default sin/cos functions for host tests
   angle *= 2.0f * VNA_PI; // Convert to rad
-  *p_sin_val = sinf(angle);
-  *p_cos_val = cosf(angle);
+  *pSinVal = sinf(angle);
+  *pCosVal = cosf(angle);
 #else
   // Normalize angle to range [0, 1) using modff to handle negative values correctly
   float fpart, ipart;
-  fpart = vna_modff(angle, &ipart); // Get fractional part in [-1, 1) range
+  fpart = vna_modff(angle, &ipart);  // Get fractional part in [-1, 1) range
   if (fpart < 0.0f) {
-    fpart += 1.0f; // Convert to [0, 1) range
+      fpart += 1.0f;  // Convert to [0, 1) range
   }
 
   // Define platform-specific parameters for table mapping
 #ifdef NANOVNA_F303
-  const float table_size_per_quarter = 1023.0f; // QTR_WAVE_TABLE_SIZE - 1 for F303
-  const float table_size_full_circle = 4092.0f; // 4 * table_size_per_quarter
+  const float table_size_per_quarter = 1023.0f;  // QTR_WAVE_TABLE_SIZE - 1 for F303
+  const float table_size_full_circle = 4092.0f;  // 4 * table_size_per_quarter
 #else
-  const float table_size_per_quarter = 256.0f;  // QTR_WAVE_TABLE_SIZE - 1 for F072
-  const float table_size_full_circle = 1024.0f; // 4 * table_size_per_quarter
+  const float table_size_per_quarter = 256.0f;   // QTR_WAVE_TABLE_SIZE - 1 for F072
+  const float table_size_full_circle = 1024.0f;  // 4 * table_size_per_quarter
 #endif
 
   // Scale to map to our quarter-wave table covering full 360 degree circle
@@ -395,63 +385,62 @@ void vna_sincosf(float angle, float *p_sin_val, float *p_cos_val) {
   float fract = scaled - full_index;
 
   // Determine quadrant (0-3 for 4 quadrants of 90 degrees each)
-  uint8_t quad = full_index / (uint16_t)table_size_per_quarter;          // which quadrant (0-3)
-  uint16_t in_quad_pos = full_index % (uint16_t)table_size_per_quarter; // position within quadrant
+  uint8_t quad = full_index / (uint8_t)table_size_per_quarter;  // which quadrant (0-3)
+  uint16_t in_quad_pos = full_index % (uint16_t)table_size_per_quarter;  // position within quadrant
 
   // Get sin value using common quadratic interpolation function
   float sin_interp = quadratic_interpolation(in_quad_pos + fract);
-
+  
   // For cosine, we need sin at complementary angle: cos(x) = sin(90° - x)
-  // Calculate complementary angle in table index space
+  // Calculate complementary angle in table index space 
   float comp_angle = table_size_per_quarter - (in_quad_pos + fract);
   float cos_interp;
   if (comp_angle >= table_size_per_quarter) {
-    // When comp_angle is at or above table size per quarter, directly use the value at last index
-    // (sin of 90° = 1)
-    cos_interp = sin_table_qtr[QTR_WAVE_TABLE_SIZE - 1];
+      // When comp_angle is at or above table size per quarter, directly use the value at last index (sin of 90° = 1)
+      cos_interp = sin_table_qtr[QTR_WAVE_TABLE_SIZE - 1];
   } else if (comp_angle < 0.0f) {
-    // When comp_angle is below 0, directly use the value at index 0 (sin of 0° = 0)
-    cos_interp = sin_table_qtr[0];
+      // When comp_angle is below 0, directly use the value at index 0 (sin of 0° = 0)
+      cos_interp = sin_table_qtr[0];
   } else {
-    // Get cosine value using common quadratic interpolation function
-    cos_interp = quadratic_interpolation(comp_angle);
+      // Get cosine value using common quadratic interpolation function
+      cos_interp = quadratic_interpolation(comp_angle);
   }
 
   float sin_final, cos_final;
 
   // Apply quadrant-specific transformations using correct trigonometric identities
   switch (quad) {
-  case 0: // 0 to 90 degrees (first quadrant): 0.000 to 1/table_size_full_circle
-    // Angle maps directly to [0°, 90°]
-    sin_final = sin_interp; // sin(x)
-    cos_final = cos_interp; // cos(x)
-    break;
-  case 1: // 90 to 180 degrees (second quadrant)
-    // For angle in [90°, 180°], let x = actual_angle - 90°, where x ∈ [0°, 90°]
-    // sin(90° + x) = cos(x), cos(90° + x) = -sin(x)
-    sin_final = cos_interp;  // cos(x) where x is the equivalent angle in [0°,90°]
-    cos_final = -sin_interp; // -sin(x) where x is the equivalent angle in [0°,90°]
-    break;
-  case 2: // 180 to 270 degrees (third quadrant)
-    // For angle in [180°, 270°], let x = actual_angle - 180°, where x ∈ [0°, 90°]
-    // sin(180° + x) = -sin(x), cos(180° + x) = -cos(x)
-    sin_final = -sin_interp; // -sin(x) where x is the equivalent angle in [0°,90°]
-    cos_final = -cos_interp; // -cos(x) where x is the equivalent angle in [0°,90°]
-    break;
-  case 3: // 270 to 360 degrees (fourth quadrant)
-    // For angle in [270°, 360°], let x = actual_angle - 270°, where x ∈ [0°, 90°]
-    // sin(270° + x) = -cos(x), cos(270° + x) = sin(x)
-    sin_final = -cos_interp; // -cos(x) where x is the equivalent angle in [0°,90°]
-    cos_final = sin_interp;  // sin(x) where x is the equivalent angle in [0°,90°]
-    break;
-  default:
-    sin_final = 0.0f;
-    cos_final = 1.0f;
-    break;
+    case 0: // 0 to 90 degrees (first quadrant): 0.000 to 1/table_size_full_circle
+      // Angle maps directly to [0°, 90°]
+      sin_final = sin_interp;   // sin(x) 
+      cos_final = cos_interp;   // cos(x)
+      break;
+    case 1: // 90 to 180 degrees (second quadrant)
+      // For angle in [90°, 180°], let x = actual_angle - 90°, where x ∈ [0°, 90°]
+      // sin(90° + x) = cos(x), cos(90° + x) = -sin(x)
+      sin_final = cos_interp;   // cos(x) where x is the equivalent angle in [0°,90°]
+      cos_final = -sin_interp;  // -sin(x) where x is the equivalent angle in [0°,90°]
+      break;
+    case 2: // 180 to 270 degrees (third quadrant)
+      // For angle in [180°, 270°], let x = actual_angle - 180°, where x ∈ [0°, 90°]
+      // sin(180° + x) = -sin(x), cos(180° + x) = -cos(x)
+      sin_final = -sin_interp;  // -sin(x) where x is the equivalent angle in [0°,90°]
+      cos_final = -cos_interp;  // -cos(x) where x is the equivalent angle in [0°,90°]
+      break;
+    case 3: // 270 to 360 degrees (fourth quadrant)
+      // For angle in [270°, 360°], let x = actual_angle - 270°, where x ∈ [0°, 90°]
+      // sin(270° + x) = -cos(x), cos(270° + x) = sin(x)
+      sin_final = -cos_interp;  // -cos(x) where x is the equivalent angle in [0°,90°]
+      cos_final = sin_interp;   // sin(x) where x is the equivalent angle in [0°,90°]
+      break;
+    default:
+      sin_final = 0.0f;
+      cos_final = 1.0f;
+      break;
   }
 
-  *p_sin_val = sin_final;
-  *p_cos_val = cos_final;
+  *pSinVal = sin_final;
+  *pCosVal = cos_final;
 #endif
 }
 
@@ -469,7 +458,7 @@ void vna_sincosf(float angle, float *p_sin_val, float *p_cos_val) {
 //**********************************************************************************
 // modff function - return fractional part and integer from float value x
 //**********************************************************************************
-float vna_modff(float x, float *iptr) {
+float vna_modff(float x, float* iptr) {
   union {
     float f;
     uint32_t i;
@@ -480,9 +469,9 @@ float vna_modff(float x, float *iptr) {
       *iptr = 0;
     return u.f;
   }
-  if (e >= 23) {
+  if (e >= 23)
     x = 0; // no fractional part
-  } else {
+  else {
     x = u.f;
     u.i &= ~(0x007fffff >> e); // remove fractional part from u
     x -= u.f;                  // calc fractional part
@@ -575,10 +564,10 @@ float vna_sqrtf(float x) {
 //**********************************************************************************
 float vna_cbrtf(float x) {
 #if 1
-  static const uint32_t b1 = 709958130, // B1 = (127-127.0/3-0.03306235651)*2**23
-    b2 = 642849266;                     // B2 = (127-127.0/3-24/3-0.03306235651)*2**23
+  static const uint32_t B1 = 709958130, // B1 = (127-127.0/3-0.03306235651)*2**23
+      B2 = 642849266;                   // B2 = (127-127.0/3-24/3-0.03306235651)*2**23
 
-  float r, t;
+  float r, T;
   union {
     float f;
     uint32_t i;
@@ -593,20 +582,20 @@ float vna_cbrtf(float x) {
       return x; // cbrt(+-0) is itself
     u.f = x * 0x1p24f;
     hx = u.i & 0x7fffffff;
-    hx = hx / 3 + b2;
+    hx = hx / 3 + B2;
   } else
-    hx = hx / 3 + b1;
+    hx = hx / 3 + B1;
   u.i &= 0x80000000;
   u.i |= hx;
 
   // First step Newton iteration (solving t*t-x/t == 0) to 16 bits.
-  t = u.f;
-  r = t * t * t;
-  t *= (x + x + r) / (x + r + r);
+  T = u.f;
+  r = T * T * T;
+  T *= (x + x + r) / (x + r + r);
   // Second step Newton iteration to 47 bits.
-  r = t * t * t;
-  t *= (x + x + r) / (x + r + r);
-  return t;
+  r = T * T * T;
+  T *= (x + x + r) / (x + r + r);
+  return T;
 #else
   if (x == 0) {
     // would otherwise return something like 4.257959840008151e-109
@@ -631,7 +620,7 @@ float vna_cbrtf(float x) {
 // logf
 //**********************************************************************************
 float vna_logf(float x) {
-  const float multiplier = logf(2.0f);
+  const float MULTIPLIER = logf(2.0f);
 #if 0
   // Give up to 0.006 error (2.5x faster original code)
   union {float f; int32_t i;} u = {x};
@@ -654,18 +643,18 @@ float vna_logf(float x) {
   // if <=0 return NAN
   if (vx.i <= 0)
     return -1 / (x * x);
-  return vx.i * (multiplier / (1 << 23)) - (124.22544637f * multiplier) -
-         (1.498030302f * multiplier) * mx.f - (1.72587999f * multiplier) / (0.3520887068f + mx.f);
+  return vx.i * (MULTIPLIER / (1 << 23)) - (124.22544637f * MULTIPLIER) -
+         (1.498030302f * MULTIPLIER) * mx.f - (1.72587999f * MULTIPLIER) / (0.3520887068f + mx.f);
 #else
   // use original code (20% faster default)
   static const float ln2_hi = 6.9313812256e-01, /* 0x3f317180 */
-    ln2_lo = 9.0580006145e-06,                  /* 0x3717f7d1 */
-    two25 = 3.355443200e+07,                    /* 0x4c000000 */
-    /* |(log(1+s)-log(1-s))/s - Lg(s)| < 2**-34.24 (~[-4.95e-11, 4.97e-11]). */
-    Lg1 = 0xaaaaaa.0p-24, /* 0.66666662693 */
-    Lg2 = 0xccce13.0p-25, /* 0.40000972152 */
-    Lg3 = 0x91e9ee.0p-25, /* 0.28498786688 */
-    Lg4 = 0xf89e26.0p-26; /* 0.24279078841 */
+      ln2_lo = 9.0580006145e-06,                /* 0x3717f7d1 */
+      two25 = 3.355443200e+07,                  /* 0x4c000000 */
+      /* |(log(1+s)-log(1-s))/s - Lg(s)| < 2**-34.24 (~[-4.95e-11, 4.97e-11]). */
+      Lg1 = 0xaaaaaa.0p-24, /* 0.66666662693 */
+      Lg2 = 0xccce13.0p-25, /* 0.40000972152 */
+      Lg3 = 0x91e9ee.0p-25, /* 0.28498786688 */
+      Lg4 = 0xf89e26.0p-26; /* 0.24279078841 */
 
   union {
     float f;
@@ -711,7 +700,7 @@ float vna_logf(float x) {
 }
 
 float vna_log10f_x_10(float x) {
-  const float multiplier = (10.0f * logf(2.0f) / logf(10.0f));
+  const float MULTIPLIER = (10.0f * logf(2.0f) / logf(10.0f));
 #if 0
   // Give up to 0.006 error (2.5x faster original code)
   union {float f; int32_t i;} u = {x};
@@ -734,8 +723,8 @@ float vna_log10f_x_10(float x) {
   // if <=0 return NAN
   if (vx.i <= 0)
     return -1 / (x * x);
-  return vx.i * (multiplier / (1 << 23)) - (124.22544637f * multiplier) -
-         (1.498030302f * multiplier) * mx.f - (1.72587999f * multiplier) / (0.3520887068f + mx.f);
+  return vx.i * (MULTIPLIER / (1 << 23)) - (124.22544637f * MULTIPLIER) -
+         (1.498030302f * MULTIPLIER) * mx.f - (1.72587999f * MULTIPLIER) / (0.3520887068f + mx.f);
 #endif
 }
 //**********************************************************************************
@@ -744,19 +733,19 @@ float vna_log10f_x_10(float x) {
 // __ieee754_atanf
 float vna_atanf(float x) {
   static const float atanhi[] = {
-    4.6364760399e-01, // atan(0.5)hi 0x3eed6338
-    7.8539812565e-01, // atan(1.0)hi 0x3f490fda
-    9.8279368877e-01, // atan(1.5)hi 0x3f7b985e
-    1.5707962513e+00, // atan(inf)hi 0x3fc90fda
+      4.6364760399e-01, // atan(0.5)hi 0x3eed6338
+      7.8539812565e-01, // atan(1.0)hi 0x3f490fda
+      9.8279368877e-01, // atan(1.5)hi 0x3f7b985e
+      1.5707962513e+00, // atan(inf)hi 0x3fc90fda
   };
   static const float atanlo[] = {
-    5.0121582440e-09, // atan(0.5)lo 0x31ac3769
-    3.7748947079e-08, // atan(1.0)lo 0x33222168
-    3.4473217170e-08, // atan(1.5)lo 0x33140fb4
-    7.5497894159e-08, // atan(inf)lo 0x33a22168
+      5.0121582440e-09, // atan(0.5)lo 0x31ac3769
+      3.7748947079e-08, // atan(1.0)lo 0x33222168
+      3.4473217170e-08, // atan(1.5)lo 0x33140fb4
+      7.5497894159e-08, // atan(inf)lo 0x33a22168
   };
-  static const float a_t[] = {
-    3.3333328366e-01, -1.9999158382e-01, 1.4253635705e-01, -1.0648017377e-01, 6.1687607318e-02,
+  static const float aT[] = {
+      3.3333328366e-01, -1.9999158382e-01, 1.4253635705e-01, -1.0648017377e-01, 6.1687607318e-02,
   };
   float w, s1, s2, z;
   uint32_t ix, sign;
@@ -803,8 +792,8 @@ float vna_atanf(float x) {
   z = x * x;
   w = z * z;
   /* break sum from i=0 to 10 aT[i]z**(i+1) into odd and even poly */
-  s1 = z * (a_t[0] + w * (a_t[2] + w * a_t[4]));
-  s2 = w * (a_t[1] + w * a_t[3]);
+  s1 = z * (aT[0] + w * (aT[2] + w * aT[4]));
+  s2 = w * (aT[1] + w * aT[3]);
   if (id < 0)
     return x - x * (s1 + s2);
   z = atanhi[id] - ((x * (s1 + s2) - atanlo[id]) - x);

@@ -9,17 +9,16 @@
 
 // Macros for drawing
 #undef lcd_drawstring
-#undef LCD_DRAWSTRING
-#define LCD_DRAWSTRING(...) display_presenter_drawstring(__VA_ARGS__)
-#define LCD_DRAWSTRING_SIZE(...) display_presenter_drawstring_size(__VA_ARGS__)
-#define LCD_PRINTF(...) display_presenter_printf(__VA_ARGS__)
-#define LCD_DRAWCHAR(...) display_presenter_drawchar(__VA_ARGS__)
-#define LCD_DRAWCHAR_SIZE(...) display_presenter_drawchar_size(__VA_ARGS__)
-#define LCD_DRAWFONT(...) display_presenter_drawfont(__VA_ARGS__)
-#define LCD_FILL(...) display_presenter_fill(__VA_ARGS__)
-#define LCD_SET_COLORS(...) display_presenter_set_colors(__VA_ARGS__)
+#define lcd_drawstring(...) display_presenter_drawstring(__VA_ARGS__)
+#define lcd_drawstring_size(...) display_presenter_drawstring_size(__VA_ARGS__)
+#define lcd_printf(...) display_presenter_printf(__VA_ARGS__)
+#define lcd_drawchar(...) display_presenter_drawchar(__VA_ARGS__)
+#define lcd_drawchar_size(...) display_presenter_drawchar_size(__VA_ARGS__)
+#define lcd_drawfont(...) display_presenter_drawfont(__VA_ARGS__)
+#define lcd_fill(...) display_presenter_fill(__VA_ARGS__)
+#define lcd_set_colors(...) display_presenter_set_colors(__VA_ARGS__)
 
-extern const keypads_list_t KEYPADS_MODE_TBL[];
+extern const keypads_list keypads_mode_tbl[];
 
 enum { NUM_KEYBOARD, TXT_KEYBOARD };
 
@@ -31,9 +30,35 @@ typedef struct {
 } keypad_pos_t;
 
 // Keyboard size and position data
-static const keypad_pos_t KEY_POS[] = {
-  [NUM_KEYBOARD] = {KP_X_OFFSET, KP_Y_OFFSET, KP_WIDTH, KP_HEIGHT},
-  [TXT_KEYBOARD] = {KPF_X_OFFSET, KPF_Y_OFFSET, KPF_WIDTH, KPF_HEIGHT}};
+static const keypad_pos_t key_pos[] = {
+    [NUM_KEYBOARD] = {KP_X_OFFSET, KP_Y_OFFSET, KP_WIDTH, KP_HEIGHT},
+    [TXT_KEYBOARD] = {KPF_X_OFFSET, KPF_Y_OFFSET, KPF_WIDTH, KPF_HEIGHT}};
+
+// Key definitions
+#define KP_EMPTY 0xFF
+#define KP_0 0
+#define KP_1 1
+#define KP_2 2
+#define KP_3 3
+#define KP_4 4
+#define KP_5 5
+#define KP_6 6
+#define KP_7 7
+#define KP_8 8
+#define KP_9 9
+#define KP_PERIOD 10
+#define KP_MINUS 11
+#define KP_BS 12
+#define KP_k 13
+#define KP_M 14
+#define KP_G 15
+#define KP_m 16
+#define KP_u 17
+#define KP_n 18
+#define KP_p 19
+#define KP_X1 20
+#define KP_ENTER 21
+#define KP_PERCENT 22
 
 typedef struct {
   uint8_t size, type;
@@ -43,100 +68,101 @@ typedef struct {
   } buttons[];
 } keypads_t;
 
-static const keypads_t KEYPADS_FREQ[] = {
-  {16, NUM_KEYBOARD},               // 16 buttons NUM keyboard (4x4 size)
-  {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9 G
-  {0x02, KP_1},                     // 4 5 6 M
-  {0x12, KP_2},                     // 1 2 3 k
-  {0x22, KP_3},                     // 0 . < x
-  {0x01, KP_4},       {0x11, KP_5}, {0x21, KP_6}, {0x00, KP_7},  {0x10, KP_8}, {0x20, KP_9},
-  {0x30, KP_G},       {0x31, KP_M}, {0x32, KP_k}, {0x33, KP_X1}, {0x23, KP_BS}};
+static const keypads_t keypads_freq[] = {
+    {16, NUM_KEYBOARD},               // 16 buttons NUM keyboard (4x4 size)
+    {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9 G
+    {0x02, KP_1},                     // 4 5 6 M
+    {0x12, KP_2},                     // 1 2 3 k
+    {0x22, KP_3},                     // 0 . < x
+    {0x01, KP_4},       {0x11, KP_5}, {0x21, KP_6}, {0x00, KP_7},  {0x10, KP_8}, {0x20, KP_9},
+    {0x30, KP_G},       {0x31, KP_M}, {0x32, KP_k}, {0x33, KP_X1}, {0x23, KP_BS}};
 
-static const keypads_t KEYPADS_UFLOAT[] = {
-  //
-  {16, NUM_KEYBOARD},               // 13 + 3 buttons NUM keyboard (4x4 size)
-  {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9
-  {0x02, KP_1},                     // 4 5 6
-  {0x12, KP_2},                     // 1 2 3
-  {0x22, KP_3},                     // 0 . < x
-  {0x01, KP_4},       {0x11, KP_5},     {0x21, KP_6},     {0x00, KP_7},
-  {0x10, KP_8},       {0x20, KP_9},     {0x33, KP_ENTER}, {0x23, KP_BS},
-  {0x30, KP_EMPTY},   {0x31, KP_EMPTY}, {0x32, KP_EMPTY},
+static const keypads_t keypads_ufloat[] = {
+    //
+    {16, NUM_KEYBOARD},               // 13 + 3 buttons NUM keyboard (4x4 size)
+    {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9
+    {0x02, KP_1},                     // 4 5 6
+    {0x12, KP_2},                     // 1 2 3
+    {0x22, KP_3},                     // 0 . < x
+    {0x01, KP_4},       {0x11, KP_5},     {0x21, KP_6},     {0x00, KP_7},
+    {0x10, KP_8},       {0x20, KP_9},     {0x33, KP_ENTER}, {0x23, KP_BS},
+    {0x30, KP_EMPTY},   {0x31, KP_EMPTY}, {0x32, KP_EMPTY},
 };
 
-static const keypads_t KEYPADS_PERCENT[] = {
-  //
-  {16, NUM_KEYBOARD},               // 13 + 3 buttons NUM keyboard (4x4 size)
-  {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9
-  {0x02, KP_1},                     // 4 5 6
-  {0x12, KP_2},                     // 1 2 3
-  {0x22, KP_3},                     // 0 . < %
-  {0x01, KP_4},       {0x11, KP_5},     {0x21, KP_6},       {0x00, KP_7},
-  {0x10, KP_8},       {0x20, KP_9},     {0x33, KP_PERCENT}, {0x23, KP_BS},
-  {0x30, KP_EMPTY},   {0x31, KP_EMPTY}, {0x32, KP_EMPTY},
+static const keypads_t keypads_percent[] = {
+    //
+    {16, NUM_KEYBOARD},               // 13 + 3 buttons NUM keyboard (4x4 size)
+    {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9
+    {0x02, KP_1},                     // 4 5 6
+    {0x12, KP_2},                     // 1 2 3
+    {0x22, KP_3},                     // 0 . < %
+    {0x01, KP_4},       {0x11, KP_5},     {0x21, KP_6},       {0x00, KP_7},
+    {0x10, KP_8},       {0x20, KP_9},     {0x33, KP_PERCENT}, {0x23, KP_BS},
+    {0x30, KP_EMPTY},   {0x31, KP_EMPTY}, {0x32, KP_EMPTY},
 };
 
-static const keypads_t KEYPADS_FLOAT[] = {
-  {16, NUM_KEYBOARD},               // 14 + 2 buttons NUM keyboard (4x4 size)
-  {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9
-  {0x02, KP_1},                     // 4 5 6
-  {0x12, KP_2},                     // 1 2 3 -
-  {0x22, KP_3},                     // 0 . < x
-  {0x01, KP_4},       {0x11, KP_5},     {0x21, KP_6},     {0x00, KP_7},
-  {0x10, KP_8},       {0x20, KP_9},     {0x32, KP_MINUS}, {0x33, KP_ENTER},
-  {0x23, KP_BS},      {0x30, KP_EMPTY}, {0x31, KP_EMPTY},
+static const keypads_t keypads_float[] = {
+    {16, NUM_KEYBOARD},               // 14 + 2 buttons NUM keyboard (4x4 size)
+    {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9
+    {0x02, KP_1},                     // 4 5 6
+    {0x12, KP_2},                     // 1 2 3 -
+    {0x22, KP_3},                     // 0 . < x
+    {0x01, KP_4},       {0x11, KP_5},     {0x21, KP_6},     {0x00, KP_7},
+    {0x10, KP_8},       {0x20, KP_9},     {0x32, KP_MINUS}, {0x33, KP_ENTER},
+    {0x23, KP_BS},      {0x30, KP_EMPTY}, {0x31, KP_EMPTY},
 };
 
-static const keypads_t KEYPADS_MFLOAT[] = {
-  {16, NUM_KEYBOARD},               // 16 buttons NUM keyboard (4x4 size)
-  {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9 u
-  {0x02, KP_1},                     // 4 5 6 m
-  {0x12, KP_2},                     // 1 2 3 -
-  {0x22, KP_3},                     // 0 . < x
-  {0x01, KP_4},       {0x11, KP_5}, {0x21, KP_6},     {0x00, KP_7},     {0x10, KP_8}, {0x20, KP_9},
-  {0x30, KP_u},       {0x31, KP_m}, {0x32, KP_MINUS}, {0x33, KP_ENTER}, {0x23, KP_BS}};
+static const keypads_t keypads_mfloat[] = {{16, NUM_KEYBOARD}, // 16 buttons NUM keyboard (4x4 size)
+                                           {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9 u
+                                           {0x02, KP_1},                     // 4 5 6 m
+                                           {0x12, KP_2},                     // 1 2 3 -
+                                           {0x22, KP_3},                     // 0 . < x
+                                           {0x01, KP_4},       {0x11, KP_5}, {0x21, KP_6},
+                                           {0x00, KP_7},       {0x10, KP_8}, {0x20, KP_9},
+                                           {0x30, KP_u},       {0x31, KP_m}, {0x32, KP_MINUS},
+                                           {0x33, KP_ENTER},   {0x23, KP_BS}};
 
-static const keypads_t KEYPADS_MKUFLOAT[] = {
-  {16, NUM_KEYBOARD},               // 15 + 1 buttons NUM keyboard (4x4 size)
-  {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9
-  {0x02, KP_1},                     // 4 5 6 m
-  {0x12, KP_2},                     // 1 2 3 k
-  {0x22, KP_3},                     // 0 . < x
-  {0x01, KP_4},       {0x11, KP_5}, {0x21, KP_6},  {0x00, KP_7},  {0x10, KP_8},     {0x20, KP_9},
-  {0x31, KP_m},       {0x32, KP_k}, {0x33, KP_X1}, {0x23, KP_BS}, {0x30, KP_EMPTY},
+static const keypads_t keypads_mkufloat[] = {
+    {16, NUM_KEYBOARD},               // 15 + 1 buttons NUM keyboard (4x4 size)
+    {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9
+    {0x02, KP_1},                     // 4 5 6 m
+    {0x12, KP_2},                     // 1 2 3 k
+    {0x22, KP_3},                     // 0 . < x
+    {0x01, KP_4},       {0x11, KP_5}, {0x21, KP_6},  {0x00, KP_7},  {0x10, KP_8},     {0x20, KP_9},
+    {0x31, KP_m},       {0x32, KP_k}, {0x33, KP_X1}, {0x23, KP_BS}, {0x30, KP_EMPTY},
 };
 
-static const keypads_t KEYPADS_NFLOAT[] = {
-  {16, NUM_KEYBOARD},               // 16 buttons NUM keyboard (4x4 size)
-  {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9 u
-  {0x02, KP_1},                     // 4 5 6 n
-  {0x12, KP_2},                     // 1 2 3 p
-  {0x22, KP_3},                     // 0 . < -
-  {0x01, KP_4},       {0x11, KP_5}, {0x21, KP_6}, {0x00, KP_7},     {0x10, KP_8}, {0x20, KP_9},
-  {0x30, KP_u},       {0x31, KP_n}, {0x32, KP_p}, {0x33, KP_MINUS}, {0x23, KP_BS}};
+static const keypads_t keypads_nfloat[] = {
+    {16, NUM_KEYBOARD},               // 16 buttons NUM keyboard (4x4 size)
+    {0x13, KP_PERIOD},  {0x03, KP_0}, // 7 8 9 u
+    {0x02, KP_1},                     // 4 5 6 n
+    {0x12, KP_2},                     // 1 2 3 p
+    {0x22, KP_3},                     // 0 . < -
+    {0x01, KP_4},       {0x11, KP_5}, {0x21, KP_6}, {0x00, KP_7},     {0x10, KP_8}, {0x20, KP_9},
+    {0x30, KP_u},       {0x31, KP_n}, {0x32, KP_p}, {0x33, KP_MINUS}, {0x23, KP_BS}};
 
 // QWERTY keyboard
-static const keypads_t KEYPADS_TEXT[] = {
-  {40, TXT_KEYBOARD}, // 40 buttons TXT keyboard (10x4 size)
-  {0x00, '1'},        {0x10, '2'}, {0x20, '3'}, {0x30, '4'},         {0x40, '5'},
-  {0x50, '6'},        {0x60, '7'}, {0x70, '8'}, {0x80, '9'},         {0x90, '0'},
-  {0x01, 'Q'},        {0x11, 'W'}, {0x21, 'E'}, {0x31, 'R'},         {0x41, 'T'},
-  {0x51, 'Y'},        {0x61, 'U'}, {0x71, 'I'}, {0x81, 'O'},         {0x91, 'P'},
-  {0x02, 'A'},        {0x12, 'S'}, {0x22, 'D'}, {0x32, 'F'},         {0x42, 'G'},
-  {0x52, 'H'},        {0x62, 'J'}, {0x72, 'K'}, {0x82, 'L'},         {0x92, '_'},
-  {0x03, '-'},        {0x13, 'Z'}, {0x23, 'X'}, {0x33, 'C'},         {0x43, 'V'},
-  {0x53, 'B'},        {0x63, 'N'}, {0x73, 'M'}, {0x83, S_LARROW[0]}, {0x93, S_ENTER[0]},
+static const keypads_t keypads_text[] = {
+    {40, TXT_KEYBOARD}, // 40 buttons TXT keyboard (10x4 size)
+    {0x00, '1'},        {0x10, '2'}, {0x20, '3'}, {0x30, '4'},         {0x40, '5'},
+    {0x50, '6'},        {0x60, '7'}, {0x70, '8'}, {0x80, '9'},         {0x90, '0'},
+    {0x01, 'Q'},        {0x11, 'W'}, {0x21, 'E'}, {0x31, 'R'},         {0x41, 'T'},
+    {0x51, 'Y'},        {0x61, 'U'}, {0x71, 'I'}, {0x81, 'O'},         {0x91, 'P'},
+    {0x02, 'A'},        {0x12, 'S'}, {0x22, 'D'}, {0x32, 'F'},         {0x42, 'G'},
+    {0x52, 'H'},        {0x62, 'J'}, {0x72, 'K'}, {0x82, 'L'},         {0x92, '_'},
+    {0x03, '-'},        {0x13, 'Z'}, {0x23, 'X'}, {0x33, 'C'},         {0x43, 'V'},
+    {0x53, 'B'},        {0x63, 'N'}, {0x73, 'M'}, {0x83, S_LARROW[0]}, {0x93, S_ENTER[0]},
 };
 
-static const keypads_t *keypad_type_list[] = {
-  [KEYPAD_FREQ] = KEYPADS_FREQ,         // frequency input
-  [KEYPAD_UFLOAT] = KEYPADS_UFLOAT,     // unsigned float input
-  [KEYPAD_PERCENT] = KEYPADS_PERCENT,   // unsigned float input in percent
-  [KEYPAD_FLOAT] = KEYPADS_FLOAT,       //   signed float input
-  [KEYPAD_MFLOAT] = KEYPADS_MFLOAT,     //   signed milli/micro float input
-  [KEYPAD_MKUFLOAT] = KEYPADS_MKUFLOAT, // unsigned milli/kilo float input
-  [KEYPAD_NFLOAT] = KEYPADS_NFLOAT,     //   signed micro/nano/pico float input
-  [KEYPAD_TEXT] = KEYPADS_TEXT          // text input
+static const keypads_t* keypad_type_list[] = {
+    [KEYPAD_FREQ] = keypads_freq,         // frequency input
+    [KEYPAD_UFLOAT] = keypads_ufloat,     // unsigned float input
+    [KEYPAD_PERCENT] = keypads_percent,   // unsigned float input in percent
+    [KEYPAD_FLOAT] = keypads_float,       //   signed float input
+    [KEYPAD_MFLOAT] = keypads_mfloat,     //   signed milli/micro float input
+    [KEYPAD_MKUFLOAT] = keypads_mkufloat, // unsigned milli/kilo float input
+    [KEYPAD_NFLOAT] = keypads_nfloat,     //   signed micro/nano/pico float input
+    [KEYPAD_TEXT] = keypads_text          // text input
 };
 
 #if NUMINPUT_LEN + 2 > TXTINPUT_LEN + 1
@@ -146,24 +172,23 @@ char kp_buf[TXTINPUT_LEN + 1];
 #endif
 
 // State
-static const keypads_t *keypads;
+static const keypads_t* keypads;
 uint8_t keypad_mode;
 
 // Helper function to get line count
-static int get_lines_count(const char *label) {
+static int get_lines_count(const char* label) {
   int n = 1;
-  while (*label) {
+  while (*label)
     if (*label++ == '\n')
       n++;
-  }
   return n;
 }
 
 // Get value from keyboard functions
 // Assuming my_atof etc are available via nanovna.h
-extern float my_atof(const char *s);
-extern int32_t my_atoi(const char *s);
-extern uint32_t my_atoui(const char *s);
+extern float my_atof(const char* s);
+extern int32_t my_atoi(const char* s);
+extern uint32_t my_atoui(const char* s);
 
 float keyboard_get_float(void) {
   return my_atof(kp_buf);
@@ -199,7 +224,7 @@ static void keypad_draw_button(int id) {
     button.border = KEYBOARD_BUTTON_BORDER | BUTTON_BORDER_RISE;
   }
 
-  const keypad_pos_t *p = &KEY_POS[keypads->type];
+  const keypad_pos_t* p = &key_pos[keypads->type];
   int x = p->x_offs + (keypads->buttons[id].pos >> 4) * p->width;
   int y = p->y_offs + (keypads->buttons[id].pos & 0xF) * p->height;
   ui_draw_button(x, y, p->width, p->height, &button);
@@ -207,7 +232,7 @@ static void keypad_draw_button(int id) {
   if (ch == KP_EMPTY)
     return;
   if (keypads->type == NUM_KEYBOARD) {
-    LCD_DRAWFONT(ch, x + (KP_WIDTH - NUM_FONT_GET_WIDTH) / 2,
+    lcd_drawfont(ch, x + (KP_WIDTH - NUM_FONT_GET_WIDTH) / 2,
                  y + (KP_HEIGHT - NUM_FONT_GET_HEIGHT) / 2);
   } else {
 #if 0
@@ -215,7 +240,7 @@ static void keypad_draw_button(int id) {
                      x + (KPF_WIDTH - FONT_WIDTH) / 2,
                      y + (KPF_HEIGHT - FONT_GET_HEIGHT) / 2);
 #else
-    LCD_DRAWCHAR_SIZE(ch, x + KPF_WIDTH / 2 - FONT_WIDTH + 1, y + KPF_HEIGHT / 2 - FONT_GET_HEIGHT,
+    lcd_drawchar_size(ch, x + KPF_WIDTH / 2 - FONT_WIDTH + 1, y + KPF_HEIGHT / 2 - FONT_GET_HEIGHT,
                       2);
 #endif
   }
@@ -234,25 +259,24 @@ static int period_pos(void) {
 }
 
 static void draw_numeric_area_frame(void) {
-  LCD_SET_COLORS(LCD_INPUT_TEXT_COLOR, LCD_INPUT_BG_COLOR);
-  LCD_FILL(0, LCD_HEIGHT - NUM_INPUT_HEIGHT, LCD_WIDTH, NUM_INPUT_HEIGHT);
-  const char *label = KEYPADS_MODE_TBL[keypad_mode].name;
+  lcd_set_colors(LCD_INPUT_TEXT_COLOR, LCD_INPUT_BG_COLOR);
+  lcd_fill(0, LCD_HEIGHT - NUM_INPUT_HEIGHT, LCD_WIDTH, NUM_INPUT_HEIGHT);
+  const char* label = keypads_mode_tbl[keypad_mode].name;
   int lines = get_lines_count(label);
-  LCD_DRAWSTRING(10, LCD_HEIGHT - (FONT_STR_HEIGHT * lines + NUM_INPUT_HEIGHT) / 2, label);
+  lcd_drawstring(10, LCD_HEIGHT - (FONT_STR_HEIGHT * lines + NUM_INPUT_HEIGHT) / 2, label);
 }
 
-static void draw_numeric_input(const char *buf) {
+static void draw_numeric_input(const char* buf) {
   uint16_t x = 14 + FONT_STR_WIDTH(12), space;
   uint16_t y = LCD_HEIGHT - (NUM_FONT_GET_HEIGHT + NUM_INPUT_HEIGHT) / 2;
   uint16_t xsim;
-#ifdef USE_RTC
-  if ((1 << keypad_mode) & ((1 << KM_RTC_DATE) | (1 << KM_RTC_TIME))) {
+#ifdef __USE_RTC__
+  if ((1 << keypad_mode) & ((1 << KM_RTC_DATE) | (1 << KM_RTC_TIME)))
     xsim = 0b01010100;
-  } else {
+  else
 #endif
     xsim = (0b00100100100100100 >> (2 - (period_pos() % 3))) & (~1);
-  }
-  LCD_SET_COLORS(LCD_INPUT_TEXT_COLOR, LCD_INPUT_BG_COLOR);
+  lcd_set_colors(LCD_INPUT_TEXT_COLOR, LCD_INPUT_BG_COLOR);
   while (*buf) {
     int c = *buf++;
     if (c == '.') {
@@ -261,24 +285,23 @@ static void draw_numeric_input(const char *buf) {
     } else if (c == '-') {
       c = KP_MINUS;
       xsim &= ~3;
-    } else if (c >= '0' && c <= '9') {
+    } else if (c >= '0' && c <= '9')
       c -= '0';
-    } else {
+    else
       continue;
-    }
     // Add space before char
     space = 2 + 10 * (xsim & 1);
     xsim >>= 1;
-    LCD_FILL(x, y, space, NUM_FONT_GET_HEIGHT);
+    lcd_fill(x, y, space, NUM_FONT_GET_HEIGHT);
     x += space;
-    LCD_DRAWFONT(c, x, y);
+    lcd_drawfont(c, x, y);
     x += NUM_FONT_GET_WIDTH;
   }
-  LCD_FILL(x, y, NUM_FONT_GET_WIDTH + 2 + 10, NUM_FONT_GET_HEIGHT);
+  lcd_fill(x, y, NUM_FONT_GET_WIDTH + 2 + 10, NUM_FONT_GET_HEIGHT);
 }
 
-static void draw_text_input(const char *buf) {
-  LCD_SET_COLORS(LCD_INPUT_TEXT_COLOR, LCD_INPUT_BG_COLOR);
+static void draw_text_input(const char* buf) {
+  lcd_set_colors(LCD_INPUT_TEXT_COLOR, LCD_INPUT_BG_COLOR);
 #if 0
   uint16_t x = 14 + FONT_STR_WIDTH(5);
   uint16_t y = LCD_HEIGHT-(FONT_GET_HEIGHT + NUM_INPUT_HEIGHT)/2;
@@ -288,8 +311,8 @@ static void draw_text_input(const char *buf) {
   int n = 2;
   uint16_t x = 14 + FONT_STR_WIDTH(5);
   uint16_t y = LCD_HEIGHT - (FONT_GET_HEIGHT * n + NUM_INPUT_HEIGHT) / 2;
-  LCD_FILL(x, y, FONT_STR_WIDTH(20) * n, FONT_GET_HEIGHT * n);
-  LCD_DRAWSTRING_SIZE(buf, x, y, n);
+  lcd_fill(x, y, FONT_STR_WIDTH(20) * n, FONT_GET_HEIGHT * n);
+  lcd_drawstring_size(buf, x, y, n);
 #endif
 }
 
@@ -322,7 +345,7 @@ static int num_keypad_click(int c, int kp_index) {
     }
     return K_DONE;
   }
-#ifdef USE_RTC
+#ifdef __USE_RTC__
   int maxlength = (1 << keypad_mode) & ((1 << KM_RTC_DATE) | (1 << KM_RTC_TIME)) ? 6 : NUMINPUT_LEN;
 #else
   int maxlength = NUMINPUT_LEN;
@@ -345,14 +368,12 @@ static int num_keypad_click(int c, int kp_index) {
         ++kp_index;
     }
   } else if (kp_index < maxlength) {
-    if (c <= KP_9) {
+    if (c <= KP_9)
       kp_buf[kp_index++] = '0' + c;
-    } else if (c == KP_PERIOD && kp_index == period_pos() &&
-               maxlength ==
-                 NUMINPUT_LEN) { // append period if there are no period and for num input
-                                 // (skip for date/time)
+    else if (c == KP_PERIOD && kp_index == period_pos() &&
+             maxlength == NUMINPUT_LEN) // append period if there are no period and for num input
+                                        // (skip for date/time)
       kp_buf[kp_index++] = '.';
-    }
   }
   kp_buf[kp_index] = '\0';
   draw_numeric_input(kp_buf);
@@ -379,7 +400,7 @@ static void keypad_click(int key) {
   int c = keypads->buttons[key].c;
   int index = strlen(kp_buf);
   int result =
-    keypads->type == NUM_KEYBOARD ? num_keypad_click(c, index) : txt_keypad_click(c, index);
+      keypads->type == NUM_KEYBOARD ? num_keypad_click(c, index) : txt_keypad_click(c, index);
   if (result == K_DONE)
     ui_keyboard_cb(keypad_mode, NULL); // apply input done
   // Exit loop on done or cancel
@@ -394,7 +415,7 @@ void ui_mode_keypad(int mode) {
   set_area_size(0, 0);
   // keypads array
   keypad_mode = mode;
-  keypads = keypad_type_list[KEYPADS_MODE_TBL[mode].keypad_type];
+  keypads = keypad_type_list[keypads_mode_tbl[mode].keypad_type];
   extern int8_t selection;
   selection = -1;
   kp_buf[0] = 0;
@@ -404,7 +425,7 @@ void ui_mode_keypad(int mode) {
 }
 
 void ui_keypad_touch(int touch_x, int touch_y) {
-  const keypad_pos_t *p = &KEY_POS[keypads->type];
+  const keypad_pos_t* p = &key_pos[keypads->type];
   if (touch_x < p->x_offs || touch_y < p->y_offs)
     return;
   // Calculate key position from touch x and y

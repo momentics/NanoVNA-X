@@ -18,6 +18,8 @@
  * Boston, MA 02110-1301, USA.
  */
 
+
+
 /*
  * Minimal host stub for the ChibiOS chprintf helpers.  The production firmware
  * relies on chvprintf() for shell output; unit tests provide the implementation
@@ -28,6 +30,6 @@
 
 #include <stdarg.h>
 
-#include "ch.h"
+typedef struct BaseSequentialStream BaseSequentialStream;
 
-int chvprintf(base_sequential_stream_t *chp, const char *fmt, va_list ap);
+int chvprintf(BaseSequentialStream* chp, const char* fmt, va_list ap);

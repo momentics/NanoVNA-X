@@ -5,14 +5,14 @@
 
 extern alignas(4) float measured[2][SWEEP_POINTS_MAX][2];
 
-extern const trace_info_t TRACE_INFO_LIST[MAX_TRACE_TYPE];
-extern const marker_info_t MARKER_INFO_LIST[MS_END];
+extern const trace_info_t trace_info_list[MAX_TRACE_TYPE];
+extern const marker_info_t marker_info_list[MS_END];
 
 extern config_t config;
 extern properties_t current_props;
 
-extern uint8_t sweep_mode;
-extern const char *const INFO_ABOUT[];
+extern  uint8_t sweep_mode;
+extern const char* const info_about[];
 extern volatile bool calibration_in_progress;
 
 extern pixel_t foreground_color;

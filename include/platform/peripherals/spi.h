@@ -45,7 +45,7 @@
 #define SPI_BR_DIV128 (SPI_CR1_BR_2 | SPI_CR1_BR_1)
 #define SPI_BR_DIV256 (SPI_CR1_BR_2 | SPI_CR1_BR_1 | SPI_CR1_BR_0)
 
-#define SPI_BR_SET(spi, br) ((spi)->CR1 = ((spi)->CR1 & ~(SPI_CR1_BR)) | (br))
+#define SPI_BR_SET(spi, br) (spi->CR1 = (spi->CR1 & ~(SPI_CR1_BR)) | br)
 
 //*****************************************************
 // SPI bus activity macros
@@ -53,31 +53,31 @@
 // The RXNE flag is set depending on the FRXTH bit value in the SPIx_CR2 register:
 // • If FRXTH is set, RXNE goes high and stays high until the RXFIFO level is greater or equal to
 // 1/4 (8-bit).
-#define SPI_RX_IS_NOT_EMPTY(spi) ((spi)->SR & SPI_SR_RXNE)
-#define SPI_RX_IS_EMPTY(spi) (!((spi)->SR & SPI_SR_RXNE))
+#define SPI_RX_IS_NOT_EMPTY(spi) (spi->SR & SPI_SR_RXNE)
+#define SPI_RX_IS_EMPTY(spi) (!(spi->SR & SPI_SR_RXNE))
 
 // The TXE flag is set when transmission TXFIFO has enough space to store data to send.
 // 0: Tx buffer not empty, bit is cleared automatically when the TXFIFO level becomes greater than
 // 1/2 1: Tx buffer empty, flag goes high and stays high until the TXFIFO level is lower or equal to
 // 1/2 of the FIFO depth
-#define SPI_TX_IS_NOT_EMPTY(spi) (!((spi)->SR & SPI_SR_TXE))
-#define SPI_TX_IS_EMPTY(spi) ((spi)->SR & SPI_SR_TXE)
+#define SPI_TX_IS_NOT_EMPTY(spi) (!(spi->SR & SPI_SR_TXE))
+#define SPI_TX_IS_EMPTY(spi) (spi->SR & SPI_SR_TXE)
 
 // When BSY is set, it indicates that a data transfer is in progress on the SPI (the SPI bus is
 // busy).
-#define SPI_IS_BUSY(spi) ((spi)->SR & SPI_SR_BSY)
+#define SPI_IS_BUSY(spi) (spi->SR & SPI_SR_BSY)
 
 // Tx or Rx in process
-#define SPI_IN_TX_RX(spi) (((spi)->SR & (SPI_SR_TXE | SPI_SR_RXNE)) == 0 || SPI_IS_BUSY(spi))
+#define SPI_IN_TX_RX(spi) ((spi->SR & (SPI_SR_TXE | SPI_SR_RXNE)) == 0 || SPI_IS_BUSY(spi))
 
 //*****************************************************
 // SPI send data macros
 //*****************************************************
-#define SPI_WRITE_8BIT(spi, data) *(__IO uint8_t *)(&(spi)->DR) = (uint8_t)data
-#define SPI_WRITE_16BIT(spi, data) *(__IO uint16_t *)(&(spi)->DR) = (uint16_t)data
+#define SPI_WRITE_8BIT(spi, data) *(__IO uint8_t*)(&spi->DR) = (uint8_t)data
+#define SPI_WRITE_16BIT(spi, data) *(__IO uint16_t*)(&spi->DR) = (uint16_t)data
 
 //*****************************************************
 // SPI read data macros
 //*****************************************************
-#define SPI_READ_8BIT(spi) *(__IO uint8_t *)(&(spi)->DR)
-#define SPI_READ_16BIT(spi) *(__IO uint16_t *)(&(spi)->DR)
+#define SPI_READ_8BIT(spi) *(__IO uint8_t*)(&spi->DR)
+#define SPI_READ_16BIT(spi) *(__IO uint16_t*)(&spi->DR)

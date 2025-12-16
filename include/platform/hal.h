@@ -23,7 +23,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-struct platform_drivers;
+struct PlatformDrivers;
 
 typedef struct {
   void (*init)(void);
@@ -45,23 +45,23 @@ typedef struct {
 
 typedef struct {
   void (*init)(void);
-  bool (*read)(int16_t *x, int16_t *y);
+  bool (*read)(int16_t* x, int16_t* y);
 } touch_driver_t;
 
 typedef struct {
   void (*init)(void);
-  void (*program_half_words)(uint16_t *dst, uint16_t *data, uint16_t size);
+  void (*program_half_words)(uint16_t* dst, uint16_t* data, uint16_t size);
   void (*erase_pages)(uint32_t address, uint32_t size);
 } storage_driver_t;
 
-typedef struct platform_drivers {
+typedef struct PlatformDrivers {
   void (*init)(void);
-  const display_driver_t *display;
-  const adc_driver_t *adc;
-  const generator_driver_t *generator;
-  const touch_driver_t *touch;
-  const storage_driver_t *storage;
-} platform_drivers_t;
+  const display_driver_t* display;
+  const adc_driver_t* adc;
+  const generator_driver_t* generator;
+  const touch_driver_t* touch;
+  const storage_driver_t* storage;
+} PlatformDrivers;
 
 void platform_init(void);
-const platform_drivers_t *platform_get_drivers(void);
+const PlatformDrivers* platform_get_drivers(void);

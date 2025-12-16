@@ -71,7 +71,7 @@ static void initgpio(GPIO_TypeDef *port, const pal_conf_t *config) {
 }
 
 void init_pal(void) {
-  rccEnableAHB(STM32_GPIO_EN_MASK, FALSE);
+  rccEnableAHB(STM32_GPIO_EN_MASK, TRUE);
   initgpio(GPIOA, &pal_config[0]);
   initgpio(GPIOB, &pal_config[1]);
   initgpio(GPIOC, &pal_config[2]);
@@ -99,11 +99,11 @@ void palSetPadGroupMode(GPIO_TypeDef *port, uint32_t mask, uint32_t mode) {
       if (moder == PAL_STM32_MODE_ALTERNATE) {
         // If going in alternate mode then the alternate number is set before switching mode in order to avoid glitches.
         port->AFR[(bit>>3)&1] = (port->AFR[(bit>>3)&1] & ~m4) | altrmask;
-        port->MODER   = (port->MODER & ~m2) | moder;
+        port->MODER = (port->MODER   & ~m2) | moder;
       }
       else {
         // If going into a non-alternate mode then the mode is switched before setting the alternate mode in order to avoid glitches.
-        port->MODER   = (port->MODER & ~m2) | moder;
+        port->MODER = (port->MODER   & ~m2) | moder;
         port->AFR[(bit>>3)&1] = (port->AFR[(bit>>3)&1] & ~m4) | altrmask;
       }
     }

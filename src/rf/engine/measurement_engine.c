@@ -24,21 +24,21 @@
 
 #include "ch.h"
 
-static inline void measurement_engine_publish(measurement_engine_t *engine, event_bus_topic_t event,
-                                              const uint16_t *mask) {
+static inline void measurement_engine_publish(measurement_engine_t* engine, event_bus_topic_t event,
+                                              const uint16_t* mask) {
   if (engine->event_bus != NULL) {
     event_bus_publish(engine->event_bus, event, mask);
   }
 }
 
-static inline void measurement_engine_service_loop(measurement_engine_t *engine) {
+static inline void measurement_engine_service_loop(measurement_engine_t* engine) {
   if (engine->port != NULL && engine->port->service_loop != NULL) {
     engine->port->service_loop(engine->port);
   }
 }
 
-void measurement_engine_init(measurement_engine_t *engine, measurement_engine_port_t *port,
-                             event_bus_t *bus, const platform_drivers_t *drivers) {
+void measurement_engine_init(measurement_engine_t* engine, measurement_engine_port_t* port,
+                             event_bus_t* bus, const PlatformDrivers* drivers) {
   if (engine == NULL) {
     return;
   }
@@ -48,7 +48,7 @@ void measurement_engine_init(measurement_engine_t *engine, measurement_engine_po
   sweep_service_init();
 }
 
-void measurement_engine_tick(measurement_engine_t *engine) {
+void measurement_engine_tick(measurement_engine_t* engine) {
   if (engine == NULL) {
     chThdSleepMilliseconds(1);
     return;
@@ -72,7 +72,7 @@ void measurement_engine_tick(measurement_engine_t *engine) {
   sweep_service_begin_measurement();
   measurement_engine_publish(engine, EVENT_SWEEP_STARTED, &mask);
   const bool completed =
-    measurement_pipeline_execute(&engine->pipeline, request.break_on_operation, mask);
+      measurement_pipeline_execute(&engine->pipeline, request.break_on_operation, mask);
   sweep_service_end_measurement();
   if (completed) {
     sweep_service_increment_generation();

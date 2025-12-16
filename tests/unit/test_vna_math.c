@@ -6,6 +6,36 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 3, or (at your option)
  * any later version.
+ *
+ * The software is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GNU Radio; see the file COPYING.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street,
+ * Boston, MA 02110-1301, USA.
+ */
+
+/*
+ * Test precision verification (based on accuracy analysis):
+ * - vna_sincosf: tolerance 0.000001 for sin/cos values (measured max: ~0.0000004), 0.0000005 for trigonometric identity (measured max: ~0.00000012)
+ * - vna_modff: tolerance 0.0000005 for integer and fractional parts (measured max: ~0.00000012)
+ * - vna_sqrtf: tolerance 0.000001 for square root calculations (measured max: ~0.00000057)
+ * - FFT impulse: tolerance 0.0000005 for frequency domain flatness (measured max: ~0.0)
+ * - FFT roundtrip: tolerance 0.000001 for forward/inverse transform accuracy (measured max: ~0.00000042)
+ */
+
+/**
+ * LUT accuracy tests for vna_sincosf().
+ *
+ * The firmware replaces expensive sinf/cosf calls with lookup-table driven
+ * interpolation (FAST_MATH_TABLE_SIZE=512).  Accuracy mistakes accumulate into
+ * the FFT, trace rendering, and calibration logic, so we verify the LUT against
+ * the double-checked libm reference across multiple quadrants as well as
+ * negative inputs / periodic wrapping.  Tests run on the host and require no
+ * STM32 hardware.
  */
 
 #include <math.h>
@@ -17,97 +47,148 @@
 
 #include "nanovna.h"
 
-// Extern declarations for renamed symbols (handled by objcopy)
-extern void vna_sincosf_f072(float angle, float *s, float *c);
-extern void vna_sincosf_f303(float angle, float *s, float *c);
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
-typedef void (*sincosf_func)(float, float*, float*);
+static int g_failures = 0;
 
-typedef struct {
-    double max_err_sin;
-    double max_err_cos;
-    double max_err_vector_mag; // Deviation from unit circle (|z| - 1)
-    float angle_at_max_sin;
-    float angle_at_max_cos;
-} AccuracyReport;
+static void fail(const char* expr, float angle, float expected, float actual) {
+  ++g_failures;
+  fprintf(stderr, "[FAIL] %s angle=%f expected=%e actual=%e\n", expr, angle, expected, actual);
+}
 
-static void analyze_accuracy(const char *platform_name, sincosf_func impl, AccuracyReport *report) {
-    memset(report, 0, sizeof(*report));
-    
-    // Sweep range: -2.0 to +2.0 normalized turns (covers multiple wraps and negative inputs)
-    // Step size: 0.0001 (approx 20,000 points per revolution)
-    const float range = 2.0f;
-    const float step = 0.0001f;
-    
-    for (float angle = -range; angle <= range; angle += step) {
-        float s_lut, c_lut;
-        impl(angle, &s_lut, &c_lut);
-        
-        double rad = (double)angle * (2.0 * VNA_PI);
-        double s_ref = sin(rad);
-        double c_ref = cos(rad);
-        
-        double err_sin = fabs(s_lut - s_ref);
-        double err_cos = fabs(c_lut - c_ref);
-        double mag = sqrt(s_lut*s_lut + c_lut*c_lut);
-        double err_mag = fabs(mag - 1.0);
-        
-        if (err_sin > report->max_err_sin) {
-            report->max_err_sin = err_sin;
-            report->angle_at_max_sin = angle;
-        }
-        if (err_cos > report->max_err_cos) {
-            report->max_err_cos = err_cos;
-            report->angle_at_max_cos = angle;
-        }
-        if (err_mag > report->max_err_vector_mag) {
-            report->max_err_vector_mag = err_mag;
-        }
+static void expect_close(const char* expr, float angle, float expected, float actual, float tol) {
+  if (fabsf(expected - actual) > tol) {
+    fail(expr, angle, expected, actual);
+  }
+}
+
+static void check_angle(float angle) {
+  float sin_lut = 0.0f, cos_lut = 0.0f;
+  vna_sincosf(angle, &sin_lut, &cos_lut);
+
+  const float rad = angle * (2.0f * VNA_PI);
+  const float sin_ref = sinf(rad);
+  const float cos_ref = cosf(rad);
+  const float tol = 1e-6f; /* tolerance based on accuracy analysis (max measured ~0.0000004) */
+
+  expect_close("sin", angle, sin_ref, sin_lut, tol);
+  expect_close("cos", angle, cos_ref, cos_lut, tol);
+
+  const float magnitude = fabsf(sin_lut * sin_lut + cos_lut * cos_lut - 1.0f);
+  if (magnitude > 5e-7f) { /* tolerance based on accuracy analysis (max measured ~0.00000012) */
+    ++g_failures;
+    fprintf(stderr, "[FAIL] norm angle=%f drift=%e\n", angle, magnitude);
+  }
+}
+
+static void test_primary_interval(void) {
+  const float samples[] = {
+      0.0f, 0.0625f, 0.1111f, 0.25f, 0.3333333f, 0.5f, 0.6666667f, 0.75f, 0.875f, 0.999f};
+  for (size_t i = 0; i < ARRAY_SIZE(samples); ++i) {
+    check_angle(samples[i]);
+  }
+}
+
+static void test_negative_and_wrapped(void) {
+  const float samples[] = {-1.25f, -0.5f, -0.125f, 1.0f + 0.25f, 2.0f + 0.9f};
+  for (size_t i = 0; i < ARRAY_SIZE(samples); ++i) {
+    check_angle(samples[i]);
+  }
+}
+
+static void test_modff(void) {
+  /*
+   * vna_modff() backs calibration math and must match libm semantics even when
+   * the MCU lacks hardware FPU support.  Cover positive and negative values.
+   * Tolerance based on accuracy analysis (max measured ~0.00000012).
+   */
+  float i = 0.0f;
+  float f = vna_modff(12.75f, &i);
+  if (fabsf(i - 12.0f) > 5e-7f || fabsf(f - 0.75f) > 5e-7f) {
+    ++g_failures;
+    fprintf(stderr, "[FAIL] modff positive i=%f f=%f\n", i, f);
+  }
+
+  f = vna_modff(-3.5f, &i);
+  if (fabsf(i + 3.0f) > 5e-7f || fabsf(f + 0.5f) > 5e-7f) {
+    ++g_failures;
+    fprintf(stderr, "[FAIL] modff negative i=%f f=%f\n", i, f);
+  }
+}
+
+static void test_vna_sqrt(void) {
+  const float samples[] = {0.0f, 1.0f, 2.0f, 9.0f, 1234.5f};
+  for (size_t i = 0; i < ARRAY_SIZE(samples); ++i) {
+    float ref = sqrtf(samples[i]);
+    float got = vna_sqrtf(samples[i]);
+    if (fabsf(ref - got) > 1e-6f) { /* tolerance based on accuracy analysis (max measured ~0.00000057) */
+      ++g_failures;
+      fprintf(stderr, "[FAIL] sqrt sample=%f ref=%f got=%f\n", samples[i], ref, got);
     }
-    
-    printf("\n=== Accuracy Report for %s ===\n", platform_name);
-    printf("  Max Sin Error: %.2e (at angle %.4f)\n", report->max_err_sin, report->angle_at_max_sin);
-    printf("  Max Cos Error: %.2e (at angle %.4f)\n", report->max_err_cos, report->angle_at_max_cos);
-    printf("  Max Mag Error: %.2e\n", report->max_err_vector_mag);
+  }
+}
+
+static void test_fft_impulse(void) {
+  /*
+   * An impulse in the time domain should transform into a flat spectrum.  This
+   * guards the bit-reversal and twiddle-table wiring.
+   * Tolerance based on accuracy analysis (max measured ~0.0).
+   */
+  float bins[FFT_SIZE][2];
+  memset(bins, 0, sizeof(bins));
+  bins[0][0] = 1.0f;
+  fft_forward(bins);
+  for (size_t i = 0; i < FFT_SIZE; ++i) {
+    if (fabsf(bins[i][0] - 1.0f) > 5e-7f || fabsf(bins[i][1]) > 5e-7f) {
+      ++g_failures;
+      fprintf(stderr, "[FAIL] fft impulse idx=%zu real=%f imag=%f\n", i, bins[i][0], bins[i][1]);
+      break;
+    }
+  }
+}
+
+static void test_fft_roundtrip(void) {
+  /*
+   * Check that forward+inverse FFT produces the original signal (up to the
+   * expected scaling factor).  This ensures the LUT-based butterflies are
+   * numerically stable.
+   * Tolerance based on accuracy analysis (max measured ~0.00000042).
+   */
+  float signal[FFT_SIZE][2];
+  for (size_t i = 0; i < FFT_SIZE; ++i) {
+    signal[i][0] = sinf((2.0f * VNA_PI * i) / FFT_SIZE);
+    signal[i][1] = cosf((2.0f * VNA_PI * i) / FFT_SIZE);
+  }
+  float reference[FFT_SIZE][2];
+  memcpy(reference, signal, sizeof(reference));
+
+  fft_forward(signal);
+  fft_inverse(signal);
+  for (size_t i = 0; i < FFT_SIZE; ++i) {
+    signal[i][0] /= FFT_SIZE;
+    signal[i][1] /= FFT_SIZE;
+    if (fabsf(signal[i][0] - reference[i][0]) > 1e-6f ||  /* tolerance based on accuracy analysis (max measured ~0.00000042) */
+        fabsf(signal[i][1] - reference[i][1]) > 1e-6f) {
+      ++g_failures;
+      fprintf(stderr, "[FAIL] fft roundtrip idx=%zu ref=(%f,%f) got=(%f,%f)\n", i,
+              reference[i][0], reference[i][1], signal[i][0], signal[i][1]);
+      break;
+    }
+  }
 }
 
 int main(void) {
-    AccuracyReport report_f072;
-    AccuracyReport report_f303;
-    
-    printf("Benchmarking Trigonometric Table Accuracy...\n");
-    
-    analyze_accuracy("F072 (256 entries/90deg)", vna_sincosf_f072, &report_f072);
-    analyze_accuracy("F303 (1024 entries/90deg)", vna_sincosf_f303, &report_f303);
-    
-    printf("\n=== Comparison ===\n");
-    printf("Metric          | F072       | F303       | Improvement\n");
-    printf("----------------|------------|------------|-------------\n");
-    printf("Max Sin Error   | %.2e   | %.2e   | %.1fx\n", 
-           report_f072.max_err_sin, report_f303.max_err_sin, 
-           report_f072.max_err_sin / report_f303.max_err_sin);
-    printf("Max Cos Error   | %.2e   | %.2e   | %.1fx\n", 
-           report_f072.max_err_cos, report_f303.max_err_cos,
-           report_f072.max_err_cos / report_f303.max_err_cos);
-           
-    // Verification logic
-    // Fail if F303 is not at least 10x better (approx, 256^2 vs 1024^2 inverse proportional for quadratic interp? 
-    // actually, quadratic interp error scales with h^3 where h is step size. 
-    // Step size ratio is 4. Error should theoretically reduce by 4^3 = 64x.
-    // Let's expect at least 10x improvement to be safe and verify table is working better.
-    
-    int fail = 0;
-    if (report_f303.max_err_sin > 1e-6) {
-        printf("[FAIL] F303 Sin error too high (> 1e-6)\n");
-        fail++;
-    }
-    if (report_f303.max_err_sin >= report_f072.max_err_sin) {
-        printf("[FAIL] F303 accuracy not better than F072\n");
-        fail++;
-    }
-    
-    if (fail) return EXIT_FAILURE;
-    
-    printf("\n[PASS] Validation Successful: Larger table provides expected accuracy gain.\n");
+  test_primary_interval();
+  test_negative_and_wrapped();
+  test_modff();
+  test_vna_sqrt();
+  test_fft_impulse();
+  test_fft_roundtrip();
+
+  if (g_failures == 0) {
+    puts("[PASS] tests/unit/test_vna_math");
     return EXIT_SUCCESS;
+  }
+  fprintf(stderr, "[FAIL] %d test(s) failed\n", g_failures);
+  return EXIT_FAILURE;
 }

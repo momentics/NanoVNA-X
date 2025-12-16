@@ -48,32 +48,32 @@ typedef struct {
   uint8_t h;
   uint8_t ofs;
 } browser_btn_t;
-static const browser_btn_t BROWSER_BTN[] = {
-  [FILE_BUTTON_LEFT] = {0 + SMALL_BUTTON_SIZE, LCD_HEIGHT - FILE_BOTTOM_HEIGHT,
-                        LCD_WIDTH / 2 - 2 * SMALL_BUTTON_SIZE, FILE_BOTTOM_HEIGHT,
-                        (LCD_WIDTH / 2 - 2 * SMALL_BUTTON_SIZE - FONT_WIDTH) / 2}, // < previous
-  [FILE_BUTTON_RIGHT] = {LCD_WIDTH / 2 + SMALL_BUTTON_SIZE, LCD_HEIGHT - FILE_BOTTOM_HEIGHT,
-                         LCD_WIDTH / 2 - 2 * SMALL_BUTTON_SIZE, FILE_BOTTOM_HEIGHT,
-                         (LCD_WIDTH / 2 - 2 * SMALL_BUTTON_SIZE - FONT_WIDTH) / 2}, // > next
-  [FILE_BUTTON_EXIT] = {LCD_WIDTH - SMALL_BUTTON_SIZE, LCD_HEIGHT - FILE_BOTTOM_HEIGHT,
-                        SMALL_BUTTON_SIZE, FILE_BOTTOM_HEIGHT,
-                        (SMALL_BUTTON_SIZE - FONT_WIDTH) / 2}, // X exit
-  [FILE_BUTTON_DEL] = {0 + 0, LCD_HEIGHT - FILE_BOTTOM_HEIGHT, SMALL_BUTTON_SIZE,
-                       FILE_BOTTOM_HEIGHT, (SMALL_BUTTON_SIZE - 3 * FONT_WIDTH) / 2}, // DEL
-  // File button, only size and start position, must be idx = FILE_BUTTON_FILE
-  [FILE_BUTTON_FILE] = {0, 0, LCD_WIDTH / FILES_COLUMNS, FILE_BUTTON_HEIGHT, FONT_WIDTH / 2 + 3},
+static const browser_btn_t browser_btn[] = {
+    [FILE_BUTTON_LEFT] = {0 + SMALL_BUTTON_SIZE, LCD_HEIGHT - FILE_BOTTOM_HEIGHT,
+                          LCD_WIDTH / 2 - 2 * SMALL_BUTTON_SIZE, FILE_BOTTOM_HEIGHT,
+                          (LCD_WIDTH / 2 - 2 * SMALL_BUTTON_SIZE - FONT_WIDTH) / 2}, // < previous
+    [FILE_BUTTON_RIGHT] = {LCD_WIDTH / 2 + SMALL_BUTTON_SIZE, LCD_HEIGHT - FILE_BOTTOM_HEIGHT,
+                           LCD_WIDTH / 2 - 2 * SMALL_BUTTON_SIZE, FILE_BOTTOM_HEIGHT,
+                           (LCD_WIDTH / 2 - 2 * SMALL_BUTTON_SIZE - FONT_WIDTH) / 2}, // > next
+    [FILE_BUTTON_EXIT] = {LCD_WIDTH - SMALL_BUTTON_SIZE, LCD_HEIGHT - FILE_BOTTOM_HEIGHT,
+                          SMALL_BUTTON_SIZE, FILE_BOTTOM_HEIGHT,
+                          (SMALL_BUTTON_SIZE - FONT_WIDTH) / 2}, // X exit
+    [FILE_BUTTON_DEL] = {0 + 0, LCD_HEIGHT - FILE_BOTTOM_HEIGHT, SMALL_BUTTON_SIZE,
+                         FILE_BOTTOM_HEIGHT, (SMALL_BUTTON_SIZE - 3 * FONT_WIDTH) / 2}, // DEL
+    // File button, only size and start position, must be idx = FILE_BUTTON_FILE
+    [FILE_BUTTON_FILE] = {0, 0, LCD_WIDTH / FILES_COLUMNS, FILE_BUTTON_HEIGHT, FONT_WIDTH / 2 + 3},
 };
 
-static void browser_get_button_pos(int idx, browser_btn_t *b) {
+static void browser_get_button_pos(int idx, browser_btn_t* b) {
   int n = idx >= FILE_BUTTON_FILE ? FILE_BUTTON_FILE : idx;
 #if 0
   memcpy(b, &browser_btn[n], sizeof(browser_btn_t));
 #else
-  b->x = BROWSER_BTN[n].x;
-  b->y = BROWSER_BTN[n].y;
-  b->w = BROWSER_BTN[n].w;
-  b->h = BROWSER_BTN[n].h;
-  b->ofs = BROWSER_BTN[n].ofs;
+  b->x = browser_btn[n].x;
+  b->y = browser_btn[n].y;
+  b->w = browser_btn[n].w;
+  b->h = browser_btn[n].h;
+  b->ofs = browser_btn[n].ofs;
 #endif
   if (idx > FILE_BUTTON_FILE) { // for file buttons use multiplier from start offset
     idx -= FILE_BUTTON_FILE;
@@ -82,7 +82,7 @@ static void browser_get_button_pos(int idx, browser_btn_t *b) {
   }
 }
 
-static void browser_draw_button(int idx, const char *txt) {
+static void browser_draw_button(int idx, const char* txt) {
   if (idx < 0)
     return;
   button_t b;
@@ -101,16 +101,15 @@ static void browser_draw_button(int idx, const char *txt) {
     lcd_printf(btn.x + btn.ofs, btn.y + (btn.h - FONT_STR_HEIGHT) / 2, txt);
 }
 
-static bool compare_ext(const char *name, const char *ext) {
+static bool compare_ext(const char* name, const char* ext) {
   int i = 0, j = 0;
-  while (name[i]) {
+  while (name[i])
     if (name[i++] == '.')
-      j = i; // Get last '.' position + 1
-  }
+      j = i;                                      // Get last '.' position + 1
   return j == 0 ? false : strcmpi(&name[j], ext); // Compare text after '.' and ext
 }
 
-static FRESULT sd_findnext(DIR *dp, FILINFO *fno) {
+static FRESULT sd_findnext(DIR* dp, FILINFO* fno) {
   while (f_readdir(dp, fno) == FR_OK && fno->fname[0]) {
     if (fno->fattrib & AM_DIR)
       continue;
@@ -123,7 +122,7 @@ static FRESULT sd_findnext(DIR *dp, FILINFO *fno) {
   return FR_NO_FILE;
 }
 
-static FRESULT sd_open_dir(DIR *dp, const TCHAR *path, const TCHAR *pattern) {
+static FRESULT sd_open_dir(DIR* dp, const TCHAR* path, const TCHAR* pattern) {
   dp->pat = pattern;
   return f_opendir(dp, path);
 }
@@ -138,7 +137,7 @@ static void browser_open_file(int sel) {
     return;
 repeat:
   cnt = sel;
-  if (sd_open_dir(&dj, "", FILE_OPT[keypad_mode].ext) != FR_OK)
+  if (sd_open_dir(&dj, "", file_opt[keypad_mode].ext) != FR_OK)
     return; // open dir
   while (sd_findnext(&dj, &fno) == FR_OK && cnt != 0)
     cnt--; // skip cnt files
@@ -153,21 +152,21 @@ repeat:
   }
 
   // Load file, get load function
-  file_load_cb_t load = FILE_OPT[keypad_mode].load;
+  file_load_cb_t load = file_opt[keypad_mode].load;
   if (load == NULL)
     return;
   //
   lcd_set_colors(LCD_FG_COLOR, LCD_BG_COLOR);
 
-  FIL *const file = filesystem_file();
+  FIL* const file = filesystem_file();
   if (f_open(file, fno.fname, FA_READ) != FR_OK)
     return;
   //  START_PROFILE;
-  const char *error = load(file, &fno, keypad_mode);
+  const char* error = load(file, &fno, keypad_mode);
   f_close(file);
   //  STOP_PROFILE;
   // Check, need continue load next or previous file
-  bool need_continue = FILE_OPT[keypad_mode].opt & FILE_OPT_CONTINUE;
+  bool need_continue = file_opt[keypad_mode].opt & FILE_OPT_CONTINUE;
   if (error) {
     lcd_clear_screen();
     ui_message_box(error, fno.fname, need_continue ? 100 : 2000);
@@ -190,13 +189,12 @@ repeat:
     if (status == EVT_TOUCH_PRESSED || status == EVT_TOUCH_DOWN) {
       int touch_x, touch_y;
       touch_position(&touch_x, &touch_y);
-      if (touch_x < LCD_WIDTH * 1 / 3) {
+      if (touch_x < LCD_WIDTH * 1 / 3)
         key = 0;
-      } else if (touch_x < LCD_WIDTH * 2 / 3) {
+      else if (touch_x < LCD_WIDTH * 2 / 3)
         key = 2;
-      } else {
+      else
         key = 1;
-      }
       touch_wait_release();
     }
     // chThdSleepMilliseconds(100); // Device hang after ~2min in this place, not switch thread back
@@ -227,7 +225,7 @@ static void browser_draw_page(int page) {
   DIR dj;
   // Mount SD card and open directory
   if (f_mount(filesystem_volume(), "", 1) != FR_OK ||
-      sd_open_dir(&dj, "", FILE_OPT[keypad_mode].ext) != FR_OK) {
+      sd_open_dir(&dj, "", file_opt[keypad_mode].ext) != FR_OK) {
     ui_message_box("ERROR", "NO CARD", 2000);
     ui_mode_normal();
     return;
