@@ -217,8 +217,14 @@ static inline int32_t pack_sincos_pair(size_t index) {
 
 static inline int32_t pack_capture_pair(const audio_sample_t* capture, size_t pair_index) {
   size_t base = pair_index * 2U;
+#ifdef NANOVNA_F303
+  // Swap order for F303 to fix byte/sample ordering
+  uint32_t low = (uint32_t)(uint16_t)capture[base + 1U];
+  uint32_t high = ((uint32_t)(uint16_t)capture[base]) << 16;
+#else
   uint32_t low = (uint32_t)(uint16_t)capture[base];
   uint32_t high = ((uint32_t)(uint16_t)capture[base + 1U]) << 16;
+#endif
   return (int32_t)(high | low);
 }
 
@@ -308,4 +314,3 @@ void set_dsp_accumulator(acc_t ss, acc_t sc, acc_t rs, acc_t rc) {
   acc_ref_c = rc;
 }
 #endif
-
