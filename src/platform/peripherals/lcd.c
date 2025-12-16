@@ -25,6 +25,10 @@
 #include "chprintf.h"
 #include "platform/peripherals/spi.h"
 
+#ifdef USE_DISPLAY_DMA
+#define __USE_DISPLAY_DMA__
+#endif
+
 // Pin macros for LCD
 #define LCD_CS_LOW palClearPad(GPIOB, GPIOB_LCD_CS)
 #define LCD_CS_HIGH palSetPad(GPIOB, GPIOB_LCD_CS)
@@ -35,10 +39,10 @@
 
 // SPI bus for LCD
 #define LCD_SPI SPI1
-#ifdef USE_DISPLAY_DMA
+#ifdef __USE_DISPLAY_DMA__
 // DMA channels for used in LCD SPI bus
-#define LCD_DMA_RX STM32_DMA1_STREAM2 // DMA1 channel 2 use for SPI1 rx
-#define LCD_DMA_TX STM32_DMA1_STREAM3 // DMA1 channel 3 use for SPI1 tx
+#define LCD_DMA_RX DMA1_Channel2 // DMA1 channel 2 use for SPI1 rx
+#define LCD_DMA_TX DMA1_Channel3 // DMA1 channel 3 use for SPI1 tx
 #endif
 
 // Custom display definition
@@ -61,7 +65,7 @@
 #endif
 
 // Disable DMA rx on disabled DMA tx
-#ifndef USE_DISPLAY_DMA
+#ifndef __USE_DISPLAY_DMA__
 #undef __USE_DISPLAY_DMA_RX__
 #endif
 
@@ -80,7 +84,7 @@ void spi_tx_byte(const uint8_t data) {
   SPI_WRITE_8BIT(LCD_SPI, data);
 }
 // Transmit buffer to SPI bus  (len should be > 0)
-void spi_tx_buffer(const uint8_t *buffer, uint16_t len) {
+void spi_tx_buffer(const uint8_t* buffer, uint16_t len) {
   while (len--) {
     while (SPI_TX_IS_NOT_EMPTY(LCD_SPI))
       ;
@@ -98,7 +102,7 @@ uint8_t spi_rx_byte(void) {
 }
 
 // Receive buffer from SPI bus (len should be > 0)
-void spi_rx_buffer(uint8_t *buffer, uint16_t len) {
+void spi_rx_buffer(uint8_t* buffer, uint16_t len) {
   do {
     SPI_WRITE_8BIT(LCD_SPI, 0xFF);
     while (SPI_RX_IS_EMPTY(LCD_SPI))
@@ -124,50 +128,53 @@ void spi_drop_rx(void) {
 //*****************************************************
 // SPI DMA settings and data
 //*****************************************************
-#ifdef USE_DISPLAY_DMA
-static const uint32_t TXDMAMODE = 0 | STM32_DMA_CR_PL(STM32_SPI_SPI1_DMA_PRIORITY) // Set priority
+#ifdef __USE_DISPLAY_DMA__
+static const uint32_t txdmamode = 0 | STM32_DMA_CR_PL(STM32_SPI_SPI1_DMA_PRIORITY) // Set priority
                                   | STM32_DMA_CR_DIR_M2P;                          // Memory to Spi
 
-static const uint32_t RXDMAMODE = 0 | STM32_DMA_CR_PL(STM32_SPI_SPI1_DMA_PRIORITY) // Set priority
+static const uint32_t rxdmamode = 0 | STM32_DMA_CR_PL(STM32_SPI_SPI1_DMA_PRIORITY) // Set priority
                                   | STM32_DMA_CR_DIR_P2M;                          // SPI to Memory
 
 // SPI transmit byte buffer use DMA (65535 bytes limit)
-static inline void spi_dma_tx_buffer(const uint8_t *buffer, uint16_t len, bool wait) {
-  dmaStreamSetMemory0(LCD_DMA_TX, buffer);
-  dmaStreamSetTransactionSize(LCD_DMA_TX, len);
-  dmaStreamSetMode(LCD_DMA_TX, TXDMAMODE | STM32_DMA_CR_BYTE | STM32_DMA_CR_MINC | STM32_DMA_CR_EN);
+static inline void spi_dma_tx_buffer(const uint8_t* buffer, uint16_t len, bool wait) {
+  dmaChannelSetMemory(LCD_DMA_TX, buffer);
+  dmaChannelSetTransactionSize(LCD_DMA_TX, len);
+  dmaChannelSetMode(LCD_DMA_TX,
+                    txdmamode | STM32_DMA_CR_BYTE | STM32_DMA_CR_MINC | STM32_DMA_CR_EN);
   if (wait)
-    dmaWaitCompletion(LCD_DMA_TX);
+    dmaChannelWaitCompletion(LCD_DMA_TX);
 }
 
 // Wait DMA Rx completion
 static void dma_channel_wait_completion_rx_tx(void) {
-  dmaWaitCompletion(LCD_DMA_TX);
-  dmaWaitCompletion(LCD_DMA_RX);
+  dmaChannelWaitCompletion(LCD_DMA_TX);
+  dmaChannelWaitCompletion(LCD_DMA_RX);
   //  while (SPI_IS_BUSY(LCD_SPI));   // Wait SPI tx/rx
 }
 
 // SPI receive byte buffer use DMA
-static const uint16_t DUMMY_TX = 0xFFFF;
-static inline void spi_dma_rx_buffer(uint8_t *buffer, uint16_t len, bool wait) {
+static const uint16_t dummy_tx = 0xFFFF;
+static inline void spi_dma_rx_buffer(uint8_t* buffer, uint16_t len, bool wait) {
   // Init Rx DMA buffer, size, mode (spi and mem data size is 8 bit), and start
-  dmaStreamSetMemory0(LCD_DMA_RX, buffer);
-  dmaStreamSetTransactionSize(LCD_DMA_RX, len);
-  dmaStreamSetMode(LCD_DMA_RX, RXDMAMODE | STM32_DMA_CR_BYTE | STM32_DMA_CR_MINC | STM32_DMA_CR_EN);
+  dmaChannelSetMemory(LCD_DMA_RX, buffer);
+  dmaChannelSetTransactionSize(LCD_DMA_RX, len);
+  dmaChannelSetMode(LCD_DMA_RX,
+                    rxdmamode | STM32_DMA_CR_BYTE | STM32_DMA_CR_MINC | STM32_DMA_CR_EN);
   // Init dummy Tx DMA (for rx clock), size, mode (spi and mem data size is 8 bit), and start
-  dmaStreamSetMemory0(LCD_DMA_TX, &DUMMY_TX);
-  dmaStreamSetTransactionSize(LCD_DMA_TX, len);
-  dmaStreamSetMode(LCD_DMA_TX, TXDMAMODE | STM32_DMA_CR_BYTE | STM32_DMA_CR_EN);
+  dmaChannelSetMemory(LCD_DMA_TX, &dummy_tx);
+  dmaChannelSetTransactionSize(LCD_DMA_TX, len);
+  dmaChannelSetMode(LCD_DMA_TX, txdmamode | STM32_DMA_CR_BYTE | STM32_DMA_CR_EN);
   if (wait)
     dma_channel_wait_completion_rx_tx();
 }
 #else
 // Replace DMA function vs no DMA
 #define dma_channel_wait_completion_rx_tx()                                                        \
-  {}
+  {                                                                                                \
+  }
 #define spi_dma_tx_buffer(buffer, len, flag) spi_tx_buffer(buffer, len)
 #define spi_dma_rx_buffer(buffer, len, flag) spi_rx_buffer(buffer, len)
-#endif // USE_DISPLAY_DMA
+#endif // __USE_DISPLAY_DMA__
 
 static void spi_init(void) {
   rccEnableSPI1(FALSE);
@@ -180,22 +187,22 @@ static void spi_init(void) {
                  | LCD_SPI_SPEED // Baud rate control
                  | SPI_CR1_CPHA  // Clock Phase
                  | SPI_CR1_CPOL  // Clock Polarity
-    ;
+      ;
   LCD_SPI->CR2 = SPI_CR2_8BIT    // SPI data size, set to 8 bit
                  | SPI_CR2_FRXTH // SPI_SR_RXNE generated every 8 bit data
 //             | SPI_CR2_SSOE      //
-#ifdef USE_DISPLAY_DMA
+#ifdef __USE_DISPLAY_DMA__
                  | SPI_CR2_TXDMAEN // Tx DMA enable
 #ifdef __USE_DISPLAY_DMA_RX__
                  | SPI_CR2_RXDMAEN // Rx DMA enable
 #endif
 #endif
-    ;
+      ;
 // Init SPI DMA Peripheral
-#ifdef USE_DISPLAY_DMA
-  dmaStreamSetPeripheral(LCD_DMA_TX, &LCD_SPI->DR); // DMA Peripheral Tx
+#ifdef __USE_DISPLAY_DMA__
+  dmaChannelSetPeripheral(LCD_DMA_TX, &LCD_SPI->DR); // DMA Peripheral Tx
 #ifdef __USE_DISPLAY_DMA_RX__
-  dmaStreamSetPeripheral(LCD_DMA_RX, &LCD_SPI->DR); // DMA Peripheral Rx
+  dmaChannelSetPeripheral(LCD_DMA_RX, &LCD_SPI->DR); // DMA Peripheral Rx
 #endif
 #endif
   // Enable DMA on SPI
@@ -388,16 +395,16 @@ enum {
 #ifndef lcd_get_cell_buffer
 #define LCD_BUFFER_1 0x01
 #define LCD_DMA_RUN 0x02
-static uint8_t lcd_dma_status = 0;
+static uint8_t LCD_dma_status = 0;
 
 // Return free buffer for render
-pixel_t *lcd_get_cell_buffer(void) {
-  return &spi_buffer[(lcd_dma_status & LCD_BUFFER_1) ? SPI_BUFFER_SIZE / 2 : 0];
+pixel_t* lcd_get_cell_buffer(void) {
+  return &spi_buffer[(LCD_dma_status & LCD_BUFFER_1) ? SPI_BUFFER_SIZE / 2 : 0];
 }
 #endif
 
 // Disable inline for this function
-static void lcd_send_command(uint8_t cmd, uint16_t len, const uint8_t *data) {
+static void lcd_send_command(uint8_t cmd, uint16_t len, const uint8_t* data) {
   // Uncomment on low speed SPI (possible get here before previous tx complete)
   while (SPI_IS_BUSY(LCD_SPI))
     ;
@@ -418,7 +425,7 @@ static void lcd_send_command(uint8_t cmd, uint16_t len, const uint8_t *data) {
 // 0x00858552 for ST7789V (9.1.3 RDDID (04h): Read Display ID)
 // 0x006BFFFF for ST7796S ?? no id description in datasheet
 // 0x00000000 for ili9341 ?? no id description in datasheet
-uint32_t lcd_send_register(uint8_t cmd, uint8_t len, const uint8_t *data) {
+uint32_t lcd_send_register(uint8_t cmd, uint8_t len, const uint8_t* data) {
   lcd_bulk_finish();
   SPI_BR_SET(LCD_SPI, SPI_BR_DIV16); // Set most safe read speed
   lcd_send_command(cmd, len, data);  // Send command
@@ -441,130 +448,130 @@ uint32_t lcd_send_register(uint8_t cmd, uint8_t len, const uint8_t *data) {
 //******************************************************************************
 // ILI9341 and ST7789V Lcd init sequence + lcd depend image rotate function
 #if defined(LCD_DRIVER_ILI9341) || defined(LCD_DRIVER_ST7789)
-typedef enum { LCD_TYPE_ILI9341 = 0, LCD_TYPE_ST7789V } lcd_type_t;
-static lcd_type_t lcd_type = LCD_TYPE_ILI9341;
-static const uint8_t ILI9341_INIT_SEQ[] = {
-  // ILI9341 init sequence
-  // cmd,           len, data...,
-  LCD_SWRESET, 0, // SW reset
-  LCD_DISPOFF, 0, // display off
-                  // ILI9341_POWERB,     3, 0x00, 0xC1, 0x30,                // Power control B
-  // ILI9341_POWER_SEQ,  4, 0x64, 0x03, 0x12, 0x81,          // Power on sequence control
-  // ILI9341_DTCA,       3, 0x85, 0x00, 0x78,                // Driver timing control A
-  // ILI9341_POWERA,     5, 0x39, 0x2C, 0x00, 0x34, 0x02,    // Power control A
-  // ILI9341_PUMPCTRL,   1, 0x20,                            // Pump ratio control
-  // ILI9341_DTCB,       2, 0x00, 0x00,                      // Driver timing control B
-  ILI9341_PWCTRL1, 1, 0x23,                      // POWER_CONTROL_1
-  ILI9341_PWCTRL2, 1, 0x10,                      // POWER_CONTROL_2
-  ILI9341_VMCTRL1, 2, 0x3e, 0x28,                // VCOM_CONTROL_1
-  ILI9341_VMCTRL2, 1, 0xBE,                      // VCOM_CONTROL_2
-  LCD_MADCTL, 1, LCD_MADCTL_MV | LCD_MADCTL_BGR, // landscape
-  LCD_COLMOD, 1, 0x55,                           // COLMOD_PIXEL_FORMAT_SET : 16 bit pixel
-  ILI9341_FRMCTR1, 2, 0x00, 0x18,                // Frame Rate
-  // ILI9341_3GAMMA_EN,  1, 0x00,                            // Gamma Function Disable
-  LCD_GAMSET, 1, 0x01, // gamma set for curve 01/2/04/08
-  ILI9341_PGAMCTRL, 15, 0x0F, 0x31, 0x2B, 0x0C, 0x0E, 0x08, 0x4E, 0xF1, 0x37, 0x07, 0x10, 0x03,
-  0x0E, 0x09, 0x00, // positive gamma correction
-  ILI9341_NGAMCTRL, 15, 0x00, 0x0E, 0x14, 0x03, 0x11, 0x07, 0x31, 0xC1, 0x48, 0x08, 0x0F, 0x0C,
-  0x31, 0x36, 0x0F, // negative gamma correction
-  // LCD_CASET,          4, 0x00, 0x00, 0x01, 0x3f,          // Column Address Set: x = 0, width
-  // 320
-  // LCD_RASET,          4, 0x00, 0x00, 0x00, 0xef,          // Page Address Set: y = 0, height
-  // 240
-  ILI9341_ETMOD, 1, 0x06,               // entry mode
-  ILI9341_DISCTRL, 3, 0x08, 0x82, 0x27, // display function control
-  ILI9341_IFCTL, 3, 0x00, 0x00, 0x00,   // Interface Control (set WEMODE=0)
-  LCD_SLPOUT, 0,                        // sleep out
-  LCD_DISPON, 0,                        // display on
-  0                                     // sentinel
+typedef enum { ili9341_type = 0, st7789v } lcd_type_t;
+static lcd_type_t lcd_type = ili9341_type;
+static const uint8_t ili9341_init_seq[] = {
+    // ILI9341 init sequence
+    // cmd,           len, data...,
+    LCD_SWRESET, 0, // SW reset
+    LCD_DISPOFF, 0, // display off
+                    // ILI9341_POWERB,     3, 0x00, 0xC1, 0x30,                // Power control B
+    // ILI9341_POWER_SEQ,  4, 0x64, 0x03, 0x12, 0x81,          // Power on sequence control
+    // ILI9341_DTCA,       3, 0x85, 0x00, 0x78,                // Driver timing control A
+    // ILI9341_POWERA,     5, 0x39, 0x2C, 0x00, 0x34, 0x02,    // Power control A
+    // ILI9341_PUMPCTRL,   1, 0x20,                            // Pump ratio control
+    // ILI9341_DTCB,       2, 0x00, 0x00,                      // Driver timing control B
+    ILI9341_PWCTRL1, 1, 0x23,                      // POWER_CONTROL_1
+    ILI9341_PWCTRL2, 1, 0x10,                      // POWER_CONTROL_2
+    ILI9341_VMCTRL1, 2, 0x3e, 0x28,                // VCOM_CONTROL_1
+    ILI9341_VMCTRL2, 1, 0xBE,                      // VCOM_CONTROL_2
+    LCD_MADCTL, 1, LCD_MADCTL_MV | LCD_MADCTL_BGR, // landscape
+    LCD_COLMOD, 1, 0x55,                           // COLMOD_PIXEL_FORMAT_SET : 16 bit pixel
+    ILI9341_FRMCTR1, 2, 0x00, 0x18,                // Frame Rate
+    // ILI9341_3GAMMA_EN,  1, 0x00,                            // Gamma Function Disable
+    LCD_GAMSET, 1, 0x01, // gamma set for curve 01/2/04/08
+    ILI9341_PGAMCTRL, 15, 0x0F, 0x31, 0x2B, 0x0C, 0x0E, 0x08, 0x4E, 0xF1, 0x37, 0x07, 0x10, 0x03,
+    0x0E, 0x09, 0x00, // positive gamma correction
+    ILI9341_NGAMCTRL, 15, 0x00, 0x0E, 0x14, 0x03, 0x11, 0x07, 0x31, 0xC1, 0x48, 0x08, 0x0F, 0x0C,
+    0x31, 0x36, 0x0F, // negative gamma correction
+    // LCD_CASET,          4, 0x00, 0x00, 0x01, 0x3f,          // Column Address Set: x = 0, width
+    // 320
+    // LCD_RASET,          4, 0x00, 0x00, 0x00, 0xef,          // Page Address Set: y = 0, height
+    // 240
+    ILI9341_ETMOD, 1, 0x06,               // entry mode
+    ILI9341_DISCTRL, 3, 0x08, 0x82, 0x27, // display function control
+    ILI9341_IFCTL, 3, 0x00, 0x00, 0x00,   // Interface Control (set WEMODE=0)
+    LCD_SLPOUT, 0,                        // sleep out
+    LCD_DISPON, 0,                        // display on
+    0                                     // sentinel
 };
 
 // ST7789 LCD_RDDID read return 0x42C2A97F (need shift right by 7 bit, so ID1 = 0x85, ID2 = 0x85,
 // ID3 = 0x52)
 #define ST7789V_ID 0x858552
-static const uint8_t ST7789V_INIT_SEQ[] = {
-  // ST7789V init sequence
-  // cmd,           len, data...,
-  LCD_SWRESET, 0, // SW reset
-  LCD_DISPOFF, 0, // display off
-  LCD_MADCTL, 1, LCD_MADCTL_MX | LCD_MADCTL_MV | LCD_MADCTL_RGB, LCD_COLMOD, 1,
-  0x55, // COLMOD_PIXEL_FORMAT_SET : 16 bit pixel
-        // ST7789V_PORCTRL,    5, 0x0C, 0x0C, 0x00, 0x33, 0x33,
-  // ST7789V_GCTRL,      1, 0x35,
-  ST7789V_VCOMS, 1, 0x1F,          // default 0x20
-                                   // ST7789V_LCMCTRL,    1, 0x2C,
-  ST7789V_VDVVRHEN, 2, 0x01, 0xC3, // default 0x01, 0xFF !!! why need C3? datasheet say 0xFF
-                                   // ST7789V_VDVS,       1, 0x20,
-  // ST7789V_FRCTRL2,    1, 0x0F,
-  // ST7789V_PWCTRL1,    2, 0xA4, 0xA1,
-  LCD_SLPOUT, 0, // sleep out
-  LCD_DISPON, 0, // display on
-  0              // sentinel
+static const uint8_t ST7789V_init_seq[] = {
+    // ST7789V init sequence
+    // cmd,           len, data...,
+    LCD_SWRESET, 0, // SW reset
+    LCD_DISPOFF, 0, // display off
+    LCD_MADCTL, 1, LCD_MADCTL_MX | LCD_MADCTL_MV | LCD_MADCTL_RGB, LCD_COLMOD, 1,
+    0x55, // COLMOD_PIXEL_FORMAT_SET : 16 bit pixel
+          // ST7789V_PORCTRL,    5, 0x0C, 0x0C, 0x00, 0x33, 0x33,
+    // ST7789V_GCTRL,      1, 0x35,
+    ST7789V_VCOMS, 1, 0x1F,          // default 0x20
+                                     // ST7789V_LCMCTRL,    1, 0x2C,
+    ST7789V_VDVVRHEN, 2, 0x01, 0xC3, // default 0x01, 0xFF !!! why need C3? datasheet say 0xFF
+                                     // ST7789V_VDVS,       1, 0x20,
+    // ST7789V_FRCTRL2,    1, 0x0F,
+    // ST7789V_PWCTRL1,    2, 0xA4, 0xA1,
+    LCD_SLPOUT, 0, // sleep out
+    LCD_DISPON, 0, // display on
+    0              // sentinel
 };
 
 // Read display ID and detect type
-static const uint8_t *get_lcd_init(void) {
+static const uint8_t* get_lcd_init(void) {
   uint32_t id = lcd_send_register(LCD_RDDID, 0, 0) >> 7;
   if (id == ST7789V_ID)
-    lcd_type = LCD_TYPE_ST7789V;
-  return lcd_type == LCD_TYPE_ILI9341 ? ILI9341_INIT_SEQ : ST7789V_INIT_SEQ;
+    lcd_type = st7789v;
+  return lcd_type == ili9341_type ? ili9341_init_seq : ST7789V_init_seq;
 }
 
 void lcd_set_rotation(uint8_t r) {
-  static const uint8_t ILI9341_ROTATION_CONST[] = {
-    // ILI9341 LCD_MADCTL rotation settings
-    (LCD_MADCTL_MV | LCD_MADCTL_BGR), (LCD_MADCTL_MY | LCD_MADCTL_BGR),
-    (LCD_MADCTL_MX | LCD_MADCTL_MY | LCD_MADCTL_MV | LCD_MADCTL_BGR),
-    (LCD_MADCTL_MX | LCD_MADCTL_BGR),
-    // ST7789 LCD_MADCTL rotation settings
-    (LCD_MADCTL_MX | LCD_MADCTL_MV | LCD_MADCTL_RGB), (LCD_MADCTL_RGB),
-    (LCD_MADCTL_MY | LCD_MADCTL_MV | LCD_MADCTL_RGB),
-    (LCD_MADCTL_MX | LCD_MADCTL_MY | LCD_MADCTL_RGB)};
-  lcd_send_command(LCD_MADCTL, 1, &ILI9341_ROTATION_CONST[lcd_type * 4 + r]);
+  static const uint8_t lcd_rotation_const[] = {
+      // ILI9341 LCD_MADCTL rotation settings
+      (LCD_MADCTL_MV | LCD_MADCTL_BGR), (LCD_MADCTL_MY | LCD_MADCTL_BGR),
+      (LCD_MADCTL_MX | LCD_MADCTL_MY | LCD_MADCTL_MV | LCD_MADCTL_BGR),
+      (LCD_MADCTL_MX | LCD_MADCTL_BGR),
+      // ST7789 LCD_MADCTL rotation settings
+      (LCD_MADCTL_MX | LCD_MADCTL_MV | LCD_MADCTL_RGB), (LCD_MADCTL_RGB),
+      (LCD_MADCTL_MY | LCD_MADCTL_MV | LCD_MADCTL_RGB),
+      (LCD_MADCTL_MX | LCD_MADCTL_MY | LCD_MADCTL_RGB)};
+  lcd_send_command(LCD_MADCTL, 1, &lcd_rotation_const[lcd_type * 4 + r]);
 }
 
 #endif
 
 #ifdef LCD_DRIVER_ST7796S
-static const uint8_t ST7796S_INIT_SEQ[] = {
-  // ST7996s init sequence
-  // cmd,           len, data...,
-  LCD_SWRESET, 0,                                // SW reset
-  LCD_DISPOFF, 0,                                // display off
-  ST7796S_IFMODE, 1, 0x00,                       // Interface Mode Control
-  ST7796S_FRMCTR1, 1, 0x0A,                      // Frame Rate
-  ST7796S_DIC, 1, 0x02,                          // Display Inversion Control , 2 Dot
-  ST7796S_DFC, 3, 0x02, 0x02, 0x3B,              // RGB/MCU Interface Control
-  ST7796S_EM, 1, 0xC6,                           // EntryMode
-  ST7796S_PWR1, 2, 0x17, 0x15,                   // Power Control 1
-  ST7796S_PWR2, 1, 0x41,                         // Power Control 2
-                                                 // ST7796S_VCMPCTL,    3, 0x00, 0x4D, 0x90,
-  ST7796S_VCMPCTL, 3, 0x00, 0x12, 0x80,          // VCOM Control
-  LCD_MADCTL, 1, LCD_MADCTL_MV | LCD_MADCTL_BGR, // landscape, BGR
-  LCD_COLMOD, 1, 0x55,                           // Interface Pixel Format, 16bpp
-  // ST7796S_PGC,       15, 0x00, 0x03, 0x09, 0x08, 0x16, 0x0A, 0x3F, 0x78, 0x4C, 0x09, 0x0A,
-  // 0x08, 0x16, 0x1A, 0x0F,  // P-Gamma
-  // ST7796S_NGC,       15, 0x00, 0X16, 0X19, 0x03, 0x0F, 0x05, 0x32, 0x45, 0x46, 0x04, 0x0E,
-  // 0x0D, 0x35, 0x37, 0x0F,  // N-Gamma
-  // 0xE9,               1, 0x00,                            // Set Image Func
-  LCD_WRDISBV, 1, 0xFF, // Set Brightness to Max
-  // 0xF7,               4, 0xA9, 0x51, 0x2C, 0x82,          // Adjust Control ??
-  // LCD_INVON,          1, 0x01,                            // Inverse colors
-  LCD_SLPOUT, 0, // sleep out
-  LCD_DISPON, 0, // display on
-  0              // sentinel
+static const uint8_t ST7796S_init_seq[] = {
+    // ST7996s init sequence
+    // cmd,           len, data...,
+    LCD_SWRESET, 0,                                // SW reset
+    LCD_DISPOFF, 0,                                // display off
+    ST7796S_IFMODE, 1, 0x00,                       // Interface Mode Control
+    ST7796S_FRMCTR1, 1, 0x0A,                      // Frame Rate
+    ST7796S_DIC, 1, 0x02,                          // Display Inversion Control , 2 Dot
+    ST7796S_DFC, 3, 0x02, 0x02, 0x3B,              // RGB/MCU Interface Control
+    ST7796S_EM, 1, 0xC6,                           // EntryMode
+    ST7796S_PWR1, 2, 0x17, 0x15,                   // Power Control 1
+    ST7796S_PWR2, 1, 0x41,                         // Power Control 2
+                                                   // ST7796S_VCMPCTL,    3, 0x00, 0x4D, 0x90,
+    ST7796S_VCMPCTL, 3, 0x00, 0x12, 0x80,          // VCOM Control
+    LCD_MADCTL, 1, LCD_MADCTL_MV | LCD_MADCTL_BGR, // landscape, BGR
+    LCD_COLMOD, 1, 0x55,                           // Interface Pixel Format, 16bpp
+    // ST7796S_PGC,       15, 0x00, 0x03, 0x09, 0x08, 0x16, 0x0A, 0x3F, 0x78, 0x4C, 0x09, 0x0A,
+    // 0x08, 0x16, 0x1A, 0x0F,  // P-Gamma
+    // ST7796S_NGC,       15, 0x00, 0X16, 0X19, 0x03, 0x0F, 0x05, 0x32, 0x45, 0x46, 0x04, 0x0E,
+    // 0x0D, 0x35, 0x37, 0x0F,  // N-Gamma
+    // 0xE9,               1, 0x00,                            // Set Image Func
+    LCD_WRDISBV, 1, 0xFF, // Set Brightness to Max
+    // 0xF7,               4, 0xA9, 0x51, 0x2C, 0x82,          // Adjust Control ??
+    // LCD_INVON,          1, 0x01,                            // Inverse colors
+    LCD_SLPOUT, 0, // sleep out
+    LCD_DISPON, 0, // display on
+    0              // sentinel
 };
 
-static const uint8_t *get_lcd_init(void) {
-  return ST7796S_INIT_SEQ;
+static const uint8_t* get_lcd_init(void) {
+  return ST7796S_init_seq;
 }
 
 void lcd_set_rotation(uint8_t r) {
-  static const uint8_t ST7796S_ROTATION_CONST[] = {
-    (LCD_MADCTL_MV | LCD_MADCTL_BGR), (LCD_MADCTL_MY | LCD_MADCTL_BGR),
-    (LCD_MADCTL_MX | LCD_MADCTL_MY | LCD_MADCTL_MV | LCD_MADCTL_BGR),
-    (LCD_MADCTL_MX | LCD_MADCTL_BGR)};
-  lcd_send_command(LCD_MADCTL, 1, &ST7796S_ROTATION_CONST[r]);
+  static const uint8_t ST7796S_rotation_const[] = {
+      (LCD_MADCTL_MV | LCD_MADCTL_BGR), (LCD_MADCTL_MY | LCD_MADCTL_BGR),
+      (LCD_MADCTL_MX | LCD_MADCTL_MY | LCD_MADCTL_MV | LCD_MADCTL_BGR),
+      (LCD_MADCTL_MX | LCD_MADCTL_BGR)};
+  lcd_send_command(LCD_MADCTL, 1, &ST7796S_rotation_const[r]);
 }
 #endif
 
@@ -574,7 +581,7 @@ void lcd_init(void) {
   chThdSleepMilliseconds(5);
   LCD_RESET_NEGATE;
   chThdSleepMilliseconds(5); // need time before LCD ready after reset
-  const uint8_t *p = get_lcd_init();
+  const uint8_t* p = get_lcd_init();
   while (*p) {
     lcd_send_command(p[0], p[1], &p[2]);
     p += 2 + p[1];
@@ -590,8 +597,8 @@ void lcd_set_window(int x, int y, int w, int h, uint16_t cmd) {
   // uint8_t yy[4] = { y >> 8, y, (y+h-1) >> 8, (y+h-1) };
   uint32_t xx = __REV16(x | ((x + w - 1) << 16));
   uint32_t yy = __REV16(y | ((y + h - 1) << 16));
-  lcd_send_command(LCD_CASET, 4, (uint8_t *)&xx);
-  lcd_send_command(LCD_RASET, 4, (uint8_t *)&yy);
+  lcd_send_command(LCD_CASET, 4, (uint8_t*)&xx);
+  lcd_send_command(LCD_RASET, 4, (uint8_t*)&yy);
   lcd_send_command(cmd, 0, NULL);
 }
 
@@ -603,18 +610,17 @@ void lcd_set_window(int x, int y, int w, int h, uint16_t cmd) {
 //
 #if defined(LCD_DRIVER_ILI9341) || defined(LCD_DRIVER_ST7789)
 // ILI9341 or ST7789 send data in RGB888 format, need parse it
-void lcd_read_memory(int x, int y, int w, int h, uint16_t *out) {
+void lcd_read_memory(int x, int y, int w, int h, uint16_t* out) {
   uint16_t len = w * h;
   lcd_set_window(x, y, w, h, LCD_RAMRD);
   // Set read speed (if different from write speed)
-  if (lcd_type == LCD_TYPE_ST7789V && ST7789V_SPI_RX_SPEED != LCD_SPI_SPEED) {
+  if (lcd_type == st7789v && ST7789V_SPI_RX_SPEED != LCD_SPI_SPEED)
     SPI_BR_SET(LCD_SPI, ST7789V_SPI_RX_SPEED);
-  } else if (ILI9341_SPI_RX_SPEED != LCD_SPI_SPEED) {
+  else if (ILI9341_SPI_RX_SPEED != LCD_SPI_SPEED)
     SPI_BR_SET(LCD_SPI, ILI9341_SPI_RX_SPEED);
-  }
-  spi_drop_rx();                    // Skip data from SPI rx buffer
-  spi_rx_byte();                    // require 8bit dummy clock
-  uint8_t *rgbbuf = (uint8_t *)out; // receive pixel data to buffer
+  spi_drop_rx();                   // Skip data from SPI rx buffer
+  spi_rx_byte();                   // require 8bit dummy clock
+  uint8_t* rgbbuf = (uint8_t*)out; // receive pixel data to buffer
 #ifndef __USE_DISPLAY_DMA_RX__
   spi_rx_buffer(rgbbuf, len * LCD_RX_PIXEL_SIZE);
   do {                                                // Parse received data to RGB565 format
@@ -626,7 +632,7 @@ void lcd_read_memory(int x, int y, int w, int h, uint16_t *out) {
   spi_dma_rx_buffer(rgbbuf, len, false); // Start DMA read, and not wait completion
   do { // Parse received data to RGB565 format while data receive by DMA
     uint16_t left =
-      dmaStreamGetTransactionSize(LCD_DMA_RX) + LCD_RX_PIXEL_SIZE; // Get DMA data left
+        dmaChannelGetTransactionSize(LCD_DMA_RX) + LCD_RX_PIXEL_SIZE; // Get DMA data left
     if (left > len)
       continue; // Next pixel RGB data not ready
     do {        // Process completed by DMA data
@@ -642,7 +648,7 @@ void lcd_read_memory(int x, int y, int w, int h, uint16_t *out) {
 }
 #elif defined(LCD_DRIVER_ST7796S)
 // ST7796S send data in RGB565 format, not need parse
-void lcd_read_memory(int x, int y, int w, int h, uint16_t *out) {
+void lcd_read_memory(int x, int y, int w, int h, uint16_t* out) {
   uint16_t len = w * h;
   lcd_set_window(x, y, w, h, LCD_RAMRD);
   // Set read speed (if need different)
@@ -652,9 +658,9 @@ void lcd_read_memory(int x, int y, int w, int h, uint16_t *out) {
   spi_rx_byte(); // require 8bit dummy clock
   // receive pixel data to buffer
 #ifndef __USE_DISPLAY_DMA_RX__
-  spi_rx_buffer((uint8_t *)out, len * 2);
+  spi_rx_buffer((uint8_t*)out, len * 2);
 #else
-  spi_dma_rx_buffer((uint8_t *)out, len * 2, true);
+  spi_dma_rx_buffer((uint8_t*)out, len * 2, true);
 #endif
   // restore speed if need
   if (LCD_SPI_RX_SPEED != LCD_SPI_SPEED)
@@ -671,25 +677,25 @@ void lcd_set_flip(bool flip) {
 // Wait completion before next data send
 #ifndef lcd_bulk_finish
 void lcd_bulk_finish(void) {
-  dmaWaitCompletion(LCD_DMA_TX); // Wait DMA
+  dmaChannelWaitCompletion(LCD_DMA_TX); // Wait DMA
   // while (SPI_IN_TX_RX(LCD_SPI));         // Wait tx
 }
 #endif
 
-static void lcd_bulk_buffer(int x, int y, int w, int h, pixel_t *buffer) {
+static void lcd_bulk_buffer(int x, int y, int w, int h, pixel_t* buffer) {
   lcd_set_window(x, y, w, h, LCD_RAMWR);
-#ifdef USE_DISPLAY_DMA
-  dmaStreamSetMemory0(LCD_DMA_TX, buffer);
-  dmaStreamSetTransactionSize(LCD_DMA_TX, w * h);
-  dmaStreamSetMode(LCD_DMA_TX, TXDMAMODE | LCD_DMA_MODE | STM32_DMA_CR_MINC | STM32_DMA_CR_EN);
+#ifdef __USE_DISPLAY_DMA__
+  dmaChannelSetMemory(LCD_DMA_TX, buffer);
+  dmaChannelSetTransactionSize(LCD_DMA_TX, w * h);
+  dmaChannelSetMode(LCD_DMA_TX, txdmamode | LCD_DMA_MODE | STM32_DMA_CR_MINC | STM32_DMA_CR_EN);
 #else
-  spi_tx_buffer((uint8_t *)buffer, w * h * sizeof(pixel_t));
+  spi_tx_buffer((uint8_t*)buffer, w * h * sizeof(pixel_t));
 #endif
 
-#ifdef REMOTE_DESKTOP
+#ifdef __REMOTE_DESKTOP__
   if (sweep_mode & SWEEP_REMOTE) {
     remote_region_t rd = {"bulk\r\n", x, y, w, h};
-    send_region(&rd, (uint8_t *)buffer, w * h * sizeof(pixel_t));
+    send_region(&rd, (uint8_t*)buffer, w * h * sizeof(pixel_t));
   }
 #endif
 }
@@ -698,7 +704,7 @@ static void lcd_bulk_buffer(int x, int y, int w, int h, pixel_t *buffer) {
 #ifndef lcd_bulk_continue
 void lcd_bulk_continue(int x, int y, int w, int h) {
   lcd_bulk_buffer(x, y, w, h, lcd_get_cell_buffer()); // Send new cell data
-  lcd_dma_status ^= LCD_BUFFER_1;                     // Switch buffer
+  LCD_dma_status ^= LCD_BUFFER_1;                     // Switch buffer
 }
 #endif
 
@@ -715,13 +721,13 @@ void lcd_bulk(int x, int y, int w, int h) {
 void lcd_fill(int x, int y, int w, int h) {
   lcd_set_window(x, y, w, h, LCD_RAMWR);
   uint32_t len = w * h;
-#ifdef USE_DISPLAY_DMA
-  dmaStreamSetMemory0(LCD_DMA_TX, &background_color);
+#ifdef __USE_DISPLAY_DMA__
+  dmaChannelSetMemory(LCD_DMA_TX, &background_color);
   while (len) {
     uint32_t delta = len > 0xFFFF ? 0xFFFF : len; // DMA can send only 65535 data in one run
-    dmaStreamSetTransactionSize(LCD_DMA_TX, delta);
-    dmaStreamSetMode(LCD_DMA_TX, TXDMAMODE | LCD_DMA_MODE | STM32_DMA_CR_EN);
-    dmaWaitCompletion(LCD_DMA_TX);
+    dmaChannelSetTransactionSize(LCD_DMA_TX, delta);
+    dmaChannelSetMode(LCD_DMA_TX, txdmamode | LCD_DMA_MODE | STM32_DMA_CR_EN);
+    dmaChannelWaitCompletion(LCD_DMA_TX);
     len -= delta;
   }
 #else
@@ -735,10 +741,10 @@ void lcd_fill(int x, int y, int w, int h) {
   } while (--len);
 #endif
 
-#ifdef REMOTE_DESKTOP
+#ifdef __REMOTE_DESKTOP__
   if (sweep_mode & SWEEP_REMOTE) {
     remote_region_t rd = {"fill\r\n", x, y, w, h};
-    send_region(&rd, (uint8_t *)&background_color, sizeof(pixel_t));
+    send_region(&rd, (uint8_t*)&background_color, sizeof(pixel_t));
   }
 #endif
 }
@@ -803,9 +809,9 @@ void lcd_set_colors(uint16_t fg_idx, uint16_t bg_idx) {
   background_color = GET_PALTETTE_COLOR(bg_idx);
 }
 
-void lcd_blit_bitmap(uint16_t x, uint16_t y, uint16_t width, uint16_t height, const uint8_t *b) {
+void lcd_blit_bitmap(uint16_t x, uint16_t y, uint16_t width, uint16_t height, const uint8_t* b) {
 #if 1 // Use this for remote desktop (in this case bulk operation send to remote)
-  pixel_t *buf = spi_buffer;
+  pixel_t* buf = spi_buffer;
   uint8_t bits = 0;
   for (uint32_t c = 0; c < height; c++) {
     for (uint32_t r = 0; r < width; r++) {
@@ -837,7 +843,7 @@ void lcd_drawchar(uint8_t ch, int x, int y) {
 }
 
 #ifndef lcd_drawstring
-void lcd_drawstring(int16_t x, int16_t y, const char *str) {
+void lcd_drawstring(int16_t x, int16_t y, const char* str) {
   int x_pos = x;
   while (*str) {
     uint8_t ch = *str++;
@@ -846,7 +852,7 @@ void lcd_drawstring(int16_t x, int16_t y, const char *str) {
       y += FONT_STR_HEIGHT;
       continue;
     }
-    const uint8_t *char_buf = FONT_GET_DATA(ch);
+    const uint8_t* char_buf = FONT_GET_DATA(ch);
     uint16_t w = FONT_GET_WIDTH(ch);
     lcd_blit_bitmap(x, y, w, FONT_GET_HEIGHT, char_buf);
     x += w;
@@ -855,20 +861,20 @@ void lcd_drawstring(int16_t x, int16_t y, const char *str) {
 #endif
 
 typedef struct {
-  const void *vmt;
+  const void* vmt;
   int16_t start_x, start_y;
   int16_t x, y;
   uint16_t state;
-} lcd_print_stream_t;
+} lcdPrintStream;
 
-static void put_normal(lcd_print_stream_t *ps, uint8_t ch) {
+static void put_normal(lcdPrintStream* ps, uint8_t ch) {
   if (ch == '\n') {
     ps->x = ps->start_x;
     ps->y += FONT_STR_HEIGHT;
     return;
   }
   uint16_t w = FONT_GET_WIDTH(ch);
-#if USE_FONT_ID < 3
+#if _USE_FONT_ < 3
   lcd_blit_bitmap(ps->x, ps->y, w, FONT_GET_HEIGHT, FONT_GET_DATA(ch));
 #else
   lcd_blit_bitmap(ps->x, ps->y, w < 9 ? 9 : w, FONT_GET_HEIGHT, FONT_GET_DATA(ch));
@@ -876,21 +882,20 @@ static void put_normal(lcd_print_stream_t *ps, uint8_t ch) {
   ps->x += w;
 }
 
-#if USE_FONT_ID != USE_SMALL_FONT_ID
-typedef void (*font_put_t)(lcd_print_stream_t *ps, uint8_t ch);
+#if _USE_FONT_ != _USE_SMALL_FONT_
+typedef void (*font_put_t)(lcdPrintStream* ps, uint8_t ch);
 static font_put_t put_char = put_normal;
-#define PUT_CHAR put_char
-static void put_small(lcd_print_stream_t *ps, uint8_t ch) {
+static void put_small(lcdPrintStream* ps, uint8_t ch) {
   if (ch == '\n') {
     ps->x = ps->start_x;
-    ps->y += SFONT_STR_HEIGHT;
+    ps->y += sFONT_STR_HEIGHT;
     return;
   }
-  uint16_t w = SFONT_GET_WIDTH(ch);
-#if USE_SMALL_FONT_ID < 3
-  lcd_blit_bitmap(ps->x, ps->y, w, SFONT_GET_HEIGHT, SFONT_GET_DATA(ch));
+  uint16_t w = sFONT_GET_WIDTH(ch);
+#if _USE_SMALL_FONT_ < 3
+  lcd_blit_bitmap(ps->x, ps->y, w, sFONT_GET_HEIGHT, sFONT_GET_DATA(ch));
 #else
-  lcd_blit_bitmap(ps->x, ps->y, w < 9 ? 9 : w, SFONT_GET_HEIGHT, SFONT_GET_DATA(ch));
+  lcd_blit_bitmap(ps->x, ps->y, w < 9 ? 9 : w, sFONT_GET_HEIGHT, sFONT_GET_DATA(ch));
 #endif
   ps->x += w;
 }
@@ -899,41 +904,40 @@ void lcd_set_font(int type) {
 }
 
 #else
-#define PUT_CHAR put_normal
+#define put_char put_normal
 #endif
 
-static msg_t lcd_put(void *ip, uint8_t ch) {
-  lcd_print_stream_t *ps = ip;
+static msg_t lcd_put(void* ip, uint8_t ch) {
+  lcdPrintStream* ps = ip;
   if (ps->state) {
-    if (ps->state == R_BGCOLOR[0]) {
+    if (ps->state == R_BGCOLOR[0])
       lcd_set_background(ch);
-    } else if (ps->state == R_FGCOLOR[0]) {
+    else if (ps->state == R_FGCOLOR[0])
       lcd_set_foreground(ch);
-    }
     ps->state = 0;
     return MSG_OK;
   } else if (ch < 0x09) {
     ps->state = ch;
     return MSG_OK;
   }
-  PUT_CHAR(ps, ch);
+  put_char(ps, ch);
   return MSG_OK;
 }
 
 // Simple print in buffer function
-int lcd_printf_va(int16_t x, int16_t y, const char *fmt, va_list ap) {
-  struct lcd_print_stream_vmt {
+int lcd_printf_va(int16_t x, int16_t y, const char* fmt, va_list ap) {
+  struct lcd_printStreamVMT {
     _base_sequential_stream_methods
   } lcd_vmt = {NULL, NULL, lcd_put, NULL};
-  lcd_print_stream_t ps = {&lcd_vmt, x, y, x, y, 0};
+  lcdPrintStream ps = {&lcd_vmt, x, y, x, y, 0};
   va_list args;
   va_copy(args, ap);
-  int retval = chvprintf((BaseSequentialStream *)(void *)&ps, fmt, args);
+  int retval = chvprintf((BaseSequentialStream*)(void*)&ps, fmt, args);
   va_end(args);
   return retval;
 }
 
-int lcd_printf(int16_t x, int16_t y, const char *fmt, ...) {
+int lcd_printf(int16_t x, int16_t y, const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
   int retval = lcd_printf_va(x, y, fmt, ap);
@@ -941,19 +945,19 @@ int lcd_printf(int16_t x, int16_t y, const char *fmt, ...) {
   return retval;
 }
 
-int lcd_printf_v(int16_t x, int16_t y, const char *fmt, ...) {
+int lcd_printf_v(int16_t x, int16_t y, const char* fmt, ...) {
   // Init small lcd print stream
-  struct lcd_print_stream_vmt {
+  struct lcd_printStreamVMT {
     _base_sequential_stream_methods
   } lcd_vmt = {NULL, NULL, lcd_put, NULL};
-  lcd_print_stream_t ps = {&lcd_vmt, x, y, x, y, 0};
+  lcdPrintStream ps = {&lcd_vmt, x, y, x, y, 0};
   lcd_set_foreground(LCD_FG_COLOR);
   lcd_set_background(LCD_BG_COLOR);
   lcd_set_rotation(DISPLAY_ROTATION_270);
   // Performing the print operation using the common code.
   va_list ap;
   va_start(ap, fmt);
-  int retval = chvprintf((BaseSequentialStream *)(void *)&ps, fmt, ap);
+  int retval = chvprintf((BaseSequentialStream*)(void*)&ps, fmt, ap);
   va_end(ap);
   lcd_set_rotation(DISPLAY_ROTATION_0);
   // Return number of bytes that would have been written.
@@ -961,10 +965,10 @@ int lcd_printf_v(int16_t x, int16_t y, const char *fmt, ...) {
 }
 
 void lcd_blit_bitmap_scale(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t size,
-                           const uint8_t *b) {
+                           const uint8_t* b) {
   lcd_set_window(x, y, w * size, h * size, LCD_RAMWR);
   for (int c = 0; c < h; c++) {
-    const uint8_t *ptr = b;
+    const uint8_t* ptr = b;
     uint8_t bits = 0;
     for (int i = 0; i < size; i++) {
       ptr = b;
@@ -983,17 +987,16 @@ void lcd_blit_bitmap_scale(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint1
 }
 
 int lcd_drawchar_size(uint8_t ch, int x, int y, uint8_t size) {
-  const uint8_t *char_buf = FONT_GET_DATA(ch);
+  const uint8_t* char_buf = FONT_GET_DATA(ch);
   uint16_t w = FONT_GET_WIDTH(ch);
 #if 1 // Use this for remote desctop (in this case bulk operation send to remote)
-  pixel_t *buf = spi_buffer;
+  pixel_t* buf = spi_buffer;
   for (uint32_t c = 0; c < FONT_GET_HEIGHT; c++, char_buf++) {
     for (uint32_t i = 0; i < size; i++) {
       uint8_t bits = *char_buf;
-      for (uint32_t r = 0; r < w; r++, bits <<= 1) {
+      for (uint32_t r = 0; r < w; r++, bits <<= 1)
         for (uint32_t j = 0; j < size; j++)
           *buf++ = (0x80 & bits) ? foreground_color : background_color;
-      }
     }
   }
   lcd_bulk(x, y, w * size, FONT_GET_HEIGHT * size);
@@ -1018,12 +1021,12 @@ void lcd_drawfont(uint8_t ch, int x, int y) {
   lcd_blit_bitmap(x, y, NUM_FONT_GET_WIDTH, NUM_FONT_GET_HEIGHT, NUM_FONT_GET_DATA(ch));
 }
 
-void lcd_drawstring_size(const char *str, int x, int y, uint8_t size) {
+void lcd_drawstring_size(const char* str, int x, int y, uint8_t size) {
   while (*str)
     x += lcd_drawchar_size(*str++, x, y, size);
 }
 
-void lcd_vector_draw(int x, int y, const vector_data_t *v) {
+void lcd_vector_draw(int x, int y, const vector_data_t* v) {
   while (v->shift_x || v->shift_y) {
     int x1 = x + (int)v->shift_x;
     int y1 = y + (int)v->shift_y;
@@ -1086,7 +1089,7 @@ void ili9341_test(int mode) {
 }
 #endif
 
-#ifdef USE_SD_CARD
+#ifdef __USE_SD_CARD__
 //*****************************************************
 //* SD functions and definitions
 //*****************************************************
@@ -1160,17 +1163,17 @@ void ili9341_test(int mode) {
 #define SD_OCR_32_33 ((uint32_t)0x1000000)
 #define SD_OCR_33_34 ((uint32_t)0x2000000)
 #define SD_OCR_34_35 ((uint32_t)0x4000000)
-#define SD_OCR_35_36 ((uint32_t)0x8000000)     // VDD voltage window 3.5-3.6
+#define SD_OCR_35_36 ((uint32_t)0x8000000) // VDD voltage window 3.5-3.6
 #define SD_OCR_CCS ((uint32_t)0x40000000)      // card capacity status
 #define SD_OCR_POWER_UP ((uint32_t)0x80000000) // card power up status bit
 #define SD_OCR_CAPACITY ((uint32_t)0x40000000)
-#define SD_OCR_VDD_27_36                                                                           \
-  (SD_OCR_27_28 | SD_OCR_28_29 | SD_OCR_29_30 | SD_OCR_30_31 | SD_OCR_31_32 | SD_OCR_32_33 |       \
+#define SD_OCR_VDD_27_36                                                                               \
+  (SD_OCR_27_28 | SD_OCR_28_29 | SD_OCR_29_30 | SD_OCR_30_31 | SD_OCR_31_32 | SD_OCR_32_33 |           \
    SD_OCR_33_34 | SD_OCR_34_35 | SD_OCR_35_36)
 #define SD_OCR_VDD_MASK SD_OCR_VDD_27_36
 
 // Use DMA on sector data Tx to SD card (only if enabled Tx DMA for LCD)
-#ifdef USE_DISPLAY_DMA
+#ifdef __USE_DISPLAY_DMA__
 #define __USE_SDCARD_DMA__
 #endif
 
@@ -1183,8 +1186,8 @@ void ili9341_test(int mode) {
 #define SD_SECTOR_SIZE 512
 // SD card spi bus
 #define SD_SPI SPI1
-#define SD_DMA_RX STM32_DMA1_STREAM2 // DMA1 channel 2 use for SPI1 rx
-#define SD_DMA_TX STM32_DMA1_STREAM3 // DMA1 channel 3 use for SPI1 tx
+#define SD_DMA_RX DMA1_Channel2 // DMA1 channel 2 use for SPI1 rx
+#define SD_DMA_TX DMA1_Channel3 // DMA1 channel 3 use for SPI1 tx
 // Define SD SPI speed on work
 #define SD_SPI_SPEED SPI_BR_DIV2
 // div4 give less error and high speed for Rx
@@ -1194,12 +1197,12 @@ void ili9341_test(int mode) {
 #define SD_INIT_SPI_SPEED SPI_BR_DIV256
 
 // Local values for SD card state
-static uint8_t card_status =
-  0; // Status: power on, write protect and Type 0:MMC, 1:SDC, 2:Block addressing
+static uint8_t CardStatus =
+    0; // Status: power on, write protect and Type 0:MMC, 1:SDC, 2:Block addressing
 
 // Debug functions, 0 to disable
 #define DEBUG 0
-int shell_printf(const char *fmt, ...);
+int shell_printf(const char* fmt, ...);
 #define DEBUG_PRINT(...)                                                                           \
   do {                                                                                             \
     if (DEBUG)                                                                                     \
@@ -1251,7 +1254,7 @@ static void sd_unselect_spi(void) {
 #ifdef SD_USE_COMMAND_CRC
 #define CRC7_POLY 0x89
 #define CRC7_INIT 0x00
-static uint8_t crc7(const uint8_t *ptr, uint16_t count) {
+static uint8_t crc7(const uint8_t* ptr, uint16_t count) {
   uint8_t crc = CRC7_INIT;
   uint8_t i = 0;
   while (count--) {
@@ -1269,7 +1272,7 @@ static uint8_t crc7(const uint8_t *ptr, uint16_t count) {
 #ifdef SD_USE_DATA_CRC
 #define CRC16_POLY 0x1021
 #define CRC16_INIT 0x0000
-static uint16_t crc16(const uint8_t *ptr, uint16_t count) {
+static uint16_t crc16(const uint8_t* ptr, uint16_t count) {
   uint16_t crc = CRC16_INIT;
 #if DEBUG == 1
   crc_time -= chVTGetSystemTimeX();
@@ -1337,7 +1340,7 @@ static uint32_t sd_read_be32(void) {
 }
 
 // Receive data block from SD
-static bool sd_rx_data_block(uint8_t *buff, uint16_t len, uint8_t token) {
+static bool sd_rx_data_block(uint8_t* buff, uint16_t len, uint8_t token) {
   if (!sd_wait_data_token(token, MS2ST(100))) {
     DEBUG_PRINT(" rx sd_wait_data_token err\r\n");
     return FALSE;
@@ -1348,7 +1351,7 @@ static bool sd_rx_data_block(uint8_t *buff, uint16_t len, uint8_t token) {
   spi_rx_buffer(buff, len);
 #endif
   uint16_t crc;
-  spi_rx_buffer((uint8_t *)&crc, 2);
+  spi_rx_buffer((uint8_t*)&crc, 2);
 #ifdef SD_USE_DATA_CRC
   uint16_t bcrc = crc16(buff, len);
   if (crc != bcrc) {
@@ -1360,7 +1363,7 @@ static bool sd_rx_data_block(uint8_t *buff, uint16_t len, uint8_t token) {
 }
 
 // Transmit data block to SD
-static bool sd_tx_data_block(const uint8_t *buff, uint16_t len, uint8_t token) {
+static bool sd_tx_data_block(const uint8_t* buff, uint16_t len, uint8_t token) {
   uint8_t r1;
   /*
    * SD cards keep the DO line low while programming the previous block.  Make
@@ -1373,7 +1376,7 @@ static bool sd_tx_data_block(const uint8_t *buff, uint16_t len, uint8_t token) {
 #ifdef __USE_SDCARD_DMA__
   spi_dma_tx_buffer(buff, len, false);
 #else
-  spi_tx_buffer((uint8_t *)buff, len);
+  spi_tx_buffer((uint8_t*)buff, len);
 #endif
 #ifdef SD_USE_DATA_CRC
   uint16_t bcrc = crc16(buff, len);
@@ -1381,7 +1384,7 @@ static bool sd_tx_data_block(const uint8_t *buff, uint16_t len, uint8_t token) {
   uint16_t bcrc = 0xFFFF;
 #endif
 #ifdef __USE_SDCARD_DMA__
-  dmaWaitCompletion(SD_DMA_TX);
+  dmaChannelWaitCompletion(SD_DMA_TX);
 #endif
   spi_tx_byte((bcrc >> 0) & 0xFF);
   spi_tx_byte((bcrc >> 8) & 0xFF);
@@ -1410,11 +1413,10 @@ static uint8_t sd_send_cmd(uint8_t cmd, uint32_t arg) {
     buf[5] = crc7(buf, 5) | 0x01;
 #else
     uint8_t crc = 0x01;
-    if (cmd == CMD0) {
+    if (cmd == CMD0)
       crc = 0x95;
-    } else if (cmd == CMD8) {
+    else if (cmd == CMD8)
       crc = 0x87;
-    }
     buf[5] = crc;
 #endif
     spi_tx_buffer(buf, 6);
@@ -1451,7 +1453,7 @@ DSTATUS disk_initialize(BYTE pdrv) {
 #endif
   if (pdrv != 0)
     return disk_status(pdrv);
-  card_status = 0;
+  CardStatus = 0;
   LCD_CS_HIGH;
   for (int n = 0; n < 10; n++)
     spi_rx_byte();
@@ -1488,11 +1490,10 @@ DSTATUS disk_initialize(BYTE pdrv) {
       uint8_t cmd = (r1 <= 1) ? ACMD41 : CMD1;
       uint32_t cnt = 100;
       do {
-        if (cmd == ACMD41) {
+        if (cmd == ACMD41)
           r1 = sd_send_cmd(ACMD41, host_ocr);
-        } else {
+        else
           r1 = sd_send_cmd(CMD1, 0);
-        }
         if (r1 == 0)
           break;
         chThdSleepMilliseconds(10);
@@ -1503,7 +1504,7 @@ DSTATUS disk_initialize(BYTE pdrv) {
   }
   sd_unselect_spi();
   if (type)
-    card_status = CT_POWER_ON | type;
+    CardStatus = CT_POWER_ON | type;
   return disk_status(pdrv);
 }
 
@@ -1511,12 +1512,12 @@ DSTATUS disk_initialize(BYTE pdrv) {
 DSTATUS disk_status(BYTE pdrv) {
   if (pdrv != 0)
     return STA_NOINIT;
-  return card_status == 0 ? STA_NOINIT : 0;
+  return CardStatus == 0 ? STA_NOINIT : 0;
 }
 
 // diskio.c - Read sector
-DRESULT disk_read(BYTE pdrv, BYTE *buff, DWORD sector, UINT count) {
-  if (pdrv != 0 || !(card_status & CT_POWER_ON))
+DRESULT disk_read(BYTE pdrv, BYTE* buff, DWORD sector, UINT count) {
+  if (pdrv != 0 || !(CardStatus & CT_POWER_ON))
     return RES_NOTRDY;
 #if DEBUG == 1
   r_cnt += count;
@@ -1525,7 +1526,7 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, DWORD sector, UINT count) {
   sd_select_spi(SD_SPI_RX_SPEED);
   while (count) {
     DWORD addr = sector;
-    if (!(card_status & CT_BLOCK))
+    if (!(CardStatus & CT_BLOCK))
       addr *= SD_SECTOR_SIZE;
     if (sd_send_cmd(CMD17, addr) != 0 ||
         !sd_rx_data_block(buff, SD_SECTOR_SIZE, SD_TOKEN_START_BLOCK))
@@ -1544,10 +1545,10 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, DWORD sector, UINT count) {
 }
 
 // diskio.c - Write sector
-DRESULT disk_write(BYTE pdrv, const BYTE *buff, DWORD sector, UINT count) {
-  if (pdrv != 0 || !(card_status & CT_POWER_ON))
+DRESULT disk_write(BYTE pdrv, const BYTE* buff, DWORD sector, UINT count) {
+  if (pdrv != 0 || !(CardStatus & CT_POWER_ON))
     return RES_NOTRDY;
-  if (card_status & CT_WRPROTECT)
+  if (CardStatus & CT_WRPROTECT)
     return RES_WRPRT;
 #if DEBUG == 1
   w_cnt += count;
@@ -1556,7 +1557,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, DWORD sector, UINT count) {
   sd_select_spi(SD_SPI_SPEED);
   while (count) {
     DWORD addr = sector;
-    if (!(card_status & CT_BLOCK))
+    if (!(CardStatus & CT_BLOCK))
       addr *= SD_SECTOR_SIZE;
     if (sd_send_cmd(CMD24, addr) != 0 ||
         !sd_tx_data_block(buff, SD_SECTOR_SIZE, SD_TOKEN_START_BLOCK))
@@ -1576,10 +1577,10 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, DWORD sector, UINT count) {
 }
 
 // diskio.c - Control device specific features
-DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff) {
+DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff) {
   (void)buff;
   DRESULT res = RES_PARERR;
-  if (pdrv != 0 || !(card_status & CT_POWER_ON))
+  if (pdrv != 0 || !(CardStatus & CT_POWER_ON))
     return RES_NOTRDY;
   sd_select_spi(SD_SPI_RX_SPEED);
   switch (cmd) {
@@ -1593,13 +1594,13 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff) {
 #endif
 #if FF_MAX_SS > FF_MIN_SS
   case GET_SECTOR_SIZE:
-    *(uint16_t *)buff = SD_SECTOR_SIZE;
+    *(uint16_t*)buff = SD_SECTOR_SIZE;
     res = RES_OK;
     break;
 #endif
 #if FF_USE_MKFS == 1
   case GET_BLOCK_SIZE:
-    *(uint16_t *)buff = 1;
+    *(uint16_t*)buff = 1;
     res = RES_OK;
     break;
   case GET_SECTOR_COUNT: {
@@ -1608,15 +1609,16 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff) {
       uint32_t sectors = 0;
       if ((csd[0] >> 6) == 1) {
         /* CSD version 2.0 (SDHC/SDXC): memory capacity = (C_SIZE + 1) * 512K */
-        uint32_t csize =
-          ((uint32_t)(csd[7] & 0x3F) << 16) | ((uint32_t)csd[8] << 8) | ((uint32_t)csd[9] << 0);
+        uint32_t csize = ((uint32_t)(csd[7] & 0x3F) << 16) | ((uint32_t)csd[8] << 8) |
+                         ((uint32_t)csd[9] << 0);
         sectors = (csize + 1U) << 10; /* 512 byte sectors */
       } else {
         /* CSD version 1.0 (SDSC) and MMC */
-        uint32_t csize =
-          ((uint32_t)(csd[6] & 0x03) << 10) | ((uint32_t)csd[7] << 2) | ((uint32_t)csd[8] >> 6);
+        uint32_t csize = ((uint32_t)(csd[6] & 0x03) << 10) | ((uint32_t)csd[7] << 2) |
+                         ((uint32_t)csd[8] >> 6);
         /* Bits 49:47 hold C_SIZE_MULT with the least significant bit at csd[10].7. */
-        uint32_t csize_mult = ((uint32_t)(csd[9] & 0x03) << 1) | ((uint32_t)(csd[10] & 0x80) >> 7);
+        uint32_t csize_mult = ((uint32_t)(csd[9] & 0x03) << 1) |
+                              ((uint32_t)(csd[10] & 0x80) >> 7);
         uint32_t read_bl_len = csd[5] & 0x0F;
         if (read_bl_len <= 31U) {
           uint32_t block_len = 1U << read_bl_len;
@@ -1626,7 +1628,7 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff) {
         }
       }
       if (sectors != 0U) {
-        *(uint32_t *)buff = sectors;
+        *(uint32_t*)buff = sectors;
         res = RES_OK;
       }
     }
@@ -1640,3 +1642,7 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff) {
   return res;
 }
 #endif
+
+void lcd_set_font(int font) {
+  (void)font;
+}

@@ -22,6 +22,24 @@
 
 #pragma once
 #include "halconf.h"
+#include "core/config_macros.h"
+
+#ifndef USE_RTC
+#define USE_RTC
+#endif
+#ifdef USE_RTC
+#define __USE_RTC__
+#endif
+#ifdef USE_BACKUP
+#define __USE_BACKUP__
+#endif
+#ifdef REMOTE_DESKTOP
+#define __REMOTE_DESKTOP__
+#endif
+#ifdef USE_SD_CARD
+#define __USE_SD_CARD__
+#endif
+
 /*
  * adc.c
  * Used for:
@@ -87,13 +105,13 @@ int16_t adc_vbat_read(void);          // Read battery voltage
 
 void i2c_start(void);
 void i2c_set_timings(uint32_t timings);
-bool i2c_transfer(uint8_t addr, const uint8_t *w, size_t wn);
-bool i2c_receive(uint8_t addr, const uint8_t *w, size_t wn, uint8_t *r, size_t rn);
+bool i2c_transfer(uint8_t addr, const uint8_t* w, size_t wn);
+bool i2c_receive(uint8_t addr, const uint8_t* w, size_t wn, uint8_t* r, size_t rn);
 
 /*
  * rtc.c
  */
-#ifdef USE_RTC
+#ifdef __USE_RTC__
 #define RTC_START_YEAR 2000
 
 #define RTC_DR_YEAR(dr) (((dr) >> 16) & 0xFF)
@@ -132,8 +150,8 @@ float rtc_get_cal(void);
 /*
  * Backup
  */
-#ifdef USE_BACKUP
-inline uint32_t get_backup_data32(uint16_t id) {
+#ifdef __USE_BACKUP__
+static inline uint32_t get_backup_data32(uint16_t id) {
   switch (id) {
   case 0:
     return RTC->BKP0R;
@@ -148,7 +166,7 @@ inline uint32_t get_backup_data32(uint16_t id) {
   }
   return 0;
 }
-inline void set_backup_data32(uint16_t id, uint32_t data) {
+static inline void set_backup_data32(uint16_t id, uint32_t data) {
   switch (id) {
   case 0:
     RTC->BKP0R = data;
@@ -181,7 +199,7 @@ void dac_setvalue_ch2(uint16_t v);
  * i2s.c
  * Used for read samples from audio codec
  */
-void init_i2s(void *buffer, uint16_t count);
+void init_i2s(void* buffer, uint16_t count);
 
 /*
  * flash.c
@@ -203,7 +221,7 @@ void init_i2s(void *buffer, uint16_t count);
 
 // Flash region reserved for calibration/configuration storage (matches linker flash7)
 #define FLASH_CALIBRATION_SECTOR_START 0x0801C800U
-#define FLASH_CALIBRATION_SECTOR_SIZE 0x0001C800U
+#define FLASH_CALIBRATION_SECTOR_SIZE  0x0001C800U
 #else
 // For STM32F072xB CPU setting
 #define FLASH_START_ADDRESS 0x08000000
@@ -220,13 +238,13 @@ void init_i2s(void *buffer, uint16_t count);
 
 // Flash region reserved for calibration/configuration storage (matches linker flash7)
 #define FLASH_CALIBRATION_SECTOR_START 0x08018800U
-#define FLASH_CALIBRATION_SECTOR_SIZE 0x00007800U
+#define FLASH_CALIBRATION_SECTOR_SIZE  0x00007800U
 #endif
 
 // Save config_t and properties_t flash area (see flash7 from *.ld settings)
 #define SAVE_FULL_AREA_SIZE (SAVE_CONFIG_SIZE + SAVEAREA_MAX * SAVE_PROP_CONFIG_SIZE)
 // Save setting at end of calibration flash region, keeping the data packed at the top.
-#define SAVE_CONFIG_ADDR                                                                           \
+#define SAVE_CONFIG_ADDR                                                                             \
   (FLASH_CALIBRATION_SECTOR_START + FLASH_CALIBRATION_SECTOR_SIZE - SAVE_CONFIG_SIZE)
 // Properties save area before config
 #define SAVE_PROP_CONFIG_ADDR (SAVE_CONFIG_ADDR - SAVEAREA_MAX * SAVE_PROP_CONFIG_SIZE)
@@ -241,7 +259,7 @@ void init_i2s(void *buffer, uint16_t count);
 // Erase settings on page
 void flash_erase_pages(uint32_t page_address, uint32_t size);
 // Write data
-void flash_program_half_word_buffer(uint16_t *dst, uint16_t *data, uint16_t size);
+void flash_program_half_word_buffer(uint16_t* dst, uint16_t* data, uint16_t size);
 
 /*
  * gpio.c
@@ -292,13 +310,13 @@ void flash_program_half_word_buffer(uint16_t *dst, uint16_t *data, uint16_t size
 
 void init_pal(void);
 
-#define PAL_SET_PAD(port, bit) (port)->BSRR = 1 << ((bit) + 0)
-#define PAL_CLEAR_PAD(port, bit) (port)->BSRR = 1 << ((bit) + 16)
-#define PAL_READ_PORT(port) ((port)->IDR)
+#define palSetPad(port, bit) (port)->BSRR = 1 << ((bit) + 0)
+#define palClearPad(port, bit) (port)->BSRR = 1 << ((bit) + 16)
+#define palReadPort(port) ((port)->IDR)
 
 // #define palSetPadMode(port, bit, mask)  palSetPadGroupMode(port, 1U<<(bit), mask)
-void pal_set_pad_mode(GPIO_TypeDef *port, int bit, uint32_t mode);
-void pal_set_pad_group_mode(GPIO_TypeDef *port, uint32_t mask, uint32_t mode);
+void palSetPadMode(GPIO_TypeDef* port, int bit, uint32_t mode);
+void palSetPadGroupMode(GPIO_TypeDef* port, uint32_t mask, uint32_t mode);
 #endif
 
 /*
@@ -307,7 +325,7 @@ void pal_set_pad_group_mode(GPIO_TypeDef *port, uint32_t mask, uint32_t mode);
 #define I2S_DMA_RX DMA1_Channel4 // DMA1 channel 4 use for I2S rx
 
 // Interrupt handler for DMA
-extern void i2s_lld_serve_rx_interrupt(void *p, uint32_t flags);
+extern void i2s_lld_serve_rx_interrupt(uint32_t flags);
 // #define DMA1_CH1_HANDLER_FUNC
 // #define DMA1_CH2_HANDLER_FUNC
 // #define DMA1_CH3_HANDLER_FUNC
@@ -316,20 +334,32 @@ extern void i2s_lld_serve_rx_interrupt(void *p, uint32_t flags);
 // #define DMA1_CH6_HANDLER_FUNC
 // #define DMA1_CH7_HANDLER_FUNC
 
-#define DMA_CHANNEL_SET_MEMORY(ch, addr)                                                           \
-  { (ch)->CMAR = (uint32_t)(addr); }
-#define DMA_CHANNEL_SET_PERIPHERAL(ch, addr)                                                       \
-  { (ch)->CPAR = (uint32_t)(addr); }
-#define DMA_CHANNEL_SET_TRANSACTION_SIZE(ch, size)                                                 \
-  { (ch)->CNDTR = (uint32_t)(size); }
-#define DMA_CHANNEL_GET_TRANSACTION_SIZE(ch) ((ch)->CNDTR)
-#define DMA_CHANNEL_SET_MODE(ch, mode)                                                             \
-  { (ch)->CCR = (uint32_t)(mode); }
-#define DMA_CHANNEL_ENABLE(ch)                                                                     \
-  { (ch)->CCR |= STM32_DMA_CR_EN; }
-#define DMA_CHANNEL_DISABLE(ch)                                                                    \
-  { (ch)->CCR &= ~STM32_DMA_CR_EN; }
-#define DMA_CHANNEL_WAIT_COMPLETION(ch)                                                            \
+#define dmaChannelSetMemory(ch, addr)                                                              \
+  {                                                                                                \
+    (ch)->CMAR = (uint32_t)(addr);                                                                 \
+  }
+#define dmaChannelSetPeripheral(ch, addr)                                                          \
+  {                                                                                                \
+    (ch)->CPAR = (uint32_t)(addr);                                                                 \
+  }
+#define dmaChannelSetTransactionSize(ch, size)                                                     \
+  {                                                                                                \
+    (ch)->CNDTR = (uint32_t)(size);                                                                \
+  }
+#define dmaChannelGetTransactionSize(ch) ((ch)->CNDTR)
+#define dmaChannelSetMode(ch, mode)                                                                \
+  {                                                                                                \
+    (ch)->CCR = (uint32_t)(mode);                                                                  \
+  }
+#define dmaChannelEnable(ch)                                                                       \
+  {                                                                                                \
+    (ch)->CCR |= STM32_DMA_CR_EN;                                                                  \
+  }
+#define dmaChannelDisable(ch)                                                                      \
+  {                                                                                                \
+    (ch)->CCR &= ~STM32_DMA_CR_EN;                                                                 \
+  }
+#define dmaChannelWaitCompletion(ch)                                                               \
   {                                                                                                \
     while ((ch)->CNDTR > 0)                                                                        \
       ;                                                                                            \
@@ -355,7 +385,7 @@ extern void i2s_lld_serve_rx_interrupt(void *p, uint32_t flags);
 #define EXT_CH_MODE_FALLING_EDGE 2U
 #define EXT_CH_MODE_BOTH_EDGES 3U
 
-void ext_start(void);
+void extStart(void);
 void ext_channel_enable(uint16_t channel, uint16_t mode);
 #endif
 
@@ -366,8 +396,8 @@ void ext_channel_enable(uint16_t channel, uint16_t mode);
 // Run TIM2 as us timer counter
 // Run TIM3 as ms timer counter
 void board_init_timers(void);
-void board_start_timer(TIM_TypeDef *timer, uint32_t period);
-inline uint32_t board_get_counter(TIM_TypeDef *timer) {
+void board_start_timer(TIM_TypeDef* timer, uint32_t period);
+static inline uint32_t board_get_counter(TIM_TypeDef *timer) {
   return timer->CNT;
 }
 #endif

@@ -84,7 +84,7 @@ uint8_t get_smooth_factor(void);
 
 void sweep_service_set_sample_function(void (*func)(float *));
 
-void i2s_lld_serve_rx_interrupt(void *p, uint32_t flags);
+void i2s_lld_serve_rx_interrupt(uint32_t flags);
 
 #ifdef __cplusplus
 }

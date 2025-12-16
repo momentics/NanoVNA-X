@@ -228,8 +228,7 @@ static void duplicate_buffer_to_dump(audio_sample_t *p, size_t n) {
 }
 #endif
 
-void i2s_lld_serve_rx_interrupt(void *ctx, uint32_t flags) {
-  (void)ctx;
+void i2s_lld_serve_rx_interrupt(uint32_t flags) {
   uint16_t wait = wait_count;
   if (wait == 0U || chVTGetSystemTimeX() < ready_time) {
     return;

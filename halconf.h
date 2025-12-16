@@ -174,7 +174,7 @@
 #define HAL_USE_WDG FALSE
 #endif
 
-#define STM32_DMA_REQUIRED
+// #define STM32_DMA_REQUIRED
 /*===========================================================================*/
 /* ADC driver related settings.                                              */
 /*===========================================================================*/
