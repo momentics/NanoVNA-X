@@ -46,10 +46,31 @@ static void ui_show_version(void) {
 //lcd_drawstring(x, y += str_height, USING_OS_NAME);
 //lcd_drawstring(x, y += str_height, MCU_NAME);
 
-  while (ui_input_wait_release() == 0)
+  // Wait for release of entry button first
+  systime_t start = chVTGetSystemTimeX();
+  while (ui_input_wait_release() == 0) {
     chThdSleepMilliseconds(100);
-  while (ui_input_check() == 0)
+    if (chVTTimeElapsedSinceX(start) > MS2ST(30000))
+      return;
+  }
+
+  // Wait for input or timeout
+  int tstat = 0;
+  while (1) {
+    if (chVTTimeElapsedSinceX(start) > MS2ST(30000))
+      break;
+    if (ui_input_check() != 0)
+      break;
+    tstat = touch_check();
+    // EVT_TOUCH_NONE = 0
+    if (tstat != 0)
+      break;
     chThdSleepMilliseconds(100);
+  }
+  
+  // Wait for release
+  if (tstat != 0)
+    touch_wait_release();
   while (ui_input_wait_release() != 0)
     chThdSleepMilliseconds(100);
   request_to_redraw(REDRAW_ALL);
