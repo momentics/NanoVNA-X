@@ -217,15 +217,18 @@ static inline int32_t pack_sincos_pair(size_t index) {
 
 static inline int32_t pack_capture_pair(const audio_sample_t* capture, size_t pair_index) {
   size_t base = pair_index * 2U;
-#ifdef NANOVNA_F303
-  // Swap order for F303 to fix byte/sample ordering
-  uint32_t low = (uint32_t)(uint16_t)capture[base + 1U];
-  uint32_t high = ((uint32_t)(uint16_t)capture[base]) << 16;
-#else
+  // Standard channel order: Ref=low, Smp=high
   uint32_t low = (uint32_t)(uint16_t)capture[base];
   uint32_t high = ((uint32_t)(uint16_t)capture[base + 1U]) << 16;
+  uint32_t val = high | low;
+
+#ifdef NANOVNA_F303
+  // Fix byte ordering issue on F303 by swapping bytes in each 16-bit halfword
+  // 0xAABBCCDD -> 0xBBAADDCC
+  val = ((val & 0xFF00FF00) >> 8) | ((val & 0x00FF00FF) << 8);
 #endif
-  return (int32_t)(high | low);
+  
+  return (int32_t)val;
 }
 
 void dsp_process(audio_sample_t* capture, size_t length) {
