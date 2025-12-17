@@ -123,8 +123,8 @@
 #define REG_27_INTERFACE_RJF (2 << 6)
 #define REG_27_INTERFACE_LJF (3 << 6)
 
-// Set the interface mode: 16 bit, BCLK, WCLK as output, LJF mode
-#define REG_27 (REG_27_DATA_16 | REG_27_INTERFACE_LJF | REG_27_WCLK_OUT | REG_27_BCLK_OUT)
+// Set the interface mode: 16 bit, LJF mode, BCLK & WCLK as INPUT (High-Z) initially
+#define REG_27 (REG_27_DATA_16 | REG_27_INTERFACE_LJF | REG_27_WCLK_IN | REG_27_BCLK_IN)
 #define REG_30(n) (0x80 + ((n) * sizeof(int16_t) / sizeof(audio_sample_t)))
 
 static const uint8_t conf_data[] = {
@@ -505,4 +505,10 @@ void tlv320aic3204_set_gain(uint8_t lgain, uint8_t rgain) {
   };
   //  tlv320aic3204_config(data, sizeof(data)/2);
   tlv320aic3204_bulk_write(data, sizeof(data));
+}
+
+void tlv320aic3204_start_clocks(void) {
+  // Set the interface mode: 16 bit, LJF mode, BCLK & WCLK as OUTPUT
+  // This is called after I2S is enabled to ensure synchronization
+  tlv320aic3204_write_reg(1, 27, REG_27_DATA_16 | REG_27_INTERFACE_LJF | REG_27_WCLK_OUT | REG_27_BCLK_OUT);
 }

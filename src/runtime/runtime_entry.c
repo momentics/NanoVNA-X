@@ -768,11 +768,18 @@ int runtime_main(void) {
    */
   tlv320aic3204_init();
   chThdSleepMilliseconds(200); // Wait for aic codec start
-                               /*
-                                * I2S Initialize
-                                */
+
+  /*
+   * I2S Initialize
+   */
   init_i2s((void*)sweep_service_rx_buffer(),
            (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
+
+  /*
+   * Enable codec clocks output (delayed to ensure I2S is ready)
+   */
+  chThdSleepMilliseconds(10);
+  tlv320aic3204_start_clocks();
 
 /*
  * SD Card init (if inserted) allow fix issues
