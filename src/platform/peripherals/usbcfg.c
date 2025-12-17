@@ -25,7 +25,7 @@ SerialUSBDriver SDU1;
 /*
  * Static line coding variable, required by the CDC implementation.
  */
-static cdc_linecoding_t linecoding = {0x00, 0x40, 0x38, 0x00, LC_STOP_1, LC_PARITY_NONE, 8};
+static cdc_linecoding_t linecoding = {{0x00, 0x40, 0x38, 0x00}, LC_STOP_1, LC_PARITY_NONE, 8};
 
 enum { STR_LANG_ID = 0, STR_MANUFACTURER, STR_PRODUCT, STR_SERIAL };
 /*

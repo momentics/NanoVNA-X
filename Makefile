@@ -407,6 +407,17 @@ test: tests
 		"$$suite"; \
 	done
 
+# Define ChibiOS sources and objects (handle potential ./ prefix)
+CHIBIOS_SOURCES := $(filter third_party/ChibiOS/% ./third_party/ChibiOS/%, $(CSRC))
+CHIBIOS_OBJECTS := $(addprefix build/obj/, $(notdir $(CHIBIOS_SOURCES:.c=.o)))
+
+# Define Board sources and objects (also trigger ChibiOS warnings)
+BOARD_SOURCES := $(filter boards/% ./boards/%, $(CSRC))
+BOARD_OBJECTS := $(addprefix build/obj/, $(notdir $(BOARD_SOURCES:.c=.o)))
+
+# Apply warning suppression only to ChibiOS and Board objects
+$(CHIBIOS_OBJECTS) $(BOARD_OBJECTS): CWARN += -Wno-implicit-fallthrough -Wno-deprecated
+
 RULESPATH = $(CHIBIOS)/os/common/startup/ARMCMx/compilers/GCC
 include $(RULESPATH)/rules.mk
 

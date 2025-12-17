@@ -65,7 +65,11 @@ typedef uint16_t pixel_t;
 #define LCD_PIXEL_SIZE        2
 // Cell size, depends from spi_buffer size, CELLWIDTH*CELLHEIGHT*sizeof(pixel) <= sizeof(spi_buffer)
 #define CELLWIDTH  (64 / DISPLAY_CELL_BUFFER_COUNT)
+#if defined(NANOVNA_F303)
+#define CELLHEIGHT (27)
+#else
 #define CELLHEIGHT (16)
+#endif
 #endif
 
 // Define size of screen buffer in pixel_t (need for cell w * h * count)
