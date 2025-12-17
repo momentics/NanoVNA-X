@@ -23,6 +23,9 @@
 // Use math.h functions if need
 #include <math.h>
 
+#define VNA_EPSILON 1e-9f
+
+
 #ifndef __FPU_PRESENT
 #define __FPU_PRESENT 0
 #endif

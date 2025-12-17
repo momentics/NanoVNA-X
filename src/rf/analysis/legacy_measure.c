@@ -25,12 +25,21 @@
 #pragma GCC optimize("Os")
 
 // Memory for measure cache data
-static char measure_memory[128];
+#include <stdalign.h>
+static char alignas(8) measure_memory[128];
 
 // Measure math functions
 // quadratic function solver
 static void match_quadratic_equation(float a, float b, float c, float* x) {
   const float a_x_2 = 2.0f * a;
+  if (fabsf(a_x_2) < VNA_EPSILON) {
+     if (fabsf(b) > VNA_EPSILON) {
+         x[0] = x[1] = -c / b;
+     } else {
+         x[0] = x[1] = 0.0f;
+     }
+     return;
+  }
   const float d = (b * b) - (2.0f * a_x_2 * c);
   if (d < 0) {
     x[0] = x[1] = 0.0f;
@@ -56,6 +65,7 @@ static float measure_search_value(uint16_t* idx, float y, get_value_t get, int16
   y1 = y2 = y3 = get(x);
   bool result = (y3 > y); // current position depend from start point
   for (; x < sweep_points; x += mode) {
+    if (mode < 0 && x == 0) break;
     y3 = get(x);
     if (result != (y3 > y))
       break;
@@ -114,6 +124,7 @@ static float search_peak_value(uint16_t* xp, get_value_t get, bool mode) {
   const float a = 8.0f * (y1 - 2.0f * y2 + y3);
   const float b = y3 - y1;
   const float c = y2;
+  if (fabsf(a) < VNA_EPSILON) return c;
   return c - b * b / a;
 }
 
@@ -762,12 +773,12 @@ static void prepare_s11_cable(uint8_t type, uint8_t update_mask) {
     uint16_t x = 0;
     f1 = measure_search_value(&x, 0, s11imag, MEASURE_SEARCH_RIGHT, MARKER_INVALID);
     if (f1) {
-      float electric_lengh = (SPEED_OF_LIGHT / 400.0f) / f1;
+      float electric_length = (SPEED_OF_LIGHT / 400.0f) / f1;
       if (real_cable_len != 0.0f) {
         s11_cable->len = real_cable_len;
-        s11_cable->vf = real_cable_len / electric_lengh;
+        s11_cable->vf = real_cable_len / electric_length;
       } else
-        s11_cable->len = velocity_factor * electric_lengh;
+        s11_cable->len = velocity_factor * electric_length;
       float data[2];
       if (measure_get_value(0, f1 / 2, data)) {
         s11_cable->R = vna_fabsf(reactance(0, data));
