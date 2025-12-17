@@ -208,7 +208,7 @@ static const uint8_t conf_data[] = {
     0x1b,
     REG_27, // Set the interface mode
     0x1e,
-    REG_30(32), // Enable the BCLKN divider with value 32 (I2S clock = 98.304MHz/(NDAC*32) = 48kHz *
+    REG_30(16), // Enable the BCLKN divider with value 16 (I2S clock = 98.304MHz/(NDAC*16) = 48kHz *
                 // (16+16)
 #elif AUDIO_ADC_FREQ == 24000
     // Clock config, default fs=24kHz
@@ -236,7 +236,7 @@ static const uint8_t conf_data[] = {
     0x1b,
     REG_27, // Set the interface mode
     0x1e,
-    REG_30(32), // Enable the BCLKN divider with value 32 (I2S clock = 98.304MHz/(NDAC*32) = 48kHz *
+    REG_30(16), // Enable the BCLKN divider with value 16 (I2S clock = 98.304MHz/(NDAC*16) = 48kHz *
                 // (16+16)
 #elif AUDIO_ADC_FREQ == 48000
     // Clock config, default fs=48kHz
@@ -264,7 +264,7 @@ static const uint8_t conf_data[] = {
     0x1b,
     REG_27, // Set the interface mode
     0x1e,
-    REG_30(32), // Enable the BCLKN divider with value 32 (I2S clock = 98.304MHz/(NDAC*32) = 48kHz *
+    REG_30(16), // Enable the BCLKN divider with value 16 (I2S clock = 98.304MHz/(NDAC*16) = 48kHz *
                 // (16+16)
 #elif AUDIO_ADC_FREQ == 96000
     // Clock config, default fs=96kHz
@@ -292,7 +292,7 @@ static const uint8_t conf_data[] = {
     0x1b,
     REG_27, // Set the interface mode
     0x1e,
-    REG_30(16), // Enable the BCLKN divider with value 16 (I2S clock = 98.304MHz/(NDAC*16) = 96kHz *
+    REG_30(8), // Enable the BCLKN divider with value 8 (I2S clock = 98.304MHz/(NDAC*8) = 96kHz *
                 // (16+16)
 #elif AUDIO_ADC_FREQ == 192000
     // Clock config, default fs=192kHz
