@@ -770,16 +770,19 @@ int runtime_main(void) {
   chThdSleepMilliseconds(200); // Wait for aic codec start
 
   /*
+   * Enable codec clocks output FIRST
+   * This ensures I2S inputs are driven (not floating) when I2S peripheral is enabled.
+   * Prevents F072 hang due to noise on floating I2S pins.
+   */
+  tlv320aic3204_start_clocks();
+  chThdSleepMilliseconds(10); // Short stabilization wait
+
+  /*
    * I2S Initialize
+   * Now safe to enable I2S as Slave, as clocks are present.
    */
   init_i2s((void*)sweep_service_rx_buffer(),
            (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
-
-  /*
-   * Enable codec clocks output (delayed to ensure I2S is ready)
-   */
-  chThdSleepMilliseconds(100);
-  tlv320aic3204_start_clocks();
 
 /*
  * SD Card init (if inserted) allow fix issues
