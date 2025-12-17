@@ -178,7 +178,6 @@ This separation lets you trace dependencies easily (e.g. `ui/` depends on `infra
 NanoVNA-X uses a standard GNU Make workflow and the Arm GNU GCC toolchain.
 See [`doc/building.md`](doc/building.md) for a fully detailed guide; the
 Russian translation is available in [`doc/building_ru.md`](doc/building_ru.md).
-summary below outlines the essential steps for a clean build.
 
 ## Companion Tools
 
@@ -200,7 +199,7 @@ There are several numbers of great companion PC tools from third-party.
 
 * [Schematics](/doc/nanovna-sch.pdf)
 * [PCB Photo](/doc/nanovna-pcb-photo.jpg)
-* [Block Diagram](/doc/nanovna-blockdiagram.png)
+
 
 ## Note
 
