@@ -125,8 +125,8 @@
 #define REG_27_DRIVE_ZERO (1 << 0)
 #define REG_29_BCLK_INV (1 << 3)
 
-// Set the interface mode: 16 bit, DSP mode, BCLK & WCLK as INPUT (High-Z) initially
-#define REG_27 (REG_27_DATA_16 | REG_27_INTERFACE_DSP | REG_27_WCLK_IN | REG_27_BCLK_IN)
+// Set the interface mode: 16 bit, DSP mode, BCLK & WCLK as OUTPUT (Matching Reference FW)
+#define REG_27 (REG_27_DATA_16 | REG_27_INTERFACE_DSP | REG_27_WCLK_OUT | REG_27_BCLK_OUT)
 #define REG_30(n) (0x80 + ((n) * sizeof(int16_t) / sizeof(audio_sample_t)))
 
 static const uint8_t conf_data[] = {
