@@ -778,7 +778,7 @@ int runtime_main(void) {
   /*
    * Enable codec clocks output (delayed to ensure I2S is ready)
    */
-  chThdSleepMilliseconds(10);
+  chThdSleepMilliseconds(100);
   tlv320aic3204_start_clocks();
 
 /*
