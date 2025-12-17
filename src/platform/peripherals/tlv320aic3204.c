@@ -125,8 +125,8 @@
 #define REG_27_DRIVE_ZERO (1 << 0)
 #define REG_29_BCLK_INV (1 << 3)
 
-// Set the interface mode: 16 bit, I2S mode, BCLK & WCLK as INPUT (High-Z) initially
-#define REG_27 (REG_27_DATA_16 | REG_27_INTERFACE_I2S | REG_27_WCLK_IN | REG_27_BCLK_IN)
+// Set the interface mode: 16 bit, DSP mode, BCLK & WCLK as INPUT (High-Z) initially
+#define REG_27 (REG_27_DATA_16 | REG_27_INTERFACE_DSP | REG_27_WCLK_IN | REG_27_BCLK_IN)
 #define REG_30(n) (0x80 + ((n) * sizeof(int16_t) / sizeof(audio_sample_t)))
 
 static const uint8_t conf_data[] = {
@@ -209,7 +209,7 @@ static const uint8_t conf_data[] = {
     0x1b,
     REG_27, // Set the interface mode
     0x1e,
-    REG_30(16), // Enable the BCLKN divider with value 16 (I2S clock = 98.304MHz/(NDAC*16) = 48kHz *
+    REG_30(32), // Enable the BCLKN divider with value 32 (I2S clock = 98.304MHz/(NDAC*32) = 48kHz *
                 // (16+16)
 #elif AUDIO_ADC_FREQ == 24000
     // Clock config, default fs=24kHz
@@ -237,7 +237,7 @@ static const uint8_t conf_data[] = {
     0x1b,
     REG_27, // Set the interface mode
     0x1e,
-    REG_30(16), // Enable the BCLKN divider with value 16 (I2S clock = 98.304MHz/(NDAC*16) = 48kHz *
+    REG_30(32), // Enable the BCLKN divider with value 32 (I2S clock = 98.304MHz/(NDAC*32) = 48kHz *
                 // (16+16)
 #elif AUDIO_ADC_FREQ == 48000
     // Clock config, default fs=48kHz
@@ -265,7 +265,7 @@ static const uint8_t conf_data[] = {
     0x1b,
     REG_27, // Set the interface mode
     0x1e,
-    REG_30(16), // Enable the BCLKN divider with value 16 (I2S clock = 98.304MHz/(NDAC*16) = 48kHz *
+    REG_30(32), // Enable the BCLKN divider with value 32 (I2S clock = 98.304MHz/(NDAC*32) = 48kHz *
                 // (16+16)
 #elif AUDIO_ADC_FREQ == 96000
     // Clock config, default fs=96kHz
@@ -293,7 +293,7 @@ static const uint8_t conf_data[] = {
     0x1b,
     REG_27, // Set the interface mode
     0x1e,
-    REG_30(8), // Enable the BCLKN divider with value 8 (I2S clock = 98.304MHz/(NDAC*8) = 96kHz *
+    REG_30(16), // Enable the BCLKN divider with value 16 (I2S clock = 98.304MHz/(NDAC*16) = 96kHz *
                 // (16+16)
 #elif AUDIO_ADC_FREQ == 192000
     // Clock config, default fs=192kHz
@@ -510,7 +510,7 @@ void tlv320aic3204_set_gain(uint8_t lgain, uint8_t rgain) {
 }
 
 void tlv320aic3204_start_clocks(void) {
-  // Set the interface mode: 16 bit, I2S mode, BCLK & WCLK as OUTPUT
+  // Set the interface mode: 16 bit, DSP mode, BCLK & WCLK as OUTPUT
   // This is called after I2S is enabled to ensure synchronization
-  tlv320aic3204_write_reg(0, 27, REG_27_DATA_16 | REG_27_INTERFACE_I2S | REG_27_WCLK_OUT | REG_27_BCLK_OUT);
+  tlv320aic3204_write_reg(0, 27, REG_27_DATA_16 | REG_27_INTERFACE_DSP | REG_27_WCLK_OUT | REG_27_BCLK_OUT);
 }
