@@ -45,6 +45,8 @@ freq_t frequency0;
 freq_t frequency1;
 float measure_frequency_step;
 float measured[2][SWEEP_POINTS_MAX][2];
+config_t config;
+properties_t current_props;
 
 static float g_curve_data[SWEEP_POINTS_MAX];
 static float g_regression_x[32];
@@ -93,6 +95,10 @@ freq_t get_frequency_step(void) {
   return (freq_t)measure_frequency_step;
 }
 
+freq_t get_sweep_frequency(uint16_t idx) {
+  return get_frequency(idx);
+}
+
 static float curve_value(uint16_t idx) {
   return g_curve_data[idx];
 }
@@ -120,7 +126,7 @@ void cell_printf(int x, int y, const char* fmt, ...) {
 }
 void markmap_all_markers(void) {}
 
-#include "../../src/rf/analysis/legacy_measure.c"
+#include "rf/analysis/measurement_analysis.h"
 
 static void test_match_quadratic_equation(void) {
   /*
@@ -237,6 +243,8 @@ static void test_parabolic_regression(void) {
 }
 
 int main(void) {
+  memset(&config, 0, sizeof(config));
+  config._measure_r = 50.0f;
   test_match_quadratic_equation();
   test_measure_search_value_right();
   test_measure_search_value_left();

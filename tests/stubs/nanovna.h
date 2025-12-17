@@ -87,6 +87,11 @@ enum { VNA_MODE_CONNECTION = 0 };
 #define S_HENRY    "H"
 #define S_DELTA    "\x17"
 #define CELLHEIGHT 10
+#define CELLWIDTH  10
+#define LCD_WIDTH  320
+#define LCD_HEIGHT 240
+#define LCD_PIXEL_SIZE 2
+typedef uint16_t pixel_t;
 
 #define PORT_Z 50.0f
 // 7. Measure Flags
@@ -104,6 +109,10 @@ float logmag(int i, const float* v);
 freq_t get_marker_frequency(int marker);
 void markmap_all_markers(void);
 void pause_sweep(void);
+void set_marker_index(int marker, int idx);
+freq_t get_frequency(uint16_t idx);
+freq_t get_frequency_step(void);
+freq_t get_sweep_frequency(uint16_t idx);
 
 int parse_line(char* line, char* args[], int max_cnt);
 int get_str_index(const char* value, const char* list);

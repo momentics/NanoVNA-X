@@ -189,6 +189,7 @@ CSRC = $(STARTUPSRC) \
        src/platform/peripherals/tlv320aic3204.c \
        src/processing/dsp_backend.c \
        src/processing/vna_math.c \
+       src/rf/analysis/measurement_analysis.c \
        src/processing/calibration.c \
        src/ui/display/plot.c \
        src/ui/display/grid.c \
@@ -373,7 +374,7 @@ $(TEST_BUILD_DIR)/test_measurement_pipeline: tests/unit/test_measurement_pipelin
 $(TEST_BUILD_DIR)/test_dsp_backend: tests/unit/test_dsp_backend.c src/processing/dsp_backend.c | $(TEST_BUILD_DIR)
 	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
-$(TEST_BUILD_DIR)/test_legacy_measure: tests/unit/test_legacy_measure.c src/processing/vna_math.c | $(TEST_BUILD_DIR)
+$(TEST_BUILD_DIR)/test_legacy_measure: tests/unit/test_legacy_measure.c src/processing/vna_math.c src/rf/analysis/measurement_analysis.c | $(TEST_BUILD_DIR)
 	$(HOST_CC) $(HOST_CFLAGS) -Wno-unused-function -Wno-unused-variable -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_event_bus: tests/unit/test_event_bus.c src/infra/event/event_bus.c | $(TEST_BUILD_DIR)
