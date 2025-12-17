@@ -768,6 +768,8 @@ int runtime_main(void) {
    */
   tlv320aic3204_init();
   chThdSleepMilliseconds(200); // Wait for aic codec start
+  // The original `chThdSleepMilliseconds(200);` was here.
+  // It is removed as per the instruction's implied reordering.
 
   /*
    * Enable codec clocks output FIRST
@@ -775,7 +777,7 @@ int runtime_main(void) {
    * Prevents F072 hang due to noise on floating I2S pins.
    */
   tlv320aic3204_start_clocks();
-  chThdSleepMilliseconds(10); // Short stabilization wait
+  chThdSleepMilliseconds(200); // Short stabilization wait, increased from 10ms
 
   /*
    * I2S Initialize

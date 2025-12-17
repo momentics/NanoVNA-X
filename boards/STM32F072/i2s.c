@@ -69,17 +69,12 @@ void init_i2s(void *buffer, uint16_t count) {
  * Required because ChibiOS V1 DMA LLD doesn't implement the shared vector for F072,
  * and we enabled TCIE/HTIE which triggers this vector.
  * Handled: DMA1 Channel 4 (SPI2/I2S RX)
+ * Note: We clear flags for Channels 4, 5, 6, 7 to be robust against spurious interrupts
+ * stuck in the shared vector, matching Reference Firmware behavior (which clears all).
  */
 OSAL_IRQ_HANDLER(DMA1_Channel4_5_6_7_IRQHandler) {
-  uint32_t isr = DMA1->ISR;
-
-  // Check Channel 4 (I2S RX)
-  if (isr & DMA_ISR_GIF4) {
-    // Clear all flags for Channel 4 (Global, Transfer Complete, Half Transfer, Error)
-    DMA1->IFCR = DMA_IFCR_CGIF4;
-  }
-  
-  // Note: Only Channel 4 is used/handled here. 
-  // If other channels (5,6,7) are used by other drivers, they might be blindly cleared or ignored here.
-  // Given current configuration, this is dedicated to I2S.
+  // Clear all flags for Channels 4, 5, 6, 7
+  // This ensures that if any other channel in this vector triggers (e.g. Ch5 I2S TX),
+  // we don't get stuck in an infinite interrupt loop.
+  DMA1->IFCR = DMA_ISR_GIF4 | DMA_ISR_GIF5 | DMA_ISR_GIF6 | DMA_ISR_GIF7;
 }
