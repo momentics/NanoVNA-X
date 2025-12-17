@@ -510,5 +510,5 @@ void tlv320aic3204_set_gain(uint8_t lgain, uint8_t rgain) {
 void tlv320aic3204_start_clocks(void) {
   // Set the interface mode: 16 bit, LJF mode, BCLK & WCLK as OUTPUT
   // This is called after I2S is enabled to ensure synchronization
-  tlv320aic3204_write_reg(1, 27, REG_27_DATA_16 | REG_27_INTERFACE_LJF | REG_27_WCLK_OUT | REG_27_BCLK_OUT);
+  tlv320aic3204_write_reg(0, 27, REG_27_DATA_16 | REG_27_INTERFACE_LJF | REG_27_WCLK_OUT | REG_27_BCLK_OUT);
 }
