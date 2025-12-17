@@ -32,13 +32,13 @@
 #include <chprintf.h>
 #include <stdarg.h>
 
-static const VNAShellCommand* command_table = NULL;
+static const vna_shell_command* command_table = NULL;
 
 static BaseSequentialStream* shell_stream = NULL;
 static threads_queue_t shell_thread;
 static char* shell_args[VNA_SHELL_MAX_ARGUMENTS + 1];
 static uint16_t shell_nargs;
-static volatile const VNAShellCommand* pending_command = NULL;
+static volatile const vna_shell_command* pending_command = NULL;
 static uint16_t pending_argc = 0;
 static char** pending_argv = NULL;
 static bool shell_skip_linefeed = false;
@@ -265,11 +265,11 @@ void shell_restore_stream(void) {
   PREPARE_STREAM;
 }
 
-void shell_register_commands(const VNAShellCommand* table) {
+void shell_register_commands(const vna_shell_command* table) {
   command_table = table;
 }
 
-const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** argv,
+const vna_shell_command* shell_parse_command(char* line, uint16_t* argc, char*** argv,
                                            const char** name_out) {
   shell_nargs = parse_line(line, shell_args, ARRAY_COUNT(shell_args));
   if (shell_nargs > ARRAY_COUNT(shell_args)) {
@@ -301,7 +301,7 @@ const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** a
   if (command_table == NULL) {
     return NULL;
   }
-  for (const VNAShellCommand* cmd = command_table; cmd->sc_name != NULL; cmd++) {
+  for (const vna_shell_command* cmd = command_table; cmd->sc_name != NULL; cmd++) {
     if (get_str_index(cmd->sc_name, shell_args[0]) == 0) {
       return cmd;
     }
@@ -309,7 +309,7 @@ const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** a
   return NULL;
 }
 
-void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t argc, char** argv) {
+void shell_request_deferred_execution(const vna_shell_command* command, uint16_t argc, char** argv) {
   pending_command = command;
   pending_argc = argc;
   pending_argv = argv;
@@ -324,7 +324,7 @@ void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t a
 void shell_service_pending_commands(void) {
   while (true) {
     osalSysLock();
-    const VNAShellCommand* command = (const VNAShellCommand*)pending_command;
+    const vna_shell_command* command = (const vna_shell_command*)pending_command;
     uint16_t argc = pending_argc;
     char** argv = pending_argv;
     if (command == NULL) {
@@ -420,7 +420,7 @@ void vna_shell_execute_cmd_line(char* line) {
   shell_assign_stream(NULL);
   uint16_t argc = 0;
   char** argv = NULL;
-  const VNAShellCommand* cmd = shell_parse_command(line, &argc, &argv, NULL);
+  const vna_shell_command* cmd = shell_parse_command(line, &argc, &argv, NULL);
   if (cmd != NULL && (cmd->flags & CMD_RUN_IN_LOAD)) {
     cmd->sc_function(argc, argv);
   }

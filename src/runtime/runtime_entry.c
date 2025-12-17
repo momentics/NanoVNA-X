@@ -130,6 +130,15 @@ static void usb_command_session_started(void) {
 }
 
 static void usb_command_session_stopped(void) {}
+
+FATFS* filesystem_volume(void) {
+  return &fs_volume_instance;
+}
+
+FIL* filesystem_file(void) {
+  return &fs_file_instance;
+}
+
 #else
 static void usb_command_session_started(void) {
   // Empty when SD card support is disabled
@@ -147,16 +156,6 @@ void* filesystem_file(void) {
 }
 #endif
 
-#ifdef __USE_SD_CARD__
-FATFS* filesystem_volume(void) {
-  return &fs_volume_instance;
-}
-
-FIL* filesystem_file(void) {
-  return &fs_file_instance;
-}
-#endif
-
 // Shell frequency printf format
 // #define VNA_FREQ_FMT_STR         "%lu"
 #define VNA_FREQ_FMT_STR "%u"
@@ -165,7 +164,6 @@ FIL* filesystem_file(void) {
 
 // Shell command line buffer, args, nargs, and function ptr
 static char shell_line[VNA_SHELL_MAX_LENGTH];
-
 
 uint8_t sweep_mode;
 
@@ -609,7 +607,7 @@ static void vna_shell_execute_line(char* line) {
   uint16_t argc = 0;
   char** argv = NULL;
   const char* command_name = NULL;
-  const VNAShellCommand* cmd = shell_parse_command(line, &argc, &argv, &command_name);
+  const vna_shell_command* cmd = shell_parse_command(line, &argc, &argv, &command_name);
   if (cmd) {
     uint16_t cmd_flag = cmd->flags;
     if ((cmd_flag & CMD_RUN_IN_UI) && (sweep_mode & SWEEP_UI_MODE)) {

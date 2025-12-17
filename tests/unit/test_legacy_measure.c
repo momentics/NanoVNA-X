@@ -108,12 +108,16 @@ static float regression_get_y(uint16_t idx) {
 
 
 // Mocks for legacy_measure dependencies
-float resistance(int i, const float* v) { return 50.0f; }
-float reactance(int i, const float* v) { return 0.0f; }
-float swr(int i, const float* v) { return 1.0f; }
-float logmag(int i, const float* v) { return 0.0f; }
-void invalidate_rect(int x, int y, int w, int h) {}
-void cell_printf(int x, int y, const char* fmt, ...) {}
+float resistance(int i, const float* v) { (void)i; (void)v; return 50.0f; }
+float reactance(int i, const float* v) { (void)i; (void)v; return 0.0f; }
+float swr(int i, const float* v) { (void)i; (void)v; return 1.0f; }
+float logmag(int i, const float* v) { (void)i; (void)v; return 0.0f; }
+void invalidate_rect(int x, int y, int w, int h) {
+  (void)x; (void)y; (void)w; (void)h;
+}
+void cell_printf(int x, int y, const char* fmt, ...) {
+  (void)x; (void)y; (void)fmt;
+}
 void markmap_all_markers(void) {}
 
 #include "../../src/rf/analysis/legacy_measure.c"

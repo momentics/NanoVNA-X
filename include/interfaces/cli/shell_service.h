@@ -41,7 +41,7 @@ typedef struct {
   const char* sc_name;
   vna_shellcmd_t sc_function;
   uint16_t flags;
-} VNAShellCommand;
+} vna_shell_command;
 
 typedef void (*shell_session_callback_t)(void);
 
@@ -52,7 +52,7 @@ enum {
   CMD_RUN_IN_LOAD = 8,
 };
 
-void shell_register_commands(const VNAShellCommand* table);
+void shell_register_commands(const vna_shell_command* table);
 
 int shell_printf(const char* fmt, ...);
 #ifdef __USE_SERIAL_CONSOLE__
@@ -70,9 +70,9 @@ void shell_update_vcp_connection_state(bool connected);
 void shell_init_connection(void);
 void shell_restore_stream(void);
 
-const VNAShellCommand* shell_parse_command(char* line, uint16_t* argc, char*** argv,
+const vna_shell_command* shell_parse_command(char* line, uint16_t* argc, char*** argv,
                                            const char** name_out);
-void shell_request_deferred_execution(const VNAShellCommand* command, uint16_t argc, char** argv);
+void shell_request_deferred_execution(const vna_shell_command* command, uint16_t argc, char** argv);
 void shell_service_pending_commands(void);
 void shell_attach_event_bus(event_bus_t* bus);
 void shell_register_session_start_callback(shell_session_callback_t callback);

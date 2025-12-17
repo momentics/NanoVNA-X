@@ -38,12 +38,6 @@
 
 #include "processing/dsp_config.h"
 
-// Apply calibration after made sweep, (if set 1, then calibration move out from sweep cycle)
-#define APPLY_CALIBRATION_AFTER_SWEEP 0
-
-// Speed of light const
-
-
 #include "core/globals.h"
 #include "ui/ui_style.h"
 #include "ui/core/ui_core.h"
@@ -69,17 +63,11 @@
 #endif
 
 
-
-
-
 #if   SWEEP_POINTS_MAX <= 256
 #define FFT_SIZE   256
 #elif SWEEP_POINTS_MAX <= 512
 #define FFT_SIZE   512
 #endif
-
-
-
 
 
 
@@ -117,9 +105,6 @@ void resume_sweep(void);
 void toggle_sweep(void);
 int  load_properties(uint32_t id);
 
-#ifdef __USE_BACKUP__
-#endif
-
 void set_sweep_points(uint16_t points);
 
 #ifdef __REMOTE_DESKTOP__
@@ -134,10 +119,6 @@ void send_region(remote_region_t *rd, uint8_t * buf, uint16_t size);
 #define SWEEP_BINARY  0x08
 #define SWEEP_REMOTE  0x40
 #define SWEEP_UI_MODE 0x80
-
-
-
-// Global flag to indicate when calibration is in critical phase to prevent UI flash operations
 
 
 /*

@@ -39,7 +39,7 @@
 
 // 3. Test overrides
 #undef USE_VARIABLE_OFFSET
-#warning "Using STUB nanovna.h"
+// #warning "Using STUB nanovna.h"
 #define FFT_SIZE 512
 
 // 4. Globals
@@ -103,6 +103,7 @@ float swr(int i, const float* v);
 float logmag(int i, const float* v);
 freq_t get_marker_frequency(int marker);
 void markmap_all_markers(void);
+void pause_sweep(void);
 
 int parse_line(char* line, char* args[], int max_cnt);
 int get_str_index(const char* value, const char* list);

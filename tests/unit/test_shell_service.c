@@ -150,6 +150,7 @@ msg_t osalThreadDequeueNextI(threads_queue_t* queue, msg_t msg) {
 
 void osalThreadDequeueAllI(threads_queue_t* queue, msg_t msg) {
   (void)queue;
+  (void)msg;
   /* For test purposes we don't track all the waiting threads */
   /* but in real implementation this would wake up all waiting threads */
 }
@@ -245,7 +246,7 @@ static void test_command_callback(int argc, char* argv[]) {
   }
 }
 
-static const VNAShellCommand g_test_commands[] = {
+static const vna_shell_command g_test_commands[] = {
     {.sc_name = "scan", .sc_function = test_command_callback, .flags = 0},
     {.sc_name = NULL, .sc_function = NULL, .flags = 0},
 };
@@ -269,7 +270,7 @@ static void test_shell_parse_and_overflow(void) {
   char** argv = NULL;
   const char* name = NULL;
 
-  const VNAShellCommand* cmd = shell_parse_command(line, &argc, &argv, &name);
+  const vna_shell_command* cmd = shell_parse_command(line, &argc, &argv, &name);
   CHECK(cmd == &g_test_commands[0], "registered command must be returned");
   CHECK(argc == 2, "argc should exclude the command token");
   CHECK(argv != NULL && strcmp(argv[0], "123") == 0, "argv[0] should match first parameter");
@@ -279,7 +280,7 @@ static void test_shell_parse_and_overflow(void) {
   char overflow_line[] = "scan 1 2 3 4 5";
   uint16_t overflow_argc = 0;
   char** overflow_argv = NULL;
-  const VNAShellCommand* overflow_cmd =
+  const vna_shell_command* overflow_cmd =
       shell_parse_command(overflow_line, &overflow_argc, &overflow_argv, NULL);
   CHECK(overflow_cmd == &g_test_commands[0], "known commands should still parse when clamped");
   CHECK(overflow_argc == VNA_SHELL_MAX_ARGUMENTS,
@@ -299,7 +300,7 @@ static void test_shell_deferred_queue_and_event_bus(void) {
   char line[] = "scan 42";
   uint16_t argc = 0;
   char** argv = NULL;
-  const VNAShellCommand* cmd = shell_parse_command(line, &argc, &argv, NULL);
+  const vna_shell_command* cmd = shell_parse_command(line, &argc, &argv, NULL);
   CHECK(cmd != NULL, "command must parse");
 
   shell_request_deferred_execution(cmd, argc, argv);
