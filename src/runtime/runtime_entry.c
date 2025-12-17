@@ -767,9 +767,7 @@ int runtime_main(void) {
    * tlv320aic Initialize (audio codec)
    */
   tlv320aic3204_init();
-  chThdSleepMilliseconds(200); // Wait for aic codec start
-  // The original `chThdSleepMilliseconds(200);` was here.
-  // It is removed as per the instruction's implied reordering.
+
 
   /*
    * Enable codec clocks output FIRST
