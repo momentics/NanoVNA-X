@@ -758,10 +758,10 @@ int runtime_main(void) {
   si5351_set_frequency_offset(IF_OFFSET);
 #endif
   /*
-   * Init Shell console connection data
+   * Init Shell console commands
    */
   shell_register_commands(commands);
-  shell_init_connection();
+
 
   /*
    * tlv320aic Initialize (audio codec)
@@ -785,7 +785,24 @@ int runtime_main(void) {
            (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
 
 /*
- * SD Card init (if inserted) allow fix issues
+   * SD Card init (if inserted) allow fix issues
+   * with partial writes (need read some sectors)
+   */
+#if HAL_USE_MMC_SPI
+  if (drivers->storage && drivers->storage->init) {
+    // Only verify SD card if we have filesystem usage?
+    // In current HAL storage->init is empty, but we might add verification here
+  }
+#endif
+
+  /*
+   * Initialize USB Shell Connection LAST
+   * This ensures core peripherals (Codec, I2S, LCD) are stable before
+   * exposing the system to potential USB PHY noise or interrupt floods
+   * (especially if cable is disconnected/floating).
+   */
+  shell_init_connection();
+/*
  * Some card after insert work in SDIO mode and can corrupt SPI exchange (need switch it to SPI)
  */
 #ifdef __USE_SD_CARD__
