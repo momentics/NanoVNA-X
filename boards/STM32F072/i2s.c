@@ -63,3 +63,23 @@ void init_i2s(void *buffer, uint16_t count) {
     | SPI_I2SCFGR_I2SE            // I2S enable
     ;
 }
+
+/*
+ * F072 Shared DMA Interrupt Handler
+ * Required because ChibiOS V1 DMA LLD doesn't implement the shared vector for F072,
+ * and we enabled TCIE/HTIE which triggers this vector.
+ * Handled: DMA1 Channel 4 (SPI2/I2S RX)
+ */
+OSAL_IRQ_HANDLER(DMA1_Channel4_5_6_7_IRQHandler) {
+  uint32_t isr = DMA1->ISR;
+
+  // Check Channel 4 (I2S RX)
+  if (isr & DMA_ISR_GIF4) {
+    // Clear all flags for Channel 4 (Global, Transfer Complete, Half Transfer, Error)
+    DMA1->IFCR = DMA_IFCR_CGIF4;
+  }
+  
+  // Note: Only Channel 4 is used/handled here. 
+  // If other channels (5,6,7) are used by other drivers, they might be blindly cleared or ignored here.
+  // Given current configuration, this is dedicated to I2S.
+}
