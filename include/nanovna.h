@@ -36,18 +36,13 @@
 #include "platform/boards/stm32_peripherals.h"
 #include "platform/hal.h"
 
-#define AUDIO_ADC_FREQ       (AUDIO_ADC_FREQ_K*1000)
-#define FREQUENCY_OFFSET     (FREQUENCY_IF_K*1000)
+#include "processing/dsp_config.h"
 
 // Apply calibration after made sweep, (if set 1, then calibration move out from sweep cycle)
 #define APPLY_CALIBRATION_AFTER_SWEEP 0
 
 // Speed of light const
-#define SPEED_OF_LIGHT           299792458
 
-// pi const
-#define VNA_PI                   3.14159265358979323846f
-#define VNA_TWOPI                6.28318530717958647692f
 
 #include "core/globals.h"
 #include "ui/ui_style.h"
@@ -183,50 +178,7 @@ void send_region(remote_region_t *rd, uint8_t * buf, uint16_t size);
 //#define AUDIO_CLOCK_REF       (98304000U)
 
 // Buffer contain left and right channel samples (need x2)
-#define AUDIO_BUFFER_LEN      (AUDIO_SAMPLES_COUNT*2)
 
-// Bandwidth depend from AUDIO_SAMPLES_COUNT and audio ADC frequency
-// for AUDIO_SAMPLES_COUNT = 48 and ADC =  48kHz one measure give  48000/48=1000Hz
-// for AUDIO_SAMPLES_COUNT = 48 and ADC =  96kHz one measure give  96000/48=2000Hz
-// for AUDIO_SAMPLES_COUNT = 48 and ADC = 192kHz one measure give 192000/48=4000Hz
-// Define additional measure count for menus
-#if AUDIO_ADC_FREQ/AUDIO_SAMPLES_COUNT == 16000
-#define BANDWIDTH_8000            (  1 - 1)
-#define BANDWIDTH_4000            (  2 - 1)
-#define BANDWIDTH_1000            (  8 - 1)
-#define BANDWIDTH_333             ( 24 - 1)
-#define BANDWIDTH_100             ( 80 - 1)
-#define BANDWIDTH_30              (256 - 1)
-#elif AUDIO_ADC_FREQ/AUDIO_SAMPLES_COUNT == 8000
-#define BANDWIDTH_8000            (  1 - 1)
-#define BANDWIDTH_4000            (  2 - 1)
-#define BANDWIDTH_1000            (  8 - 1)
-#define BANDWIDTH_333             ( 24 - 1)
-#define BANDWIDTH_100             ( 80 - 1)
-#define BANDWIDTH_30              (256 - 1)
-#elif AUDIO_ADC_FREQ/AUDIO_SAMPLES_COUNT == 4000
-#define BANDWIDTH_4000            (  1 - 1)
-#define BANDWIDTH_2000            (  2 - 1)
-#define BANDWIDTH_1000            (  4 - 1)
-#define BANDWIDTH_333             ( 12 - 1)
-#define BANDWIDTH_100             ( 40 - 1)
-#define BANDWIDTH_30              (132 - 1)
-#elif AUDIO_ADC_FREQ/AUDIO_SAMPLES_COUNT == 2000
-#define BANDWIDTH_2000            (  1 - 1)
-#define BANDWIDTH_1000            (  2 - 1)
-#define BANDWIDTH_333             (  6 - 1)
-#define BANDWIDTH_100             ( 20 - 1)
-#define BANDWIDTH_30              ( 66 - 1)
-#define BANDWIDTH_10              (200 - 1)
-#elif AUDIO_ADC_FREQ/AUDIO_SAMPLES_COUNT == 1000
-#define BANDWIDTH_1000            (  1 - 1)
-#define BANDWIDTH_333             (  3 - 1)
-#define BANDWIDTH_100             ( 10 - 1)
-#define BANDWIDTH_30              ( 33 - 1)
-#define BANDWIDTH_10              (100 - 1)
-#endif
-
-typedef int16_t audio_sample_t;
 void dsp_process(audio_sample_t *src, size_t len);
 void reset_dsp_accumerator(void);
 void calculate_gamma(float *gamma);
@@ -618,8 +570,7 @@ extern const struct usb_command_server_port usb_port;
 
 extern const char* const info_about[];
 
-extern properties_t current_props;
-extern config_t config;
+#include "core/context.h"
 
 float groupdelay_from_array(int i, const float *v);
 
@@ -769,34 +720,7 @@ void test_log(void);
 #define NO_SAVE_SLOT      ((uint16_t)(-1))
 
 
-#define frequency0          current_props._frequency0
-#define frequency1          current_props._frequency1
-#define cal_frequency0      current_props._cal_frequency0
-#define cal_frequency1      current_props._cal_frequency1
-#define var_freq            current_props._var_freq
-#define sweep_points        current_props._sweep_points
-#define cal_sweep_points    current_props._cal_sweep_points
-#define cal_power           current_props._cal_power
-#define cal_status          current_props._cal_status
-#define cal_data            current_props._cal_data
-#define electrical_delayS11 current_props._electrical_delay[0]
-#define electrical_delayS21 current_props._electrical_delay[1]
-#define s21_offset          current_props._s21_offset
-#define velocity_factor     current_props._velocity_factor
-#define trace               current_props._trace
-#define current_trace       current_props._current_trace
-#define markers             current_props._markers
-#define active_marker       current_props._active_marker
-#define previous_marker     current_props._previous_marker
-#ifdef __VNA_Z_RENORMALIZATION__
- #define cal_load_r         current_props._cal_load_r
-#else
- #define cal_load_r         50.0f
-#endif
 
-#define props_mode          current_props._mode
-#define domain_window      (props_mode&TD_WINDOW)
-#define domain_func        (props_mode&TD_FUNC)
 
 #define FREQ_STARTSTOP()       {props_mode&=~TD_CENTER_SPAN;}
 #define FREQ_CENTERSPAN()      {props_mode|= TD_CENTER_SPAN;}

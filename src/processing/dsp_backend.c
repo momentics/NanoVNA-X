@@ -21,6 +21,8 @@
  */
 
 #include "nanovna.h"
+#include "processing/dsp_config.h"
+#include "processing/vna_math.h"
 #include <stddef.h>
 
 #ifdef USE_VARIABLE_OFFSET

@@ -31,34 +31,36 @@
 #define __STATIC_INLINE static inline
 #endif
 
-#define __VNA_USE_MATH_TABLES__ 1
-#define __USE_VNA_MATH__ 1
-#define SWEEP_POINTS_MAX 512
+// 1. Configuration (defines VNA_PI, etc.)
+#include "processing/dsp_config.h"
+
+// 2. Data Types (defines properties_t, freq_t, __USE_VNA_MATH__ via config_macros)
+#include "core/data_types.h"
+
+// 3. Test overrides
+#undef USE_VARIABLE_OFFSET
+#warning "Using STUB nanovna.h"
 #define FFT_SIZE 512
-#define AUDIO_SAMPLES_COUNT 48
-#define AUDIO_ADC_FREQ 192000
-#define FREQUENCY_OFFSET (7000 * (AUDIO_ADC_FREQ / AUDIO_SAMPLES_COUNT / 1000))
-#define VNA_PI 3.14159265358979323846f
 
-typedef float audio_sample_t;
-typedef uint32_t freq_t;
-
-typedef float complex_sample_t[2];
-
-typedef struct {
-  uint16_t _vna_mode;
-  uint32_t _serial_speed;
-} config_t;
-
+// 4. Globals
+extern properties_t current_props;
 extern config_t config;
 
+#define velocity_factor     current_props._velocity_factor
+#define markers             current_props._markers
+#define active_marker       0 // Mock active marker as 0
+
+// 5. Helpers
+#define VNA_MODE(idx) (config._vna_mode & (1U << (idx)))
 enum { VNA_MODE_CONNECTION = 0 };
 
-#define VNA_MODE(idx) (config._vna_mode & (1U << (idx)))
-
-#define ARRAY_COUNT(a) (sizeof(a) / sizeof(*(a)))
+#ifndef STR1
 #define STR1(x) #x
+#endif
+#ifndef define_to_STR
 #define define_to_STR(x) STR1(x)
+#endif
+#define ARRAY_COUNT(a) (sizeof(a) / sizeof(*(a)))
 
 #define SWAP(type, x, y)                                                                         \
   do {                                                                                           \
@@ -67,11 +69,48 @@ enum { VNA_MODE_CONNECTION = 0 };
     (y) = _tmp;                                                                                  \
   } while (0)
 
-#include "processing/vna_math.h"
+// 6. UI Mocks
+#define FONT_STR_HEIGHT      8
+#define STR_MEASURE_HEIGHT (FONT_STR_HEIGHT + 1)
+#define FONT_WIDTH           6
+#define STR_MEASURE_WIDTH  (FONT_WIDTH * 10)
+#define OFFSETX                      10
+#define OFFSETY                       0
+#define STR_MEASURE_X      (OFFSETX +  0)
+#define STR_MEASURE_Y      (OFFSETY + 80)
+
+#define S_OHM      "\x1E"
+#define S_METRE    "m"
+#define S_dB       "dB"
+#define S_Hz       "Hz"
+#define S_FARAD    "F"
+#define S_HENRY    "H"
+#define S_DELTA    "\x17"
+#define CELLHEIGHT 10
+
+#define PORT_Z 50.0f
+// 7. Measure Flags
+#define MEASURE_UPD_SWEEP (1 << 0)
+#define MEASURE_UPD_FREQ  (1 << 2)
+#define MEASURE_UPD_ALL   (MEASURE_UPD_SWEEP | MEASURE_UPD_FREQ)
+
+// 8. Prototypes
+void invalidate_rect(int x, int y, int w, int h);
+void cell_printf(int x, int y, const char* fmt, ...);
+float resistance(int i, const float* v);
+float reactance(int i, const float* v);
+float swr(int i, const float* v);
+float logmag(int i, const float* v);
+freq_t get_marker_frequency(int marker);
+void markmap_all_markers(void);
 
 int parse_line(char* line, char* args[], int max_cnt);
 int get_str_index(const char* value, const char* list);
 
+// 9. VNA Math (must be after VNA_PI and __USE_VNA_MATH__ are available)
+#include "processing/vna_math.h"
+
+// 10. More UI prototypes
 void lcd_fill(int x, int y, int w, int h);
 void lcd_bulk(int x, int y, int w, int h);
 void lcd_drawchar(uint8_t ch, int x, int y);

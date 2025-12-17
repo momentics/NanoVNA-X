@@ -70,7 +70,7 @@ static void snapshot(float* samp_s, float* samp_c, float* ref_s, float* ref_c) {
 
 static void test_dc_signal(void) {
   reset_dsp_accumerator();
-  float capture[2 * AUDIO_SAMPLES_COUNT];
+  audio_sample_t capture[2 * AUDIO_SAMPLES_COUNT];
   for (size_t i = 0; i < AUDIO_SAMPLES_COUNT; ++i) {
     capture[i * 2 + 0] = 100.0f; /* reference */
     capture[i * 2 + 1] = 50.0f;  /* sample */
@@ -85,7 +85,7 @@ static void test_dc_signal(void) {
 
 static void test_in_phase_sine(void) {
   reset_dsp_accumerator();
-  float capture[2 * AUDIO_SAMPLES_COUNT];
+  audio_sample_t capture[2 * AUDIO_SAMPLES_COUNT];
   for (size_t i = 0; i < AUDIO_SAMPLES_COUNT; ++i) {
     float phase = (2.0f * VNA_PI * i) / AUDIO_SAMPLES_COUNT;
     float ref = sinf(phase);
@@ -101,7 +101,7 @@ static void test_in_phase_sine(void) {
 
 static void test_quadrature_sine(void) {
   reset_dsp_accumerator();
-  float capture[2 * AUDIO_SAMPLES_COUNT];
+  audio_sample_t capture[2 * AUDIO_SAMPLES_COUNT];
   for (size_t i = 0; i < AUDIO_SAMPLES_COUNT; ++i) {
     float phase = (2.0f * VNA_PI * i) / AUDIO_SAMPLES_COUNT;
     capture[i * 2 + 0] = sinf(phase) * 500.0f;

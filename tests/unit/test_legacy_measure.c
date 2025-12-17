@@ -25,7 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define __VNA_MEASURE_MODULE__ 1
+
 #include "nanovna.h"
 
 /*
@@ -104,6 +104,17 @@ static float regression_get_x(uint16_t idx) {
 static float regression_get_y(uint16_t idx) {
   return g_regression_y[idx];
 }
+
+
+
+// Mocks for legacy_measure dependencies
+float resistance(int i, const float* v) { return 50.0f; }
+float reactance(int i, const float* v) { return 0.0f; }
+float swr(int i, const float* v) { return 1.0f; }
+float logmag(int i, const float* v) { return 0.0f; }
+void invalidate_rect(int x, int y, int w, int h) {}
+void cell_printf(int x, int y, const char* fmt, ...) {}
+void markmap_all_markers(void) {}
 
 #include "../../src/rf/analysis/legacy_measure.c"
 

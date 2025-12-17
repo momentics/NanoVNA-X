@@ -14,6 +14,7 @@
  * GNU General Public License for more details.
  */
 #include "nanovna.h"
+#include "processing/dsp_config.h"
 #include <stdint.h>
 
 // Use table increase transform speed, but increase code size
