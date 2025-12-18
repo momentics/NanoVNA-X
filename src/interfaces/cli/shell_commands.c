@@ -348,12 +348,12 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     } else {
       for (int i = 0; i < points; i++) {
         if (mask & SCAN_MASK_OUT_FREQ)
-          shell_printf(VNA_FREQ_FMT_STR " ", get_frequency(i));
+          if (!shell_printf(VNA_FREQ_FMT_STR " ", get_frequency(i))) break;
         if (mask & SCAN_MASK_OUT_DATA0)
-          shell_printf("%f %f ", measured[0][i][0], measured[0][i][1]);
+          if (!shell_printf("%f %f ", measured[0][i][0], measured[0][i][1])) break;
         if (mask & SCAN_MASK_OUT_DATA1)
-          shell_printf("%f %f ", measured[1][i][0], measured[1][i][1]);
-        shell_printf(VNA_SHELL_NEWLINE_STR);
+          if (!shell_printf("%f %f ", measured[1][i][0], measured[1][i][1])) break;
+        if (!shell_printf(VNA_SHELL_NEWLINE_STR)) break;
       }
     }
   }
@@ -494,7 +494,7 @@ VNA_SHELL_FUNCTION(cmd_data) {
         continue;
       }
       for (uint16_t i = 0; i < snapshot.points; i++) {
-        shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, snapshot.data[i][0], snapshot.data[i][1]);
+        if (!shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, snapshot.data[i][0], snapshot.data[i][1])) break;
         if ((i & 0x0F) == 0x0F) chThdYield();
       }
       if (sweep_service_snapshot_release(&snapshot)) return;
@@ -508,7 +508,7 @@ VNA_SHELL_FUNCTION(cmd_data) {
   }
 
   for (uint16_t i = 0; i < points; i++) {
-    shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, array[i][0], array[i][1]);
+    if (!shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, array[i][0], array[i][1])) break;
     if ((i & 0x0F) == 0x0F) chThdYield();
   }
 }

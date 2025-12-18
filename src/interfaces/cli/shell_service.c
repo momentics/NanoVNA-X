@@ -31,6 +31,8 @@
 
 #include <chprintf.h>
 #include <stdarg.h>
+#include "memstreams.h"
+#include <string.h>
 
 static const vna_shell_command* command_table = NULL;
 
@@ -127,15 +129,47 @@ static void shell_write(const void* buf, size_t size) {
 static size_t shell_read(void* buf, size_t size) {
   return shell_io_read((uint8_t*)buf, size);
 }
+static char shell_print_buffer[128];
+
 int shell_printf(const char* fmt, ...) {
   if (shell_stream == NULL) {
     return 0;
   }
+  
   va_list ap;
+  MemoryStream ms;
+  BaseSequentialStream *chp;
+  
+  /* Initialize memory stream writing to shell_print_buffer
+   * Reserve 1 byte for null terminator
+   */
+  msObjectInit(&ms, (uint8_t *)shell_print_buffer, sizeof(shell_print_buffer) - 1, 0);
+
+  /* Cast to generic stream interface */
+  chp = (BaseSequentialStream *)(void *)&ms;
+
   va_start(ap, fmt);
-  const int written = chvprintf(shell_stream, fmt, ap);
+  /* Write formatted string to memory stream */
+  chvprintf(chp, fmt, ap);
   va_end(ap);
-  return written;
+
+  /* Null terminate the string */
+  shell_print_buffer[ms.eos] = 0;
+
+  /* Check if any bytes were written */
+  if (ms.eos == 0) {
+      return 0;
+  }
+
+  /* 
+   * Use shell_io_write which implements timeouts to prevent hanging 
+   * if the host is not reading data (e.g. stalled CDC connection).
+   */
+  if (!shell_io_write((uint8_t*)shell_print_buffer, ms.eos)) {
+    return 0;
+  }
+
+  return ms.eos;
 }
 
 #ifdef __USE_SERIAL_CONSOLE__
