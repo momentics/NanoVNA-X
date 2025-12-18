@@ -711,9 +711,10 @@ int runtime_main(void) {
     if (drivers->init) {
       drivers->init();
     }
-    if (drivers->display && drivers->display->init) {
-      drivers->display->init();
-    }
+    // Display initialization moved to end of startup sequence to match NanoVNA-D reference
+    // if (drivers->display && drivers->display->init) {
+    //   drivers->display->init();
+    // }
     if (drivers->adc && drivers->adc->init) {
       drivers->adc->init();
     }
@@ -759,6 +760,12 @@ int runtime_main(void) {
    * Init Shell console commands
    */
   shell_register_commands(commands);
+  
+  /*
+   * Initialize USB Shell Connection
+   * Moved here to match NanoVNA-D reference (before LCD init)
+   */
+  shell_init_connection();
 
 
   /*
@@ -799,7 +806,15 @@ int runtime_main(void) {
    * exposing the system to potential USB PHY noise or interrupt floods
    * (especially if cable is disconnected/floating).
    */
-  shell_init_connection();
+  // shell_init_connection(); // Moved earlier
+
+  /*
+   * LCD Initialize
+   * Performed LAST to match reference firmware and avoid I2C/Display conflicts during startup.
+   */
+   if (drivers->display && drivers->display->init) {
+      drivers->display->init();
+   }
 /*
  * Some card after insert work in SDIO mode and can corrupt SPI exchange (need switch it to SPI)
  */
