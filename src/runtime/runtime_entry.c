@@ -767,6 +767,14 @@ int runtime_main(void) {
    */
   shell_init_connection();
 
+  /*
+   * LCD Initialize
+   * Init LCD after USB but BEFORE Codec/I2S to match NanoVNA-D reference.
+   */
+  if (drivers->display && drivers->display->init) {
+    drivers->display->init();
+  }
+
 
   /*
    * tlv320aic Initialize (audio codec)
@@ -801,20 +809,14 @@ int runtime_main(void) {
 #endif
 
   /*
-   * Initialize USB Shell Connection LAST
+   * Initialize USB Shell Connection LAST (Moved earlier in Phase 2)
    * This ensures core peripherals (Codec, I2S, LCD) are stable before
    * exposing the system to potential USB PHY noise or interrupt floods
    * (especially if cable is disconnected/floating).
    */
   // shell_init_connection(); // Moved earlier
 
-  /*
-   * LCD Initialize
-   * Performed LAST to match reference firmware and avoid I2C/Display conflicts during startup.
-   */
-   if (drivers->display && drivers->display->init) {
-      drivers->display->init();
-   }
+   // drivers->display->init(); // Moved to Phase 2 position (before Codec)
 /*
  * Some card after insert work in SDIO mode and can corrupt SPI exchange (need switch it to SPI)
  */
