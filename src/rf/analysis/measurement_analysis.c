@@ -9,7 +9,7 @@
 #include <math.h>
 #include "ui/display/traces.h"
 
-extern float measured[2][SWEEP_POINTS_MAX][2];
+extern alignas(8) float measured[2][SWEEP_POINTS_MAX][2];
 
 #ifndef frequency0
 extern freq_t frequency0;

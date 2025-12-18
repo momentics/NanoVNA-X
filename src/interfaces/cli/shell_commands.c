@@ -797,7 +797,7 @@ VNA_SHELL_FUNCTION(cmd_transform) {}
 VNA_SHELL_FUNCTION(cmd_dump) {
 #if ENABLED_DUMP_COMMAND
   int i, j;
-  alignas(4) audio_sample_t dump[96 * 2];
+  alignas(8) audio_sample_t dump[AUDIO_BUFFER_LEN * 2];
   int selection = 0;
   if (argc == 1) selection = (my_atoui(argv[0]) == 1) ? 0 : 1;
   sweep_service_prepare_dump(dump, ARRAY_COUNT(dump), selection);

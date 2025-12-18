@@ -66,7 +66,7 @@
 #endif
 
 // LCD display buffer
-alignas(4) pixel_t spi_buffer[SPI_BUFFER_SIZE];
+alignas(8) pixel_t spi_buffer[SPI_BUFFER_SIZE];
 // Default foreground & background colors
 pixel_t foreground_color = 0;
 pixel_t background_color = 0;

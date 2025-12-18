@@ -38,7 +38,7 @@
  */
 static systime_t ready_time = 0;
 static volatile uint16_t wait_count = 0;
-static alignas(4) audio_sample_t rx_buffer[AUDIO_BUFFER_LEN * 2];
+static alignas(8) audio_sample_t rx_buffer[AUDIO_BUFFER_LEN * 2];
 
 #if ENABLED_DUMP_COMMAND
 static audio_sample_t* dump_buffer = NULL;

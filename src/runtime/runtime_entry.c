@@ -170,7 +170,7 @@ uint8_t sweep_mode;
 // Flag to indicate when calibration is in progress to prevent UI flash operations during critical phases
 volatile bool calibration_in_progress = false;
 // Sweep measured data - aligned for DMA operations
-alignas(4) float measured[2][SWEEP_POINTS_MAX][2];
+alignas(8) float measured[2][SWEEP_POINTS_MAX][2];
 
 static int16_t battery_last_mv;
 static systime_t battery_next_sample = 0;
@@ -315,7 +315,7 @@ config_t config = {
     ._band_mode = 0,
 };
 
-alignas(4) properties_t current_props;
+alignas(8) properties_t current_props;
 
 int load_properties(uint32_t id) {
   int r = caldata_recall(id);

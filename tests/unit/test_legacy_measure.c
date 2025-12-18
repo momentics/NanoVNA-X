@@ -44,7 +44,7 @@ uint16_t sweep_points;
 freq_t frequency0;
 freq_t frequency1;
 float measure_frequency_step;
-float measured[2][SWEEP_POINTS_MAX][2];
+alignas(8) float measured[2][SWEEP_POINTS_MAX][2];
 config_t config;
 properties_t current_props;
 
