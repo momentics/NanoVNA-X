@@ -259,9 +259,17 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   original_points = sweep_points;
   bool restore_config = false;
 
+  // Save current sweep state
+  bool was_running = (sweep_mode & SWEEP_ENABLE) != 0;
+
   if (argc < 2 || argc > 4) {
     PRINT_USAGE("usage: scan {start(Hz)} {stop(Hz)} [points] [outmask]" VNA_SHELL_NEWLINE_STR);
     return;
+  }
+
+  // Pause sweep if it was running to prevent interference during setup
+  if (was_running) {
+    pause_sweep();
   }
 
   start = my_atoui(argv[0]);
@@ -277,6 +285,8 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     } else {
       shell_printf("frequency range is invalid" VNA_SHELL_NEWLINE_STR);
     }
+    // Restore state if we return early
+    if (was_running) resume_sweep();
     return;
   }
   if (start != original_start || stop != original_stop)
@@ -286,6 +296,8 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     if (points == 0 || points > SWEEP_POINTS_MAX) {
       shell_printf("sweep points exceeds range " define_to_STR(SWEEP_POINTS_MAX)
                        VNA_SHELL_NEWLINE_STR);
+      // Restore state if we return early
+      if (was_running) resume_sweep();
       return;
     }
     sweep_points = points;
@@ -329,6 +341,7 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     app_measurement_reset();
     app_measurement_sweep(false, sweep_ch);
   }
+  // Ensure paused before output (redundant if was_running is true, but safe)
   pause_sweep();
   
   if (mask) {
@@ -362,14 +375,18 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     sweep_points = original_points;
     app_measurement_update_frequencies();
   }
-  resume_sweep();
+  
+  // Only resume if it was originally running
+  if (was_running) {
+    resume_sweep();
+  }
 }
 
 VNA_SHELL_FUNCTION(cmd_scan_bin) {
 #if ENABLE_SCANBIN_COMMAND
   sweep_mode |= SWEEP_BINARY;
   cmd_scan(argc, argv);
-  sweep_mode &= ~(SWEEP_BINARY);
+  // sweep_mode &= ~(SWEEP_BINARY); // Cleared in cmd_scan
 #endif
 }
 
@@ -1144,9 +1161,9 @@ VNA_SHELL_FUNCTION(cmd_reset) {
 }
 
 const vna_shell_command commands[] = {
-    {"scan", cmd_scan, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
+    {"scan", cmd_scan, CMD_WAIT_MUTEX},
 #if ENABLE_SCANBIN_COMMAND
-    {"scan_bin", cmd_scan_bin, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
+    {"scan_bin", cmd_scan_bin, CMD_WAIT_MUTEX},
 #endif
     {"data", cmd_data, 0},
     {"frequencies", cmd_frequencies, 0},
