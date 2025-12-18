@@ -169,8 +169,15 @@ uint8_t sweep_mode;
 
 // Flag to indicate when calibration is in progress to prevent UI flash operations during critical phases
 volatile bool calibration_in_progress = false;
+
+#if defined(NANOVNA_F303)
+#define CCM_RAM __attribute__((section(".ccm")))
+#else
+#define CCM_RAM
+#endif
+
 // Sweep measured data - aligned for DMA operations
-alignas(8) float measured[2][SWEEP_POINTS_MAX][2];
+alignas(8) CCM_RAM float measured[2][SWEEP_POINTS_MAX][2];
 
 static int16_t battery_last_mv;
 static systime_t battery_next_sample = 0;
@@ -702,6 +709,12 @@ int runtime_main(void) {
    */
   halInit();
   chSysInit();
+
+#if defined(NANOVNA_F303)
+  // Zero initialize CCM RAM data (not handled by startup)
+  memset(measured, 0, sizeof(measured));
+#endif
+
   sweep_mode = SWEEP_ENABLE;
   battery_last_mv = INT16_MIN;
 

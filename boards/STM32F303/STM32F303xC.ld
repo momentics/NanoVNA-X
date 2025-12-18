@@ -93,4 +93,10 @@ SECTIONS
     {
         *(.calsave)
     } > CALDATA_FLASH
+
+    .ccm (NOLOAD) : ALIGN(4)
+    {
+        *(.ccm)
+        *(.ccm.*)
+    } > ram4
 }
