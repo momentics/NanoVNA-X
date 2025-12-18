@@ -178,17 +178,27 @@ static UI_FUNCTION_CALLBACK(menu_marker_select_cb) {
   menu_push_submenu(menu_build_marker_select_menu());
 }
 
-const menuitem_t menu_marker[] = {
-    {MT_CALLBACK, 0, "SELECT\nMARKER", menu_marker_select_cb},
-    {MT_ADV_CALLBACK, 0, "TRACKING", menu_marker_tracking_acb},
+const menuitem_t menu_search[] = {
     {MT_ADV_CALLBACK, VNA_MODE_SEARCH, "SEARCH\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
+    {MT_ADV_CALLBACK, 0, "TRACKING", menu_marker_tracking_acb},
     {MT_CALLBACK, MK_SEARCH_LEFT, "SEARCH\n " S_LARROW "LEFT", menu_marker_search_dir_cb},
     {MT_CALLBACK, MK_SEARCH_RIGHT, "SEARCH\n " S_RARROW "RIGHT", menu_marker_search_dir_cb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+
+const menuitem_t menu_operations[] = {
     {MT_CALLBACK, ST_START, "MOVE\nSTART", menu_marker_op_cb},
     {MT_CALLBACK, ST_STOP, "MOVE\nSTOP", menu_marker_op_cb},
     {MT_CALLBACK, ST_CENTER, "MOVE\nCENTER", menu_marker_op_cb},
     {MT_CALLBACK, ST_SPAN, "MOVE\nSPAN", menu_marker_op_cb},
     {MT_CALLBACK, UI_MARKER_EDELAY, "MARKER\nE-DELAY", menu_marker_op_cb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+
+const menuitem_t menu_marker[] = {
+    {MT_CALLBACK, 0, "SELECT\nMARKER", menu_marker_select_cb},
+    {MT_SUBMENU, 0, "SEARCH", menu_search},
+    {MT_SUBMENU, 0, "OPERATIONS", menu_operations},
     {MT_ADV_CALLBACK, 0, "DELTA", menu_marker_delta_acb},
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };

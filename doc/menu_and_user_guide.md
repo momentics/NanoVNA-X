@@ -25,6 +25,7 @@ This guide documents the on-device menu tree implemented in the current NanoVNA-
 ## CAL menu
 
 ### MECH CAL
+
 * `MECH CAL` opens the classic calibration assistant with ordered steps `OPEN`, `SHORT`, `LOAD`, `ISOLN`, `THRU`, followed by `DONE` (persist to flash) and `DONE IN RAM` (apply without saving). Completed standards show a check mark.
 * `CAL RANGE` reports the stored point count and frequency span for the active calibration. Invoking the entry re-applies those limits (and the recorded power) when the calibration was interpolated.
 * `CAL POWER` selects Si5351 drive strength. Choose `AUTO` for adaptive control or one of the explicit currents (2–8 mA).
@@ -35,10 +36,13 @@ This guide documents the on-device menu tree implemented in the current NanoVNA-
 * `CAL RESET` clears the working calibration (enhanced-response state is preserved).
 
 For detailed 12-point calibration instructions, see the documentation:
+
 * [English: 12-Point Calibration Guide](calibration_12_point.md)
 
 ### SAVE/RECALL
+
 This companion submenu mirrors the slot operations for field workflows:
+
 * `SAVE CAL` / `RECALL CAL` provide immediate access to calibration storage without stepping through the MECH CAL flow.
 * `CAL APPLY` and `CAL RESET` duplicate the toggles so you can quickly switch correction on/off after recalling a slot.
 
@@ -55,22 +59,30 @@ This companion submenu mirrors the slot operations for field workflows:
 ## DISPLAY menu
 
 ### Traces and formats
+
 * `TRACES` — toggles `TRACE 0`–`TRACE 3`. Selecting an enabled trace focuses it; disabled traces are turned on. When `STORED_TRACES` is enabled, additional entries allow storing and recalling frozen traces.
 * `FORMAT S11` — lists all reflection formats for the active trace: `LOGMAG`, `PHASE`, `DELAY`, `SMITH`, `SWR`, `RESISTANCE`, `REACTANCE`, `|Z|`, with nested `MORE` pages for `POLAR`, `LINEAR`, `REAL`, `IMAG`, `Q FACTOR`, `CONDUCTANCE`, `SUSCEPTANCE`, `|Y|`, `Z PHASE`, `SERIES/SHUNT/ PARALLEL` component views.
 * `FORMAT S21` — equivalent menu for transmission formats. The `MORE` branch exposes shunt/series impedance and Q-factor views.
 * `CHANNEL` — swaps the focused trace between reflection (CH0) and transmission (CH1).
 
 ### Scaling
+
 * `SCALE` — provides `AUTO SCALE`, manual `TOP`, `BOTTOM`, `SCALE/DIV`, `REFERENCE POSITION`, `E-DELAY`, `S21 OFFSET`, and (with `__USE_GRID_VALUES__`) toggles for grid overlays.
 
 ### Markers
+
 Markers now live directly under DISPLAY:
+
 * `MARKERS` -> opens the marker control surface.
   * `SELECT MARKER` lists every slot allowed by `MARKERS_MAX`. Active markers show `CHECK` icons; the currently driven marker shows `AUTO` in its icon. Buttons `ALL OFF` and `DELTA` appear below the list.
-  * `TRACKING` toggles marker tracking.
-  * `SEARCH` displays the current search mode (MAXIMUM/MINIMUM). `SEARCH ← LEFT` and `SEARCH -> RIGHT` jump to the next extremum in each direction.
-  * `MOVE START/STOP/CENTER/SPAN` transfer the highlighted marker (or marker pair) into the corresponding sweep parameter.
-  * `MARKER E-DELAY` applies the measured delay to the active trace.
+  * `SEARCH` -> opens the search submenu:
+    * `SEARCH` displays the current search mode (MAXIMUM/MINIMUM).
+    * `TRACKING` toggles marker tracking.
+    * `SEARCH ← LEFT` and `SEARCH -> RIGHT` jump to the next extremum in each direction.
+  * `OPERATIONS` -> opens the operations submenu:
+    * `MOVE START/STOP/CENTER/SPAN` transfer the highlighted marker (or marker pair) into the corresponding sweep parameter.
+    * `MARKER E-DELAY` applies the measured delay to the active trace.
+  * `DELTA` enables delta mode.
 
 ## MEASURE menu
 
@@ -85,6 +97,7 @@ This menu consolidates DSP helpers and measurement assistants.
 ## SYSTEM menu
 
 ### System utilities
+
 * `TOUCH CAL` / `TOUCH TEST` — touch calibration and verification utilities.
 * `BRIGHTNESS` *(with `__LCD_BRIGHTNESS__`)* — adjusts LCD backlight duty cycle.
 * `SAVE CONFIG` — forces configuration plus any pending autosave data to flash.
@@ -92,6 +105,7 @@ This menu consolidates DSP helpers and measurement assistants.
 * `DATE/TIME` *(with `__USE_RTC__`)* — provides `SET DATE`, `SET TIME`, `RTC CAL`, and `RTC 512 Hz / LED2` output control.
 
 ### Device (expert settings)
+
 * `DEVICE` -> opens advanced hardware controls:
   * `THRESHOLD`, `TCXO`, `VBAT OFFSET` — keypad-entry system constants.
   * `IF OFFSET` *(with `USE_VARIABLE_OFFSET_MENU`)* — choose from compiled IF offsets.
@@ -120,7 +134,7 @@ The final button reflects the sweep status: `PAUSE SWEEP` while sweeping, `RESUM
 
 ## USB console prompt behaviour
 
-Automation clients rely on the USB shell prompt. Each session starts with `\r\nch> \r\nNanoVNA Shell\r\nch> ` so host software can synchronise on the prompt before parsing the banner.
+Automation clients rely on the USB shell prompt. Each session starts with `\r\nch> \r\nNanoVNA Shell\r\nch>` so host software can synchronise on the prompt before parsing the banner.
 
 ---
 
