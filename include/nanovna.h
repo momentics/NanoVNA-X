@@ -66,7 +66,13 @@
 #if   SWEEP_POINTS_MAX <= 256
 #define FFT_SIZE   256
 #elif SWEEP_POINTS_MAX <= 512
+// For time domain transforms we need 2x points (positive + negative frequencies)
+// So 401 points needs > 802 buffer -> 1024 FFT
+#if SWEEP_POINTS_MAX > 256
+#define FFT_SIZE   1024
+#else
 #define FFT_SIZE   512
+#endif
 #endif
 
 

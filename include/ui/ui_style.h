@@ -66,7 +66,7 @@ typedef uint16_t pixel_t;
 // Cell size, depends from spi_buffer size, CELLWIDTH*CELLHEIGHT*sizeof(pixel) <= sizeof(spi_buffer)
 #define CELLWIDTH  (64 / DISPLAY_CELL_BUFFER_COUNT)
 #if defined(NANOVNA_F303)
-#define CELLHEIGHT (32)
+#define CELLHEIGHT (64)
 #else
 #define CELLHEIGHT (16)
 #endif
