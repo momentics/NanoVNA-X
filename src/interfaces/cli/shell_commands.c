@@ -797,14 +797,18 @@ VNA_SHELL_FUNCTION(cmd_transform) {}
 VNA_SHELL_FUNCTION(cmd_dump) {
 #if ENABLED_DUMP_COMMAND
   int i, j;
-  alignas(8) audio_sample_t dump[AUDIO_BUFFER_LEN * 2];
+  // Use global spi_buffer instead of stack allocation to prevent overflow
+  // F303 stack is only 512 bytes, and this buffer needs ~384 bytes
+  extern pixel_t spi_buffer[];
+  audio_sample_t* dump = (audio_sample_t*)spi_buffer;
   int selection = 0;
   if (argc == 1) selection = (my_atoui(argv[0]) == 1) ? 0 : 1;
-  sweep_service_prepare_dump(dump, ARRAY_COUNT(dump), selection);
+  const int dump_count = AUDIO_BUFFER_LEN * 2;
+  sweep_service_prepare_dump(dump, dump_count, selection);
   // tlv320aic3204_select(0);
   sweep_service_start_capture(DELAY_SWEEP_START);
   while (!sweep_service_dump_ready()) __WFI();
-  for (i = 0, j = 0; i < (int)ARRAY_COUNT(dump); i++) {
+  for (i = 0, j = 0; i < dump_count; i++) {
     shell_printf("%6d ", dump[i]);
     if (++j == 12) { shell_printf(VNA_SHELL_NEWLINE_STR); j = 0; }
   }

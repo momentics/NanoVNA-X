@@ -73,6 +73,11 @@ static bool shell_io_write(const uint8_t* data, size_t size) {
     return false;
   }
   size_t written = 0;
+  // Use a counter to prevent infinite blocking if the host is unresponsive
+  // 100 retries * 10ms = 1000ms timeout
+  int retries = 0;
+  const int max_retries = 100;
+
   while (written < size) {
     size_t chunk = size - written;
     if (chunk > SHELL_IO_CHUNK_SIZE) {
@@ -83,10 +88,14 @@ static bool shell_io_write(const uint8_t* data, size_t size) {
       if (!shell_check_connect()) {
         return false;
       }
-      chThdSleepMilliseconds(5);
+      if (++retries > max_retries) {
+        return false;
+      }
+      chThdSleepMilliseconds(10);
       continue;
     }
     written += sent;
+    retries = 0; // Reset retry counter on successful write
   }
   return true;
 }
