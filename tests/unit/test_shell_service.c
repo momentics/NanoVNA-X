@@ -39,6 +39,7 @@
 #include "platform/peripherals/usbcfg.h"
 #include "interfaces/cli/shell_service.h"
 #include "chprintf.h"
+#include "memstreams.h"
 
 /* ------------------------------------------------------------------------- */
 /*                  Minimal USB/stream plumbing for the tests                */
@@ -58,7 +59,18 @@ USBDriver USBD1 = {.state = USB_ACTIVE};
 SerialUSBDriver SDU1 = {.stream = {.vmt = NULL}, .config = &serusbcfg, .user_data = NULL};
 
 static shell_stream_state_t g_stream_state;
+
+/* Implementation of msObjectInit for the test stub */
+void msObjectInit(MemoryStream *msp, uint8_t *buffer, size_t size, size_t eos) {
+    msp->vmt = NULL; // Not used in test logic directly
+    msp->buffer = buffer;
+    msp->size = size;
+    msp->eos = eos;
+}
+
 static int g_queue_enqueues = 0;
+// ... (rest of usage)
+
 static int g_queue_dequeues = 0;
 static event_bus_listener_t g_registered_listener = NULL;
 static event_bus_topic_t g_registered_topic = EVENT_SWEEP_STARTED;
@@ -115,14 +127,40 @@ size_t chnReadTimeout(BaseAsynchronousChannel* chp, uint8_t* data, size_t size,
 }
 
 int chvprintf(BaseSequentialStream* chp, const char* fmt, va_list ap) {
-  char buffer[256];
-  int len = vsnprintf(buffer, sizeof(buffer), fmt, ap);
-  if (len <= 0) {
+  if ((void*)chp == (void*)&SDU1) {
+    char buffer[256];
+    int len = vsnprintf(buffer, sizeof(buffer), fmt, ap);
+    if (len <= 0) {
+      return len;
+    }
+    chnWriteTimeout((BaseAsynchronousChannel*)chp, (const uint8_t*)buffer, (size_t)len,
+                    TIME_IMMEDIATE);
+    return len;
+  } else {
+    /* Assume it is a MemoryStream as used in shell_service.c */
+    MemoryStream* ms = (MemoryStream*)chp;
+    if (ms->buffer == NULL || ms->size <= ms->eos) {
+      return 0;
+    }
+    size_t available = ms->size - ms->eos + 1; /* vsnprintf needs space for null */
+    /* Note: ms->size in shell_service logic excludes the final null byte it reserves manually.
+       but standard vsnprintf expects 'size' to INCLUDE the null byte.
+       shell_service allocates 128, inits ms with 127.
+       So we have buffer[127] available effectively if we are at eos=0.
+       we want to write up to 127 chars. vsnprintf(..., 128).
+    */
+    int len = vsnprintf((char*)ms->buffer + ms->eos, available, fmt, ap);
+    if (len > 0) {
+        /* vsnprintf returns expected length. We must clamp to written length. */
+        size_t written = (size_t)len;
+        if (written >= available) {
+            written = available - 1;
+        }
+        ms->eos += written;
+        return written; // Return written chars similar to chvprintf
+    }
     return len;
   }
-  chnWriteTimeout((BaseAsynchronousChannel*)chp, (const uint8_t*)buffer, (size_t)len,
-                  TIME_IMMEDIATE);
-  return len;
 }
 
 void chThdSleepMilliseconds(uint32_t ms) {

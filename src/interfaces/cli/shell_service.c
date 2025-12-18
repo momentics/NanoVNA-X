@@ -129,7 +129,7 @@ static void shell_write(const void* buf, size_t size) {
 static size_t shell_read(void* buf, size_t size) {
   return shell_io_read((uint8_t*)buf, size);
 }
-static char shell_print_buffer[128];
+static char shell_print_buffer[96];
 
 int shell_printf(const char* fmt, ...) {
   if (shell_stream == NULL) {
