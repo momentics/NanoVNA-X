@@ -259,17 +259,9 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   original_points = sweep_points;
   bool restore_config = false;
 
-  // Save current sweep state
-  bool was_running = (sweep_mode & SWEEP_ENABLE) != 0;
-
   if (argc < 2 || argc > 4) {
     PRINT_USAGE("usage: scan {start(Hz)} {stop(Hz)} [points] [outmask]" VNA_SHELL_NEWLINE_STR);
     return;
-  }
-
-  // Pause sweep if it was running to prevent interference during setup
-  if (was_running) {
-    pause_sweep();
   }
 
   start = my_atoui(argv[0]);
@@ -285,8 +277,6 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     } else {
       shell_printf("frequency range is invalid" VNA_SHELL_NEWLINE_STR);
     }
-    // Restore state if we return early
-    if (was_running) resume_sweep();
     return;
   }
   if (start != original_start || stop != original_stop)
@@ -296,8 +286,6 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     if (points == 0 || points > SWEEP_POINTS_MAX) {
       shell_printf("sweep points exceeds range " define_to_STR(SWEEP_POINTS_MAX)
                        VNA_SHELL_NEWLINE_STR);
-      // Restore state if we return early
-      if (was_running) resume_sweep();
       return;
     }
     sweep_points = points;
@@ -341,7 +329,6 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     app_measurement_reset();
     app_measurement_sweep(false, sweep_ch);
   }
-  // Ensure paused before output (redundant if was_running is true, but safe)
   pause_sweep();
   
   if (mask) {
@@ -375,18 +362,14 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     sweep_points = original_points;
     app_measurement_update_frequencies();
   }
-  
-  // Only resume if it was originally running
-  if (was_running) {
-    resume_sweep();
-  }
+  resume_sweep();
 }
 
 VNA_SHELL_FUNCTION(cmd_scan_bin) {
 #if ENABLE_SCANBIN_COMMAND
   sweep_mode |= SWEEP_BINARY;
   cmd_scan(argc, argv);
-  // sweep_mode &= ~(SWEEP_BINARY); // Cleared in cmd_scan
+  sweep_mode &= ~(SWEEP_BINARY);
 #endif
 }
 
@@ -1161,9 +1144,9 @@ VNA_SHELL_FUNCTION(cmd_reset) {
 }
 
 const vna_shell_command commands[] = {
-    {"scan", cmd_scan, CMD_WAIT_MUTEX},
+    {"scan", cmd_scan, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
 #if ENABLE_SCANBIN_COMMAND
-    {"scan_bin", cmd_scan_bin, CMD_WAIT_MUTEX},
+    {"scan_bin", cmd_scan_bin, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
 #endif
     {"data", cmd_data, 0},
     {"frequencies", cmd_frequencies, 0},
@@ -1207,8 +1190,8 @@ const vna_shell_command commands[] = {
 #endif
     {"touchcal", cmd_touchcal, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
     {"touchtest", cmd_touchtest, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
-    {"pause", cmd_pause, CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
-    {"resume", cmd_resume, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
+    {"pause", cmd_pause, CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD | CMD_NO_AUTO_RESUME},
+    {"resume", cmd_resume, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD | CMD_NO_AUTO_RESUME},
 #ifdef __SD_CARD_LOAD__
     {"msg", cmd_msg, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_LOAD},
 #endif
@@ -1230,7 +1213,7 @@ const vna_shell_command commands[] = {
 #endif
     {"vbat", cmd_vbat, CMD_RUN_IN_LOAD},
     {"tcxo", cmd_tcxo, CMD_RUN_IN_LOAD},
-    {"reset", cmd_reset, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_LOAD},
+    {"reset", cmd_reset, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_LOAD | CMD_NO_AUTO_RESUME},
 #ifdef __USE_SMOOTH__
     {"smooth", cmd_smooth, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif

@@ -617,17 +617,29 @@ static void vna_shell_execute_line(char* line) {
   const vna_shell_command* cmd = shell_parse_command(line, &argc, &argv, &command_name);
   if (cmd) {
     uint16_t cmd_flag = cmd->flags;
+    bool auto_resume = false;
     if ((cmd_flag & CMD_RUN_IN_UI) && (sweep_mode & SWEEP_UI_MODE)) {
       cmd_flag &= (uint16_t)~CMD_WAIT_MUTEX;
     }
     if (cmd_flag & CMD_BREAK_SWEEP) {
+      if (sweep_mode & SWEEP_ENABLE) {
+        auto_resume = true;
+      }
       ui_controller_request_console_break();
       pause_sweep();
     }
     if (cmd_flag & CMD_WAIT_MUTEX) {
+      if (auto_resume) {
+        shell_set_auto_resume(true);
+      } else {
+        shell_set_auto_resume(false);
+      }
       shell_request_deferred_execution(cmd, argc, argv);
     } else {
       cmd->sc_function((int)argc, argv);
+      if (auto_resume && !(cmd_flag & CMD_NO_AUTO_RESUME)) {
+        resume_sweep();
+      }
     }
   } else if (command_name && *command_name) {
     shell_printf("%s?" VNA_SHELL_NEWLINE_STR, command_name);

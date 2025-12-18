@@ -48,8 +48,17 @@ static event_bus_t* shell_event_bus = NULL;
 static shell_session_callback_t shell_session_start_cb = NULL;
 static shell_session_callback_t shell_session_stop_cb = NULL;
 static bool shell_session_active = false;
+static bool shell_auto_resume = false;
 
 static void shell_on_event(const event_bus_message_t* message, void* user_data);
+
+void shell_set_auto_resume(bool enable) {
+  shell_auto_resume = enable;
+}
+
+bool shell_get_auto_resume(void) {
+  return shell_auto_resume;
+}
 
 static void shell_assign_stream(BaseSequentialStream* stream) {
   shell_stream = stream;
@@ -379,6 +388,14 @@ void shell_service_pending_commands(void) {
       pause_sweep();
     }
     command->sc_function(argc, argv);
+    
+    // Auto-resume sweep if it was running and command allows it
+    if (shell_auto_resume) {
+      if (!(command->flags & CMD_NO_AUTO_RESUME)) {
+        resume_sweep();
+      }
+      shell_auto_resume = false;
+    }
 
 
     osalSysLock();

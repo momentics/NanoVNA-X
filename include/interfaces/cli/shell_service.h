@@ -50,6 +50,7 @@ enum {
   CMD_BREAK_SWEEP = 2,
   CMD_RUN_IN_UI = 4,
   CMD_RUN_IN_LOAD = 8,
+  CMD_NO_AUTO_RESUME = 16,
 };
 
 void shell_register_commands(const vna_shell_command* table);
@@ -77,6 +78,9 @@ void shell_service_pending_commands(void);
 void shell_attach_event_bus(event_bus_t* bus);
 void shell_register_session_start_callback(shell_session_callback_t callback);
 void shell_register_session_stop_callback(shell_session_callback_t callback);
+
+void shell_set_auto_resume(bool enable);
+bool shell_get_auto_resume(void);
 
 int vna_shell_read_line(char* line, int max_size);
 void vna_shell_execute_cmd_line(char* line);
