@@ -361,7 +361,7 @@ static void usb_event(USBDriver* usbp, usbevent_t event) {
     /* Disconnection event on suspend.*/
     sduDisconnectI(&SDU1);
     /* Wake up any waiting shell threads to prevent hanging */
-    shell_wake_all_waiting_threads();
+    shell_wake_all_waiting_threadsI();
     /* Update connection state to disconnected */
     shell_update_vcp_connection_state(false);
     break;
@@ -407,7 +407,7 @@ bool custom_sduRequestsHook(USBDriver *usbp) {
         /* DTR is not asserted - host has closed the port */
         sduDisconnectI(&SDU1);
         /* Wake up any waiting shell threads to prevent hanging */
-        shell_wake_all_waiting_threads();
+        shell_wake_all_waiting_threadsI();
         shell_update_vcp_connection_state(false);
       }
       usbSetupTransfer(usbp, NULL, 0, NULL);

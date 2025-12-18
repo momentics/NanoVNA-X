@@ -61,7 +61,7 @@ int serial_shell_printf(const char* fmt, ...);
 
 void shell_stream_write(const void* buffer, size_t size);
 
-void shell_wake_all_waiting_threads(void);
+void shell_wake_all_waiting_threadsI(void);
 
 void shell_update_speed(uint32_t speed);
 void shell_reset_console(void);

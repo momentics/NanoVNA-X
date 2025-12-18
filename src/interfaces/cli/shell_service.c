@@ -152,16 +152,14 @@ void shell_stream_write(const void* buffer, size_t size) {
   shell_write(buffer, size);
 }
 
-// Function to wake up all shell threads, safe to call from USB event handler
-void shell_wake_all_waiting_threads(void) {
+// Function to wake up all shell threads, must be called from ISR or locked context
+void shell_wake_all_waiting_threadsI(void) {
 #ifdef NANOVNA_HOST_TEST
   // In test environment, we don't have full OSAL implementation
   // This is a placeholder for the real implementation
 #else
-  osalSysLockFromISR();
   // Wake up all waiting threads with MSG_RESET (-2) to unblock them
   osalThreadDequeueAllI(&shell_thread, (msg_t)-2);
-  osalSysUnlockFromISR();
 #endif
 }
 
