@@ -74,68 +74,6 @@ void set_power(uint8_t value) {
 
 
 
-// Forward declarations
-static void cmd_dump(int argc, char* argv[]);
-static void cmd_scan(int argc, char* argv[]);
-static void cmd_scan_bin(int argc, char* argv[]);
-static void cmd_data(int argc, char* argv[]);
-static void cmd_frequencies(int argc, char* argv[]);
-static void cmd_freq(int argc, char* argv[]);
-static void cmd_sweep(int argc, char* argv[]);
-static void cmd_power(int argc, char* argv[]);
-static void cmd_offset(int argc, char* argv[]);
-static void cmd_bandwidth(int argc, char* argv[]);
-static void cmd_time(int argc, char* argv[]);
-static void cmd_dac(int argc, char* argv[]);
-static void cmd_saveconfig(int argc, char* argv[]);
-static void cmd_clearconfig(int argc, char* argv[]);
-static void cmd_sd_list(int argc, char* argv[]);
-static void cmd_sd_read(int argc, char* argv[]);
-static void cmd_sd_delete(int argc, char* argv[]);
-static void cmd_port(int argc, char* argv[]);
-static void cmd_stat(int argc, char* argv[]);
-static void cmd_gain(int argc, char* argv[]);
-static void cmd_sample(int argc, char* argv[]);
-static void cmd_test(int argc, char* argv[]);
-static void cmd_touchcal(int argc, char* argv[]);
-static void cmd_touchtest(int argc, char* argv[]);
-static void cmd_pause(int argc, char* argv[]);
-static void cmd_resume(int argc, char* argv[]);
-static void cmd_msg(int argc, char* argv[]);
-static void cmd_cal(int argc, char* argv[]);
-static void cmd_save(int argc, char* argv[]);
-static void cmd_recall(int argc, char* argv[]);
-static void cmd_trace(int argc, char* argv[]);
-static void cmd_marker(int argc, char* argv[]);
-static void cmd_edelay(int argc, char* argv[]);
-static void cmd_s21offset(int argc, char* argv[]);
-static void cmd_capture(int argc, char* argv[]);
-static void cmd_measure(int argc, char* argv[]);
-static void cmd_refresh(int argc, char* argv[]);
-static void cmd_touch(int argc, char* argv[]);
-static void cmd_release(int argc, char* argv[]);
-static void cmd_vbat(int argc, char* argv[]);
-static void cmd_tcxo(int argc, char* argv[]);
-static void cmd_reset(int argc, char* argv[]);
-static void cmd_smooth(int argc, char* argv[]);
-static void cmd_config(int argc, char* argv[]);
-static void cmd_usart_cfg(int argc, char* argv[]);
-static void cmd_usart(int argc, char* argv[]);
-static void cmd_vbat_offset(int argc, char* argv[]);
-static void cmd_transform(int argc, char* argv[]);
-static void cmd_threshold(int argc, char* argv[]);
-static void cmd_help(int argc, char* argv[]);
-static void cmd_info(int argc, char* argv[]);
-static void cmd_version(int argc, char* argv[]);
-static void cmd_color(int argc, char* argv[]);
-static void cmd_i2c(int argc, char* argv[]);
-static void cmd_si5351reg(int argc, char* argv[]);
-static void cmd_lcd(int argc, char* argv[]);
-static void cmd_threads(int argc, char* argv[]);
-static void cmd_si5351time(int argc, char* argv[]);
-static void cmd_i2ctime(int argc, char* argv[]);
-static void cmd_band(int argc, char* argv[]);
-
 // Implementations
 
 VNA_SHELL_FUNCTION(cmd_power) {
