@@ -353,8 +353,10 @@ VNA_SHELL_FUNCTION(cmd_scan) {
           if (!shell_printf("%f %f ", measured[0][i][0], measured[0][i][1])) break;
         if (mask & SCAN_MASK_OUT_DATA1)
           if (!shell_printf("%f %f ", measured[1][i][0], measured[1][i][1])) break;
-        if (!shell_printf(VNA_SHELL_NEWLINE_STR)) break;
-      }
+        if ((i & 0x3F) == 0x3F) {
+          wdgReset(&WDGD1);
+          chThdYield();
+        }
     }
   }
 
@@ -495,7 +497,10 @@ VNA_SHELL_FUNCTION(cmd_data) {
       }
       for (uint16_t i = 0; i < snapshot.points; i++) {
         if (!shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, snapshot.data[i][0], snapshot.data[i][1])) break;
-        if ((i & 0x0F) == 0x0F) chThdYield();
+        if ((i & 0x3F) == 0x3F) {
+          wdgReset(&WDGD1);
+          chThdYield();
+        }
       }
       if (sweep_service_snapshot_release(&snapshot)) return;
       chThdYield();
@@ -509,7 +514,10 @@ VNA_SHELL_FUNCTION(cmd_data) {
 
   for (uint16_t i = 0; i < points; i++) {
     if (!shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, array[i][0], array[i][1])) break;
-    if ((i & 0x0F) == 0x0F) chThdYield();
+    if ((i & 0x3F) == 0x3F) {
+      wdgReset(&WDGD1);
+      chThdYield();
+    }
   }
 }
 
