@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * Based on Dmitry (DiSlord) dislordlive@gmail.com
+ * Originally written using elements from Dmitry (DiSlord) dislordlive@gmail.com
  * All rights reserved.
  *
  * This is free software; you can redistribute it and/or modify
@@ -466,6 +466,8 @@ void fft(float array[][2], const uint8_t dir) {
 #define FFT_N 8
 #elif FFT_SIZE == 512
 #define FFT_N 9
+#elif FFT_SIZE == 1024
+#define FFT_N 10
 #else
 #error "Need define FFT_N for this FFT size"
 #endif

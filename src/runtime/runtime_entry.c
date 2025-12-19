@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * Based on Dmitry (DiSlord) dislordlive@gmail.com
- * Based on TAKAHASHI Tomohiro (TTRFTECH) edy555@gmail.com
+ * Originally written using elements from Dmitry (DiSlord) dislordlive@gmail.com
+ * Originally written using elements from TAKAHASHI Tomohiro (TTRFTECH) edy555@gmail.com
  * All rights reserved.
  *
  * This is free software; you can redistribute it and/or modify
@@ -169,8 +169,15 @@ uint8_t sweep_mode;
 
 // Flag to indicate when calibration is in progress to prevent UI flash operations during critical phases
 volatile bool calibration_in_progress = false;
+
+#if defined(NANOVNA_F303)
+#define CCM_RAM __attribute__((section(".ccm")))
+#else
+#define CCM_RAM
+#endif
+
 // Sweep measured data - aligned for DMA operations
-alignas(8) float measured[2][SWEEP_POINTS_MAX][2];
+alignas(8) CCM_RAM float measured[2][SWEEP_POINTS_MAX][2];
 
 static int16_t battery_last_mv;
 static systime_t battery_next_sample = 0;
@@ -611,17 +618,29 @@ static void vna_shell_execute_line(char* line) {
   const vna_shell_command* cmd = shell_parse_command(line, &argc, &argv, &command_name);
   if (cmd) {
     uint16_t cmd_flag = cmd->flags;
+    bool auto_resume = false;
     if ((cmd_flag & CMD_RUN_IN_UI) && (sweep_mode & SWEEP_UI_MODE)) {
       cmd_flag &= (uint16_t)~CMD_WAIT_MUTEX;
     }
     if (cmd_flag & CMD_BREAK_SWEEP) {
+      if (sweep_mode & SWEEP_ENABLE) {
+        auto_resume = true;
+      }
       ui_controller_request_console_break();
       pause_sweep();
     }
     if (cmd_flag & CMD_WAIT_MUTEX) {
+      if (auto_resume) {
+        shell_set_auto_resume(true);
+      } else {
+        shell_set_auto_resume(false);
+      }
       shell_request_deferred_execution(cmd, argc, argv);
     } else {
       cmd->sc_function((int)argc, argv);
+      if (auto_resume && !(cmd_flag & CMD_NO_AUTO_RESUME)) {
+        resume_sweep();
+      }
     }
   } else if (command_name && *command_name) {
     shell_printf("%s?" VNA_SHELL_NEWLINE_STR, command_name);
@@ -703,6 +722,12 @@ int runtime_main(void) {
    */
   halInit();
   chSysInit();
+
+#if defined(NANOVNA_F303)
+  // Zero initialize CCM RAM data (not handled by startup)
+  memset(measured, 0, sizeof(measured));
+#endif
+
   sweep_mode = SWEEP_ENABLE;
   battery_last_mv = INT16_MIN;
 

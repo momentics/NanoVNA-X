@@ -168,6 +168,7 @@ void chThdSleepMilliseconds(uint32_t ms) {
 }
 
 void pause_sweep(void) {}
+void resume_sweep(void) {}
 
 
 void osalSysLock(void) {}

@@ -1,6 +1,7 @@
 # NanoVNA-X Menu Structure
 
 ## CAL
+
 - **MECH CAL**
   - OPEN -> apply standard
   - SHORT
@@ -23,9 +24,10 @@
   - CAL RESET
 
 For detailed 12-point calibration instructions, see the documentation:
-* [12-Point Calibration Guide](calibration_12_point.md)
+- [12-Point Calibration Guide](calibration_12_point.md)
 
 ## STIMULUS
+
 - START / STOP / CENTER / SPAN -> keypad entries
 - CW FREQ -> single-frequency output
 - FREQ STEP -> jog coarse step
@@ -35,6 +37,7 @@ For detailed 12-point calibration instructions, see the documentation:
 - MORE PTS -> legacy sweep-points submenu
 
 ## DISPLAY
+
 - TRACES -> TRACE 0 … TRACE 3, stored trace slots `[STORED_TRACES > 0]`
 - FORMAT S11 -> LOGMAG, PHASE, DELAY, SMITH, SWR, RESISTANCE, REACTANCE, |Z|, MORE -> (POLAR, LINEAR, REAL, IMAG, Q FACTOR, CONDUCTANCE, SUSCEPTANCE, |Y|) -> MORE -> (Z PHASE, SERIES/SHUNT/PARALLEL component views)
 - FORMAT S21 -> LOGMAG, PHASE, DELAY, SMITH, POLAR, LINEAR, REAL, IMAG, MORE -> (series/shunt R/X/|Z|, Q)
@@ -42,12 +45,18 @@ For detailed 12-point calibration instructions, see the documentation:
 - SCALE -> AUTO SCALE, TOP, BOTTOM, SCALE/DIV, REFERENCE POSITION, E-DELAY, S21 OFFSET, SHOW GRID `[__USE_GRID_VALUES__]`, DOT GRID `[__USE_GRID_VALUES__]`
 - MARKERS
   - SELECT MARKER -> MARKER 1 … MARKER N, ALL OFF, DELTA
-  - TRACKING
-  - SEARCH (MAXIMUM/MINIMUM), SEARCH ← LEFT, SEARCH -> RIGHT
-  - MOVE START / MOVE STOP / MOVE CENTER / MOVE SPAN
-  - MARKER E-DELAY
+  - SEARCH
+    - SEARCH (MAXIMUM/MINIMUM)
+    - TRACKING
+    - SEARCH ← LEFT
+    - SEARCH -> RIGHT
+  - OPERATIONS
+    - MOVE START / MOVE STOP / MOVE CENTER / MOVE SPAN
+    - MARKER E-DELAY
+  - DELTA
 
 ## MEASURE
+
 - TRANSFORM -> toggle domain, select LOW PASS IMPULSE / LOW PASS STEP / BANDPASS, change window, VELOCITY FACTOR
 - DATA SMOOTH `[__USE_SMOOTH__]` -> OFF, x1/x2/x4/x5/x6…, SMOOTH MODE toggle
 - MEASURE `[__VNA_MEASURE_MODULE__]`
@@ -57,6 +66,7 @@ For detailed 12-point calibration instructions, see the documentation:
 - PORT-Z `[__VNA_Z_RENORMALIZATION__]` -> set reference impedance
 
 ## SYSTEM
+
 - TOUCH CAL
 - TOUCH TEST
 - BRIGHTNESS `[__LCD_BRIGHTNESS__]`
@@ -79,6 +89,7 @@ For detailed 12-point calibration instructions, see the documentation:
 - CONNECTION `[__USE_SERIAL_CONSOLE__]` -> toggle USB/UART, set serial speed
 
 ## SD CARD
+
 - LOAD `[__SD_FILE_BROWSER__]` -> open browser filtered by extension (SCREENSHOT, S1P, S2P, CAL)
 - SAVE S1P -> dump CH0 data to an S1P file
 - SAVE S2P -> dump both channels to an S2P file
@@ -88,4 +99,5 @@ For detailed 12-point calibration instructions, see the documentation:
 - FORMAT SD `[FF_USE_MKFS]` -> unmount, run FatFs mkfs (`FM_FAT`), remount, and report the outcome
 
 ## Sweep control
+
 - `%s SWEEP` button reflects the sweep state (`PAUSE SWEEP` or `RESUME SWEEP`) and immediately toggles the background sweep engine.

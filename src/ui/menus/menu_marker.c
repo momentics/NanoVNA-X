@@ -1,3 +1,23 @@
+/*
+ * Copyright (c) 2024, @momentics <momentics@gmail.com>
+ * All rights reserved.
+ *
+ * This is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3, or (at your option)
+ * any later version.
+ *
+ * The software is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GNU Radio; see the file COPYING.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street,
+ * Boston, MA 02110-1301, USA.
+ */
+
 #include "ch.h"
 #include "hal.h"
 #include "nanovna.h"
@@ -178,17 +198,27 @@ static UI_FUNCTION_CALLBACK(menu_marker_select_cb) {
   menu_push_submenu(menu_build_marker_select_menu());
 }
 
-const menuitem_t menu_marker[] = {
-    {MT_CALLBACK, 0, "SELECT\nMARKER", menu_marker_select_cb},
-    {MT_ADV_CALLBACK, 0, "TRACKING", menu_marker_tracking_acb},
+const menuitem_t menu_search[] = {
     {MT_ADV_CALLBACK, VNA_MODE_SEARCH, "SEARCH\n " R_LINK_COLOR "%s", menu_vna_mode_acb},
+    {MT_ADV_CALLBACK, 0, "TRACKING", menu_marker_tracking_acb},
     {MT_CALLBACK, MK_SEARCH_LEFT, "SEARCH\n " S_LARROW "LEFT", menu_marker_search_dir_cb},
     {MT_CALLBACK, MK_SEARCH_RIGHT, "SEARCH\n " S_RARROW "RIGHT", menu_marker_search_dir_cb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+
+const menuitem_t menu_operations[] = {
     {MT_CALLBACK, ST_START, "MOVE\nSTART", menu_marker_op_cb},
     {MT_CALLBACK, ST_STOP, "MOVE\nSTOP", menu_marker_op_cb},
     {MT_CALLBACK, ST_CENTER, "MOVE\nCENTER", menu_marker_op_cb},
     {MT_CALLBACK, ST_SPAN, "MOVE\nSPAN", menu_marker_op_cb},
     {MT_CALLBACK, UI_MARKER_EDELAY, "MARKER\nE-DELAY", menu_marker_op_cb},
+    {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
+};
+
+const menuitem_t menu_marker[] = {
+    {MT_CALLBACK, 0, "SELECT\nMARKER", menu_marker_select_cb},
+    {MT_SUBMENU, 0, "SEARCH", menu_search},
+    {MT_SUBMENU, 0, "OPERATIONS", menu_operations},
     {MT_ADV_CALLBACK, 0, "DELTA", menu_marker_delta_acb},
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
