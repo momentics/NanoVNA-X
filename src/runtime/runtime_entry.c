@@ -876,7 +876,7 @@ int runtime_main(void) {
   /*
    * Startup sweep thread
    */
-  chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO - 1, Thread1, NULL);
+  chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO + 1, Thread1, NULL);
 
   while (1) {
     if (!shell_check_connect()) {
