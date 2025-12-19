@@ -353,10 +353,12 @@ VNA_SHELL_FUNCTION(cmd_scan) {
           if (!shell_printf("%f %f ", measured[0][i][0], measured[0][i][1])) break;
         if (mask & SCAN_MASK_OUT_DATA1)
           if (!shell_printf("%f %f ", measured[1][i][0], measured[1][i][1])) break;
+        if (!shell_printf(VNA_SHELL_NEWLINE_STR)) break;
         if ((i & 0x3F) == 0x3F) {
           wdgReset(&WDGD1);
           chThdYield();
         }
+      }
     }
   }
 
@@ -560,6 +562,7 @@ VNA_SHELL_FUNCTION(cmd_clearconfig) {
 VNA_SHELL_FUNCTION(cmd_capture) {
   // read 2 row pixel time force
 #define READ_ROWS 2
+  extern pixel_t spi_buffer[];
   for (int y = 0; y < LCD_HEIGHT; y += READ_ROWS) {
     lcd_read_memory(0, y, LCD_WIDTH, READ_ROWS, (uint16_t*)spi_buffer);
     shell_stream_write(spi_buffer, READ_ROWS * LCD_WIDTH * sizeof(uint16_t));
