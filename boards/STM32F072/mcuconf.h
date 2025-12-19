@@ -78,7 +78,7 @@
 #ifdef VNA_AUTO_SELECT_RTC_SOURCE
  #define STM32_LSEDRV                        (3 << 3)
  #define STM32_RTCSEL                        STM32_RTCSEL_NOCLOCK
- #define STM32_LSI_ENABLED                   FALSE
+ #define STM32_LSI_ENABLED                   TRUE
  #define STM32_LSE_ENABLED                   FALSE
 // Disable this function call in ChibiOS, backup domain init on auto select RTC source
  #define STM32_NO_BACKUP_DOMAIN_INIT
@@ -263,6 +263,6 @@
 /*
  * WDG driver system settings.
  */
-#define STM32_WDG_USE_IWDG                  FALSE
+#define STM32_WDG_USE_IWDG                  TRUE
 
 #endif /* MCUCONF_H */

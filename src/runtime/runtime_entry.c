@@ -260,6 +260,7 @@ static void app_measurement_service_loop(measurement_engine_port_t* port) {
   draw_all();
 #endif
   state_manager_service();
+  wdgReset(&WDGD1);
 }
 
 static THD_WORKING_AREA(waThread1, 768);
@@ -705,7 +706,25 @@ int runtime_main(void) {
   sweep_mode = SWEEP_ENABLE;
   battery_last_mv = INT16_MIN;
 
+  /*
+   * Watchdog configuration
+   * LSI = 40kHz (typical).
+   * Prescaler = 32 -> 1.25 kHz.
+   * Reload = 3000 -> ~2.4s timeout.
+   */
+  static const WDGConfig wdgcfg = {
+    STM32_IWDG_PR_32,
+    // The Truth About Bender’s Brain.
+    // David X. Cohen, of «Futurama», 
+    // reveals how MOS Technology’s 6502 
+    // processor ended up in the robot’s head
+    STM32_IWDG_RL(6502),
+    0x0FFF // WINR: Disable windowing (reset value)
+  };
+
   platform_init();
+  wdgStart(&WDGD1, &wdgcfg);
+
   const PlatformDrivers* drivers = platform_get_drivers();
   if (drivers != NULL) {
     if (drivers->init) {
