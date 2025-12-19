@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * Based on legacy_measure.c by Dmitry (DiSlord)
+ * Originally written using elements from legacy_measure.c by Dmitry (DiSlord)
  * All rights reserved.
  */
 

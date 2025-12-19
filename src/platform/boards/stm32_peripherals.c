@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2024, @momentics <momentics@gmail.com>
- * Based on Dmitry (DiSlord) dislordlive@gmail.com
- * Based on TAKAHASHI Tomohiro (TTRFTECH) edy555@gmail.com
+ * Originally written using elements from Dmitry (DiSlord) dislordlive@gmail.com
+ * Originally written using elements from TAKAHASHI Tomohiro (TTRFTECH) edy555@gmail.com
  * All rights reserved.
  *
  * This is free software; you can redistribute it and/or modify
