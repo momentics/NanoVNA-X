@@ -120,7 +120,6 @@ static uint32_t usb_pm_alloc(USBDriver *usbp, size_t size) {
  *
  * @notapi
  */
-#define STM32_USB_USE_WORD_COPY
 static size_t usb_packet_read_to_buffer(usbep_t ep, uint8_t *buf) {
   size_t i, n;
   stm32_usb_descriptor_t *udp = USB_GET_DESCRIPTOR(ep);
