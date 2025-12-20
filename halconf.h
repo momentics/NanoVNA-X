@@ -333,7 +333,7 @@
 #define SERIAL_USB_RX_BUFFERS_NUMBER 1
 #endif
 #if !defined(SERIAL_TX_USB_BUFFERS_NUMBER) || defined(__DOXYGEN__)
-#define SERIAL_USB_TX_BUFFERS_NUMBER 2
+#define SERIAL_USB_TX_BUFFERS_NUMBER 4
 #endif
 
 // USB Send timeout
