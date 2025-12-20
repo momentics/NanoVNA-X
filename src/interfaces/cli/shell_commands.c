@@ -37,6 +37,7 @@
 #include "runtime/runtime_entry.h" // For globals if needed, but nanovna.h should suffice
 #include <string.h>
 #include <stdlib.h>
+#include <chprintf.h>
 
 #define VNA_SHELL_FUNCTION(command_name) static __attribute__((unused)) void command_name(int argc __attribute__((unused)), char* argv[] __attribute__((unused)))
 #define VNA_FREQ_FMT_STR "%u"
@@ -285,14 +286,20 @@ VNA_SHELL_FUNCTION(cmd_scan) {
       }
     } else {
       for (int i = 0; i < points; i++) {
+        char line[128];
+        size_t offset = 0;
         if (mask & SCAN_MASK_OUT_FREQ)
-          if (!shell_printf(VNA_FREQ_FMT_STR " ", get_frequency(i))) break;
+          offset += chsnprintf(line + offset, sizeof(line) - offset, VNA_FREQ_FMT_STR " ", get_frequency(i));
         if (mask & SCAN_MASK_OUT_DATA0)
-          if (!shell_printf("%f %f ", measured[0][i][0], measured[0][i][1])) break;
+          offset += chsnprintf(line + offset, sizeof(line) - offset, "%f %f ", measured[0][i][0], measured[0][i][1]);
         if (mask & SCAN_MASK_OUT_DATA1)
-          if (!shell_printf("%f %f ", measured[1][i][0], measured[1][i][1])) break;
-        if (!shell_printf(VNA_SHELL_NEWLINE_STR)) break;
-        if ((i & 0x3F) == 0x3F) {
+          offset += chsnprintf(line + offset, sizeof(line) - offset, "%f %f ", measured[1][i][0], measured[1][i][1]);
+        
+        offset += chsnprintf(line + offset, sizeof(line) - offset, VNA_SHELL_NEWLINE_STR);
+
+        shell_stream_write(line, offset);
+
+        if ((i & 12) == 12) {
           wdgReset(&WDGD1);
           chThdYield();
         }
@@ -437,7 +444,7 @@ VNA_SHELL_FUNCTION(cmd_data) {
       }
       for (uint16_t i = 0; i < snapshot.points; i++) {
         if (!shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, snapshot.data[i][0], snapshot.data[i][1])) break;
-        if ((i & 0x3F) == 0x3F) {
+        if ((i & 12) == 12) {
           wdgReset(&WDGD1);
           chThdYield();
         }
@@ -454,7 +461,7 @@ VNA_SHELL_FUNCTION(cmd_data) {
 
   for (uint16_t i = 0; i < points; i++) {
     if (!shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, array[i][0], array[i][1])) break;
-    if ((i & 0x3F) == 0x3F) {
+    if ((i & 12) == 12) {
       wdgReset(&WDGD1);
       chThdYield();
     }
