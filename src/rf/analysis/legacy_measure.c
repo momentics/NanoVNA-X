@@ -23,8 +23,10 @@
 #ifdef __VNA_MEASURE_MODULE__
 // Use size optimization (module not need fast speed, better have smallest size)
 #pragma GCC push_options
-#pragma GCC optimize("Os")
 
+#pragma GCC optimize("O2")
+#include <math.h>
+#include <stdlib.h>
 #include "rf/analysis/measurement_analysis.h"
 
 // Memory for measure cache data

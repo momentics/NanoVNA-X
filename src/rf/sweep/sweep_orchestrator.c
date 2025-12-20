@@ -18,6 +18,8 @@
  * Boston, MA 02110-1301, USA.
  */
 
+#pragma GCC optimize("O2")
+
 #include "rf/sweep/sweep_orchestrator.h"
 
 #include "hal.h"
