@@ -29,9 +29,12 @@
 #include "nanovna.h"
 #include "platform/peripherals/usbcfg.h"
 #include "rf/sweep/sweep_orchestrator.h"
+#include "runtime/runtime_entry.h"
+
+extern void resume_sweep(void);
 
 #ifndef NANOVNA_HOST_TEST
-extern WatchdogDriver WDGD1;
+// extern WatchdogDriver WDGD1; // Already declared in hal_wdg_lld.h
 #endif
 
 #include <chprintf.h>
