@@ -92,32 +92,33 @@ static bool shell_io_write(const uint8_t* data, size_t size) {
     return false;
   }
   size_t written = 0;
-  // Use a counter to prevent infinite blocking if the host is unresponsive
-  // 100 retries * 10ms = 1000ms timeout
-  int retries = 0;
-  const int max_retries = 100;
 
   while (written < size) {
     size_t chunk = size - written;
     if (chunk > SHELL_IO_CHUNK_SIZE) {
       chunk = SHELL_IO_CHUNK_SIZE;
     }
-    size_t sent = chnWriteTimeout(channel, data + written, chunk, SHELL_IO_TIMEOUT);
+    // Use TIME_IMMEDIATE to check for buffer space without blocking.
+    // This allows us to kick the watchdog frequently and yield to other threads.
+    #ifndef NANOVNA_HOST_TEST
+    wdgReset(&WDGD1);
+    #endif
+
+    size_t sent = chnWriteTimeout(channel, data + written, chunk, TIME_IMMEDIATE);
+
     if (sent == 0) {
       if (!shell_check_connect()) {
         return false;
       }
-      if (++retries > max_retries) {
-        return false;
-      }
-#ifndef NANOVNA_HOST_TEST
-      wdgReset(&WDGD1); 
-#endif
-      chThdSleepMilliseconds(1);
+      // Buffer full. Yield to allow USB interrupt to process and free space.
+      // We do not increment retries or timeout here, effectively blocking until space is available,
+      // but keeping the watchdog alive.
+      #ifndef NANOVNA_HOST_TEST
+      chThdYield();
+      #endif
       continue;
     }
     written += sent;
-    retries = 0; // Reset retry counter on successful write
   }
   return true;
 }
