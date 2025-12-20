@@ -37,6 +37,7 @@
 #include "runtime/runtime_entry.h" // For globals if needed, but nanovna.h should suffice
 #include <string.h>
 #include <stdlib.h>
+#include <chprintf.h>
 
 #define VNA_SHELL_FUNCTION(command_name) static __attribute__((unused)) void command_name(int argc __attribute__((unused)), char* argv[] __attribute__((unused)))
 #define VNA_FREQ_FMT_STR "%u"
@@ -284,46 +285,71 @@ VNA_SHELL_FUNCTION(cmd_scan) {
           shell_stream_write(&measured[1][i][0], sizeof(float) * 2);
       }
     } else {
+      char buffer[256];
+      size_t buffer_len = 0;
+      
       for (int i = 0; i < points; i++) {
+        char line[64];
+        int n = 0;
+        
+        // Use chsnprintf to format locally instead of shell_printf
         switch (mask & (SCAN_MASK_OUT_FREQ | SCAN_MASK_OUT_DATA0 | SCAN_MASK_OUT_DATA1)) {
           case (SCAN_MASK_OUT_FREQ | SCAN_MASK_OUT_DATA0 | SCAN_MASK_OUT_DATA1):
-            shell_printf(VNA_FREQ_FMT_STR " %f %f %f %f" VNA_SHELL_NEWLINE_STR,
+            n = chsnprintf(line, sizeof(line), VNA_FREQ_FMT_STR " %f %f %f %f" VNA_SHELL_NEWLINE_STR,
                          get_frequency(i),
                          measured[0][i][0], measured[0][i][1],
                          measured[1][i][0], measured[1][i][1]);
             break;
           case (SCAN_MASK_OUT_FREQ | SCAN_MASK_OUT_DATA0):
-            shell_printf(VNA_FREQ_FMT_STR " %f %f" VNA_SHELL_NEWLINE_STR,
+            n = chsnprintf(line, sizeof(line), VNA_FREQ_FMT_STR " %f %f" VNA_SHELL_NEWLINE_STR,
                          get_frequency(i),
                          measured[0][i][0], measured[0][i][1]);
             break;
           case (SCAN_MASK_OUT_DATA0 | SCAN_MASK_OUT_DATA1):
-            shell_printf("%f %f %f %f" VNA_SHELL_NEWLINE_STR,
+            n = chsnprintf(line, sizeof(line), "%f %f %f %f" VNA_SHELL_NEWLINE_STR,
                          measured[0][i][0], measured[0][i][1],
                          measured[1][i][0], measured[1][i][1]);
             break;
           case SCAN_MASK_OUT_FREQ:
-            shell_printf(VNA_FREQ_FMT_STR VNA_SHELL_NEWLINE_STR, get_frequency(i));
+            n = chsnprintf(line, sizeof(line), VNA_FREQ_FMT_STR VNA_SHELL_NEWLINE_STR, get_frequency(i));
             break;
           case SCAN_MASK_OUT_DATA0:
-            shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, measured[0][i][0], measured[0][i][1]);
+            n = chsnprintf(line, sizeof(line), "%f %f" VNA_SHELL_NEWLINE_STR, measured[0][i][0], measured[0][i][1]);
             break;
           case SCAN_MASK_OUT_DATA1:
-             shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, measured[1][i][0], measured[1][i][1]);
+             n = chsnprintf(line, sizeof(line), "%f %f" VNA_SHELL_NEWLINE_STR, measured[1][i][0], measured[1][i][1]);
             break;
           default:
-            // Fallback for uncommon combinations (slow but correct)
-             if (mask & SCAN_MASK_OUT_FREQ) shell_printf(VNA_FREQ_FMT_STR " ", get_frequency(i));
-             if (mask & SCAN_MASK_OUT_DATA0) shell_printf("%f %f ", measured[0][i][0], measured[0][i][1]);
-             if (mask & SCAN_MASK_OUT_DATA1) shell_printf("%f %f ", measured[1][i][0], measured[1][i][1]);
-             shell_printf(VNA_SHELL_NEWLINE_STR);
+            // Fallback for uncommon combinations
+             n = 0;
+             if (mask & SCAN_MASK_OUT_FREQ) n += chsnprintf(line + n, sizeof(line) - n, VNA_FREQ_FMT_STR " ", get_frequency(i));
+             if (mask & SCAN_MASK_OUT_DATA0) n += chsnprintf(line + n, sizeof(line) - n, "%f %f ", measured[0][i][0], measured[0][i][1]);
+             if (mask & SCAN_MASK_OUT_DATA1) n += chsnprintf(line + n, sizeof(line) - n, "%f %f ", measured[1][i][0], measured[1][i][1]);
+             n += chsnprintf(line + n, sizeof(line) - n, VNA_SHELL_NEWLINE_STR);
             break;
         }
 
-        if ((i & 12) == 12) {
-          wdgReset(&WDGD1);
-          chThdYield();
+        // Flush if buffer would overflow
+        if (buffer_len + n >= sizeof(buffer)) {
+           shell_stream_write(buffer, buffer_len);
+           buffer_len = 0;
+           #ifndef NANOVNA_HOST_TEST
+           wdgReset(&WDGD1);
+           #endif
+           // Yield to allow USB processing
+           chThdYield();
         }
+        
+        // Append to buffer
+        if (n > 0 && (size_t)n < sizeof(line)) {
+           memcpy(buffer + buffer_len, line, n);
+           buffer_len += n;
+        }
+      }
+      
+      // Flush remaining
+      if (buffer_len > 0) {
+        shell_stream_write(buffer, buffer_len);
       }
     }
   }
