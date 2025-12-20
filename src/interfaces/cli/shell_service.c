@@ -28,6 +28,11 @@
 
 #include "nanovna.h"
 #include "platform/peripherals/usbcfg.h"
+#include "rf/sweep/sweep_orchestrator.h"
+
+#ifndef NANOVNA_HOST_TEST
+extern WatchdogDriver WDGD1;
+#endif
 
 #include <chprintf.h>
 #include <stdarg.h>
@@ -102,7 +107,10 @@ static bool shell_io_write(const uint8_t* data, size_t size) {
       if (++retries > max_retries) {
         return false;
       }
-      chThdSleepMilliseconds(10);
+#ifndef NANOVNA_HOST_TEST
+      wdgReset(&WDGD1); 
+#endif
+      chThdSleepMilliseconds(1);
       continue;
     }
     written += sent;
