@@ -99,23 +99,25 @@ static bool shell_io_write(const uint8_t* data, size_t size) {
       chunk = SHELL_IO_CHUNK_SIZE;
     }
 
-    // Use a short blocking timeout to allow ISR to run and wake us up immediately
-    // or return control to kick watchdog if stalled.
-    // TIME_IMMEDIATE polling can cause bus contention/starvation.
-    size_t sent = chnWriteTimeout(channel, data + written, chunk, MS2ST(5));
+    // Use TIME_IMMEDIATE for non-blocking write attempt.
+    // If buffer is full, we must Yield() to allow the USB ISR to drain data.
+    // Blocking with timeout (MS2ST(5)) introduces unnecessary latency/jitter.
+    size_t sent = chnWriteTimeout(channel, data + written, chunk, TIME_IMMEDIATE);
 
     if (sent > 0) {
       written += sent;
     } else {
-      // If timeout/0 bytes, check connection and kick watchdog
+      // Buffer full (sent=0). Check connection.
       if (!shell_check_connect()) {
         return false;
       }
+      // Buffer is full. Yield to scheduler to let USB ISR prioritize packet transmission.
+      // Reset watchdog to prevent timeout during high-throughput saturation.
+      #ifndef NANOVNA_HOST_TEST
+      wdgReset(&WDGD1);
+      chThdYield();
+      #endif
     }
-    
-    #ifndef NANOVNA_HOST_TEST
-    wdgReset(&WDGD1);
-    #endif
   }
   return true;
 }
