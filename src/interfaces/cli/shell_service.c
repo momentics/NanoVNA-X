@@ -98,27 +98,24 @@ static bool shell_io_write(const uint8_t* data, size_t size) {
     if (chunk > SHELL_IO_CHUNK_SIZE) {
       chunk = SHELL_IO_CHUNK_SIZE;
     }
-    // Use TIME_IMMEDIATE to check for buffer space without blocking.
-    // This allows us to kick the watchdog frequently and yield to other threads.
-    #ifndef NANOVNA_HOST_TEST
-    wdgReset(&WDGD1);
-    #endif
 
-    size_t sent = chnWriteTimeout(channel, data + written, chunk, TIME_IMMEDIATE);
+    // Use a short blocking timeout to allow ISR to run and wake us up immediately
+    // or return control to kick watchdog if stalled.
+    // TIME_IMMEDIATE polling can cause bus contention/starvation.
+    size_t sent = chnWriteTimeout(channel, data + written, chunk, MS2ST(5));
 
-    if (sent == 0) {
+    if (sent > 0) {
+      written += sent;
+    } else {
+      // If timeout/0 bytes, check connection and kick watchdog
       if (!shell_check_connect()) {
         return false;
       }
-      // Buffer full. Yield to allow USB interrupt to process and free space.
-      // We do not increment retries or timeout here, effectively blocking until space is available,
-      // but keeping the watchdog alive.
-      #ifndef NANOVNA_HOST_TEST
-      chThdYield();
-      #endif
-      continue;
     }
-    written += sent;
+    
+    #ifndef NANOVNA_HOST_TEST
+    wdgReset(&WDGD1);
+    #endif
   }
   return true;
 }

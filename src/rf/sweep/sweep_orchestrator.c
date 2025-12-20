@@ -712,6 +712,12 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
       uint16_t current_bar = (uint16_t)(((uint32_t)p_sweep * WIDTH) / (sweep_points - 1U));
       sweep_progress_update(current_bar);
     }
+    
+    // Kick watchdog during long sweeps to prevent reset
+    #ifndef NANOVNA_HOST_TEST
+    wdgReset(&WDGD1);
+    #endif
+    
     processed++;
   }
   completed = (p_sweep == sweep_points);
