@@ -37,7 +37,6 @@
 #include "runtime/runtime_entry.h" // For globals if needed, but nanovna.h should suffice
 #include <string.h>
 #include <stdlib.h>
-#include <chprintf.h>
 
 #define VNA_SHELL_FUNCTION(command_name) static __attribute__((unused)) void command_name(int argc __attribute__((unused)), char* argv[] __attribute__((unused)))
 #define VNA_FREQ_FMT_STR "%u"
@@ -286,18 +285,40 @@ VNA_SHELL_FUNCTION(cmd_scan) {
       }
     } else {
       for (int i = 0; i < points; i++) {
-        char line[128];
-        size_t offset = 0;
-        if (mask & SCAN_MASK_OUT_FREQ)
-          offset += chsnprintf(line + offset, sizeof(line) - offset, VNA_FREQ_FMT_STR " ", get_frequency(i));
-        if (mask & SCAN_MASK_OUT_DATA0)
-          offset += chsnprintf(line + offset, sizeof(line) - offset, "%f %f ", measured[0][i][0], measured[0][i][1]);
-        if (mask & SCAN_MASK_OUT_DATA1)
-          offset += chsnprintf(line + offset, sizeof(line) - offset, "%f %f ", measured[1][i][0], measured[1][i][1]);
-        
-        offset += chsnprintf(line + offset, sizeof(line) - offset, VNA_SHELL_NEWLINE_STR);
-
-        shell_stream_write(line, offset);
+        switch (mask & (SCAN_MASK_OUT_FREQ | SCAN_MASK_OUT_DATA0 | SCAN_MASK_OUT_DATA1)) {
+          case (SCAN_MASK_OUT_FREQ | SCAN_MASK_OUT_DATA0 | SCAN_MASK_OUT_DATA1):
+            shell_printf(VNA_FREQ_FMT_STR " %f %f %f %f" VNA_SHELL_NEWLINE_STR,
+                         get_frequency(i),
+                         measured[0][i][0], measured[0][i][1],
+                         measured[1][i][0], measured[1][i][1]);
+            break;
+          case (SCAN_MASK_OUT_FREQ | SCAN_MASK_OUT_DATA0):
+            shell_printf(VNA_FREQ_FMT_STR " %f %f" VNA_SHELL_NEWLINE_STR,
+                         get_frequency(i),
+                         measured[0][i][0], measured[0][i][1]);
+            break;
+          case (SCAN_MASK_OUT_DATA0 | SCAN_MASK_OUT_DATA1):
+            shell_printf("%f %f %f %f" VNA_SHELL_NEWLINE_STR,
+                         measured[0][i][0], measured[0][i][1],
+                         measured[1][i][0], measured[1][i][1]);
+            break;
+          case SCAN_MASK_OUT_FREQ:
+            shell_printf(VNA_FREQ_FMT_STR VNA_SHELL_NEWLINE_STR, get_frequency(i));
+            break;
+          case SCAN_MASK_OUT_DATA0:
+            shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, measured[0][i][0], measured[0][i][1]);
+            break;
+          case SCAN_MASK_OUT_DATA1:
+             shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, measured[1][i][0], measured[1][i][1]);
+            break;
+          default:
+            // Fallback for uncommon combinations (slow but correct)
+             if (mask & SCAN_MASK_OUT_FREQ) shell_printf(VNA_FREQ_FMT_STR " ", get_frequency(i));
+             if (mask & SCAN_MASK_OUT_DATA0) shell_printf("%f %f ", measured[0][i][0], measured[0][i][1]);
+             if (mask & SCAN_MASK_OUT_DATA1) shell_printf("%f %f ", measured[1][i][0], measured[1][i][1]);
+             shell_printf(VNA_SHELL_NEWLINE_STR);
+            break;
+        }
 
         if ((i & 12) == 12) {
           wdgReset(&WDGD1);
