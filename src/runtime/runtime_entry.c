@@ -308,7 +308,7 @@ static void app_measurement_service_loop(measurement_engine_port_t* port) {
   state_manager_service();
 }
 
-static THD_WORKING_AREA(waThread1, 1024); // Increased stack slightly
+static THD_WORKING_AREA(waThread1, 600); // Further reduced for F072 RAM
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
   chRegSetThreadName("sweep");
