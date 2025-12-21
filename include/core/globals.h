@@ -31,7 +31,7 @@ extern const marker_info_t marker_info_list[MS_END];
 extern config_t config;
 extern properties_t current_props;
 
-extern  uint8_t sweep_mode;
+
 extern const char* const info_about[];
 extern volatile bool calibration_in_progress;
 

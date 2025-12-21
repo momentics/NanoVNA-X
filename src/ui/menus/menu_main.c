@@ -34,8 +34,8 @@
 static UI_FUNCTION_ADV_CALLBACK(menu_pause_acb) {
   (void)data;
   if (b) {
-    b->p1.text = (sweep_mode & SWEEP_ENABLE) ? "PAUSE" : "RESUME";
-    b->icon = (sweep_mode & SWEEP_ENABLE) ? BUTTON_ICON_NOCHECK : BUTTON_ICON_CHECK;
+    b->p1.text = app_measurement_is_enabled() ? "PAUSE" : "RESUME";
+    b->icon = app_measurement_is_enabled() ? BUTTON_ICON_NOCHECK : BUTTON_ICON_CHECK;
     return;
   }
   toggle_sweep();

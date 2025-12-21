@@ -62,6 +62,8 @@
 #define MIN_BANDWIDTH ((AUDIO_ADC_FREQ / AUDIO_SAMPLES_COUNT) / 512 + 1)
 
 // Helper for set_power (moved from runtime_entry.c)
+static bool shell_binary_mode = false;
+
 void set_power(uint8_t value) {
   request_to_redraw(REDRAW_CAL_STATUS);
   if (value > SI5351_CLK_DRIVE_STRENGTH_8MA)
@@ -70,7 +72,7 @@ void set_power(uint8_t value) {
     return;
   current_props._power = value;
   // Update power if pause, need for generation in CW mode (legacy behaviour)
-  if (!(sweep_mode & SWEEP_ENABLE))
+  if (!app_measurement_is_enabled())
     si5351_set_power(value);
 }
 
@@ -238,11 +240,11 @@ VNA_SHELL_FUNCTION(cmd_scan) {
 #if ENABLE_SCANBIN_COMMAND
   if (argc == 4) {
     mask = my_atoui(argv[3]);
-    if (sweep_mode & SWEEP_BINARY)
+    if (shell_binary_mode)
       mask |= SCAN_MASK_BINARY;
     sweep_ch = (mask >> 1) & 3;
   }
-  sweep_mode &= ~(SWEEP_BINARY);
+  shell_binary_mode = false;
 #else
   if (argc == 4) {
     mask = my_atoui(argv[3]);
@@ -269,7 +271,7 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     app_measurement_reset();
     app_measurement_sweep(false, sweep_ch);
   }
-  pause_sweep();
+  app_measurement_pause();
   
   if (mask) {
     if (mask & SCAN_MASK_BINARY) {
@@ -359,7 +361,7 @@ VNA_SHELL_FUNCTION(cmd_scan) {
     sweep_points = original_points;
     app_measurement_update_frequencies();
   }
-  resume_sweep();
+  app_measurement_enable();
 }
 
 
@@ -367,9 +369,9 @@ VNA_SHELL_FUNCTION(cmd_scan) {
 // but currently sweep_mode bits are global.
 VNA_SHELL_FUNCTION(cmd_scan_bin) {
 #if ENABLE_SCANBIN_COMMAND
-  sweep_mode |= SWEEP_BINARY;
+  shell_binary_mode = true;
   cmd_scan(argc, argv);
-  sweep_mode &= ~(SWEEP_BINARY);
+  shell_binary_mode = false;
 #endif
 }
 
@@ -407,7 +409,7 @@ VNA_SHELL_FUNCTION(cmd_freq) {
                  (unsigned long)freq);
     return;
   }
-  pause_sweep();
+  app_measurement_pause();
   app_measurement_set_frequency(freq);
 }
 
@@ -486,7 +488,7 @@ VNA_SHELL_FUNCTION(cmd_data) {
   if (sel < 2) {
       // Use runtime_entry.c logic
     sweep_service_snapshot_t snapshot;
-    if (sweep_mode & SWEEP_ENABLE)
+    if (app_measurement_is_enabled())
         sweep_service_wait_for_generation();
     while (true) {
       if (!sweep_service_snapshot_acquire((uint8_t)sel, &snapshot)) {
@@ -826,7 +828,7 @@ VNA_SHELL_FUNCTION(cmd_dump) {
 VNA_SHELL_FUNCTION(cmd_pause) {
   (void)argc;
   (void)argv;
-  pause_sweep();
+  app_measurement_pause();
 }
 
 VNA_SHELL_FUNCTION(cmd_resume) {
@@ -834,7 +836,7 @@ VNA_SHELL_FUNCTION(cmd_resume) {
   (void)argv;
   // Restore frequencies array and calibration state (legacy behaviour)
   app_measurement_update_frequencies();
-  resume_sweep();
+  app_measurement_enable();
 }
 
 VNA_SHELL_FUNCTION(cmd_vbat) {
@@ -860,9 +862,9 @@ VNA_SHELL_FUNCTION(cmd_refresh) {
     return;
   int enable = get_str_index(argv[0], cmd_enable_list);
   if (enable == 0)
-    sweep_mode |= SWEEP_REMOTE;
+    app_display_set_inhibited(true);
   else if (enable == 1)
-    sweep_mode &= (uint8_t)~SWEEP_REMOTE;
+    app_display_set_inhibited(false);
   request_to_redraw(REDRAW_FREQUENCY | REDRAW_CAL_STATUS | REDRAW_AREA | REDRAW_BATTERY);
 }
 

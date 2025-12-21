@@ -689,7 +689,7 @@ static void lcd_bulk_buffer(int x, int y, int w, int h, pixel_t* buffer) {
 #endif
 
 #ifdef __REMOTE_DESKTOP__
-  if (sweep_mode & SWEEP_REMOTE) {
+  if (app_display_is_inhibited()) {
     remote_region_t rd = {"bulk\r\n", x, y, w, h};
     send_region(&rd, (uint8_t*)buffer, w * h * sizeof(pixel_t));
   }
@@ -738,7 +738,7 @@ void lcd_fill(int x, int y, int w, int h) {
 #endif
 
 #ifdef __REMOTE_DESKTOP__
-  if (sweep_mode & SWEEP_REMOTE) {
+  if (app_display_is_inhibited()) {
     remote_region_t rd = {"fill\r\n", x, y, w, h};
     send_region(&rd, (uint8_t*)&background_color, sizeof(pixel_t));
   }

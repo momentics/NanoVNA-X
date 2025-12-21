@@ -578,6 +578,26 @@ void sweep_get_ordered(freq_t* start, freq_t* stop);
 int load_properties(uint32_t id);
 void set_marker_index(int m, int idx);
 
+// Private state exposed for inline accessors - DO NOT MODIFY DIRECTLY
+extern volatile uint8_t sweep_mode;
+extern bool display_inhibited;
+
+static inline bool app_measurement_is_enabled(void) {
+    return (sweep_mode & SWEEP_ENABLE) != 0;
+}
+
+static inline bool app_display_is_inhibited(void) {
+    return display_inhibited;
+}
+
+static inline void app_display_set_inhibited(bool inhibited) {
+    display_inhibited = inhibited;
+}
+
+// Direct function calls (renamed from resume_sweep/pause_sweep)
+void app_measurement_enable(void);
+void app_measurement_pause(void);
+
 // Stat helper
 struct stat_t {
   int16_t rms[2];

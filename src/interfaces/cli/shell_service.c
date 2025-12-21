@@ -31,7 +31,7 @@
 #include "rf/sweep/sweep_orchestrator.h"
 #include "runtime/runtime_entry.h"
 
-extern void resume_sweep(void);
+extern void app_measurement_enable(void);
 
 #ifndef NANOVNA_HOST_TEST
 // extern WatchdogDriver WDGD1; // Already declared in hal_wdg_lld.h
@@ -396,14 +396,14 @@ void shell_service_pending_commands(void) {
     osalSysUnlock();
 
     if ((command->flags & CMD_BREAK_SWEEP) || (command->flags & CMD_WAIT_MUTEX)) {
-      pause_sweep();
+      app_measurement_pause();
     }
     command->sc_function(argc, argv);
     
     // Auto-resume sweep if it was running and command allows it
     if (shell_auto_resume) {
       if (!(command->flags & CMD_NO_AUTO_RESUME)) {
-        resume_sweep();
+        app_measurement_enable();
       }
       shell_auto_resume = false;
     }

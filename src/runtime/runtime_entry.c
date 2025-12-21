@@ -167,10 +167,16 @@ void* filesystem_file(void) {
 // Shell command line buffer, args, nargs, and function ptr
 static char shell_line[VNA_SHELL_MAX_LENGTH];
 
-uint8_t sweep_mode;
+volatile uint8_t sweep_mode;
+static thread_t *sweep_thread = NULL;
+bool display_inhibited = false;
 
 // Flag to indicate when calibration is in progress to prevent UI flash operations during critical phases
 volatile bool calibration_in_progress = false;
+
+// ... (existing includes and defines)
+
+// New Accessors - Trampolines removed, inline in header or renamed functions
 
 #if defined(NANOVNA_F303)
 #define CCM_RAM __attribute__((section(".ccm")))
@@ -180,6 +186,9 @@ volatile bool calibration_in_progress = false;
 
 // Sweep measured data - aligned for DMA operations
 alignas(8) CCM_RAM float measured[2][SWEEP_POINTS_MAX][2];
+
+// ... (existing variables)
+
 
 static int16_t battery_last_mv;
 static systime_t battery_next_sample = 0;
@@ -303,11 +312,14 @@ static THD_WORKING_AREA(waThread1, 1024); // Increased stack slightly
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
   chRegSetThreadName("sweep");
+  sweep_thread = chThdGetSelfX();
 #ifdef __FLIP_DISPLAY__
   if (VNA_MODE(VNA_MODE_FLIP_DISPLAY))
     lcd_set_flip(true);
 #endif
   
+  // Initialize command pool - REMOVED (using direct encoding)
+
   while (1) {
     msg_t msg;
     
@@ -351,29 +363,38 @@ static THD_FUNCTION(Thread1, arg) {
 
 #include "rf/sweep/sweep_orchestrator.h"
 
-void pause_sweep(void) {
-  measurement_command_t cmd;
-  cmd.type = CMD_MEASURE_STOP;
-  measurement_post_command(cmd);
-  // Wait for the sweep thread to actually stop and the engine to become idle
-  // This is required before starting operations that need exclusive hardware access (like scan)
-  sweep_wait_for_idle();
+void app_measurement_pause(void) {
+  if (sweep_thread != NULL && chThdGetSelfX() == sweep_thread) {
+    // We are running in the sweep thread (e.g. from Shell Service callback)
+    // Directly modify state to avoid self-deadlock on Mailbox or Wait
+    sweep_mode &= (uint8_t)~SWEEP_ENABLE;
+  } else {
+    measurement_command_t cmd;
+    cmd.type = CMD_MEASURE_STOP;
+    measurement_post_command(cmd);
+    // Wait for the sweep thread to actually stop and the engine to become idle
+    sweep_wait_for_idle();
+  }
 }
 
-void resume_sweep(void) {
-  measurement_command_t cmd;
-  cmd.type = CMD_MEASURE_START;
-  cmd.data.start.oneshot = false;
-  measurement_post_command(cmd);
+void app_measurement_enable(void) {
+  if (sweep_thread != NULL && chThdGetSelfX() == sweep_thread) {
+     sweep_mode |= SWEEP_ENABLE;
+     sweep_mode &= (uint8_t)~SWEEP_ONCE;
+  } else {
+      measurement_command_t cmd;
+      cmd.type = CMD_MEASURE_START;
+      cmd.data.start.oneshot = false;
+      measurement_post_command(cmd);
+  }
 }
 
 void toggle_sweep(void) {
-   // This is racy without a mutex if called from multiple threads, but acceptable for UI toggle
-   if (sweep_mode & SWEEP_ENABLE) {
-       pause_sweep();
-   } else {
-       resume_sweep();
-   }
+  if (app_measurement_is_enabled()) {
+    app_measurement_pause();
+  } else {
+    app_measurement_enable();
+  }
 }
 
 config_t config = {
@@ -699,7 +720,7 @@ static void vna_shell_execute_line(char* line) {
         auto_resume = true;
       }
       ui_controller_request_console_break();
-      pause_sweep();
+      app_measurement_pause();
     }
     if (cmd_flag & CMD_WAIT_MUTEX) {
       if (auto_resume) {
@@ -711,7 +732,7 @@ static void vna_shell_execute_line(char* line) {
     } else {
       cmd->sc_function((int)argc, argv);
       if (auto_resume && !(cmd_flag & CMD_NO_AUTO_RESUME)) {
-        resume_sweep();
+        app_measurement_enable();
       }
     }
   } else if (command_name && *command_name) {
@@ -1100,6 +1121,6 @@ void send_region(remote_region_t* rd, uint8_t* buf, uint16_t size) {
     shell_stream_write(buf, size);
     shell_stream_write(VNA_SHELL_PROMPT_STR VNA_SHELL_NEWLINE_STR, 6);
   } else
-    sweep_mode &= ~SWEEP_REMOTE;
+    app_display_set_inhibited(false);
 }
 #endif
