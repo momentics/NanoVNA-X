@@ -305,10 +305,9 @@ static void app_measurement_service_loop(measurement_engine_port_t* port) {
   // draw_all(); // Moved to ui_task
 #endif
   state_manager_service();
-  state_manager_service();
 }
 
-static THD_WORKING_AREA(waThread1, 600); // Further reduced for F072 RAM
+static THD_WORKING_AREA(waThread1, 800); // 800 bytes sufficient for Sweep Engine (Leaf)
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
   chRegSetThreadName("sweep");
