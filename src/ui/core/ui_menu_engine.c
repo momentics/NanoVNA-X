@@ -350,20 +350,31 @@ void ui_menu_lever(uint16_t status) {
     return;
   }
 
-  do {
-    uint32_t mask = 1 << selection;
-    if (status & EVT_UP)
-      selection++;
-    if (status & EVT_DOWN)
-      selection--;
-    // close menu if no menu item
-    if ((uint16_t)selection >= count) {
-       ui_mode_normal();
-      return;
-    }
-    menu_draw(mask | (1 << selection));
-    chThdSleepMilliseconds(100);
-  } while ((status = ui_input_wait_release()) != 0);
+  // Handle navigation (reliant on ui_process_lever to generate repeats)
+  if (status & (EVT_UP | EVT_DOWN)) {
+      uint32_t mask = 1 << selection;
+      if (status & EVT_UP)
+        selection++;
+      if (status & EVT_DOWN)
+        selection--;
+        
+      if ((uint16_t)selection >= count) {
+         ui_mode_normal();
+         return;
+      }
+      menu_draw(mask | (1 << selection));
+  }
+}
+
+static void menu_touch_invoke_cb(void* ctx) {
+    ui_context_t* c = (ui_context_t*)ctx;
+    selection = -1;
+    menu_invoke(c->data.menu.item_index);
+}
+
+static void menu_touch_dismiss_cb(void* ctx) {
+     (void)ctx;
+     ui_mode_normal();
 }
 
 void ui_menu_touch(int touch_x, int touch_y) {
@@ -373,13 +384,9 @@ void ui_menu_touch(int touch_x, int touch_y) {
       uint32_t mask = (1 << i) | (1 << selection);
       selection = i;
       menu_draw(mask);
-      touch_wait_release();
-      selection = -1;
-      menu_invoke(i);
+      ui_enter_wait_touch_release(menu_touch_invoke_cb, selection, i);
       return;
     }
   }
-
-  touch_wait_release();
-  ui_mode_normal();
+  ui_enter_wait_touch_release(menu_touch_dismiss_cb, 0, 0);
 }

@@ -58,6 +58,16 @@ static uint8_t touch_remote = REMOTE_NONE;
 // Mode state
 uint8_t ui_mode = UI_NORMAL;
 
+// UI State Context
+ui_context_t ui_context = {0};
+
+void ui_enter_wait_touch_release(void (*callback)(void*), int16_t selection, int16_t item_index) {
+    ui_context.state = UI_STATE_WAITING_TOUCH_RELEASE;
+    ui_context.resume_callback = callback;
+    ui_context.data.menu.selection = selection;
+    ui_context.data.menu.item_index = item_index;
+}
+
 // External handlers (to be defined in other modules)
 extern void ui_normal_lever(uint16_t status);
 extern void ui_normal_touch(int x, int y);
@@ -599,13 +609,40 @@ static void ui_process_touch(void) {
 
 void ui_process(void) {
   ui_controller_dispatch_board_events();
-  uint8_t requests = ui_controller_acquire_requests(UI_CONTROLLER_REQUEST_LEVER |
-                                                    UI_CONTROLLER_REQUEST_TOUCH);
-  if (requests & UI_CONTROLLER_REQUEST_LEVER) {
-    ui_process_lever();
-  }
-  if (requests & UI_CONTROLLER_REQUEST_TOUCH) {
-    ui_process_touch();
+
+  // State Machine Handling
+  if (ui_context.state != UI_STATE_IDLE) {
+    switch (ui_context.state) {
+      case UI_STATE_WAITING_TOUCH_RELEASE:
+        if (touch_check() == EVT_TOUCH_RELEASED) {
+          ui_context.state = UI_STATE_IDLE;
+          if (ui_context.resume_callback) {
+            ui_context.resume_callback((void*)&ui_context);
+          }
+        }
+        break;
+      
+      case UI_STATE_MENU_LEVER_HOLD:
+        // Logic will be moved here from ui_menu_lever
+        break;
+
+      default:
+        ui_context.state = UI_STATE_IDLE;
+        break;
+    }
+    // Continue processing other things or return? 
+    // If waiting for touch, we generally don't want to process new LEVER events that interfere.
+    // However, watchdog MUST run.
+  } else {
+    // Normal Event Processing
+    uint8_t requests = ui_controller_acquire_requests(UI_CONTROLLER_REQUEST_LEVER |
+                                                      UI_CONTROLLER_REQUEST_TOUCH);
+    if (requests & UI_CONTROLLER_REQUEST_LEVER) {
+      ui_process_lever();
+    }
+    if (requests & UI_CONTROLLER_REQUEST_TOUCH) {
+      ui_process_touch();
+    }
   }
 
   touch_start_watchdog();
