@@ -59,7 +59,7 @@ static msg_t ui_task_entry(void* arg) {
 
 void ui_task_init(void) {
   scheduler_start("ui", 
-                  NORMALPRIO - 1, // Lower priority than measurement
+                  NORMALPRIO, // Higher priority than measurement (LOWPRIO)
                   waUIThread, 
                   sizeof(waUIThread), 
                   ui_task_entry, 

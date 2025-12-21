@@ -357,8 +357,8 @@ static THD_FUNCTION(Thread1, arg) {
 
     if (engine_running) {
         measurement_engine_tick(&measurement_engine);
-        // Prevent starvation of lower priority threads (UI)
-        chThdYield();
+        // Thread1 is now lower priority, so it will be preempted by UI/Shell naturally.
+        // No explicit Yield needed.
     }
   }
 }
@@ -965,7 +965,7 @@ int runtime_main(void) {
   /*
    * Startup sweep thread
    */
-  chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO + 1, Thread1, NULL);
+  chThdCreateStatic(waThread1, sizeof(waThread1), LOWPRIO, Thread1, NULL);
 
   while (1) {
     if (!shell_check_connect()) {
