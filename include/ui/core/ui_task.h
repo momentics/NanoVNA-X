@@ -13,5 +13,12 @@
 #include "ch.h"
 
 void ui_task_init(void);
+
+// Initialize UI system (should be called from main thread)
+void ui_task_system_init(void);
+
+// Process UI events (should be called periodically from main loop)
+void ui_task_process(void);
+
 void ui_task_signal(void);
 

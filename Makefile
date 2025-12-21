@@ -96,9 +96,9 @@ endif
 # the stack used by the main() thread.
 ifeq ($(USE_PROCESS_STACKSIZE),)
   ifeq ($(TARGET),F303)
-    USE_PROCESS_STACKSIZE = 0x400
+    USE_PROCESS_STACKSIZE = 0x800
   else
-    USE_PROCESS_STACKSIZE = 0x1C0
+    USE_PROCESS_STACKSIZE = 0x800
   endif
 endif
 # Stack size to the allocated to the Cortex-M main/exceptions stack. This

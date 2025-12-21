@@ -307,60 +307,7 @@ static void app_measurement_service_loop(measurement_engine_port_t* port) {
   state_manager_service();
 }
 
-static THD_WORKING_AREA(waThread1, 1024); // Restored to 1024 (Safe) thanks to single-buffer LCD
-static THD_FUNCTION(Thread1, arg) {
-  (void)arg;
-  chRegSetThreadName("sweep");
-  sweep_thread = chThdGetSelfX();
-#ifdef __FLIP_DISPLAY__
-  if (VNA_MODE(VNA_MODE_FLIP_DISPLAY))
-    lcd_set_flip(true);
-#endif
-  
-  // Initialize command pool - REMOVED (using direct encoding)
-
-  while (1) {
-    msg_t msg;
-    
-    // Check for commands
-    // If sweeping is enabled OR engine is busy, we must not block indefinitely
-    bool engine_running = ((sweep_mode & SWEEP_ENABLE) != 0) || sweep_is_active();
-    systime_t timeout = engine_running ? TIME_IMMEDIATE : TIME_INFINITE;
-
-    if (chMBFetch(&measurement_cmd_mbox, &msg, timeout) == MSG_OK) {
-        measurement_command_type_t type = (measurement_command_type_t)(msg & 0xFF);
-        
-        switch (type) {
-            case CMD_MEASURE_START:
-                sweep_mode |= SWEEP_ENABLE;
-                if ((msg >> 8) & 1) { // Process data
-                    sweep_mode |= SWEEP_ONCE;
-                } else {
-                    sweep_mode &= (uint8_t)~SWEEP_ONCE;
-                }
-                break;
-            case CMD_MEASURE_STOP:
-                sweep_mode &= (uint8_t)~SWEEP_ENABLE;
-                break;
-            case CMD_MEASURE_SINGLE:
-                sweep_mode |= SWEEP_ENABLE | SWEEP_ONCE;
-                break;
-             // Handle config updates or other commands here
-            default:
-                break;
-        }
-    }
-    
-    // Re-evaluate running state after command processing
-    engine_running = ((sweep_mode & SWEEP_ENABLE) != 0) || sweep_is_active();
-
-    if (engine_running) {
-        measurement_engine_tick(&measurement_engine);
-        // Thread1 is now lower priority, so it will be preempted by UI/Shell naturally.
-        // No explicit Yield needed.
-    }
-  }
-}
+// Thread1 REMOVED. Logic integrated into runtime_main loop.
 
 #include "rf/sweep/sweep_orchestrator.h"
 
@@ -960,33 +907,79 @@ int runtime_main(void) {
   /*
    * Startup sweep thread
    */
-  // Start UI Task LAST to ensure all hardware (LCD, Touch, etc) is ready
-  ui_task_init(); 
+  /*
+   * Initialize UI System (Cooperative Mode)
+   * Must be initialized after HAL/Drivers but before usage.
+   * run_ui_task() will be called in the main loop.
+   */
+  ui_task_system_init();
   
-  chThdCreateStatic(waThread1, sizeof(waThread1), LOWPRIO, Thread1, NULL);
+  // Initialize sweep thread handle to main thread (this thread)
+  // This ensures app_measurement_pause works correctly in single-threaded mode
+  chRegSetThreadName("main");
+  sweep_thread = chThdGetSelfX();
+  
+#ifdef __FLIP_DISPLAY__
+  if (VNA_MODE(VNA_MODE_FLIP_DISPLAY))
+    lcd_set_flip(true);
+#endif
 
+  static uint16_t shell_line_idx = 0;
+  static char shell_line_buf[VNA_SHELL_MAX_LENGTH];
+  bool shell_show_prompt = true;
+
+  // Main Cooperative Event Loop
   while (1) {
-    if (!shell_check_connect()) {
-      chThdSleepMilliseconds(1000);
-      continue;
+    // 1. UI Task
+    ui_task_process();
+
+    // 2. Sweep Logic (Legacy Thread1 Logic)
+    msg_t msg; 
+    // Check for sweep commands
+    if (chMBFetch(&measurement_cmd_mbox, &msg, TIME_IMMEDIATE) == MSG_OK) {
+        measurement_command_type_t type = (measurement_command_type_t)(msg & 0xFF);
+        switch (type) {
+            case CMD_MEASURE_START:
+                sweep_mode |= SWEEP_ENABLE;
+                if ((msg >> 8) & 1) sweep_mode |= SWEEP_ONCE;
+                else sweep_mode &= (uint8_t)~SWEEP_ONCE;
+                break;
+            case CMD_MEASURE_STOP:
+                sweep_mode &= (uint8_t)~SWEEP_ENABLE;
+                break;
+            case CMD_MEASURE_SINGLE:
+                sweep_mode |= SWEEP_ENABLE | SWEEP_ONCE;
+                break;
+            default:
+                break;
+        }
     }
-#ifdef VNA_SHELL_THREAD
-#if CH_CFG_USE_WAITEXIT == FALSE
-#error "VNA_SHELL_THREAD use chThdWait, need enable CH_CFG_USE_WAITEXIT in chconf.h"
-#endif
-      thread_t* shelltp =
-          chThdCreateStatic(waThread2, sizeof(waThread2), NORMALPRIO + 1, myshellThread, NULL);
-      chThdWait(shelltp);
-#else
-    do {
-      shell_printf(VNA_SHELL_PROMPT_STR);
-      if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH))
-        vna_shell_execute_line(shell_line);
-      else {
-        chThdSleepMilliseconds(200);
+    // Run Sweep Tick
+    if (((sweep_mode & SWEEP_ENABLE) != 0) || sweep_is_active()) {
+        measurement_engine_tick(&measurement_engine);
+    }
+
+    // 3. Shell Logic (Non-blocking polled)
+    if (shell_check_connect()) {
+      if (shell_show_prompt) {
+         shell_printf(VNA_SHELL_PROMPT_STR);
+         shell_show_prompt = false;
       }
-    } while (shell_check_connect());
-#endif
+      
+      // Use existing vna_shell_read_line. 
+      // Caveat: If typing is slower than SHELL_IO_TIMEOUT (20ms) per char, line buffer may reset.
+      // Ideally shell_service should be stateful, but for now we prioritize system stability.
+      if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH)) {
+         vna_shell_execute_line(shell_line);
+         shell_show_prompt = true;
+      }
+    } else {
+       shell_show_prompt = true;
+    }
+    
+    // Optional: WFI (Wait For Interrupt) to save power if idle?
+    // Only if sweep is NOT running.
+    // if (!sweep_running) chThdSleepMilliseconds(1);
   }
 }
 

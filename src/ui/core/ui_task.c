@@ -15,7 +15,7 @@
 
 // Stack size for UI thread. Needs to be sufficient for drawing operations.
 // 1024 bytes should be safe for now, can be tuned later.
-static THD_WORKING_AREA(waUIThread, 1400);
+// static THD_WORKING_AREA(waUIThread, 1400); // Converted to Main Stack
 
 // Event mask for UI Wakeup
 #define UI_WAKEUP_EVENT_MASK (eventmask_t)1
@@ -28,40 +28,34 @@ void ui_task_signal(void) {
   }
 }
 
-static msg_t ui_task_entry(void* arg) {
-  (void)arg;
-  chRegSetThreadName("ui");
-  ui_thread_ptr = chThdGetSelfX();
+static systime_t last_ui_time = 0;
 
-  // Initialize UI (moved from Thread1)
+void ui_task_system_init(void) {
+  // Initialize UI (moved from Thread1/UIThread)
   ui_port.api->init();
   plot_init();
-  
-  while (true) {
-    // Process UI events, touches, buttons
-    ui_process();
-    
-    // Process Menu / Draw (if driven by polling in ui_process or if we need explicit draw)
-    // The previous loop called ui_port.api->process() which mapped to ui_process()
-    // and then called draw_all() ONLY if DEBUG_CONSOLE_SHOW was not set.
-    
-    #if !DEBUG_CONSOLE_SHOW
-    // We need to call draw_all() here because it was in the main loop
-    draw_all();
-    #endif
-
-    // Wait for event or timeout (for battery redraws or other periodic tasks)
-    // 40ms timeout ensures ~25 FPS redraw rate without flooding
-    chEvtWaitAnyTimeout(UI_WAKEUP_EVENT_MASK, MS2ST(40));
-  }
-  return MSG_OK;
+  last_ui_time = chVTGetSystemTime();
 }
 
+void ui_task_process(void) {
+  // Rate Limit UI to ~25Hz (40ms)
+  // But allow immediate processing if events are pending?
+  // For cooperative multitasking, we should check interval.
+  
+  // Always run input processing (it's fast and needs current state)
+  ui_process();
+
+  systime_t now = chVTGetSystemTime();
+  if (now - last_ui_time >= MS2ST(40)) {
+     last_ui_time = now;
+     #if !DEBUG_CONSOLE_SHOW
+     draw_all();
+     #endif
+  }
+}
+
+// Legacy Init (Unused now, but kept for signature compatibility if needed, or removed)
 void ui_task_init(void) {
-  scheduler_start("ui", 
-                  NORMALPRIO, // Higher priority than measurement (LOWPRIO)
-                  waUIThread, 
-                  sizeof(waUIThread), 
-                  ui_task_entry, 
-                  NULL);
+   // Deprecated in Single Thread Mode
+   ui_task_system_init();
 }
