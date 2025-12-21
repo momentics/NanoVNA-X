@@ -307,7 +307,7 @@ static void app_measurement_service_loop(measurement_engine_port_t* port) {
   state_manager_service();
 }
 
-static THD_WORKING_AREA(waThread1, 800); // 800 bytes sufficient for Sweep Engine (Leaf)
+static THD_WORKING_AREA(waThread1, 600); // 600 bytes is sufficient for non-recursive sweep
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
   chRegSetThreadName("sweep");
