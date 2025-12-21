@@ -28,6 +28,7 @@
 #include "hal.h"
 #include "platform/peripherals/si5351.h"
 #include "nanovna.h"
+#include "rf/engine/measurement_commands.h"
 #include "interfaces/cli/shell_service.h"
 #include "interfaces/cli/shell_commands.h"
 #include "platform/peripherals/usbcfg.h"
@@ -257,6 +258,33 @@ static void app_measurement_handle_result(measurement_engine_port_t* port,
   request_to_redraw(REDRAW_PLOT);
 }
 
+// Measurement Command Mailbox
+#define MEASUREMENT_CMD_QUEUE_SIZE 4
+static msg_t measurement_cmd_queue[MEASUREMENT_CMD_QUEUE_SIZE];
+static MAILBOX_DECL(measurement_cmd_mbox, measurement_cmd_queue, MEASUREMENT_CMD_QUEUE_SIZE);
+
+void measurement_post_command(measurement_command_t cmd) {
+    msg_t encoded_cmd = (msg_t)cmd.type;
+    
+    // Simple encoding: Type in lower 8 bits, data in upper 24 bits
+    switch (cmd.type) {
+        case CMD_MEASURE_START:
+            if (cmd.data.start.oneshot) {
+                encoded_cmd |= (1 << 8);
+            }
+            break;
+        case CMD_MEASURE_UPDATE_CONFIG:
+            // Assuming flags fit in 16 bits
+            // If flags are larger, we might need a different approach, but currently flags are small.
+            // (cmd.data.config.flags << 8)
+            break;
+        default:
+            break;
+    }
+
+    chMBPost(&measurement_cmd_mbox, encoded_cmd, TIME_IMMEDIATE);
+}
+
 static void app_measurement_service_loop(measurement_engine_port_t* port) {
   (void)port;
   shell_service_pending_commands();
@@ -271,7 +299,7 @@ static void app_measurement_service_loop(measurement_engine_port_t* port) {
   wdgReset(&WDGD1);
 }
 
-static THD_WORKING_AREA(waThread1, 768);
+static THD_WORKING_AREA(waThread1, 1024); // Increased stack slightly
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
   chRegSetThreadName("sweep");
@@ -279,30 +307,73 @@ static THD_FUNCTION(Thread1, arg) {
   if (VNA_MODE(VNA_MODE_FLIP_DISPLAY))
     lcd_set_flip(true);
 #endif
-  /*
-   * UI (menu, touch, buttons) and plot initialize - MOVED TO UI TASK
-   */
-  // ui_port.api->init();
-  // Initialize graph plotting
-  // plot_init();
+  
   while (1) {
-    measurement_engine_tick(&measurement_engine);
+    msg_t msg;
+    
+    // Check for commands
+    // If sweeping is enabled OR engine is busy, we must not block indefinitely
+    bool engine_running = ((sweep_mode & SWEEP_ENABLE) != 0) || sweep_is_active();
+    systime_t timeout = engine_running ? TIME_IMMEDIATE : TIME_INFINITE;
+
+    if (chMBFetch(&measurement_cmd_mbox, &msg, timeout) == MSG_OK) {
+        measurement_command_type_t type = (measurement_command_type_t)(msg & 0xFF);
+        
+        switch (type) {
+            case CMD_MEASURE_START:
+                sweep_mode |= SWEEP_ENABLE;
+                if ((msg >> 8) & 1) { // Process data
+                    sweep_mode |= SWEEP_ONCE;
+                } else {
+                    sweep_mode &= (uint8_t)~SWEEP_ONCE;
+                }
+                break;
+            case CMD_MEASURE_STOP:
+                sweep_mode &= (uint8_t)~SWEEP_ENABLE;
+                break;
+            case CMD_MEASURE_SINGLE:
+                sweep_mode |= SWEEP_ENABLE | SWEEP_ONCE;
+                break;
+             // Handle config updates or other commands here
+            default:
+                break;
+        }
+    }
+    
+    // Re-evaluate running state after command processing
+    engine_running = ((sweep_mode & SWEEP_ENABLE) != 0) || sweep_is_active();
+
+    if (engine_running) {
+        measurement_engine_tick(&measurement_engine);
+    }
   }
 }
 
 #include "rf/sweep/sweep_orchestrator.h"
 
 void pause_sweep(void) {
-  sweep_mode &= ~SWEEP_ENABLE;
+  measurement_command_t cmd;
+  cmd.type = CMD_MEASURE_STOP;
+  measurement_post_command(cmd);
+  // Wait for the sweep thread to actually stop and the engine to become idle
+  // This is required before starting operations that need exclusive hardware access (like scan)
   sweep_wait_for_idle();
 }
 
 void resume_sweep(void) {
-  sweep_mode |= SWEEP_ENABLE;
+  measurement_command_t cmd;
+  cmd.type = CMD_MEASURE_START;
+  cmd.data.start.oneshot = false;
+  measurement_post_command(cmd);
 }
 
 void toggle_sweep(void) {
-  sweep_mode ^= SWEEP_ENABLE;
+   // This is racy without a mutex if called from multiple threads, but acceptable for UI toggle
+   if (sweep_mode & SWEEP_ENABLE) {
+       pause_sweep();
+   } else {
+       resume_sweep();
+   }
 }
 
 config_t config = {

@@ -57,6 +57,7 @@ uint32_t sweep_service_increment_generation(void);
 uint32_t sweep_service_current_generation(void);
 void sweep_service_wait_for_generation(void);
 void sweep_service_reset_progress(void);
+bool sweep_is_active(void);
 bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* snapshot);
 bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot);
 

@@ -744,6 +744,10 @@ void sweep_wait_for_idle(void) {
   }
 }
 
+bool sweep_is_active(void) {
+  return sweep_in_progress;
+}
+
 void app_measurement_reset(void) {
   sweep_reset_progress();
 }

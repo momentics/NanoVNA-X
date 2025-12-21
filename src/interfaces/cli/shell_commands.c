@@ -35,6 +35,7 @@
 #include "interfaces/ports/usb_command_server_port.h"
 #include "version_info.h"
 #include "runtime/runtime_entry.h" // For globals if needed, but nanovna.h should suffice
+#include "rf/engine/measurement_commands.h"
 #include <string.h>
 #include <stdlib.h>
 #include <chprintf.h>
@@ -361,6 +362,9 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   resume_sweep();
 }
 
+
+// Wrapper for scan_bin to avoid modifying global sweep_mode directly if possible, 
+// but currently sweep_mode bits are global.
 VNA_SHELL_FUNCTION(cmd_scan_bin) {
 #if ENABLE_SCANBIN_COMMAND
   sweep_mode |= SWEEP_BINARY;
