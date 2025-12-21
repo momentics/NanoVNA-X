@@ -891,12 +891,6 @@ int runtime_main(void) {
   shell_register_commands(commands);
   
   /*
-   * Start UI Task
-   * Must be started AFTER state_manager_init and frequency offsets are applied.
-   */
-  ui_task_init();
-  
-  /*
    * Initialize USB Shell Connection
    * Moved here to match NanoVNA-D reference (before LCD init)
    */
@@ -967,6 +961,9 @@ int runtime_main(void) {
   /*
    * Startup sweep thread
    */
+  // Start UI Task LAST to ensure all hardware (LCD, Touch, etc) is ready
+  ui_task_init(); 
+  
   chThdCreateStatic(waThread1, sizeof(waThread1), LOWPRIO, Thread1, NULL);
 
   while (1) {
