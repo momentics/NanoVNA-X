@@ -44,6 +44,7 @@
 #include "ui/display/display_presenter.h"
 #include "ui/controller/ui_controller.h"
 #include "platform/boards/board_events.h"
+#include "ui/core/ui_task.h"
 
 #ifdef __LCD_BRIGHTNESS__
 void lcd_set_brightness(uint16_t brightness);
@@ -260,11 +261,11 @@ static void app_measurement_service_loop(measurement_engine_port_t* port) {
   (void)port;
   shell_service_pending_commands();
   sweep_mode |= SWEEP_UI_MODE;
-  ui_port.api->process();
+  // ui_port.api->process(); // Moved to ui_task
   sweep_mode &= (uint8_t)~SWEEP_UI_MODE;
   schedule_battery_redraw();
 #if !DEBUG_CONSOLE_SHOW
-  draw_all();
+  // draw_all(); // Moved to ui_task
 #endif
   state_manager_service();
   wdgReset(&WDGD1);
@@ -279,11 +280,11 @@ static THD_FUNCTION(Thread1, arg) {
     lcd_set_flip(true);
 #endif
   /*
-   * UI (menu, touch, buttons) and plot initialize
+   * UI (menu, touch, buttons) and plot initialize - MOVED TO UI TASK
    */
-  ui_port.api->init();
+  // ui_port.api->init();
   // Initialize graph plotting
-  plot_init();
+  // plot_init();
   while (1) {
     measurement_engine_tick(&measurement_engine);
   }
@@ -791,6 +792,11 @@ int runtime_main(void) {
   measurement_engine_port.handle_result = app_measurement_handle_result;
   measurement_engine_port.service_loop = app_measurement_service_loop;
   measurement_engine_init(&measurement_engine, &measurement_engine_port, &app_event_bus, drivers);
+  
+  /*
+   * Start UI Task (Phase 1 Refactoring)
+   */
+  ui_task_init();
 
   /*
    * restore config and calibration 0 slot from flash memory, also if need use backup data

@@ -1,0 +1,55 @@
+/*
+ * Copyright (c) 2024, @momentics <momentics@gmail.com>
+ * All rights reserved.
+ *
+ * This is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3, or (at your option)
+ * any later version.
+ */
+
+#include "ui/core/ui_task.h"
+#include "infra/task/scheduler.h"
+#include "nanovna.h"
+#include "interfaces/ports/ui_port.h"
+
+// Stack size for UI thread. Needs to be sufficient for drawing operations.
+// 1024 bytes should be safe for now, can be tuned later.
+static THD_WORKING_AREA(waUIThread, 1024);
+
+static msg_t ui_task_entry(void* arg) {
+  (void)arg;
+  chRegSetThreadName("ui");
+
+  // Initialize UI (moved from Thread1)
+  ui_port.api->init();
+  plot_init();
+  
+  while (true) {
+    // Process UI events, touches, buttons
+    ui_process();
+    
+    // Process Menu / Draw (if driven by polling in ui_process or if we need explicit draw)
+    // The previous loop called ui_port.api->process() which mapped to ui_process()
+    // and then called draw_all() ONLY if DEBUG_CONSOLE_SHOW was not set.
+    
+    #if !DEBUG_CONSOLE_SHOW
+    // We need to call draw_all() here because it was in the main loop
+    draw_all();
+    #endif
+
+    // Run at ~20ms - 50ms interval (20Hz - 50Hz) to allow other threads to run
+    // This replaces the 'implicit' sleep in the measurement loop
+    chThdSleepMilliseconds(20);
+  }
+  return MSG_OK;
+}
+
+void ui_task_init(void) {
+  scheduler_start("ui", 
+                  NORMALPRIO - 1, // Lower priority than measurement
+                  waUIThread, 
+                  sizeof(waUIThread), 
+                  ui_task_entry, 
+                  NULL);
+}

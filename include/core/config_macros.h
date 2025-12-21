@@ -48,7 +48,7 @@
 // Add RTC backup registers support
 #define __USE_BACKUP__
 // Add SD card support, requires RTC for timestamps
-#define __USE_SD_CARD__
+// #define __USE_SD_CARD__
 // Use unique serial string for USB
 #define __USB_UID__
 // If enabled serial in halconf.h, possible enable serial console control
