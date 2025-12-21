@@ -565,10 +565,29 @@ void ui_touch_draw_test(void) {
 }
 
 // Process loop
+static systime_t repeat_time = 0;
 static void ui_process_lever(void) {
   uint16_t status = ui_input_check();
-  if (status)
+  uint16_t current_buttons = ui_input_get_buttons();
+
+  if (status) {
     ui_handler[ui_mode].button(status);
+    if (current_buttons & (BUTTON_UP | BUTTON_DOWN))
+      repeat_time = chVTGetSystemTimeX() + BUTTON_DOWN_LONG_TICKS;
+  } else if (current_buttons & (BUTTON_UP | BUTTON_DOWN)) {
+    if (chVTGetSystemTimeX() > repeat_time) {
+      uint16_t rep = 0;
+      if (current_buttons & BUTTON_UP)
+        rep |= EVT_UP | EVT_REPEAT;
+      if (current_buttons & BUTTON_DOWN)
+        rep |= EVT_DOWN | EVT_REPEAT;
+      if (rep) {
+        ui_handler[ui_mode].button(rep);
+        repeat_time = chVTGetSystemTimeX() + BUTTON_REPEAT_TICKS;
+        ui_task_signal();
+      }
+    }
+  }
 }
 
 static void ui_process_touch(void) {

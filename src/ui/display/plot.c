@@ -27,6 +27,7 @@
 #include <stddef.h>
 #include <string.h>
 #include "ch.h"
+#include "ui/core/ui_task.h"
 #include "hal.h"
 #include "chprintf.h"
 #include "nanovna.h"
@@ -781,6 +782,7 @@ void draw_all_cells(void) {
   measure_prepare();
 #endif
   for (n = 0; n < h; n++) {
+    wdgReset(&WDGD1);
     map_t update_map = markmap[n];
     for (m = 0; update_map && m < w; update_map >>= 1, m++)
       if (update_map & 1)
@@ -961,49 +963,55 @@ static void draw_battery_status(void) {
 //            Draw all request
 //**************************************************************************************
 void draw_all(void) {
+  chSysLock();
+  uint16_t req = redraw_request;
+  redraw_request = 0;
+  chSysUnlock();
 #ifdef __USE_BACKUP__
-  if (redraw_request & REDRAW_BACKUP)
+  if (req & REDRAW_BACKUP)
     update_backup_data();
 #endif
-  if (redraw_request & REDRAW_PLOT)
+  if (req & REDRAW_PLOT)
     plot_into_index();
   if (area_width == 0) {
-    redraw_request = 0;
+    req = 0;
     return;
   }
-  if (redraw_request & REDRAW_CLRSCR) {
+  if (req & REDRAW_CLRSCR) {
     lcd_set_background(LCD_BG_COLOR);
     lcd_clear_screen();
   }
-  if (redraw_request & REDRAW_AREA)
+  if (req & REDRAW_AREA)
     force_set_markmap();
   else {
-    if (redraw_request & REDRAW_MARKER)
+    if (req & REDRAW_MARKER)
       markmap_all_markers();
-    if (redraw_request & REDRAW_REFERENCE)
+    if (req & REDRAW_REFERENCE)
       markmap_all_refpos();
 #if VNA_ENABLE_GRID_VALUES
-    if (redraw_request & REDRAW_GRID_VALUE)
+    if (req & REDRAW_GRID_VALUE)
       markmap_grid_values();
 #endif
   }
-  if (redraw_request &
+  if (req &
       (REDRAW_CELLS | REDRAW_MARKER | REDRAW_GRID_VALUE | REDRAW_REFERENCE | REDRAW_AREA))
     draw_all_cells();
-  if (redraw_request & REDRAW_FREQUENCY)
+  if (req & REDRAW_FREQUENCY)
     draw_frequencies();
-  if (redraw_request & REDRAW_CAL_STATUS)
+  if (req & REDRAW_CAL_STATUS)
     draw_cal_status();
-  if (redraw_request & REDRAW_BATTERY)
+  if (req & REDRAW_BATTERY)
     draw_battery_status();
-  redraw_request = 0;
+  req = 0;
 }
 
 //**************************************************************************************
 //            Set update mask for next screen update
-//**************************************************************************************
 void request_to_redraw(uint16_t mask) {
+  chSysLock();
   redraw_request |= mask;
+  chSysUnlock();
+  ui_task_signal();
 }
 
 void plot_init(void) {
