@@ -352,7 +352,6 @@ int touch_check(void) {
 //*******************************************************************************
 void touch_wait_release(void) {
   while (touch_check() != EVT_TOUCH_RELEASED) {
-    wdgReset(&WDGD1);
     chThdSleepMilliseconds(TOUCH_RELEASE_POLL_INTERVAL_MS);
   }
 }
@@ -552,7 +551,6 @@ void ui_touch_draw_test(void) {
     if (touch_check() == EVT_TOUCH_PRESSED) {
       touch_position(&x0, &y0);
       do {
-        wdgReset(&WDGD1);
         lcd_printf(10, 30, "%3d %3d ", x0, y0);
         chThdSleepMilliseconds(50);
         touch_position(&x1, &y1);

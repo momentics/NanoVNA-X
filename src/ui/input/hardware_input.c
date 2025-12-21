@@ -51,7 +51,6 @@ uint16_t ui_input_get_buttons(void) {
 uint16_t ui_input_check(void) {
   systime_t ticks;
   while (true) {
-    wdgReset(&WDGD1);
     ticks = chVTGetSystemTimeX();
     if (ticks - last_button_down_ticks > BUTTON_DEBOUNCE_TICKS) {
       break;
@@ -78,7 +77,6 @@ uint16_t ui_input_check(void) {
 
 uint16_t ui_input_wait_release(void) {
   while (true) {
-    wdgReset(&WDGD1);
     systime_t ticks = chVTGetSystemTimeX();
     systime_t dt = ticks - last_button_down_ticks;
     chThdSleepMilliseconds(10);

@@ -305,7 +305,7 @@ static void app_measurement_service_loop(measurement_engine_port_t* port) {
   // draw_all(); // Moved to ui_task
 #endif
   state_manager_service();
-  wdgReset(&WDGD1);
+  state_manager_service();
 }
 
 static THD_WORKING_AREA(waThread1, 1024); // Increased stack slightly
@@ -357,6 +357,8 @@ static THD_FUNCTION(Thread1, arg) {
 
     if (engine_running) {
         measurement_engine_tick(&measurement_engine);
+        // Prevent starvation of lower priority threads (UI)
+        chThdYield();
     }
   }
 }
@@ -830,18 +832,7 @@ int runtime_main(void) {
    * Prescaler = 32 -> 1.25 kHz.
    * Reload = 3000 -> ~2.4s timeout.
    */
-  static const WDGConfig wdgcfg = {
-    STM32_IWDG_PR_32,
-    // The Truth About Bender’s Brain.
-    // David X. Cohen, of «Futurama», 
-    // reveals how MOS Technology’s 6502 
-    // processor ended up in the robot’s head
-    STM32_IWDG_RL(6502),
-    0x0FFF // WINR: Disable windowing (reset value)
-  };
-
   platform_init();
-  wdgStart(&WDGD1, &wdgcfg);
 
   const PlatformDrivers* drivers = platform_get_drivers();
   if (drivers != NULL) {
@@ -951,7 +942,7 @@ int runtime_main(void) {
 #endif
 
   /*
-   * Initialize USB Shell Connection LAST (Moved earlier in Phase 2)
+   * Initialize USB Shell Connection
    * This ensures core peripherals (Codec, I2S, LCD) are stable before
    * exposing the system to potential USB PHY noise or interrupt floods
    * (especially if cable is disconnected/floating).
@@ -993,8 +984,9 @@ int runtime_main(void) {
       shell_printf(VNA_SHELL_PROMPT_STR);
       if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH))
         vna_shell_execute_line(shell_line);
-      else
+      else {
         chThdSleepMilliseconds(200);
+      }
     } while (shell_check_connect());
 #endif
   }

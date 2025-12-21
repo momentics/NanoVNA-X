@@ -717,7 +717,6 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
     
     // Kick watchdog during long sweeps to prevent reset
     #ifndef NANOVNA_HOST_TEST
-    wdgReset(&WDGD1);
     #endif
     
     processed++;

@@ -782,7 +782,6 @@ void draw_all_cells(void) {
   measure_prepare();
 #endif
   for (n = 0; n < h; n++) {
-    wdgReset(&WDGD1);
     map_t update_map = markmap[n];
     for (m = 0; update_map && m < w; update_map >>= 1, m++)
       if (update_map & 1)
@@ -1011,7 +1010,7 @@ void request_to_redraw(uint16_t mask) {
   chSysLock();
   redraw_request |= mask;
   chSysUnlock();
-  ui_task_signal();
+// ui_task_signal(); // Removed to prevent flooding UI task
 }
 
 void plot_init(void) {

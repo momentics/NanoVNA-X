@@ -51,8 +51,8 @@ static msg_t ui_task_entry(void* arg) {
     #endif
 
     // Wait for event or timeout (for battery redraws or other periodic tasks)
-    // 100ms timeout ensures we still refresh battery/status occasionally even without input
-    chEvtWaitAnyTimeout(UI_WAKEUP_EVENT_MASK, MS2ST(100));
+    // 40ms timeout ensures ~25 FPS redraw rate without flooding
+    chEvtWaitAnyTimeout(UI_WAKEUP_EVENT_MASK, MS2ST(40));
   }
   return MSG_OK;
 }

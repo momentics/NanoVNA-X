@@ -375,7 +375,6 @@ static bool touch_pickup_marker(int touch_x, int touch_y) {
   set_active_trace(mt);
   // drag marker until release
   while (true) {
-    wdgReset(&WDGD1);
     int status = touch_check();
     if (status == EVT_TOUCH_RELEASED)
       break;

@@ -337,7 +337,6 @@ VNA_SHELL_FUNCTION(cmd_scan) {
            shell_stream_write(buffer, buffer_len);
            buffer_len = 0;
            #ifndef NANOVNA_HOST_TEST
-           wdgReset(&WDGD1);
            #endif
            // Yield to allow USB processing
            chThdYield();
@@ -498,7 +497,6 @@ VNA_SHELL_FUNCTION(cmd_data) {
       for (uint16_t i = 0; i < snapshot.points; i++) {
         if (!shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, snapshot.data[i][0], snapshot.data[i][1])) break;
         if ((i & 12) == 12) {
-          wdgReset(&WDGD1);
           chThdYield();
         }
       }
@@ -515,7 +513,6 @@ VNA_SHELL_FUNCTION(cmd_data) {
   for (uint16_t i = 0; i < points; i++) {
     if (!shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, array[i][0], array[i][1])) break;
     if ((i & 12) == 12) {
-      wdgReset(&WDGD1);
       chThdYield();
     }
   }

@@ -114,7 +114,6 @@ static bool shell_io_write(const uint8_t* data, size_t size) {
       // Buffer is full. Yield to scheduler to let USB ISR prioritize packet transmission.
       // Reset watchdog to prevent timeout during high-throughput saturation.
       #ifndef NANOVNA_HOST_TEST
-      wdgReset(&WDGD1);
       chThdYield();
       #endif
     }
