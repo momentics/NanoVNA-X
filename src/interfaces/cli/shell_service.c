@@ -148,6 +148,14 @@ static void shell_write(const void* buf, size_t size) {
 static size_t shell_read(void* buf, size_t size) {
   return shell_io_read((uint8_t*)buf, size);
 }
+
+static size_t shell_read_nonblocking(void* buf, size_t size) {
+  BaseAsynchronousChannel* channel = shell_current_channel();
+  if (channel == NULL || buf == NULL) {
+    return 0;
+  }
+  return chnReadTimeout(channel, (uint8_t*)buf, size, TIME_IMMEDIATE);
+}
 static char shell_print_buffer[96];
 
 int shell_printf(const char* fmt, ...) {
@@ -453,8 +461,9 @@ static const char backspace[] = {0x08, 0x20, 0x08, 0x00};
 
 int vna_shell_read_line(char* line, int max_size) {
   uint8_t c;
-  uint16_t j = 0;
-  while (shell_read(&c, 1)) {
+  static uint16_t j = 0;
+  // Use non-blocking read for cooperative multitasking
+  while (shell_read_nonblocking(&c, 1)) {
     if (shell_skip_linefeed) {
       shell_skip_linefeed = false;
       if (c == '\n') {
@@ -472,6 +481,7 @@ int vna_shell_read_line(char* line, int max_size) {
       shell_skip_linefeed = (c == '\r');
       shell_printf(VNA_SHELL_NEWLINE_STR);
       line[j] = 0;
+      j = 0; // Reset for next line
       return 1;
     }
     if (c < ' ' || j >= max_size - 1) {
