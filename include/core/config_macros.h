@@ -32,7 +32,9 @@
 #endif
 
 // Enable DMA mode for send data to LCD (Need enable HAL_USE_SPI in halconf.h)
+#if defined(NANOVNA_F303)
 #define __USE_DISPLAY_DMA__
+#endif
 // LCD or hardware allow change brightness, add menu item for this
 #if defined(NANOVNA_F303)
 #define __LCD_BRIGHTNESS__

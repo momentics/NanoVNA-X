@@ -307,7 +307,7 @@ static void app_measurement_service_loop(measurement_engine_port_t* port) {
   state_manager_service();
 }
 
-static THD_WORKING_AREA(waThread1, 600); // 600 bytes is sufficient for non-recursive sweep
+static THD_WORKING_AREA(waThread1, 1024); // Restored to 1024 (Safe) thanks to single-buffer LCD
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
   chRegSetThreadName("sweep");
