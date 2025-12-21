@@ -15,7 +15,7 @@
 
 // Stack size for UI thread. Needs to be sufficient for drawing operations.
 // 1024 bytes should be safe for now, can be tuned later.
-static THD_WORKING_AREA(waUIThread, 1536);
+static THD_WORKING_AREA(waUIThread, 1400);
 
 // Event mask for UI Wakeup
 #define UI_WAKEUP_EVENT_MASK (eventmask_t)1
