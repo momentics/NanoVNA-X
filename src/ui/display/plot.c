@@ -30,6 +30,9 @@
 #include "ui/core/ui_task.h"
 #include "hal.h"
 #include "chprintf.h"
+#include "ui/controller/marker_logic.h"
+#include "ui/core/ui_model.h"
+
 #include "nanovna.h"
 #include "infra/state/state_manager.h"
 
@@ -311,81 +314,9 @@ static void markmap_all_markers(void) {
   markmap_marker_area();
 }
 
-//**************************************************************************************
-//            Marker search functions
-//**************************************************************************************
-static bool _greater(int x, int y) {
-  return x > y;
-}
-static bool _lesser(int x, int y) {
-  return x < y;
-}
 
-void marker_search(void) {
-  int i, value;
-  int found = 0;
-  if (current_trace == TRACE_INVALID || active_marker == MARKER_INVALID)
-    return;
-  // Select search index table
-  trace_index_const_table_t index = trace_index_const_table(current_trace);
-  // Select compare function (depend from config settings)
-  bool (*compare)(int x, int y) = VNA_MODE(VNA_MODE_SEARCH) ? _lesser : _greater;
-  for (i = 1, value = TRACE_Y(index, 0); i < sweep_points; i++) {
-    if ((*compare)(value, TRACE_Y(index, i))) {
-      value = TRACE_Y(index, i);
-      found = i;
-    }
-  }
-  set_marker_index(active_marker, found);
-}
+// Logic moved to ui/controller/marker_logic.c
 
-void marker_search_dir(int16_t from, int16_t dir) {
-  int i, value;
-  int found = -1;
-  if (current_trace == TRACE_INVALID || active_marker == MARKER_INVALID)
-    return;
-  // Select search index table
-  trace_index_const_table_t index = trace_index_const_table(current_trace);
-  // Select compare function (depend from config settings)
-  bool (*compare)(int x, int y) = VNA_MODE(VNA_MODE_SEARCH) ? _lesser : _greater;
-  // Search next
-  for (i = from + dir, value = TRACE_Y(index, from); i >= 0 && i < sweep_points; i += dir) {
-    if ((*compare)(value, TRACE_Y(index, i)))
-      break;
-    value = TRACE_Y(index, i);
-  }
-  //
-  for (; i >= 0 && i < sweep_points; i += dir) {
-    if ((*compare)(TRACE_Y(index, i), value))
-      break;
-    value = TRACE_Y(index, i);
-    found = i;
-  }
-  if (found < 0)
-    return;
-  set_marker_index(active_marker, found);
-}
-
-int distance_to_index(int8_t t, uint16_t idx, int16_t x, int16_t y) {
-  trace_index_const_table_t index = trace_index_const_table(t);
-  x -= (int16_t)TRACE_X(index, idx);
-  y -= (int16_t)TRACE_Y(index, idx);
-  return x * x + y * y;
-}
-
-int search_nearest_index(int x, int y, int t) {
-  int min_i = -1;
-  int min_d = MARKER_PICKUP_DISTANCE * MARKER_PICKUP_DISTANCE;
-  int i;
-  for (i = 0; i < sweep_points; i++) {
-    int d = distance_to_index(t, i, x, y);
-    if (d >= min_d)
-      continue;
-    min_d = d;
-    min_i = i;
-  }
-  return min_i;
-}
 
 //**************************************************************************************
 //            Reference plate draw and update
@@ -538,7 +469,7 @@ static void plot_into_index(void) {
   //  STOP_PROFILE;
   // Marker track on data update
   if (props_mode & TD_MARKER_TRACK)
-    marker_search();
+    marker_logic_search();
 #ifdef __VNA_MEASURE_MODULE__
   // Current scan update
   measure_set_flag(MEASURE_UPD_SWEEP);

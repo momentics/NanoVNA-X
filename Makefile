@@ -196,7 +196,9 @@ CSRC = $(STARTUPSRC) \
        src/ui/display/render.c \
        src/ui/display/traces.c \
        src/ui/controller/ui_controller.c \
+       src/ui/controller/marker_logic.c \
        src/ui/core/ui_core.c \
+       src/ui/core/ui_model.c \
        src/ui/core/ui_task.c \
        src/ui/core/ui_menu_engine.c \
        src/ui/core/ui_keypad.c \

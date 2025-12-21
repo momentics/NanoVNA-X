@@ -893,6 +893,22 @@ static float kaiser_window_ext(uint32_t k, uint32_t n, uint16_t beta) {
   return bessel_i0_ext((float)k / n);
 }
 
+// Static buffer for FFT operations to avoid stack overflow or spi_buffer overflow
+// On F303, force FFT_SIZE to 256 to fit in RAM (2KB usage).
+// Main RAM is almost full (~38KB BSS), so 4KB overflowed. 2KB should fit tightly.
+#ifdef NANOVNA_F303
+#ifdef FFT_SIZE
+#undef FFT_SIZE
+#endif
+#define FFT_SIZE 256
+#endif
+
+// Shared definition - explicitly force to .bss to avoid accidental CCM placement
+static float fft_buffer[FFT_SIZE * 2] __attribute__((section(".bss")));
+
+
+
+
 void app_measurement_transform_domain(uint16_t ch_mask) {
   uint16_t offset = 0;
   uint8_t is_lowpass = FALSE;
@@ -946,8 +962,9 @@ void app_measurement_transform_domain(uint16_t ch_mask) {
     if ((ch_mask & 1U) == 0U) {
       continue;
     }
-    float* tmp = (float*)spi_buffer;
+    float* tmp = fft_buffer;
     float* data = measured[ch][0];
+
     int i;
     for (i = 0; i < sweep_points; i++) {
 #ifdef USE_FFT_WINDOW_BUFFER

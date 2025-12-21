@@ -495,65 +495,7 @@ void app_measurement_update_frequencies(void) {
   sweep_service_reset_progress();
 }
 
-void set_trace_scale(int t, float scale) {
-  if (trace[t].scale == scale) return;
-  trace[t].scale = scale;
-  request_to_redraw(REDRAW_PLOT | REDRAW_AREA | REDRAW_MARKER);
-}
 
-void set_trace_refpos(int t, float refpos) {
-  if (trace[t].refpos == refpos) return;
-  trace[t].refpos = refpos;
-  request_to_redraw(REDRAW_PLOT | REDRAW_AREA | REDRAW_MARKER);
-}
-
-void set_trace_type(int t, int type, int channel) {
-  if (trace[t].type == type && trace[t].channel == channel) return;
-  trace[t].type = type;
-  trace[t].channel = channel;
-  request_to_redraw(REDRAW_PLOT | REDRAW_AREA | REDRAW_MARKER);
-}
-
-void set_trace_enable(int t, bool enable) {
-  if (trace[t].enabled == enable) return;
-  trace[t].enabled = enable;
-  request_to_redraw(REDRAW_PLOT | REDRAW_AREA | REDRAW_MARKER);
-}
-
-
-void set_electrical_delay(int ch, float seconds) {
-  if (current_props._electrical_delay[ch] == seconds)
-    return;
-  current_props._electrical_delay[ch] = seconds;
-  request_to_redraw(REDRAW_MARKER);
-}
-
-float get_electrical_delay(void) {
-  if (current_trace == TRACE_INVALID)
-    return 0.0f;
-  int ch = trace[current_trace].channel;
-  return current_props._electrical_delay[ch];
-}
-
-void set_s21_offset(float offset) {
-  if (s21_offset != offset) {
-    s21_offset = offset;
-    request_to_redraw(REDRAW_MARKER);
-  }
-}
-
-void set_marker_index(int m, int idx) {
-  if (idx < 0) idx = 0;
-  if (idx >= sweep_points) idx = sweep_points - 1;
-  if (markers[m].enabled) request_to_draw_marker(markers[m].index);
-  markers[m].index = idx;
-  markers[m].frequency = get_frequency(idx);
-  request_to_redraw(REDRAW_MARKER);
-}
-
-freq_t get_marker_frequency(int marker) {
-  return markers[marker].frequency;
-}
 
 void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforce_order) {
   // Check frequency for out of bounds (minimum SPAN can be any value)
@@ -924,8 +866,8 @@ int runtime_main(void) {
     lcd_set_flip(true);
 #endif
 
-  static uint16_t shell_line_idx = 0;
-  static char shell_line_buf[VNA_SHELL_MAX_LENGTH];
+
+
   bool shell_show_prompt = true;
 
   // Main Cooperative Event Loop

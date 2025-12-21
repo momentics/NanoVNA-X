@@ -43,6 +43,9 @@
 #include "ui/core/ui_menu_engine.h"
 #include "ui/core/ui_keypad.h"
 #include "platform/boards/board_events.h"
+#include "ui/controller/marker_logic.h"
+#include "ui/core/ui_model.h"
+
 
 // Use size optimization (UI not need fast speed, better have smallest size)
 #pragma GCC optimize("Os")
@@ -256,9 +259,10 @@ static void lever_search_marker(int status) {
   if (active_marker == active_marker)
     return;
   if (status & EVT_DOWN)
-    marker_search_dir(markers[active_marker].index, MK_SEARCH_LEFT);
+    marker_logic_search_dir(markers[active_marker].index, MK_SEARCH_LEFT);
   else if (status & EVT_UP)
-    marker_search_dir(markers[active_marker].index, MK_SEARCH_RIGHT);
+    marker_logic_search_dir(markers[active_marker].index, MK_SEARCH_RIGHT);
+
 }
 #endif
 
@@ -351,7 +355,8 @@ static bool touch_pickup_marker(int touch_x, int touch_y) {
       if (!markers[m].enabled)
         continue;
       // Get distance to marker from touch point
-      int dist = distance_to_index(t, markers[m].index, touch_x, touch_y);
+      int dist = marker_logic_distance_to_index(t, markers[m].index, touch_x, touch_y);
+
       if (dist < min_dist) {
         min_dist = dist;
         i = m;
@@ -383,7 +388,8 @@ static bool touch_pickup_marker(int touch_x, int touch_y) {
       continue;
     }
     touch_position(&touch_x, &touch_y);
-    int index = search_nearest_index(touch_x - OFFSETX, touch_y - OFFSETY, current_trace);
+    int index = marker_logic_search_nearest_index(touch_x - OFFSETX, touch_y - OFFSETY, current_trace);
+
     if (index >= 0 && markers[active_marker].index != index) {
       set_marker_index(active_marker, index);
       redraw_marker(active_marker);
@@ -488,3 +494,80 @@ void ui_normal_touch(int touch_x, int touch_y) {
 //============================================
 
 // Core processing moved to ui/core/ui_core.c
+
+// ====================================================================
+// Trace/Marker Setters (Moved from runtime_entry.c)
+// ====================================================================
+
+void set_trace_scale(int t, float scale) {
+  if (t < 0 || t >= TRACES_MAX) return;
+  if (trace[t].scale == scale) return;
+  trace[t].scale = scale;
+  request_to_redraw(REDRAW_PLOT | REDRAW_AREA | REDRAW_MARKER);
+}
+
+void set_trace_refpos(int t, float refpos) {
+  if (t < 0 || t >= TRACES_MAX) return;
+  if (trace[t].refpos == refpos) return;
+  trace[t].refpos = refpos;
+  request_to_redraw(REDRAW_PLOT | REDRAW_AREA | REDRAW_MARKER);
+}
+
+void set_trace_type(int t, int type, int channel) {
+  if (t < 0 || t >= TRACES_MAX) return;
+  if (trace[t].type == type && trace[t].channel == channel) return;
+  trace[t].type = type;
+  trace[t].channel = channel;
+  request_to_redraw(REDRAW_PLOT | REDRAW_AREA | REDRAW_MARKER);
+}
+
+void set_trace_enable(int t, bool enable) {
+  if (t < 0 || t >= TRACES_MAX) return;
+  if (trace[t].enabled == enable) return;
+  trace[t].enabled = enable;
+  request_to_redraw(REDRAW_PLOT | REDRAW_AREA | REDRAW_MARKER);
+}
+
+void set_electrical_delay(int ch, float seconds) {
+  if (ch < 0 || ch >= 2) return;
+  if (current_props._electrical_delay[ch] == seconds)
+    return;
+  current_props._electrical_delay[ch] = seconds;
+  request_to_redraw(REDRAW_MARKER);
+}
+
+float get_electrical_delay(void) {
+  if (current_trace == TRACE_INVALID)
+    return 0.0f;
+  // trace is a macro to current_props._trace
+  int ch = trace[current_trace].channel;
+  if (ch < 0 || ch >= 2) return 0.0f;
+  return current_props._electrical_delay[ch];
+}
+
+void set_s21_offset(float offset) {
+  if (s21_offset != offset) {
+    s21_offset = offset;
+    request_to_redraw(REDRAW_MARKER);
+  }
+}
+
+void set_marker_index(int m, int idx) {
+  if (m < 0 || m >= MARKERS_MAX) return;
+  if (idx < 0) idx = 0;
+  // sweep_points from nanovna.h/globals? 
+  // Need to ensure sweep_points matches ui_model logic.
+  // We use the global 'sweep_points' here as before.
+  if (idx >= sweep_points) idx = sweep_points - 1;
+  
+  if (markers[m].enabled) request_to_draw_marker(markers[m].index);
+  markers[m].index = idx;
+  markers[m].frequency = get_frequency(idx);
+  request_to_redraw(REDRAW_MARKER);
+}
+
+freq_t get_marker_frequency(int marker) {
+  if (marker < 0 || marker >= MARKERS_MAX) return 0;
+  return markers[marker].frequency;
+}
+

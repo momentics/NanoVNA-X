@@ -121,33 +121,13 @@ static bool shell_io_write(const uint8_t* data, size_t size) {
   return true;
 }
 
-static size_t shell_io_read(uint8_t* data, size_t size) {
-  BaseAsynchronousChannel* channel = shell_current_channel();
-  if (channel == NULL || data == NULL) {
-    return 0;
-  }
-  size_t received = 0;
-  while (received < size) {
-    size_t chunk = chnReadTimeout(channel, data + received, size - received, SHELL_IO_TIMEOUT);
-    if (chunk == 0) {
-      if (!shell_check_connect()) {
-        break;
-      }
-      chThdSleepMilliseconds(5);
-      continue;
-    }
-    received += chunk;
-  }
-  return received;
-}
+
 
 static void shell_write(const void* buf, size_t size) {
   (void)shell_io_write((const uint8_t*)buf, size);
 }
 
-static size_t shell_read(void* buf, size_t size) {
-  return shell_io_read((uint8_t*)buf, size);
-}
+
 
 static size_t shell_read_nonblocking(void* buf, size_t size) {
   BaseAsynchronousChannel* channel = shell_current_channel();
