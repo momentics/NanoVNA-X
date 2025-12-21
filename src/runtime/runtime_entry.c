@@ -876,10 +876,6 @@ int runtime_main(void) {
   measurement_engine_port.service_loop = app_measurement_service_loop;
   measurement_engine_init(&measurement_engine, &measurement_engine_port, &app_event_bus, drivers);
   
-  /*
-   * Start UI Task (Phase 1 Refactoring)
-   */
-  ui_task_init();
 
   /*
    * restore config and calibration 0 slot from flash memory, also if need use backup data
@@ -893,6 +889,12 @@ int runtime_main(void) {
    * Init Shell console commands
    */
   shell_register_commands(commands);
+  
+  /*
+   * Start UI Task
+   * Must be started AFTER state_manager_init and frequency offsets are applied.
+   */
+  ui_task_init();
   
   /*
    * Initialize USB Shell Connection
