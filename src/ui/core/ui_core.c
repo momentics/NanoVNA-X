@@ -24,6 +24,7 @@
 #include <math.h>
 #include "nanovna.h"
 #include "ui/core/ui_core.h"
+#include "ui/core/ui_task.h" // For ui_task_signal
 #include "ui/core/ui_menu_engine.h" // For ui_draw_button
 #include "ui/core/ui_keypad.h" // For ui_keypad_lever
 #include "ui/ui_menu.h"
@@ -595,10 +596,12 @@ void ui_process(void) {
 
 void handle_button_interrupt(uint16_t channel) {
   ui_controller_publish_board_event(BOARD_EVENT_BUTTON, channel, true);
+  ui_task_signal();
 }
 
 void handle_touch_interrupt(void) {
   ui_controller_publish_board_event(BOARD_EVENT_TOUCH, 0, true);
+  ui_task_signal();
 }
 
 #if HAL_USE_EXT == TRUE

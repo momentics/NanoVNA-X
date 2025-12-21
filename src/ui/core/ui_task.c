@@ -17,9 +17,21 @@
 // 1024 bytes should be safe for now, can be tuned later.
 static THD_WORKING_AREA(waUIThread, 1024);
 
+// Event mask for UI Wakeup
+#define UI_WAKEUP_EVENT_MASK (eventmask_t)1
+
+static thread_t* ui_thread_ptr = NULL;
+
+void ui_task_signal(void) {
+  if (ui_thread_ptr != NULL) {
+    chEvtSignal(ui_thread_ptr, UI_WAKEUP_EVENT_MASK);
+  }
+}
+
 static msg_t ui_task_entry(void* arg) {
   (void)arg;
   chRegSetThreadName("ui");
+  ui_thread_ptr = chThdGetSelfX();
 
   // Initialize UI (moved from Thread1)
   ui_port.api->init();
@@ -38,9 +50,9 @@ static msg_t ui_task_entry(void* arg) {
     draw_all();
     #endif
 
-    // Run at ~20ms - 50ms interval (20Hz - 50Hz) to allow other threads to run
-    // This replaces the 'implicit' sleep in the measurement loop
-    chThdSleepMilliseconds(20);
+    // Wait for event or timeout (for battery redraws or other periodic tasks)
+    // 100ms timeout ensures we still refresh battery/status occasionally even without input
+    chEvtWaitAnyTimeout(UI_WAKEUP_EVENT_MASK, MS2ST(100));
   }
   return MSG_OK;
 }

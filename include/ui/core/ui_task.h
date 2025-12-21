@@ -13,3 +13,5 @@
 #include "ch.h"
 
 void ui_task_init(void);
+void ui_task_signal(void);
+
