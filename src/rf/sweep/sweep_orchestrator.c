@@ -622,9 +622,8 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
     freq_t frequency = get_frequency(p_sweep);
     // Simplified measurement loop using RF Driver
     if (mask & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE)) {
-      complex_float_t s11, s21;
-      complex_float_t *p_s11 = (mask & SWEEP_CH0_MEASURE) ? &s11 : NULL;
-      complex_float_t *p_s21 = (mask & SWEEP_CH1_MEASURE) ? &s21 : NULL;
+      float *p_s11 = (mask & SWEEP_CH0_MEASURE) ? &sweep_data[0] : NULL;
+      float *p_s21 = (mask & SWEEP_CH1_MEASURE) ? &sweep_data[2] : NULL;
 
       if (!rf_driver_get_default()->measure_point(frequency, p_s11, p_s21)) {
         goto capture_failure;
@@ -637,8 +636,6 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
       }
 
       if (p_s11) {
-        sweep_data[0] = s11.real;
-        sweep_data[1] = s11.imag;
         if (mask & SWEEP_APPLY_CALIBRATION) apply_ch0_error_term(sweep_data, sweep_cal_data);
         if (mask & SWEEP_APPLY_EDELAY_S11) apply_edelay(electrical_delayS11 * frequency, &sweep_data[0]);
         measured[0][p_sweep][0] = sweep_data[0];
@@ -646,8 +643,6 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
       }
 
       if (p_s21) {
-        sweep_data[2] = s21.real;
-        sweep_data[3] = s21.imag;
         if (mask & SWEEP_APPLY_CALIBRATION) apply_ch1_error_term(sweep_data, sweep_cal_data);
         if (mask & SWEEP_APPLY_EDELAY_S21) apply_edelay(electrical_delayS21 * frequency, &sweep_data[2]);
         if (mask & SWEEP_APPLY_S21_OFFSET) apply_offset(&sweep_data[2], offset);

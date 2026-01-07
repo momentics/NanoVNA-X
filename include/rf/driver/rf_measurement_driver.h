@@ -36,11 +36,14 @@ typedef struct {
 } complex_float_t;
 
 typedef struct {
-    // Measure a single frequency point.
-    // Intent: Encapsulate all hardware operations (signal gen, settling, capture) 
-    // to decouple orchestration from specific hardware.
+    // Measure a single frequency point
+    // This function handles:
+    // 1. Setting the generator frequency
+    // 2. Waiting for settling time
+    // 3. Measuring S11 (Channel 0) - writes 2 floats (Real, Imag) to s11
+    // 4. Measuring S21 (Channel 1) - writes 2 floats (Real, Imag) to s21
     // Returns true if successful, false on error/abort.
-    bool (*measure_point)(freq_t frequency, complex_float_t* s11, complex_float_t* s21);
+    bool (*measure_point)(freq_t frequency, float* s11, float* s21);
     
     // Cancel any ongoing hardware operation.
     // Intent: safely stop pending DMA or waits during user interruption.

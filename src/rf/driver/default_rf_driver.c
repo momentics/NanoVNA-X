@@ -40,7 +40,7 @@
  * directly calls si5351, tlv320aic3204 and sweep_service functions.
  */
 
-static bool default_measure_point(freq_t frequency, complex_float_t* s11, complex_float_t* s21) {
+static bool default_measure_point(freq_t frequency, float* s11, float* s21) {
   // 1. Set Frequency
   // Use si5351 driver directly. current_props is global config.
   int delay = si5351_set_frequency(frequency, current_props._power);
@@ -80,10 +80,9 @@ static bool default_measure_point(freq_t frequency, complex_float_t* s11, comple
         return false;
       }
       
-      float raw[2];
-      sample(raw);
-      s11->real = raw[0];
-      s11->imag = raw[1];
+      sample(s11);
+      //s11->real = raw[0];
+      //s11->imag = raw[1];
     } else {
         // If skipping S11, we might need to preserve timing or not?
         // In original code, skipping is mask-based. If mask implies NO ch0, we don't wait.
@@ -121,10 +120,9 @@ static bool default_measure_point(freq_t frequency, complex_float_t* s11, comple
         return false;
       }
 
-      float raw[2];
-      sample(raw);
-      s21->real = raw[0];
-      s21->imag = raw[1];
+      sample(s21);
+      //s21->real = raw[0];
+      //s21->imag = raw[1];
     }
   }
 
