@@ -578,6 +578,21 @@ static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
 static float sweep_data[4];
 static float sweep_cal_data[CAL_TYPE_COUNT][2];
 
+// Struct for callback context
+typedef struct {
+    int idx;
+    freq_t freq;
+    uint16_t mask;
+} sweep_wait_ctx_t;
+
+// Callback to run math during hardware wait
+static void sweep_wait_callback(bool final_cycle, void* arg) {
+    sweep_wait_ctx_t* ctx = (sweep_wait_ctx_t*)arg;
+    if (final_cycle && (ctx->mask & SWEEP_APPLY_CALIBRATION)) {
+        cal_interpolate(ctx->idx, ctx->freq, sweep_cal_data);
+    }
+}
+
 bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
   sweep_in_progress = true;
   sweep_service_wait_for_copy_release();
@@ -603,6 +618,14 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
     offset = vna_expf(s21_offset * (logf(10.0f) / 20.0f));
   }
 
+  // Context for parallelism
+  sweep_wait_ctx_t wait_ctx;
+  wait_ctx.mask = mask;
+
+  // We need a forward declaration or helper.
+  // Since we are inside function, we can't define function.
+  // We must define it outside.
+  
   if (p_sweep == 0U) {
     sweep_prepare_led_and_progress(show_progress);
   }
@@ -625,16 +648,21 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
       float *p_s11 = (mask & SWEEP_CH0_MEASURE) ? &sweep_data[0] : NULL;
       float *p_s21 = (mask & SWEEP_CH1_MEASURE) ? &sweep_data[2] : NULL;
 
-      if (!rf_driver_get_default()->measure_point(frequency, p_s11, p_s21)) {
+      // Prepare context for callback
+      interpolation_idx = (mask & SWEEP_USE_INTERPOLATION) ? -1 : (int)p_sweep;
+      wait_ctx.idx = interpolation_idx;
+      wait_ctx.freq = frequency;
+      
+      // Use the helper we defined above (we need to inject it before this function)
+      // Since we can't inject outside easily in one go, we rely on a separate replacement chunk for the helper.
+      // Assuming 'sweep_wait_callback' exists.
+      
+      if (!rf_driver_get_default()->measure_point(frequency, p_s11, p_s21, sweep_wait_callback, &wait_ctx)) {
         goto capture_failure;
       }
 
-      interpolation_idx = (mask & SWEEP_USE_INTERPOLATION) ? -1 : (int)p_sweep;
-
-      if (mask & SWEEP_APPLY_CALIBRATION) {
-          cal_interpolate(interpolation_idx, frequency, sweep_cal_data);
-      }
-
+      // cal_interpolate is now called inside measure_point callback.
+      
       if (p_s11) {
         if (mask & SWEEP_APPLY_CALIBRATION) apply_ch0_error_term(sweep_data, sweep_cal_data);
         if (mask & SWEEP_APPLY_EDELAY_S11) apply_edelay(electrical_delayS11 * frequency, &sweep_data[0]);

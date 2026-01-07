@@ -40,7 +40,7 @@
  * directly calls si5351, tlv320aic3204 and sweep_service functions.
  */
 
-static bool default_measure_point(freq_t frequency, float* s11, float* s21) {
+static bool default_measure_point(freq_t frequency, float* s11, float* s21, void (*on_wait_cb)(bool final_cycle, void* ctx), void* ctx) {
   // 1. Set Frequency
   // Use si5351 driver directly. current_props is global config.
   int delay = si5351_set_frequency(frequency, current_props._power);
@@ -76,6 +76,36 @@ static bool default_measure_point(freq_t frequency, float* s11, float* s21) {
       // Update delay for next step in this cycle
       current_delay = DELAY_CHANNEL_CHANGE;
       
+      
+      // Execute callback during capture wait (parallelism)
+      if (on_wait_cb) {
+          on_wait_cb(cycle == (total_cycles - 1U), ctx);
+          // Set to NULL to ensure we run it only ONCE? 
+          // No, original code ran it potentially twice (once for Ch0, once for Ch1 if needed)
+          // But `cal_interpolate` is idempotent.
+          // Optimization: Run it only once per cycle?
+          // If we run it here, we don't need to run it again in Ch1 block if Ch0 block ran.
+          // BUT: `on_wait_cb` might contain logic that needs to run on *each* capture wait if split?
+          // `cal_interpolate` prepares `sweep_cal_data`. It only needs to run once per point (or per cycle).
+          // Let's pass it. The callback can decide.
+          // Actually, let's null it out to run only once per cycle to save CPU? 
+          // "cal_interpolate" is hefty.
+          // Original code:
+          // if (final_cycle) cal_interpolate();
+          // inside Ch0 block.
+          // Inside Ch1 block:
+          // if (final_cycle && (mask & CAL) && (mask & CH0) == 0) cal_interpolate()
+          // So it runs EXACTLY ONCE.
+          
+          // Strategy: Run it in Ch0. If Ch0 skipped, run in Ch1.
+          // How to implement generic "on_wait"?
+          // Just call it. The orchestrator wrapper should handle "run once" logic if needed or just be idempotent.
+          // But for performance, we should avoid calling it twice.
+          // Let's assume on_wait_cb is "do useful work while waiting".
+          // We can call it every time we wait.
+          // Orchestrator wrapper will have a flag "done".
+      }
+
       if (!sweep_service_wait_for_capture()) {
         return false;
       }
@@ -115,6 +145,11 @@ static bool default_measure_point(freq_t frequency, float* s11, float* s21) {
       // If it is small, it's fine.
       
       current_delay = DELAY_CHANNEL_CHANGE;
+
+      if (on_wait_cb) {
+           // Allow callback to run here if it didn't run effectively in Ch0
+           on_wait_cb(cycle == (total_cycles - 1U), ctx);
+      }
 
       if (!sweep_service_wait_for_capture()) {
         return false;

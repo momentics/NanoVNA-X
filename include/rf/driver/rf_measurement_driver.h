@@ -42,8 +42,9 @@ typedef struct {
     // 2. Waiting for settling time
     // 3. Measuring S11 (Channel 0) - writes 2 floats (Real, Imag) to s11
     // 4. Measuring S21 (Channel 1) - writes 2 floats (Real, Imag) to s21
+    // 5. Calls on_wait_cb(ctx) during hardware waits to allow parallelism (e.g. math)
     // Returns true if successful, false on error/abort.
-    bool (*measure_point)(freq_t frequency, float* s11, float* s21);
+    bool (*measure_point)(freq_t frequency, float* s11, float* s21, void (*on_wait_cb)(bool final_cycle, void* ctx), void* ctx);
     
     // Cancel any ongoing hardware operation.
     // Intent: safely stop pending DMA or waits during user interruption.
