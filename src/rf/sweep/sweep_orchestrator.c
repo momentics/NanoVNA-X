@@ -21,6 +21,7 @@
 #pragma GCC optimize("O2")
 
 #include "rf/sweep/sweep_orchestrator.h"
+#include "rf/driver/rf_measurement_driver.h"
 
 #include "hal.h"
 #include "platform/peripherals/si5351.h"
@@ -62,13 +63,17 @@ static uint8_t sweep_bar_pending = 0;
 static uint8_t smooth_factor = 0;
 static void (*volatile sample_func)(float* gamma) = NULL;
 
-void sweep_service_set_sample_function(void (*func)(float*)) {
+void sweep_service_set_sample_function(sweep_sample_func_t func) {
   if (func == NULL) {
     func = calculate_gamma;
   }
   osalSysLock();
   sample_func = func;
   osalSysUnlock();
+}
+
+sweep_sample_func_t sweep_service_get_sample_function(void) {
+  return sample_func;
 }
 
 static inline bool sweep_ui_input_pending(void) {
@@ -588,8 +593,7 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
     return false;
   }
   bool completed = false;
-  int delay = 0;
-  int st_delay = DELAY_SWEEP_START;
+
   int interpolation_idx = p_sweep;
   bool show_progress = config._bandwidth >= BANDWIDTH_100;
   uint16_t batch_budget = sweep_points_budget(break_on_operation);
@@ -616,86 +620,37 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
       break;
     }
     freq_t frequency = get_frequency(p_sweep);
-    uint8_t extra_cycles = 0U;
+    // Simplified measurement loop using RF Driver
     if (mask & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE)) {
-      delay = app_measurement_set_frequency(frequency);
+      complex_float_t s11, s21;
+      complex_float_t *p_s11 = (mask & SWEEP_CH0_MEASURE) ? &s11 : NULL;
+      complex_float_t *p_s21 = (mask & SWEEP_CH1_MEASURE) ? &s21 : NULL;
+
+      if (!rf_driver_get_default()->measure_point(frequency, p_s11, p_s21)) {
+        goto capture_failure;
+      }
+
       interpolation_idx = (mask & SWEEP_USE_INTERPOLATION) ? -1 : (int)p_sweep;
-      extra_cycles = si5351_take_settling_cycles();
-    }
-    uint8_t total_cycles = extra_cycles + 1U;
 
-    // Process each cycle - reduced nesting by extracting logic
-    for (uint8_t cycle = 0; cycle < total_cycles; cycle++) {
-      bool final_cycle = (cycle == total_cycles - 1U);
-      int cycle_delay = delay;
-      int cycle_st_delay = (cycle == 0U) ? st_delay : 0;
-
-      // Process channel 0 if needed
-      if (mask & SWEEP_CH0_MEASURE) {
-        tlv320aic3204_select(0);
-        sweep_service_start_capture(cycle_delay + cycle_st_delay);
-        cycle_delay = DELAY_CHANNEL_CHANGE;
-        
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
+      if (mask & SWEEP_APPLY_CALIBRATION) {
           cal_interpolate(interpolation_idx, frequency, sweep_cal_data);
-        }
+      }
 
-        if (!sweep_service_wait_for_capture()) {
-          goto capture_failure;
-        }
-
-        void (*sample_cb)(float*) = sample_func;
-        sample_cb(&sweep_data[0]);  // Process S11 data[0], data[1]
-
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-          apply_ch0_error_term(sweep_data, sweep_cal_data);
-        }
-
-        if (mask & SWEEP_APPLY_EDELAY_S11) {
-             apply_edelay(electrical_delayS11 * frequency, &sweep_data[0]);
-        }
-        
-        // Store results
+      if (p_s11) {
+        sweep_data[0] = s11.real;
+        sweep_data[1] = s11.imag;
+        if (mask & SWEEP_APPLY_CALIBRATION) apply_ch0_error_term(sweep_data, sweep_cal_data);
+        if (mask & SWEEP_APPLY_EDELAY_S11) apply_edelay(electrical_delayS11 * frequency, &sweep_data[0]);
         measured[0][p_sweep][0] = sweep_data[0];
         measured[0][p_sweep][1] = sweep_data[1];
       }
 
-      // Process channel 1 if needed
-      if (mask & SWEEP_CH1_MEASURE) {
-        // For channel 1, we may need to interpolate again if channel 0 wasn't processed
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION) && (mask & SWEEP_CH0_MEASURE) == 0U) {
-          cal_interpolate(interpolation_idx, frequency, sweep_cal_data);
-        }
-
-        tlv320aic3204_select(1);
-        sweep_service_start_capture(cycle_delay + cycle_st_delay);
-        cycle_delay = DELAY_CHANNEL_CHANGE;
-        
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-             cal_interpolate(interpolation_idx, frequency, sweep_cal_data);
-        }
-
-        if (!sweep_service_wait_for_capture()) {
-          goto capture_failure;
-        }
-        
-        void (*sample_cb)(float*) = sample_func;
-        sample_cb(&sweep_data[2]);  // Process S21 data[2], data[3]
-        
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-            apply_ch1_error_term(sweep_data, sweep_cal_data);
-        }
-        
-        if (mask & SWEEP_APPLY_EDELAY_S21) {
-             apply_edelay(electrical_delayS21 * frequency, &sweep_data[2]);
-        }
-
-        // Apply S21 offset if needed
-        if (mask & SWEEP_APPLY_S21_OFFSET) {
-          apply_offset(&sweep_data[2], offset);
-        }
-
-        // Store results
+      if (p_s21) {
+        sweep_data[2] = s21.real;
+        sweep_data[3] = s21.imag;
+        if (mask & SWEEP_APPLY_CALIBRATION) apply_ch1_error_term(sweep_data, sweep_cal_data);
+        if (mask & SWEEP_APPLY_EDELAY_S21) apply_edelay(electrical_delayS21 * frequency, &sweep_data[2]);
+        if (mask & SWEEP_APPLY_S21_OFFSET) apply_offset(&sweep_data[2], offset);
         measured[1][p_sweep][0] = sweep_data[2];
         measured[1][p_sweep][1] = sweep_data[3];
       }

@@ -5,6 +5,13 @@
 
 .DEFAULT_GOAL := all
 
+# Auto-detect number of cores and enable parallel build if -j is not specified
+ifeq ($(filter -j%,$(MAKEFLAGS)),)
+  ifneq ($(shell which nproc 2>/dev/null),)
+    MAKEFLAGS += -j$(shell nproc)
+  endif
+endif
+
 #Build target
 ifeq ($(TARGET),)
   TARGET = F072
@@ -182,6 +189,7 @@ CSRC = $(STARTUPSRC) \
        src/runtime/main.c \
        src/runtime/runtime_entry.c \
        src/rf/sweep/sweep_orchestrator.c \
+       src/rf/driver/default_rf_driver.c \
        src/interfaces/cli/shell_service.c \
        src/interfaces/cli/shell_commands.c \
        src/core/common.c \

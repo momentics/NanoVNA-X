@@ -83,7 +83,10 @@ void measurement_data_smooth(uint16_t ch_mask);
 void set_smooth_factor(uint8_t factor);
 uint8_t get_smooth_factor(void);
 
-void sweep_service_set_sample_function(void (*func)(float*));
+typedef void (*sweep_sample_func_t)(float* gamma);
+
+void sweep_service_set_sample_function(sweep_sample_func_t func);
+sweep_sample_func_t sweep_service_get_sample_function(void);
 
 void i2s_lld_serve_rx_interrupt(uint32_t flags);
 
