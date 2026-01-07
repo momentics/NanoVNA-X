@@ -26,11 +26,13 @@
 #include "nanovna.h"
 
 // Typically defined in config or hal, ensuring visibility
+#include "hal.h"
+
 #ifndef DELAY_SWEEP_START
-#define DELAY_SWEEP_START MS2ST(2)
+#define DELAY_SWEEP_START US2ST(100)
 #endif
 #ifndef DELAY_CHANNEL_CHANGE
-#define DELAY_CHANNEL_CHANGE MS2ST(1)
+#define DELAY_CHANNEL_CHANGE US2ST(100)
 #endif
 
 /*
