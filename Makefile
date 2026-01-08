@@ -330,14 +330,16 @@ ifeq ($(TARGET),F072)
           -DENABLE_GAIN_COMMAND=0 \
           -DENABLE_PORT_COMMAND=0 \
           -DENABLE_STAT_COMMAND=0 \
-          -DENABLE_THREADS_COMMAND=0
+          -DENABLE_THREADS_COMMAND=0 \
+          -DENABLED_DUMP_COMMAND=0
 endif
+ifneq ($(TARGET),F072)
 #Enable if use RTC and need auto select source LSE or LSI
 UDEFS+= -DVNA_AUTO_SELECT_RTC_SOURCE
+endif
 #Enable if install external 32.768kHz clock quartz on PC14 and PC15 pins on STM32 CPU and no VNA_AUTO_SELECT_RTC_SOURCE
 #UDEFS+= -DVNA_USE_LSE
-#UDEFS+= -D__VNA_Z_RENORMALIZATION__ -D__VNA_FAST_RENDER__
-
+UDEFS+= -D__VNA_Z_RENORMALIZATION__ 
 # Define ASM defines here
 UADEFS =
 

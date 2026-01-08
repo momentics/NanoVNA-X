@@ -1,4 +1,5 @@
 # Building the NanoVNA-X firmware
+
 [Русская версия](building_ru.md)
 
 This guide documents a reproducible path to build the NanoVNA-X firmware from
@@ -55,10 +56,10 @@ The codebase is now split into clearly defined layers rather than the historical
 | `include/runtime`, `src/runtime` | Application entry points, feature toggles, sweep orchestration, and CLI plumbing. |
 | `include/rf`, `src/rf` | Sweep orchestration, measurement pipelines, and RF-side helpers. |
 | `include/processing`, `src/processing` | DSP kernels and math helpers backing measurement and UI logic. |
-| `include/infra`, `src/infra` | Shared services (configuration persistence, scheduler, event bus, state manager). |
-| `include/interfaces`, `src/interfaces` | Clean ports for the CLI, USB transport, UI handlers, and processing adapters. |
+| `include/sys`, `src/sys` | Shared services (configuration persistence, scheduler, event bus, state manager). |
+| `include/driver`, `src/driver` | Hardware drivers (LCD, Codec, Synthesizer, USB). |
 | `include/ui`, `src/ui` | Rendering, controllers, input adapters, and embedded font/icon assets. |
-| `src/platform`, `boards/STM32F072/STM32F303` | Board support packages shared with ChibiOS. |
+| `boards/STM32F072`, `boards/STM32F303` | Board support packages shared with ChibiOS. |
 
 When adding new code or porting patches, drop each feature into the matching layer to keep dependencies one-directional.
 
@@ -110,7 +111,7 @@ so that tools such as the Windows `DfuSe` utility recognise the file
 immediately; flashing via `make flash` or `dfu-util` works with either the raw
 `.bin` or the `.dfu` artefact.
 
-## 5. Flash the device (optional)
+## 6. Flash the device (optional)
 
 With the hardware in DFU mode, flash the generated binary using `dfu-util`:
 
@@ -123,7 +124,7 @@ The `flash` target always uses the binary generated in `build/` for the
 selected board profile. The device must enumerate as a DFU interface on your
 host; see the main README for more detail on entering DFU mode.
 
-## 6. Troubleshooting
+## 7. Troubleshooting
 
 - **Missing compiler** – confirm that `arm-none-eabi-gcc` is on `PATH` and the
   packages listed above are installed.
@@ -132,9 +133,8 @@ host; see the main README for more detail on entering DFU mode.
 - **Permission errors when flashing** – on Linux, add udev rules for DFU devices
   or run `dfu-util` with `sudo`.
 - **Host utility cannot detect the device** – after flashing, open the USB console
-  and confirm the session starts with `ch> ` before the banner. Older host caches
+  and confirm the session starts with `ch>` before the banner. Older host caches
   (e.g. NanoVNA-Saver) may need a reconnect to pick up the new handshake.
-
 
 Following these steps should yield a repeatable build both locally and in
 continuous integration environments.

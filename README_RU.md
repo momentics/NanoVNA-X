@@ -177,6 +177,7 @@ NanoVNA-X использует стандартный процесс на осн
 ## Документация
 
 - [12-точечная калибровка (RU)](doc/calibration_12_point_RU.md) — подробная инструкция по 12-точечной калибровке.
+- [Поддержка 50/75 Ом (PORT-Z) (RU)](doc/PORT-Z-50-75-Omh_RU.md) — инструкция по ренормализации импеданса.
 - [Структура меню NanoVNA-X (RU)](doc/menu_structure_ru.md) — подробное древо пунктов меню на русском языке.
 - [NanoVNA-X menu structure](doc/menu_structure.md) — англоязычное дерево актуального меню NanoVNA-X.
 - [NanoVNA-X menu & user workflow reference](doc/menu_and_user_guide.md) — англоязычное описание сценариев работы с меню.

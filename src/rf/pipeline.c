@@ -21,6 +21,7 @@
  */
 
 #include "rf/pipeline.h"
+#include "nanovna.h"
 #include <stddef.h>
 
 #include "rf/sweep.h"
@@ -40,5 +41,35 @@ uint16_t measurement_pipeline_active_mask(measurement_pipeline_t* pipeline) {
 bool measurement_pipeline_execute(measurement_pipeline_t* pipeline, bool break_on_operation,
                                   uint16_t channel_mask) {
   (void)pipeline;
-  return app_measurement_sweep(break_on_operation, channel_mask);
-}
+  bool res = app_measurement_sweep(break_on_operation, channel_mask);
+
+#ifdef __VNA_Z_RENORMALIZATION__
+  if (res && current_props._portz != 50.0f && current_props._portz > 1.0f) {
+     float k = (current_props._portz - 50.0f) / (current_props._portz + 50.0f);
+     uint16_t count = sweep_points;
+     // Only renormalize CH0 (S11)
+     if (channel_mask & 1) {
+       for (uint16_t i = 0; i < count; i++) {
+         float re = measured[0][i][0];
+         float im = measured[0][i][1];
+         
+         // Gamma_new = (Gamma - k) / (1 - Gamma*k)
+         // A + jB = (re - k) + j(im)
+         // C + jD = (1 - re*k) + j(-im*k)
+         
+         float A = re - k;
+         float B = im;
+         float C = 1.0f - re * k;
+         float D = -im * k;
+         
+         float den = C * C + D * D;
+         if (den > 1e-9f) {
+           measured[0][i][0] = (A * C + B * D) / den;
+           measured[0][i][1] = (B * C - A * D) / den;
+         }
+       }
+     }
+  }
+#endif
+
+  return res;}

@@ -24,13 +24,6 @@
 //**************************************************************************************
 // Cell render functions
 //**************************************************************************************
-#if VNA_FAST_RENDER
-// Little faster on easy traces, 2x faster if need lot of clipping and draw long lines
-// Bitmaps draw, 2x faster, but limit width <= 32
-#include "fast_render/vna_render.c"
-// Ensure non-static symbols are available if vna_render.c defines them as static inline or similar
-// (Assuming vna_render.c provides compatible implementations)
-#else
 // Little slower on easy traces, but slow if need lot of clip and draw long lines
 /**
  * @brief Draw a line in the cell buffer using optimized Bresenham's algorithm.
@@ -107,7 +100,6 @@ void cell_blit_bitmap(RenderCellCtx* rcx, int16_t x, int16_t y, uint16_t w, uint
     }
   }
 }
-#endif
 
 #ifdef VNA_ENABLE_SHADOW_TEXT
 void cell_blit_bitmap_shadow(RenderCellCtx* rcx, int16_t x, int16_t y, uint16_t w, uint16_t h,

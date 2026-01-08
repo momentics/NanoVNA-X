@@ -56,6 +56,7 @@ The firmware was rewritten around a layered ChibiOS stack that emphasises respon
 ### Firmware Stability and Responsiveness
 
 The core of the firmware was reworked from blocking calls to a fully asynchronous, event-driven architecture using ChibiOS primitives (Mailboxes, Events, and Semaphores).
+
 - **Non-Blocking USB.** The USB CDC (serial) stack is now fully asynchronous. The firmware no longer hangs if a host PC connects, disconnects, or stalls during a data transfer. This resolves the most common source of device freezes.
 - **Timeout-Driven Recovery.** Critical subsystems, including the measurement engine and I²C bus, are guarded by timeouts. A stalled operation will no longer lock up the device; instead, the subsystem attempts to recover cleanly.
 - **RTOS-based Concurrency.** Busy-wait loops and polling have been replaced with efficient RTOS-based signaling, reducing CPU load and improving battery life. The measurement thread, UI, and USB stack now cooperate without race conditions or deadlocks.
@@ -64,7 +65,8 @@ The core of the firmware was reworked from blocking calls to a fully asynchronou
 
 ### Performance and Resource Management
 
-* **Targeted Memory Optimization** Static RAM consumption has been significantly reduced, especially for the 16 kB STM32F072 (NanoVNA-H) target. This was achieved by tuning buffer sizes, disabling features like trace caching on low-memory models, and moving key buffers to CCM RAM on the STM32F303.
+- **Targeted Memory Optimization** Static RAM consumption has been significantly reduced, especially for the 16 kB STM32F072 (NanoVNA-H) target. This was achieved by tuning buffer sizes, disabling features like trace caching on low-memory models, and moving key buffers to CCM RAM on the STM32F303.
+
 - **Strategic DMA Usage** The DMA architecture was refined to prioritize measurement stability. DMA is used for the most demanding data paths:
   - **LCD Interface (SPI)** Ensures smooth, high-speed UI and graph rendering.
   - **Measurement Pipeline (I²S)** Guarantees sample delivery from the codec without dropping data.
@@ -105,12 +107,14 @@ While the speed per point is limited by the physics of the measurement loop, the
 
 ### New Features and Capabilities
 
-* **PLL Stabilization** The Si5351 synthesizer programming sequence was optimized to reduce frequency overshoot and drift, improving measurement repeatability, especially at the start of a sweep.
+- **PLL Stabilization** The Si5351 synthesizer programming sequence was optimized to reduce frequency overshoot and drift, improving measurement repeatability, especially at the start of a sweep.
+
 - **Deterministic USB serial numbers** The firmware now enables the USB unique-ID mode at boot, so every unit enumerates with a stable serial number that host software (NanoVNA-App, NanoVNA Saver, etc.) can display without extra configuration.
 
 ### Build and Development Workflow
 
-* **Automated Versioning** The firmware version is now automatically embedded during the build process from a single `VERSION` file.
+- **Automated Versioning** The firmware version is now automatically embedded during the build process from a single `VERSION` file.
+
 - **Improved CI/CD** The GitHub Actions workflows have been optimized for faster, more reliable builds with better caching.
 - **DFU File Generation** A Python-based script for creating DfuSe-compatible firmware files has been integrated into the release process.
 
@@ -219,6 +223,7 @@ There are several numbers of great companion PC tools from third-party.
 ## Documentation
 
 - [12-Point Calibration Guide (English)](doc/calibration_12_point.md)
+- [50/75 Ohm PORT-Z Guide](doc/PORT-Z-50-75-Omh.md)
 - [NanoVNA-X menu structure](doc/menu_structure.md)
 - [NanoVNA-X menu & user workflow reference](doc/menu_and_user_guide.md)
 - [NanoVNA User Guide(ja)](https://cho45.github.io/NanoVNA-manual/) by cho45. [(en:google translate)](https://translate.google.com/translate?sl=ja&tl=en&u=https%3A%2F%2Fcho45.github.io%2FNanoVNA-manual%2F)
@@ -235,5 +240,6 @@ Hardware design material is disclosed to prevent bad quality clone. Please let m
 
 ## Credit
 
-* [@momentics](https://github.com/momentics/) – NanoVNA-X maintainer and integrator.
+- [@momentics](https://github.com/momentics/) – NanoVNA-X maintainer and integrator.
+
 - The broader NanoVNA community – especially [@edy555](https://github.com/edy555) and [@DiSlord](https://github.com/DiSlord) – for releasing the original schematics, DSP tables, and firmware under the GPL.

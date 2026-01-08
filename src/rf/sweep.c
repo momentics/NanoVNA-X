@@ -30,9 +30,6 @@
 #include <stdint.h>
 #include <string.h>
 
-#ifdef __VNA_Z_RENORMALIZATION__
-#include "../analysis/vna_renorm.c"
-#endif
 
 /*
  * DMA/I2S capture state
@@ -607,11 +604,6 @@ static void fsm_setup_freq(rf_fsm_context_t* ctx) {
 
 static void fsm_setup_measure(rf_fsm_context_t* ctx) {
   if (ctx->current_cycle >= ctx->total_cycles) {
-#ifdef __VNA_Z_RENORMALIZATION__
-    if (ctx->mask & SWEEP_USE_RENORMALIZATION) {
-       apply_renormalization(ctx->sweep_data, ctx->mask);
-    }
-#endif
     ctx->state = RF_STATE_NEXT_STEP;
     return;
   }

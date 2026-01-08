@@ -49,9 +49,6 @@
  * keep updates responsive even on constrained MCUs.
  *
  * Feature flags:
- *   VNA_FAST_RENDER    - Use the optimized renderer located in
- *                        src/ui/draw/fast_render/vna_render.c (defaults to the legacy
- *                        implementation when undefined).
  *   VNA_ENABLE_SHADOW_TEXT - Enables drop shadow text rendering when true. The
  *                        legacy configuration macro _USE_SHADOW_TEXT_ still
  *                        works and feeds this flag.
@@ -62,14 +59,6 @@
  * etc.) is preserved. All helper functions are kept static to avoid leaking
  * internal symbols.
  */
-
-#ifndef VNA_FAST_RENDER
-#ifdef __VNA_FAST_RENDER__
-#define VNA_FAST_RENDER 1
-#else
-#define VNA_FAST_RENDER 0
-#endif
-#endif
 
 #ifndef VNA_ENABLE_SHADOW_TEXT
 #ifdef _USE_SHADOW_TEXT_
