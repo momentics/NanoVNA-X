@@ -38,7 +38,7 @@
 // ================================================================================================
 #ifdef __USE_LC_MATCHING__
 
-static lc_match_array_t* lc_match_array = (lc_match_array_t*)measure_memory;
+static lc_match_array_t* lc_match_array = &measure_cache.lc_match;
 
 static void prepare_lc_match(uint8_t mode, uint8_t update_mask) {
   (void)mode;
@@ -116,7 +116,7 @@ static void draw_lc_match(int xp, int yp) {
 // ================================================================================================
 #ifdef __S21_MEASURE__
 
-static s21_analysis_t* s21_measure = (s21_analysis_t*)measure_memory;
+static s21_analysis_t* s21_measure = &measure_cache.s21;
 
 static void draw_serial_result(int xp, int yp) {
   cell_printf(xp, yp, s21_measure->header);
@@ -169,7 +169,7 @@ static void prepare_series(uint8_t type, uint8_t update_mask) {
   markmap_all_markers();
 }
 
-static s21_filter_measure_t* s21_filter = (s21_filter_measure_t*)measure_memory;
+static s21_filter_measure_t* s21_filter = &measure_cache.s21_filter;
 
 static void draw_s21_pass(int xp, int yp, s21_pass* p, const char* name) {
   cell_printf(xp, yp, name);
@@ -264,7 +264,7 @@ static void prepare_filter(uint8_t type, uint8_t update_mask) {
 // ================================================================================================
 #ifdef __S11_CABLE_MEASURE__
 
-static s11_cable_measure_t* s11_cable = (s11_cable_measure_t*)measure_memory;
+static s11_cable_measure_t* s11_cable = &measure_cache.s11_cable;
 float real_cable_len = 0.0f;
 
 static void draw_s11_cable(int xp, int yp) {
@@ -336,7 +336,7 @@ static void prepare_s11_cable(uint8_t type, uint8_t update_mask) {
 // ================================================================================================
 #ifdef __S11_RESONANCE_MEASURE__
 
-static s11_resonance_measure_t* s11_resonance = (s11_resonance_measure_t*)measure_memory;
+static s11_resonance_measure_t* s11_resonance = &measure_cache.s11_resonance;
 
 static void draw_s11_resonance(int xp, int yp) {
   cell_printf(xp, yp, "S11 RESONANCE");

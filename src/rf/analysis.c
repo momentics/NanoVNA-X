@@ -38,12 +38,12 @@ extern uint16_t sweep_points;
 #endif
 
 // Memory for measure cache data (Definition)
-char alignas(8) measure_memory[128];
+alignas(8) measurement_cache_t measure_cache;
 
 // Internal pointers for easy access within analysis functions
-static lc_match_array_t* lc_match_array = (lc_match_array_t*)measure_memory;
-static s21_analysis_t* s21_measure = (s21_analysis_t*)measure_memory;
-static s11_resonance_measure_t* s11_resonance = (s11_resonance_measure_t*)measure_memory;
+static lc_match_array_t* lc_match_array = &measure_cache.lc_match;
+static s21_analysis_t* s21_measure = &measure_cache.s21;
+static s11_resonance_measure_t* s11_resonance = &measure_cache.s11_resonance;
 
 // ================================================================================================
 // Math Helpers

@@ -27,7 +27,8 @@
 #include "nanovna.h" // For freq_t, etc.
 
 // Shared memory for analysis results
-extern char alignas(8) measure_memory[128];
+// Shared memory for analysis results
+// extern char alignas(8) measure_memory[128]; // Replaced by measurement_cache_t
 
 // Type of get value function
 typedef float (*get_value_t)(uint16_t idx);
@@ -138,6 +139,22 @@ typedef struct {
 float s11_resonance_value(uint16_t i);
 float s11_resonance_min(uint16_t i);
 bool add_resonance_value(int i, uint16_t x, freq_t f); // Helper used by update_mask logic, maybe internal?
+
+// Measurement Cache Union
+typedef union {
+    lc_match_array_t lc_match;
+    s21_analysis_t s21;
+    s21_filter_measure_t s21_filter;
+    s11_cable_measure_t s11_cable;
+    s11_resonance_measure_t s11_resonance;
+    char raw[128]; // Ensure minimum size and strict alignment.
+} measurement_cache_t;
+
+// Shared memory for analysis results (Typed)
+extern alignas(8) measurement_cache_t measure_cache;
+
+// Legacy compatibility macro (temporary, until all files are updated)
+// #define measure_memory ((char*)&measure_cache)
 
 // Global Helpers (Wrappers for global vars if needed, but we assume direct access for now to match legacy)
 
