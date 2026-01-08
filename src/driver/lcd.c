@@ -644,6 +644,14 @@ void lcd_set_window(int x, int y, int w, int h, uint16_t cmd) {
 #ifdef __USE_DISPLAY_DMA__
 static void lcd_start_dma_transaction(const lcd_render_request_t* req) {
   // Note: We are in Critical Section (ISR or Lock)
+  
+  // 1. Wait for previous SPI transaction to fully complete (shift register empty)
+  //    DMA TC triggers when memory read is done/DR is full, not when SPI wire is done.
+  // 1. Wait for previous SPI transaction to fully complete (shift register empty)
+  //    DMA TC triggers when memory read is done/DR is full, not when SPI wire is done.
+  while (SPI_IS_BUSY(LCD_SPI)) {}
+  dmaChannelDisable(LCD_DMA_TX); // Ensure DMA is disabled before reconfig
+  
   // Send window commands via blocking SPI (fast ~3us)
    uint32_t xx = __REV16(req->x | ((req->x + req->w - 1) << 16));
    uint32_t yy = __REV16(req->y | ((req->y + req->h - 1) << 16));
