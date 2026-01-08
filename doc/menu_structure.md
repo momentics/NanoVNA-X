@@ -2,7 +2,7 @@
 
 ## CAL
 
-- **MECH CAL**
+- **CAL WIZARD**
   - OPEN -> apply standard
   - SHORT
   - LOAD
@@ -10,18 +10,16 @@
   - THRU
   - DONE -> store to flash
   - DONE IN RAM -> apply without persistence
-- CAL RANGE -> show/apply stored span & points
-- CAL POWER -> AUTO / 2 mA / 4 mA / 6 mA / 8 mA
+- **CAL OPTIONS**
+  - CAL RANGE -> show/apply stored span & points
+  - CAL POWER -> AUTO / 2 mA / 4 mA / 6 mA / 8 mA
+  - ENHANCED RESPONSE -> toggle enhanced-response correction
+  - LOAD STD `[__VNA_Z_RENORMALIZATION__]` -> set standard load impedance
+- **CAL MANAGE**
+  - CAL APPLY -> toggle correction on/off
+  - CAL RESET -> clear the working calibration
 - SAVE CAL -> select slot and store coefficients
-- CAL APPLY -> toggle correction on/off
-- ENHANCED RESPONSE -> toggle enhanced-response correction
-- LOAD STD `[__VNA_Z_RENORMALIZATION__]` -> set standard load impedance
-- CAL RESET -> clear the working calibration
-- **SAVE/RECALL**
-  - SAVE CAL -> write active coefficients
-  - RECALL CAL -> load stored span
-  - CAL APPLY
-  - CAL RESET
+- RECALL CAL -> load stored span
 
 For detailed 12-point calibration instructions, see the documentation:
 - [12-Point Calibration Guide](calibration_12_point.md)
@@ -33,8 +31,7 @@ For detailed 12-point calibration instructions, see the documentation:
 - FREQ STEP -> jog coarse step
 - JOG STEP -> AUTO or manual setting
 - SET POINTS -> keypad entry
-- `%d PTS` buttons -> presets compiled from `POINTS_SET`
-- MORE PTS -> legacy sweep-points submenu
+- MORE PTS -> opens additional point count presets submenu
 
 ## DISPLAY
 
@@ -43,17 +40,7 @@ For detailed 12-point calibration instructions, see the documentation:
 - FORMAT S21 -> LOGMAG, PHASE, DELAY, SMITH, POLAR, LINEAR, REAL, IMAG, MORE -> (series/shunt R/X/|Z|, Q)
 - CHANNEL -> toggle CH0 / CH1 for active trace
 - SCALE -> AUTO SCALE, TOP, BOTTOM, SCALE/DIV, REFERENCE POSITION, E-DELAY, S21 OFFSET, SHOW GRID `[__USE_GRID_VALUES__]`, DOT GRID `[__USE_GRID_VALUES__]`
-- MARKERS
-  - SELECT MARKER -> MARKER 1 … MARKER N, ALL OFF, DELTA
-  - SEARCH
-    - SEARCH (MAXIMUM/MINIMUM)
-    - TRACKING
-    - SEARCH ← LEFT
-    - SEARCH -> RIGHT
-  - OPERATIONS
-    - MOVE START / MOVE STOP / MOVE CENTER / MOVE SPAN
-    - MARKER E-DELAY
-  - DELTA
+- MARKERS -> opens marker submenu with SELECT MARKER, SEARCH, OPERATIONS, and DELTA options
 
 ## MEASURE
 

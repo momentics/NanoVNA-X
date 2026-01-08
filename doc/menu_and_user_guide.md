@@ -24,26 +24,24 @@ This guide documents the on-device menu tree implemented in the current NanoVNA-
 
 ## CAL menu
 
-### MECH CAL
+### CAL WIZARD
 
-* `MECH CAL` opens the classic calibration assistant with ordered steps `OPEN`, `SHORT`, `LOAD`, `ISOLN`, `THRU`, followed by `DONE` (persist to flash) and `DONE IN RAM` (apply without saving). Completed standards show a check mark.
+* `CAL WIZARD` opens the classic calibration assistant with ordered steps `OPEN`, `SHORT`, `LOAD`, `ISOLN`, `THRU`, followed by `DONE` (persist to flash) and `DONE IN RAM` (apply without saving). Completed standards show a check mark.
 * `CAL RANGE` reports the stored point count and frequency span for the active calibration. Invoking the entry re-applies those limits (and the recorded power) when the calibration was interpolated.
 * `CAL POWER` selects Si5351 drive strength. Choose `AUTO` for adaptive control or one of the explicit currents (2–8 mA).
-* `SAVE CAL` lists every calibration slot, annotating each with its stored span if populated. Selecting a slot writes the current coefficients.
-* `CAL APPLY` toggles correction without discarding coefficients.
 * `ENHANCED RESPONSE` enables or disables the enhanced-response algorithm.
 * `LOAD STD` *(with `__VNA_Z_RENORMALIZATION__`)* lets you edit the nominal load impedance used during calibration.
+
+### CAL MANAGE
+
+* `CAL APPLY` toggles correction without discarding coefficients.
 * `CAL RESET` clears the working calibration (enhanced-response state is preserved).
-
-For detailed 12-point calibration instructions, see the documentation:
-
-* [English: 12-Point Calibration Guide](calibration_12_point.md)
 
 ### SAVE/RECALL
 
 This companion submenu mirrors the slot operations for field workflows:
 
-* `SAVE CAL` / `RECALL CAL` provide immediate access to calibration storage without stepping through the MECH CAL flow.
+* `SAVE CAL` / `RECALL CAL` provide immediate access to calibration storage without stepping through the CAL WIZARD flow.
 * `CAL APPLY` and `CAL RESET` duplicate the toggles so you can quickly switch correction on/off after recalling a slot.
 
 ## STIMULUS menu
@@ -53,8 +51,7 @@ This companion submenu mirrors the slot operations for field workflows:
 * `FREQ STEP` — adjusts the coarse tuning step used by the jog controls.
 * `JOG STEP` — toggles between automatic increments and the value entered via keypad.
 * `SET POINTS` — direct keypad entry for arbitrary sweep point counts.
-* `%d PTS` buttons — shortcut presets compiled from `POINTS_SET`. Each button shows the resolved point count.
-* `MORE PTS` — re-opens the legacy sweep-points submenu if you need additional presets beyond the ones shown inline.
+* `MORE PTS` — opens additional point count presets submenu with preset buttons and SET POINTS option.
 
 ## DISPLAY menu
 

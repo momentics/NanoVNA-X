@@ -2,7 +2,7 @@
 
 ## CAL
 
-- **MECH CAL**
+- **CAL WIZARD**
   - OPEN -> применение эталона
   - SHORT
   - LOAD
@@ -10,18 +10,16 @@
   - THRU
   - DONE -> запись результатов во flash
   - DONE IN RAM -> применение текущей калибровки во временной памяти (без сохранения во флэш)
-- CAL RANGE -> отображение/возврат сохранённого диапазона и числа точек
-- CAL POWER -> AUTO или фиксированные токи 2/4/6/8 mA
+- **CAL OPTIONS**
+  - CAL RANGE -> отображение/возврат сохранённого диапазона и числа точек
+  - CAL POWER -> AUTO или фиксированные токи 2/4/6/8 mA
+  - ENHANCED RESPONSE -> переключение алгоритма enhanced-response
+  - LOAD STD `[__VNA_Z_RENORMALIZATION__]` -> ввод номинального сопротивления нагрузки
+- **CAL MANAGE**
+  - CAL APPLY -> включение/выключение коррекции
+  - CAL RESET -> очистка текущей калибровки
 - SAVE CAL -> выбор слота калибровки и запись коэффициентов
-- CAL APPLY -> включение/выключение коррекции
-- ENHANCED RESPONSE -> переключение алгоритма enhanced-response
-- LOAD STD `[__VNA_Z_RENORMALIZATION__]` -> ввод номинального сопротивления нагрузки
-- CAL RESET -> очистка текущей калибровки
-- **SAVE/RECALL**
-  - SAVE CAL
-  - RECALL CAL
-  - CAL APPLY
-  - CAL RESET
+- RECALL CAL -> загрузка сохранённого диапазона
 
 Подробная инструкция по 12-точечной калибровке:
 
@@ -34,7 +32,6 @@
 - FREQ STEP -> шаг перестройки для джога
 - JOG STEP -> AUTO или ручной ввод
 - SET POINTS -> ввод произвольного количества точек
-- Кнопки `%d PTS` -> пресеты из массива `POINTS_SET`
 - MORE PTS -> доступ к расширенному списку точек
 
 ## DISPLAY
@@ -44,17 +41,7 @@
 - FORMAT S21 -> LOGMAG, PHASE, DELAY, SMITH, POLAR, LINEAR, REAL, IMAG, ветка MORE -> (series/shunt R/X/|Z|, Q)
 - CHANNEL -> выбор канала CH0/CH1 для активной трассы
 - SCALE -> AUTO SCALE, TOP, BOTTOM, SCALE/DIV, REFERENCE POSITION, E-DELAY, S21 OFFSET, SHOW GRID `[__USE_GRID_VALUES__]`, DOT GRID `[__USE_GRID_VALUES__]`
-- MARKERS
-  - SELECT MARKER, ALL OFF, DELTA
-  - SEARCH
-    - SEARCH (MAXIMUM/MINIMUM)
-    - TRACKING
-    - SEARCH ← LEFT
-    - SEARCH -> RIGHT
-  - OPERATIONS
-    - MOVE START / MOVE STOP / MOVE CENTER / MOVE SPAN
-    - MARKER E-DELAY
-  - DELTA
+- MARKERS -> открывает подменю селектора маркеров с опциями SELECT MARKER, SEARCH, OPERATIONS и DELTA
 
 ## MEASURE
 
