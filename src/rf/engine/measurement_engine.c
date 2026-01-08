@@ -45,7 +45,7 @@ void measurement_engine_init(measurement_engine_t* engine, measurement_engine_po
   engine->port = port;
   engine->event_bus = bus;
   measurement_pipeline_init(&engine->pipeline, drivers);
-  sweep_service_init();
+  sweep_service_init(bus);
 }
 
 void measurement_engine_tick(measurement_engine_t* engine) {

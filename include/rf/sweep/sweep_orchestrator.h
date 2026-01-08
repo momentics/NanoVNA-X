@@ -28,6 +28,7 @@
 
 #include "runtime/runtime_features.h"
 #include "ch.h"
+#include "infra/event/event_bus.h"
 #include "nanovna.h"
 
 #define SWEEP_CH0_MEASURE (1U << 0)
@@ -49,7 +50,8 @@ typedef struct {
   uint32_t generation;
 } sweep_service_snapshot_t;
 
-void sweep_service_init(void);
+void sweep_service_init(event_bus_t* bus);
+void sweep_service_cancel_scan(void);
 void sweep_service_wait_for_copy_release(void);
 void sweep_service_begin_measurement(void);
 void sweep_service_end_measurement(void);
@@ -57,7 +59,6 @@ uint32_t sweep_service_increment_generation(void);
 uint32_t sweep_service_current_generation(void);
 void sweep_service_wait_for_generation(void);
 void sweep_service_reset_progress(void);
-bool sweep_is_active(void);
 bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* snapshot);
 bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot);
 
@@ -83,10 +84,7 @@ void measurement_data_smooth(uint16_t ch_mask);
 void set_smooth_factor(uint8_t factor);
 uint8_t get_smooth_factor(void);
 
-typedef void (*sweep_sample_func_t)(float* gamma);
-
-void sweep_service_set_sample_function(sweep_sample_func_t func);
-sweep_sample_func_t sweep_service_get_sample_function(void);
+void sweep_service_set_sample_function(void (*func)(float*));
 
 void i2s_lld_serve_rx_interrupt(uint32_t flags);
 

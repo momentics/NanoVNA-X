@@ -28,7 +28,6 @@
 #include "hal.h"
 #include "platform/peripherals/si5351.h"
 #include "nanovna.h"
-#include "rf/engine/measurement_commands.h"
 #include "interfaces/cli/shell_service.h"
 #include "interfaces/cli/shell_commands.h"
 #include "platform/peripherals/usbcfg.h"
@@ -45,7 +44,6 @@
 #include "ui/display/display_presenter.h"
 #include "ui/controller/ui_controller.h"
 #include "platform/boards/board_events.h"
-#include "ui/core/ui_task.h"
 
 #ifdef __LCD_BRIGHTNESS__
 void lcd_set_brightness(uint16_t brightness);
@@ -167,16 +165,10 @@ void* filesystem_file(void) {
 // Shell command line buffer, args, nargs, and function ptr
 static char shell_line[VNA_SHELL_MAX_LENGTH];
 
-volatile uint8_t sweep_mode;
-static thread_t *sweep_thread = NULL;
-bool display_inhibited = false;
+uint8_t sweep_mode;
 
 // Flag to indicate when calibration is in progress to prevent UI flash operations during critical phases
 volatile bool calibration_in_progress = false;
-
-// ... (existing includes and defines)
-
-// New Accessors - Trampolines removed, inline in header or renamed functions
 
 #if defined(NANOVNA_F303)
 #define CCM_RAM __attribute__((section(".ccm")))
@@ -186,9 +178,6 @@ volatile bool calibration_in_progress = false;
 
 // Sweep measured data - aligned for DMA operations
 alignas(8) CCM_RAM float measured[2][SWEEP_POINTS_MAX][2];
-
-// ... (existing variables)
-
 
 static int16_t battery_last_mv;
 static systime_t battery_next_sample = 0;
@@ -267,82 +256,52 @@ static void app_measurement_handle_result(measurement_engine_port_t* port,
   request_to_redraw(REDRAW_PLOT);
 }
 
-// Measurement Command Mailbox
-#define MEASUREMENT_CMD_QUEUE_SIZE 4
-static msg_t measurement_cmd_queue[MEASUREMENT_CMD_QUEUE_SIZE];
-static MAILBOX_DECL(measurement_cmd_mbox, measurement_cmd_queue, MEASUREMENT_CMD_QUEUE_SIZE);
-
-void measurement_post_command(measurement_command_t cmd) {
-    msg_t encoded_cmd = (msg_t)cmd.type;
-    
-    // Simple encoding: Type in lower 8 bits, data in upper 24 bits
-    switch (cmd.type) {
-        case CMD_MEASURE_START:
-            if (cmd.data.start.oneshot) {
-                encoded_cmd |= (1 << 8);
-            }
-            break;
-        case CMD_MEASURE_UPDATE_CONFIG:
-            // Assuming flags fit in 16 bits
-            // If flags are larger, we might need a different approach, but currently flags are small.
-            // (cmd.data.config.flags << 8)
-            break;
-        default:
-            break;
-    }
-
-    chMBPost(&measurement_cmd_mbox, encoded_cmd, TIME_IMMEDIATE);
-}
-
 static void app_measurement_service_loop(measurement_engine_port_t* port) {
   (void)port;
   shell_service_pending_commands();
   sweep_mode |= SWEEP_UI_MODE;
-  // ui_port.api->process(); // Moved to ui_task
+  ui_port.api->process();
   sweep_mode &= (uint8_t)~SWEEP_UI_MODE;
   schedule_battery_redraw();
 #if !DEBUG_CONSOLE_SHOW
-  // draw_all(); // Moved to ui_task
+  draw_all();
 #endif
   state_manager_service();
+  wdgReset(&WDGD1);
 }
 
-// Thread1 REMOVED. Logic integrated into runtime_main loop.
+static THD_WORKING_AREA(waThread1, 768);
+static THD_FUNCTION(Thread1, arg) {
+  (void)arg;
+  chRegSetThreadName("sweep");
+#ifdef __FLIP_DISPLAY__
+  if (VNA_MODE(VNA_MODE_FLIP_DISPLAY))
+    lcd_set_flip(true);
+#endif
+  /*
+   * UI (menu, touch, buttons) and plot initialize
+   */
+  ui_port.api->init();
+  // Initialize graph plotting
+  plot_init();
+  while (1) {
+    measurement_engine_tick(&measurement_engine);
+  }
+}
 
 #include "rf/sweep/sweep_orchestrator.h"
 
-void app_measurement_pause(void) {
-  if (sweep_thread != NULL && chThdGetSelfX() == sweep_thread) {
-    // We are running in the sweep thread (e.g. from Shell Service callback)
-    // Directly modify state to avoid self-deadlock on Mailbox or Wait
-    sweep_mode &= (uint8_t)~SWEEP_ENABLE;
-  } else {
-    measurement_command_t cmd;
-    cmd.type = CMD_MEASURE_STOP;
-    measurement_post_command(cmd);
-    // Wait for the sweep thread to actually stop and the engine to become idle
-    sweep_wait_for_idle();
-  }
+void pause_sweep(void) {
+  sweep_mode &= ~SWEEP_ENABLE;
+  sweep_wait_for_idle();
 }
 
-void app_measurement_enable(void) {
-  if (sweep_thread != NULL && chThdGetSelfX() == sweep_thread) {
-     sweep_mode |= SWEEP_ENABLE;
-     sweep_mode &= (uint8_t)~SWEEP_ONCE;
-  } else {
-      measurement_command_t cmd;
-      cmd.type = CMD_MEASURE_START;
-      cmd.data.start.oneshot = false;
-      measurement_post_command(cmd);
-  }
+void resume_sweep(void) {
+  sweep_mode |= SWEEP_ENABLE;
 }
 
 void toggle_sweep(void) {
-  if (app_measurement_is_enabled()) {
-    app_measurement_pause();
-  } else {
-    app_measurement_enable();
-  }
+  sweep_mode ^= SWEEP_ENABLE;
 }
 
 config_t config = {
@@ -495,7 +454,65 @@ void app_measurement_update_frequencies(void) {
   sweep_service_reset_progress();
 }
 
+void set_trace_scale(int t, float scale) {
+  if (trace[t].scale == scale) return;
+  trace[t].scale = scale;
+  request_to_redraw(REDRAW_PLOT | REDRAW_AREA | REDRAW_MARKER);
+}
 
+void set_trace_refpos(int t, float refpos) {
+  if (trace[t].refpos == refpos) return;
+  trace[t].refpos = refpos;
+  request_to_redraw(REDRAW_PLOT | REDRAW_AREA | REDRAW_MARKER);
+}
+
+void set_trace_type(int t, int type, int channel) {
+  if (trace[t].type == type && trace[t].channel == channel) return;
+  trace[t].type = type;
+  trace[t].channel = channel;
+  request_to_redraw(REDRAW_PLOT | REDRAW_AREA | REDRAW_MARKER);
+}
+
+void set_trace_enable(int t, bool enable) {
+  if (trace[t].enabled == enable) return;
+  trace[t].enabled = enable;
+  request_to_redraw(REDRAW_PLOT | REDRAW_AREA | REDRAW_MARKER);
+}
+
+
+void set_electrical_delay(int ch, float seconds) {
+  if (current_props._electrical_delay[ch] == seconds)
+    return;
+  current_props._electrical_delay[ch] = seconds;
+  request_to_redraw(REDRAW_MARKER);
+}
+
+float get_electrical_delay(void) {
+  if (current_trace == TRACE_INVALID)
+    return 0.0f;
+  int ch = trace[current_trace].channel;
+  return current_props._electrical_delay[ch];
+}
+
+void set_s21_offset(float offset) {
+  if (s21_offset != offset) {
+    s21_offset = offset;
+    request_to_redraw(REDRAW_MARKER);
+  }
+}
+
+void set_marker_index(int m, int idx) {
+  if (idx < 0) idx = 0;
+  if (idx >= sweep_points) idx = sweep_points - 1;
+  if (markers[m].enabled) request_to_draw_marker(markers[m].index);
+  markers[m].index = idx;
+  markers[m].frequency = get_frequency(idx);
+  request_to_redraw(REDRAW_MARKER);
+}
+
+freq_t get_marker_frequency(int marker) {
+  return markers[marker].frequency;
+}
 
 void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforce_order) {
   // Check frequency for out of bounds (minimum SPAN can be any value)
@@ -610,7 +627,7 @@ static void vna_shell_execute_line(char* line) {
         auto_resume = true;
       }
       ui_controller_request_console_break();
-      app_measurement_pause();
+      pause_sweep();
     }
     if (cmd_flag & CMD_WAIT_MUTEX) {
       if (auto_resume) {
@@ -622,7 +639,7 @@ static void vna_shell_execute_line(char* line) {
     } else {
       cmd->sc_function((int)argc, argv);
       if (auto_resume && !(cmd_flag & CMD_NO_AUTO_RESUME)) {
-        app_measurement_enable();
+        resume_sweep();
       }
     }
   } else if (command_name && *command_name) {
@@ -720,7 +737,18 @@ int runtime_main(void) {
    * Prescaler = 32 -> 1.25 kHz.
    * Reload = 3000 -> ~2.4s timeout.
    */
+  static const WDGConfig wdgcfg = {
+    STM32_IWDG_PR_32,
+    // The Truth About Bender’s Brain.
+    // David X. Cohen, of «Futurama», 
+    // reveals how MOS Technology’s 6502 
+    // processor ended up in the robot’s head
+    STM32_IWDG_RL(6502),
+    0x0FFF // WINR: Disable windowing (reset value)
+  };
+
   platform_init();
+  wdgStart(&WDGD1, &wdgcfg);
 
   const PlatformDrivers* drivers = platform_get_drivers();
   if (drivers != NULL) {
@@ -763,7 +791,6 @@ int runtime_main(void) {
   measurement_engine_port.handle_result = app_measurement_handle_result;
   measurement_engine_port.service_loop = app_measurement_service_loop;
   measurement_engine_init(&measurement_engine, &measurement_engine_port, &app_event_bus, drivers);
-  
 
   /*
    * restore config and calibration 0 slot from flash memory, also if need use backup data
@@ -826,7 +853,7 @@ int runtime_main(void) {
 #endif
 
   /*
-   * Initialize USB Shell Connection
+   * Initialize USB Shell Connection LAST (Moved earlier in Phase 2)
    * This ensures core peripherals (Codec, I2S, LCD) are stable before
    * exposing the system to potential USB PHY noise or interrupt floods
    * (especially if cable is disconnected/floating).
@@ -849,79 +876,29 @@ int runtime_main(void) {
   /*
    * Startup sweep thread
    */
-  /*
-   * Initialize UI System (Cooperative Mode)
-   * Must be initialized after HAL/Drivers but before usage.
-   * run_ui_task() will be called in the main loop.
-   */
-  ui_task_system_init();
-  
-  // Initialize sweep thread handle to main thread (this thread)
-  // This ensures app_measurement_pause works correctly in single-threaded mode
-  chRegSetThreadName("main");
-  sweep_thread = chThdGetSelfX();
-  
-#ifdef __FLIP_DISPLAY__
-  if (VNA_MODE(VNA_MODE_FLIP_DISPLAY))
-    lcd_set_flip(true);
-#endif
+  chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO + 1, Thread1, NULL);
 
-
-
-  bool shell_show_prompt = true;
-
-  // Main Cooperative Event Loop
   while (1) {
-    // 1. UI Task
-    ui_task_process();
-
-    // 2. Sweep Logic (Legacy Thread1 Logic)
-    msg_t msg; 
-    // Check for sweep commands
-    if (chMBFetch(&measurement_cmd_mbox, &msg, TIME_IMMEDIATE) == MSG_OK) {
-        measurement_command_type_t type = (measurement_command_type_t)(msg & 0xFF);
-        switch (type) {
-            case CMD_MEASURE_START:
-                sweep_mode |= SWEEP_ENABLE;
-                if ((msg >> 8) & 1) sweep_mode |= SWEEP_ONCE;
-                else sweep_mode &= (uint8_t)~SWEEP_ONCE;
-                break;
-            case CMD_MEASURE_STOP:
-                sweep_mode &= (uint8_t)~SWEEP_ENABLE;
-                break;
-            case CMD_MEASURE_SINGLE:
-                sweep_mode |= SWEEP_ENABLE | SWEEP_ONCE;
-                break;
-            default:
-                break;
-        }
+    if (!shell_check_connect()) {
+      chThdSleepMilliseconds(1000);
+      continue;
     }
-    // Run Sweep Tick
-    if (((sweep_mode & SWEEP_ENABLE) != 0) || sweep_is_active()) {
-        measurement_engine_tick(&measurement_engine);
-    }
-
-    // 3. Shell Logic (Non-blocking polled)
-    if (shell_check_connect()) {
-      if (shell_show_prompt) {
-         shell_printf(VNA_SHELL_PROMPT_STR);
-         shell_show_prompt = false;
-      }
-      
-      // Use existing vna_shell_read_line. 
-      // Caveat: If typing is slower than SHELL_IO_TIMEOUT (20ms) per char, line buffer may reset.
-      // Ideally shell_service should be stateful, but for now we prioritize system stability.
-      if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH)) {
-         vna_shell_execute_line(shell_line);
-         shell_show_prompt = true;
-      }
-    } else {
-       shell_show_prompt = true;
-    }
-    
-    // Optional: WFI (Wait For Interrupt) to save power if idle?
-    // Only if sweep is NOT running.
-    // if (!sweep_running) chThdSleepMilliseconds(1);
+#ifdef VNA_SHELL_THREAD
+#if CH_CFG_USE_WAITEXIT == FALSE
+#error "VNA_SHELL_THREAD use chThdWait, need enable CH_CFG_USE_WAITEXIT in chconf.h"
+#endif
+      thread_t* shelltp =
+          chThdCreateStatic(waThread2, sizeof(waThread2), NORMALPRIO + 1, myshellThread, NULL);
+      chThdWait(shelltp);
+#else
+    do {
+      shell_printf(VNA_SHELL_PROMPT_STR);
+      if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH))
+        vna_shell_execute_line(shell_line);
+      else
+        chThdSleepMilliseconds(200);
+    } while (shell_check_connect());
+#endif
   }
 }
 
@@ -1046,6 +1023,6 @@ void send_region(remote_region_t* rd, uint8_t* buf, uint16_t size) {
     shell_stream_write(buf, size);
     shell_stream_write(VNA_SHELL_PROMPT_STR VNA_SHELL_NEWLINE_STR, 6);
   } else
-    app_display_set_inhibited(false);
+    sweep_mode &= ~SWEEP_REMOTE;
 }
 #endif

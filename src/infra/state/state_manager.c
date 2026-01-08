@@ -182,14 +182,10 @@ void state_manager_mark_dirty(void) {
 
 void state_manager_force_save(void) {
 #ifdef __USE_BACKUP__
-  // Explicit Save: Update Flash
   // Don't save during calibration to avoid conflicts with measurement process
   if (!calibration_in_progress) {
     caldata_save(active_calibration_slot());
   }
-  
-  // Also synchronize RTC
-  update_backup_data();
   
   sweep_state_dirty = false;
   sweep_state_last_save = chVTGetSystemTimeX();
@@ -205,12 +201,9 @@ void state_manager_service(void) {
   if ((int32_t)(now - sweep_state_deadline) < 0) {
     return;
   }
-  
-  // Auto-Save: Update RTC only (Resume State)
-  // We do NOT write to Flash automatically to preserve endurance and prevent stalls.
-  update_backup_data();
-  
-  sweep_state_dirty = false;
-  sweep_state_last_save = now;
+  if ((int32_t)(now - sweep_state_last_save) < (int32_t)SWEEP_STATE_AUTOSAVE_MIN_GAP) {
+    return;
+  }
+  state_manager_force_save();
 #endif
 }

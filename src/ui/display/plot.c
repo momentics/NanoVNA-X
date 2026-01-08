@@ -27,12 +27,8 @@
 #include <stddef.h>
 #include <string.h>
 #include "ch.h"
-#include "ui/core/ui_task.h"
 #include "hal.h"
 #include "chprintf.h"
-#include "ui/controller/marker_logic.h"
-#include "ui/core/ui_model.h"
-
 #include "nanovna.h"
 #include "infra/state/state_manager.h"
 
@@ -314,9 +310,81 @@ static void markmap_all_markers(void) {
   markmap_marker_area();
 }
 
+//**************************************************************************************
+//            Marker search functions
+//**************************************************************************************
+static bool _greater(int x, int y) {
+  return x > y;
+}
+static bool _lesser(int x, int y) {
+  return x < y;
+}
 
-// Logic moved to ui/controller/marker_logic.c
+void marker_search(void) {
+  int i, value;
+  int found = 0;
+  if (current_trace == TRACE_INVALID || active_marker == MARKER_INVALID)
+    return;
+  // Select search index table
+  trace_index_const_table_t index = trace_index_const_table(current_trace);
+  // Select compare function (depend from config settings)
+  bool (*compare)(int x, int y) = VNA_MODE(VNA_MODE_SEARCH) ? _lesser : _greater;
+  for (i = 1, value = TRACE_Y(index, 0); i < sweep_points; i++) {
+    if ((*compare)(value, TRACE_Y(index, i))) {
+      value = TRACE_Y(index, i);
+      found = i;
+    }
+  }
+  set_marker_index(active_marker, found);
+}
 
+void marker_search_dir(int16_t from, int16_t dir) {
+  int i, value;
+  int found = -1;
+  if (current_trace == TRACE_INVALID || active_marker == MARKER_INVALID)
+    return;
+  // Select search index table
+  trace_index_const_table_t index = trace_index_const_table(current_trace);
+  // Select compare function (depend from config settings)
+  bool (*compare)(int x, int y) = VNA_MODE(VNA_MODE_SEARCH) ? _lesser : _greater;
+  // Search next
+  for (i = from + dir, value = TRACE_Y(index, from); i >= 0 && i < sweep_points; i += dir) {
+    if ((*compare)(value, TRACE_Y(index, i)))
+      break;
+    value = TRACE_Y(index, i);
+  }
+  //
+  for (; i >= 0 && i < sweep_points; i += dir) {
+    if ((*compare)(TRACE_Y(index, i), value))
+      break;
+    value = TRACE_Y(index, i);
+    found = i;
+  }
+  if (found < 0)
+    return;
+  set_marker_index(active_marker, found);
+}
+
+int distance_to_index(int8_t t, uint16_t idx, int16_t x, int16_t y) {
+  trace_index_const_table_t index = trace_index_const_table(t);
+  x -= (int16_t)TRACE_X(index, idx);
+  y -= (int16_t)TRACE_Y(index, idx);
+  return x * x + y * y;
+}
+
+int search_nearest_index(int x, int y, int t) {
+  int min_i = -1;
+  int min_d = MARKER_PICKUP_DISTANCE * MARKER_PICKUP_DISTANCE;
+  int i;
+  for (i = 0; i < sweep_points; i++) {
+    int d = distance_to_index(t, i, x, y);
+    if (d >= min_d)
+      continue;
+    min_d = d;
+    min_i = i;
+  }
+  return min_i;
+}
 
 //**************************************************************************************
 //            Reference plate draw and update
@@ -469,7 +537,7 @@ static void plot_into_index(void) {
   //  STOP_PROFILE;
   // Marker track on data update
   if (props_mode & TD_MARKER_TRACK)
-    marker_logic_search();
+    marker_search();
 #ifdef __VNA_MEASURE_MODULE__
   // Current scan update
   measure_set_flag(MEASURE_UPD_SWEEP);
@@ -893,55 +961,49 @@ static void draw_battery_status(void) {
 //            Draw all request
 //**************************************************************************************
 void draw_all(void) {
-  chSysLock();
-  uint16_t req = redraw_request;
-  redraw_request = 0;
-  chSysUnlock();
 #ifdef __USE_BACKUP__
-  if (req & REDRAW_BACKUP)
+  if (redraw_request & REDRAW_BACKUP)
     update_backup_data();
 #endif
-  if (req & REDRAW_PLOT)
+  if (redraw_request & REDRAW_PLOT)
     plot_into_index();
   if (area_width == 0) {
-    req = 0;
+    redraw_request = 0;
     return;
   }
-  if (req & REDRAW_CLRSCR) {
+  if (redraw_request & REDRAW_CLRSCR) {
     lcd_set_background(LCD_BG_COLOR);
     lcd_clear_screen();
   }
-  if (req & REDRAW_AREA)
+  if (redraw_request & REDRAW_AREA)
     force_set_markmap();
   else {
-    if (req & REDRAW_MARKER)
+    if (redraw_request & REDRAW_MARKER)
       markmap_all_markers();
-    if (req & REDRAW_REFERENCE)
+    if (redraw_request & REDRAW_REFERENCE)
       markmap_all_refpos();
 #if VNA_ENABLE_GRID_VALUES
-    if (req & REDRAW_GRID_VALUE)
+    if (redraw_request & REDRAW_GRID_VALUE)
       markmap_grid_values();
 #endif
   }
-  if (req &
+  if (redraw_request &
       (REDRAW_CELLS | REDRAW_MARKER | REDRAW_GRID_VALUE | REDRAW_REFERENCE | REDRAW_AREA))
     draw_all_cells();
-  if (req & REDRAW_FREQUENCY)
+  if (redraw_request & REDRAW_FREQUENCY)
     draw_frequencies();
-  if (req & REDRAW_CAL_STATUS)
+  if (redraw_request & REDRAW_CAL_STATUS)
     draw_cal_status();
-  if (req & REDRAW_BATTERY)
+  if (redraw_request & REDRAW_BATTERY)
     draw_battery_status();
-  req = 0;
+  redraw_request = 0;
 }
 
 //**************************************************************************************
 //            Set update mask for next screen update
+//**************************************************************************************
 void request_to_redraw(uint16_t mask) {
-  chSysLock();
   redraw_request |= mask;
-  chSysUnlock();
-// ui_task_signal(); // Removed to prevent flooding UI task
 }
 
 void plot_init(void) {

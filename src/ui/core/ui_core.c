@@ -24,7 +24,6 @@
 #include <math.h>
 #include "nanovna.h"
 #include "ui/core/ui_core.h"
-#include "ui/core/ui_task.h" // For ui_task_signal
 #include "ui/core/ui_menu_engine.h" // For ui_draw_button
 #include "ui/core/ui_keypad.h" // For ui_keypad_lever
 #include "ui/ui_menu.h"
@@ -36,6 +35,7 @@
 #include "platform/boards/board_events.h"
 
 #include "infra/storage/config_service.h"
+#include "rf/sweep/sweep_orchestrator.h"
 
 
 #define TOUCH_INTERRUPT_ENABLED 1
@@ -45,6 +45,9 @@ static uint8_t touch_status_flag = 0;
 static uint8_t last_touch_status = 0; // Fixed type to match usage if needed or keep EVT_TOUCH_NONE
 int16_t last_touch_x;
 int16_t last_touch_y;
+
+static uint16_t sweep_bar_drawn_pixels = 0;
+static uint8_t sweep_bar_pending = 0;
 
 static event_bus_t* ui_event_bus = NULL;
 static board_events_t* ui_board_events = NULL;
@@ -57,16 +60,6 @@ static uint8_t touch_remote = REMOTE_NONE;
 
 // Mode state
 uint8_t ui_mode = UI_NORMAL;
-
-// UI State Context
-ui_context_t ui_context = {0};
-
-void ui_enter_wait_touch_release(void (*callback)(void*), int16_t selection, int16_t item_index) {
-    ui_context.state = UI_STATE_WAITING_TOUCH_RELEASE;
-    ui_context.resume_callback = callback;
-    ui_context.data.menu.selection = selection;
-    ui_context.data.menu.item_index = item_index;
-}
 
 // External handlers (to be defined in other modules)
 extern void ui_normal_lever(uint16_t status);
@@ -135,7 +128,7 @@ void ui_controller_release_requests(uint8_t mask) {
 }
 
 void ui_controller_request_console_break(void) {
-  ui_controller_set_request(UI_CONTROLLER_REQUEST_CONSOLE);
+  sweep_service_cancel_scan();
 }
 
 static void ui_controller_dispatch_board_events(void) {
@@ -191,6 +184,40 @@ static void ui_on_event(const event_bus_message_t* message, void* user_data) {
   case EVENT_STORAGE_UPDATED:
     request_to_redraw(REDRAW_CAL_STATUS);
     break;
+  case EVENT_SWEEP_PROGRESS:
+    {
+       uint16_t pixels = (uint16_t)(uintptr_t)message->payload;
+       if (pixels == 0) {
+          sweep_bar_drawn_pixels = 0;
+          sweep_bar_pending = 0;
+          lcd_set_background(LCD_SWEEP_LINE_COLOR);
+       } else if (pixels >= WIDTH) {
+          if (sweep_bar_pending > 0U) {
+               lcd_fill(OFFSETX + CELLOFFSETX + sweep_bar_drawn_pixels, OFFSETY, sweep_bar_pending, 1);
+               sweep_bar_drawn_pixels += sweep_bar_pending;
+          }
+          sweep_bar_pending = 0;
+          lcd_set_background(LCD_GRID_COLOR);
+          if (sweep_bar_drawn_pixels > 0U) {
+               lcd_fill(OFFSETX + CELLOFFSETX, OFFSETY, sweep_bar_drawn_pixels, 1);
+          }
+          sweep_bar_drawn_pixels = 0;
+       } else {
+          if (pixels > WIDTH) pixels = WIDTH;
+          if (pixels > sweep_bar_drawn_pixels) {
+               uint16_t delta = pixels - sweep_bar_drawn_pixels - sweep_bar_pending;
+               uint16_t draw = sweep_bar_pending + delta;
+               if (draw >= 2U) {
+                     lcd_fill(OFFSETX + CELLOFFSETX + sweep_bar_drawn_pixels, OFFSETY, draw, 1);
+                     sweep_bar_drawn_pixels += draw;
+                     sweep_bar_pending = 0;
+               } else {
+                     sweep_bar_pending = (uint8_t)draw;
+               }
+          }
+       }
+    }
+    break;
   default:
     break;
   }
@@ -205,6 +232,7 @@ void ui_attach_event_bus(event_bus_t* bus) {
     event_bus_subscribe(bus, EVENT_SWEEP_STARTED, ui_on_event, NULL);
     event_bus_subscribe(bus, EVENT_SWEEP_COMPLETED, ui_on_event, NULL);
     event_bus_subscribe(bus, EVENT_STORAGE_UPDATED, ui_on_event, NULL);
+    event_bus_subscribe(bus, EVENT_SWEEP_PROGRESS, ui_on_event, NULL);
   }
 }
 
@@ -362,6 +390,7 @@ int touch_check(void) {
 //*******************************************************************************
 void touch_wait_release(void) {
   while (touch_check() != EVT_TOUCH_RELEASED) {
+    wdgReset(&WDGD1);
     chThdSleepMilliseconds(TOUCH_RELEASE_POLL_INTERVAL_MS);
   }
 }
@@ -561,6 +590,7 @@ void ui_touch_draw_test(void) {
     if (touch_check() == EVT_TOUCH_PRESSED) {
       touch_position(&x0, &y0);
       do {
+        wdgReset(&WDGD1);
         lcd_printf(10, 30, "%3d %3d ", x0, y0);
         chThdSleepMilliseconds(50);
         touch_position(&x1, &y1);
@@ -573,29 +603,10 @@ void ui_touch_draw_test(void) {
 }
 
 // Process loop
-static systime_t repeat_time = 0;
 static void ui_process_lever(void) {
   uint16_t status = ui_input_check();
-  uint16_t current_buttons = ui_input_get_buttons();
-
-  if (status) {
+  if (status)
     ui_handler[ui_mode].button(status);
-    if (current_buttons & (BUTTON_UP | BUTTON_DOWN))
-      repeat_time = chVTGetSystemTimeX() + BUTTON_DOWN_LONG_TICKS;
-  } else if (current_buttons & (BUTTON_UP | BUTTON_DOWN)) {
-    if (chVTGetSystemTimeX() > repeat_time) {
-      uint16_t rep = 0;
-      if (current_buttons & BUTTON_UP)
-        rep |= EVT_UP | EVT_REPEAT;
-      if (current_buttons & BUTTON_DOWN)
-        rep |= EVT_DOWN | EVT_REPEAT;
-      if (rep) {
-        ui_handler[ui_mode].button(rep);
-        repeat_time = chVTGetSystemTimeX() + BUTTON_REPEAT_TICKS;
-        ui_task_signal();
-      }
-    }
-  }
 }
 
 static void ui_process_touch(void) {
@@ -609,40 +620,13 @@ static void ui_process_touch(void) {
 
 void ui_process(void) {
   ui_controller_dispatch_board_events();
-
-  // State Machine Handling
-  if (ui_context.state != UI_STATE_IDLE) {
-    switch (ui_context.state) {
-      case UI_STATE_WAITING_TOUCH_RELEASE:
-        if (touch_check() == EVT_TOUCH_RELEASED) {
-          ui_context.state = UI_STATE_IDLE;
-          if (ui_context.resume_callback) {
-            ui_context.resume_callback((void*)&ui_context);
-          }
-        }
-        break;
-      
-      case UI_STATE_MENU_LEVER_HOLD:
-        // Logic will be moved here from ui_menu_lever
-        break;
-
-      default:
-        ui_context.state = UI_STATE_IDLE;
-        break;
-    }
-    // Continue processing other things or return? 
-    // If waiting for touch, we generally don't want to process new LEVER events that interfere.
-    // However, watchdog MUST run.
-  } else {
-    // Normal Event Processing
-    uint8_t requests = ui_controller_acquire_requests(UI_CONTROLLER_REQUEST_LEVER |
-                                                      UI_CONTROLLER_REQUEST_TOUCH);
-    if (requests & UI_CONTROLLER_REQUEST_LEVER) {
-      ui_process_lever();
-    }
-    if (requests & UI_CONTROLLER_REQUEST_TOUCH) {
-      ui_process_touch();
-    }
+  uint8_t requests = ui_controller_acquire_requests(UI_CONTROLLER_REQUEST_LEVER |
+                                                    UI_CONTROLLER_REQUEST_TOUCH);
+  if (requests & UI_CONTROLLER_REQUEST_LEVER) {
+    ui_process_lever();
+  }
+  if (requests & UI_CONTROLLER_REQUEST_TOUCH) {
+    ui_process_touch();
   }
 
   touch_start_watchdog();
@@ -650,12 +634,10 @@ void ui_process(void) {
 
 void handle_button_interrupt(uint16_t channel) {
   ui_controller_publish_board_event(BOARD_EVENT_BUTTON, channel, true);
-  ui_task_signal();
 }
 
 void handle_touch_interrupt(void) {
   ui_controller_publish_board_event(BOARD_EVENT_TOUCH, 0, true);
-  ui_task_signal();
 }
 
 #if HAL_USE_EXT == TRUE

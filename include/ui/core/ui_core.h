@@ -46,31 +46,6 @@ enum {
 #define TOUCH_RELEASE_POLL_INTERVAL_MS 2U // 500 Hz release detection
 #define TOUCH_DRAG_POLL_INTERVAL_MS 8U    // 125 Hz drag updates
 
-// UI State Machine
-typedef enum {
-    UI_STATE_IDLE,
-    UI_STATE_WAITING_TOUCH_RELEASE,
-    UI_STATE_MENU_LEVER_HOLD
-} ui_state_t;
-
-typedef struct {
-    ui_state_t state;
-    void (*resume_callback)(void*); // Callback when state condition met
-    union {
-      struct {
-        int16_t selection;
-        int16_t item_index;
-      } menu;
-      int32_t raw[4];
-    } data;
-} ui_context_t;
-
-extern ui_context_t ui_context;
-
-// Helper to enter wait state
-void ui_enter_wait_touch_release(void (*callback)(void*), int16_t selection, int16_t item_index);
-
-
 // File Formats (moved from ui_controller.c)
 #ifdef __USE_SD_CARD__
 enum {

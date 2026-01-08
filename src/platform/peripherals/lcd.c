@@ -689,7 +689,7 @@ static void lcd_bulk_buffer(int x, int y, int w, int h, pixel_t* buffer) {
 #endif
 
 #ifdef __REMOTE_DESKTOP__
-  if (app_display_is_inhibited()) {
+  if (sweep_mode & SWEEP_REMOTE) {
     remote_region_t rd = {"bulk\r\n", x, y, w, h};
     send_region(&rd, (uint8_t*)buffer, w * h * sizeof(pixel_t));
   }
@@ -738,7 +738,7 @@ void lcd_fill(int x, int y, int w, int h) {
 #endif
 
 #ifdef __REMOTE_DESKTOP__
-  if (app_display_is_inhibited()) {
+  if (sweep_mode & SWEEP_REMOTE) {
     remote_region_t rd = {"fill\r\n", x, y, w, h};
     send_region(&rd, (uint8_t*)&background_color, sizeof(pixel_t));
   }
@@ -806,7 +806,7 @@ void lcd_set_colors(uint16_t fg_idx, uint16_t bg_idx) {
 }
 
 void lcd_blit_bitmap(uint16_t x, uint16_t y, uint16_t width, uint16_t height, const uint8_t* b) {
-#ifdef __REMOTE_DESKTOP__ // Use this for remote desktop (in this case bulk operation send to remote)
+#if 1 // Use this for remote desktop (in this case bulk operation send to remote)
   pixel_t* buf = spi_buffer;
   uint8_t bits = 0;
   for (uint32_t c = 0; c < height; c++) {
@@ -985,7 +985,7 @@ void lcd_blit_bitmap_scale(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint1
 int lcd_drawchar_size(uint8_t ch, int x, int y, uint8_t size) {
   const uint8_t* char_buf = FONT_GET_DATA(ch);
   uint16_t w = FONT_GET_WIDTH(ch);
-#ifdef __REMOTE_DESKTOP__ // Use this for remote desctop (in this case bulk operation send to remote)
+#if 1 // Use this for remote desctop (in this case bulk operation send to remote)
   pixel_t* buf = spi_buffer;
   for (uint32_t c = 0; c < FONT_GET_HEIGHT; c++, char_buf++) {
     for (uint32_t i = 0; i < size; i++) {

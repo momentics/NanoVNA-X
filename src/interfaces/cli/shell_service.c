@@ -31,7 +31,7 @@
 #include "rf/sweep/sweep_orchestrator.h"
 #include "runtime/runtime_entry.h"
 
-extern void app_measurement_enable(void);
+extern void resume_sweep(void);
 
 #ifndef NANOVNA_HOST_TEST
 // extern WatchdogDriver WDGD1; // Already declared in hal_wdg_lld.h
@@ -114,6 +114,7 @@ static bool shell_io_write(const uint8_t* data, size_t size) {
       // Buffer is full. Yield to scheduler to let USB ISR prioritize packet transmission.
       // Reset watchdog to prevent timeout during high-throughput saturation.
       #ifndef NANOVNA_HOST_TEST
+      wdgReset(&WDGD1);
       chThdYield();
       #endif
     }
@@ -121,20 +122,32 @@ static bool shell_io_write(const uint8_t* data, size_t size) {
   return true;
 }
 
-
+static size_t shell_io_read(uint8_t* data, size_t size) {
+  BaseAsynchronousChannel* channel = shell_current_channel();
+  if (channel == NULL || data == NULL) {
+    return 0;
+  }
+  size_t received = 0;
+  while (received < size) {
+    size_t chunk = chnReadTimeout(channel, data + received, size - received, SHELL_IO_TIMEOUT);
+    if (chunk == 0) {
+      if (!shell_check_connect()) {
+        break;
+      }
+      chThdSleepMilliseconds(5);
+      continue;
+    }
+    received += chunk;
+  }
+  return received;
+}
 
 static void shell_write(const void* buf, size_t size) {
   (void)shell_io_write((const uint8_t*)buf, size);
 }
 
-
-
-static size_t shell_read_nonblocking(void* buf, size_t size) {
-  BaseAsynchronousChannel* channel = shell_current_channel();
-  if (channel == NULL || buf == NULL) {
-    return 0;
-  }
-  return chnReadTimeout(channel, (uint8_t*)buf, size, TIME_IMMEDIATE);
+static size_t shell_read(void* buf, size_t size) {
+  return shell_io_read((uint8_t*)buf, size);
 }
 static char shell_print_buffer[96];
 
@@ -383,14 +396,14 @@ void shell_service_pending_commands(void) {
     osalSysUnlock();
 
     if ((command->flags & CMD_BREAK_SWEEP) || (command->flags & CMD_WAIT_MUTEX)) {
-      app_measurement_pause();
+      pause_sweep();
     }
     command->sc_function(argc, argv);
     
     // Auto-resume sweep if it was running and command allows it
     if (shell_auto_resume) {
       if (!(command->flags & CMD_NO_AUTO_RESUME)) {
-        app_measurement_enable();
+        resume_sweep();
       }
       shell_auto_resume = false;
     }
@@ -441,9 +454,8 @@ static const char backspace[] = {0x08, 0x20, 0x08, 0x00};
 
 int vna_shell_read_line(char* line, int max_size) {
   uint8_t c;
-  static uint16_t j = 0;
-  // Use non-blocking read for cooperative multitasking
-  while (shell_read_nonblocking(&c, 1)) {
+  uint16_t j = 0;
+  while (shell_read(&c, 1)) {
     if (shell_skip_linefeed) {
       shell_skip_linefeed = false;
       if (c == '\n') {
@@ -461,7 +473,6 @@ int vna_shell_read_line(char* line, int max_size) {
       shell_skip_linefeed = (c == '\r');
       shell_printf(VNA_SHELL_NEWLINE_STR);
       line[j] = 0;
-      j = 0; // Reset for next line
       return 1;
     }
     if (c < ' ' || j >= max_size - 1) {

@@ -32,9 +32,7 @@
 #endif
 
 // Enable DMA mode for send data to LCD (Need enable HAL_USE_SPI in halconf.h)
-#if defined(NANOVNA_F303)
 #define __USE_DISPLAY_DMA__
-#endif
 // LCD or hardware allow change brightness, add menu item for this
 #if defined(NANOVNA_F303)
 #define __LCD_BRIGHTNESS__
@@ -68,8 +66,6 @@
 //#define __FLIP_DISPLAY__
 // Add shadow on text in plot area (improve readable, but little slowdown render)
 #define _USE_SHADOW_TEXT_
-// Faster draw line in cell algorithm (better clipping and faster)
-// #define __VNA_FAST_LINES__
 // Use build in table for sin/cos calculation, allow save a lot of flash space (this table also use for FFT), max sin/cos error = 4e-7
 #define __VNA_USE_MATH_TABLES__
 // Use custom fast/compact approximation for some math functions in calculations (vna_ ...), use it carefully

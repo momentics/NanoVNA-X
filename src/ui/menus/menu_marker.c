@@ -26,8 +26,6 @@
 #include "ui/core/ui_menu_engine.h"
 #include "ui/menus/menu_marker.h"
 #include "ui/menus/menu_display.h" 
-#include "ui/controller/marker_logic.h"
- 
 
 // Macros
 #define UI_MARKER_EDELAY 6
@@ -93,9 +91,8 @@ static UI_FUNCTION_CALLBACK(menu_marker_op_cb) {
 }
 
 static UI_FUNCTION_CALLBACK(menu_marker_search_dir_cb) {
-  marker_logic_search_dir(markers[active_marker].index,
+  marker_search_dir(markers[active_marker].index,
                     data == MK_SEARCH_RIGHT ? MK_SEARCH_RIGHT : MK_SEARCH_LEFT);
-
   props_mode &= ~TD_MARKER_TRACK;
 #ifdef UI_USE_LEVELER_SEARCH_MODE
   select_lever_mode(LM_SEARCH);

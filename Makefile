@@ -103,15 +103,15 @@ endif
 # the stack used by the main() thread.
 ifeq ($(USE_PROCESS_STACKSIZE),)
   ifeq ($(TARGET),F303)
-    USE_PROCESS_STACKSIZE = 0x800
+    USE_PROCESS_STACKSIZE = 0x400
   else
-    USE_PROCESS_STACKSIZE = 0x800
+    USE_PROCESS_STACKSIZE = 0x1C0
   endif
 endif
 # Stack size to the allocated to the Cortex-M main/exceptions stack. This
 # stack is used for processing interrupts and exceptions.
 ifeq ($(USE_EXCEPTIONS_STACKSIZE),)
-  USE_EXCEPTIONS_STACKSIZE = 0x200
+  USE_EXCEPTIONS_STACKSIZE = 0x100
 endif
 #
 # Architecture or project specific options
@@ -189,7 +189,6 @@ CSRC = $(STARTUPSRC) \
        src/runtime/main.c \
        src/runtime/runtime_entry.c \
        src/rf/sweep/sweep_orchestrator.c \
-       src/rf/driver/default_rf_driver.c \
        src/interfaces/cli/shell_service.c \
        src/interfaces/cli/shell_commands.c \
        src/core/common.c \
@@ -204,10 +203,7 @@ CSRC = $(STARTUPSRC) \
        src/ui/display/render.c \
        src/ui/display/traces.c \
        src/ui/controller/ui_controller.c \
-       src/ui/controller/marker_logic.c \
        src/ui/core/ui_core.c \
-       src/ui/core/ui_model.c \
-       src/ui/core/ui_task.c \
        src/ui/core/ui_menu_engine.c \
        src/ui/core/ui_keypad.c \
        src/ui/menus/menu_main.c \

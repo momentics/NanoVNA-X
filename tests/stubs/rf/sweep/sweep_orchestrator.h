@@ -23,9 +23,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "infra/event/event_bus.h"
+
 uint16_t app_measurement_get_sweep_mask(void);
 bool app_measurement_sweep(bool break_on_operation, uint16_t mask);
-void sweep_service_init(void);
+void sweep_service_init(event_bus_t* bus);
 void sweep_service_wait_for_copy_release(void);
 void sweep_service_begin_measurement(void);
 void sweep_service_end_measurement(void);

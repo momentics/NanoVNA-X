@@ -28,8 +28,6 @@
 #include "ui/core/ui_menu_engine.h"
 #include "ui/core/ui_keypad.h"
 #include "ui/menus/menu_system.h"
-#include "ui/controller/marker_logic.h"
-
 #include "infra/storage/config_service.h"
 #include "infra/event/event_bus.h"
 #include <string.h>
@@ -156,8 +154,7 @@ void apply_vna_mode(uint16_t idx, vna_mode_ops operation) {
     break;
 #endif
   case VNA_MODE_SEARCH:
-    marker_logic_search();
-
+    marker_search();
 #ifdef UI_USE_LEVELER_SEARCH_MODE
     select_lever_mode(LM_SEARCH);
 #endif

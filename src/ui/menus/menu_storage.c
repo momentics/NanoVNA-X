@@ -349,7 +349,7 @@ static FRESULT sd_card_format(void) {
 
 static UI_FUNCTION_CALLBACK(menu_sdcard_format_cb) {
   (void)data;
-  bool resume = app_measurement_is_enabled();
+  bool resume = (sweep_mode & SWEEP_ENABLE) != 0;
   if (resume)
     toggle_sweep();
   systime_t start = chVTGetSystemTimeX();
@@ -469,7 +469,7 @@ UI_KEYBOARD_CALLBACK(input_filename) {
 }
 
 UI_FUNCTION_CALLBACK(menu_sdcard_cb) {
-  keyboard_temp = app_measurement_is_enabled() ? 1 : 0;
+  keyboard_temp = (sweep_mode & SWEEP_ENABLE) ? 1 : 0;
   if (keyboard_temp)
     toggle_sweep();
   data = fix_screenshot_format(data);

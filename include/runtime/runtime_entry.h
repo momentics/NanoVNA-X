@@ -20,11 +20,4 @@
 
 #pragma once
 
-#include <stdbool.h>
-
 int runtime_main(void);
-
-void app_measurement_pause(void);
-void app_measurement_enable(void);
-
-void toggle_sweep(void);

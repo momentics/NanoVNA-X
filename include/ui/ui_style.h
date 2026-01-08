@@ -88,7 +88,7 @@ typedef uint16_t pixel_t;
 #if defined(NANOVNA_F303)
 #define CELLHEIGHT (64)
 #else
-#define CELLHEIGHT (4)
+#define CELLHEIGHT (16)
 #endif
 #endif
 
