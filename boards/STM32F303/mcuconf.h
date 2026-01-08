@@ -61,7 +61,7 @@
 #define STM32_TIM8SW                        STM32_TIM8SW_PCLK2
 #define STM32_USB_CLOCK_REQUIRED            TRUE
 #define STM32_USBPRE                        STM32_USBPRE_DIV1P5
-#define STM32_USB_USE_WORD_COPY             FALSE
+#define STM32_USB_USE_WORD_COPY             TRUE
 
 // Define STM32_I2C1_CLOCK as 72MHz (STM32_I2C1SW is STM32_I2C1SW_SYSCLK)
 #define STM32_I2C1_CLOCK                    72
@@ -270,8 +270,7 @@
  */
 #define STM32_USB_USE_USB1                  TRUE
 #define STM32_USB_LOW_POWER_ON_SUSPEND      FALSE
-#define STM32_USB_USB1_LP_IRQ_PRIORITY      12
-#define STM32_USB_USB1_HP_IRQ_PRIORITY      12
+#define STM32_USB_USB1_LP_IRQ_PRIORITY      3
 
 /*
  * WDG driver system settings.
