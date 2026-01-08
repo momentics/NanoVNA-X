@@ -71,6 +71,22 @@ alignas(8) pixel_t spi_buffer[SPI_BUFFER_SIZE];
 pixel_t foreground_color = 0;
 pixel_t background_color = 0;
 
+// Async Rendering Context
+typedef struct {
+  int x, y, w, h;
+  pixel_t* buffer;
+} lcd_render_request_t;
+
+static lcd_render_request_t render_queue[2];
+static uint8_t req_write_idx = 0;
+static uint8_t req_read_idx = 0;
+static bool dma_active = false;
+static semaphore_t render_sem;
+static thread_reference_t dma_wait_thread = NULL;
+
+static void lcd_start_dma_transaction(const lcd_render_request_t* req);
+
+
 //*****************************************************
 // SPI functions, settings and data
 //*****************************************************
@@ -203,6 +219,20 @@ static void spi_init(void) {
 #endif
   // Enable DMA on SPI
   LCD_SPI->CR1 |= SPI_CR1_SPE; // SPI enable
+  
+  // Initialize render semaphore with number of available buffers
+  chSemObjectInit(&render_sem, DISPLAY_CELL_BUFFER_COUNT);
+}
+
+// Re-init DMA with ISR
+static void lcd_dma_init_isr(void) {
+#ifdef __USE_DISPLAY_DMA__
+#if defined(STM32F072xB)
+  nvicEnableVector(DMA1_Channel2_3_IRQn, 2); // Priority 2
+#elif defined(STM32F303xC)
+  nvicEnableVector(DMA1_Channel3_IRQn, 2); // Priority 2
+#endif
+#endif
 }
 
 //******************************************************************************
@@ -389,13 +419,11 @@ enum {
 //******************************************************************************
 // Used only in double buffer mode
 #ifndef lcd_get_cell_buffer
-#define LCD_BUFFER_1 0x01
-#define LCD_DMA_RUN 0x02
-static uint8_t LCD_dma_status = 0;
-
 // Return free buffer for render
 pixel_t* lcd_get_cell_buffer(void) {
-  return &spi_buffer[(LCD_dma_status & LCD_BUFFER_1) ? SPI_BUFFER_SIZE / 2 : 0];
+  chSemWait(&render_sem);
+  // req_write_idx points to the slot we are about to Fill
+  return &spi_buffer[(req_write_idx & 1) ? SPI_BUFFER_SIZE / 2 : 0];
 }
 #endif
 
@@ -573,6 +601,7 @@ void lcd_set_rotation(uint8_t r) {
 
 void lcd_init(void) {
   spi_init();
+  lcd_dma_init_isr(); // Register ISR
   LCD_RESET_ASSERT;
   chThdSleepMilliseconds(5);
   LCD_RESET_NEGATE;
@@ -587,8 +616,18 @@ void lcd_init(void) {
 }
 
 void lcd_set_window(int x, int y, int w, int h, uint16_t cmd) {
-  // Any LCD exchange start from this
-  dma_channel_wait_completion_rx_tx();
+  // We can't use dma_channel_wait anymore if we are using ISR driven logic mixed with blocking
+  // But for simple commands we assume bus is free unless dma_active is true
+  if (dma_active) {
+    // This happens if we call blocking functions while Async DMA is running (e.g. read_memory)
+    // We must wait for queue to drain
+    chSysLock();
+    while (dma_active) {
+        chThdSuspendS(&dma_wait_thread);
+    }
+    chSysUnlock();
+  }
+
   // uint8_t xx[4] = { x >> 8, x, (x+w-1) >> 8, (x+w-1) };
   // uint8_t yy[4] = { y >> 8, y, (y+h-1) >> 8, (y+h-1) };
   uint32_t xx = __REV16(x | ((x + w - 1) << 16));
@@ -598,8 +637,116 @@ void lcd_set_window(int x, int y, int w, int h, uint16_t cmd) {
   lcd_send_command(cmd, 0, NULL);
 }
 
+
 // Set DMA data size, depend from pixel size
 #define LCD_DMA_MODE (LCD_PIXEL_SIZE == 2 ? STM32_DMA_CR_HWORD : STM32_DMA_CR_BYTE)
+
+#ifdef __USE_DISPLAY_DMA__
+static void lcd_start_dma_transaction(const lcd_render_request_t* req) {
+  // Note: We are in Critical Section (ISR or Lock)
+  // Send window commands via blocking SPI (fast ~3us)
+   uint32_t xx = __REV16(req->x | ((req->x + req->w - 1) << 16));
+   uint32_t yy = __REV16(req->y | ((req->y + req->h - 1) << 16));
+   
+   // Inline lcd_send_command to avoid blocking checks recursion issues
+   // We know bus is free because we are the DMA handler
+   // CASET
+   LCD_CS_LOW; LCD_DC_CMD;
+   SPI_WRITE_8BIT(LCD_SPI, LCD_CASET);
+   while (SPI_IS_BUSY(LCD_SPI));
+   LCD_DC_DATA;
+   spi_tx_buffer((uint8_t*)&xx, 4);
+
+   // RASET
+   while (SPI_IS_BUSY(LCD_SPI));
+   LCD_DC_CMD;
+   SPI_WRITE_8BIT(LCD_SPI, LCD_RASET);
+   while (SPI_IS_BUSY(LCD_SPI));
+   LCD_DC_DATA;
+   spi_tx_buffer((uint8_t*)&yy, 4);
+   
+   // RAMWR
+   while (SPI_IS_BUSY(LCD_SPI));
+   LCD_DC_CMD;
+   SPI_WRITE_8BIT(LCD_SPI, LCD_RAMWR);
+   while (SPI_IS_BUSY(LCD_SPI));
+   LCD_DC_DATA;
+
+   // Start DMA
+   dmaChannelSetMemory(LCD_DMA_TX, req->buffer);
+   dmaChannelSetTransactionSize(LCD_DMA_TX, req->w * req->h);
+   // Enable TCIE (Transfer Complete Interrupt)
+   dmaChannelSetMode(LCD_DMA_TX, txdmamode | LCD_DMA_MODE | STM32_DMA_CR_MINC | STM32_DMA_CR_EN | STM32_DMA_CR_TCIE);
+}
+
+static void lcd_dma_tx_isr(void *p, uint32_t flags) {
+  (void)p;
+  if ((flags & STM32_DMA_ISR_TCIF) == 0) return;
+  
+  chSysLockFromISR();
+  
+  // 1. Mark finished buffer as free
+  chSemSignalI(&render_sem);
+  
+  // 2. Advance read index
+  req_read_idx ^= 1;
+  
+  // 3. Check if we have more to send
+  if (req_read_idx != req_write_idx) {
+    lcd_start_dma_transaction(&render_queue[req_read_idx]);
+  } else {
+    dma_active = false;
+    // Wake up any thread waiting for idle (e.g. lcd_fill)
+    chThdResumeI(&dma_wait_thread, MSG_OK);
+  }
+  
+  chSysUnlockFromISR();
+}
+
+static void lcd_dma_handle_irq(void) {
+  uint32_t flags = 0;
+  // Read and Clear Status
+#if defined(STM32F072xB)
+  if (DMA1->ISR & DMA_ISR_TCIF3) {
+    DMA1->IFCR = DMA_IFCR_CTCIF3;
+    flags = STM32_DMA_ISR_TCIF;
+  }
+  // Clear Global interrupt flag just in case
+  DMA1->IFCR = DMA_IFCR_CGIF3;
+#elif defined(STM32F303xC)
+  if (DMA1->ISR & DMA_ISR_TCIF3) {
+    DMA1->IFCR = DMA_IFCR_CTCIF3;
+    flags = STM32_DMA_ISR_TCIF;
+  }
+  // Clear Global interrupt flag
+  DMA1->IFCR = DMA_IFCR_CGIF3;
+#endif
+
+  if (flags) {
+    lcd_dma_tx_isr(NULL, flags);
+  }
+}
+
+
+// ISR Handlers
+#if defined(STM32F072xB)
+CH_IRQ_HANDLER(DMA1_Channel2_3_IRQHandler) {
+  CH_IRQ_PROLOGUE();
+  lcd_dma_handle_irq();
+  CH_IRQ_EPILOGUE();
+}
+#elif defined(STM32F303xC)
+CH_IRQ_HANDLER(DMA1_Channel3_IRQHandler) {
+  CH_IRQ_PROLOGUE();
+  lcd_dma_handle_irq();
+  CH_IRQ_EPILOGUE();
+}
+#endif
+#endif
+
+//
+// LCD read data functions (Copy screen data to buffer)
+//
 
 //
 // LCD read data functions (Copy screen data to buffer)
@@ -696,11 +843,35 @@ static void lcd_bulk_buffer(int x, int y, int w, int h, pixel_t* buffer) {
 #endif
 }
 
-// Copy part of spi_buffer to region, no wait completion after if buffer count !=1
+// Copy part of spi_buffer to region
 #ifndef lcd_bulk_continue
 void lcd_bulk_continue(int x, int y, int w, int h) {
-  lcd_bulk_buffer(x, y, w, h, lcd_get_cell_buffer()); // Send new cell data
-  LCD_dma_status ^= LCD_BUFFER_1;                     // Switch buffer
+#ifdef __USE_DISPLAY_DMA__
+  pixel_t* buf = &spi_buffer[(req_write_idx & 1) ? SPI_BUFFER_SIZE / 2 : 0];
+  
+  // Prepare request
+  render_queue[req_write_idx].x = x;
+  render_queue[req_write_idx].y = y;
+  render_queue[req_write_idx].w = w;
+  render_queue[req_write_idx].h = h;
+  render_queue[req_write_idx].buffer = buf;
+  
+  // Advance write index (we effectively "consumed" the buffer)
+  chSysLock();
+  uint8_t current_write = req_write_idx;
+  req_write_idx ^= 1;
+  
+  if (!dma_active) {
+    dma_active = true;
+    // Start immediately
+    lcd_start_dma_transaction(&render_queue[current_write]);
+  } else {
+     // Already active, ISR will pick up next
+  }
+  chSysUnlock();
+#else
+  lcd_bulk_buffer(x, y, w, h, spi_buffer);
+#endif
 }
 #endif
 
