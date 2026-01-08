@@ -37,7 +37,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "rf/engine/measurement_engine.h"
+#include "rf/measurement.h"
 
 /* ------------------------------------------------------------------------- */
 /*                         Stubbed sweep service hooks                        */

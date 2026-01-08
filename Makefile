@@ -185,24 +185,25 @@ CSRC = $(STARTUPSRC) \
        src/ui/resources/fonts/Font7x11b.c \
        src/ui/resources/fonts/Font11x14.c \
        src/ui/resources/icons/icons_menu.c \
-       src/platform/peripherals/usbcfg.c \
+       src/driver/usbcfg.c \
        src/runtime/main.c \
        src/runtime/runtime_entry.c \
-       src/rf/sweep/sweep_orchestrator.c \
-       src/interfaces/cli/shell_service.c \
-       src/interfaces/cli/shell_commands.c \
+       src/rf/sweep.c \
+       src/sys/shell_service.c \
+       src/sys/shell_commands.c \
        src/core/common.c \
-       src/platform/peripherals/si5351.c \
-       src/platform/peripherals/tlv320aic3204.c \
+       src/driver/si5351.c \
+       src/driver/tlv320aic3204.c \
        src/processing/dsp_backend.c \
        src/processing/vna_math.c \
-       src/rf/analysis/measurement_analysis.c \
+       src/rf/analysis.c \
+       src/rf/legacy.c \
        src/processing/calibration.c \
-       src/ui/display/plot.c \
-       src/ui/display/grid.c \
-       src/ui/display/render.c \
-       src/ui/display/traces.c \
-       src/ui/controller/ui_controller.c \
+       src/ui/draw/plot.c \
+       src/ui/draw/grid.c \
+       src/ui/draw/render.c \
+       src/ui/draw/traces.c \
+       src/ui/core/ui_controller.c \
        src/ui/core/ui_core.c \
        src/ui/core/ui_menu_engine.c \
        src/ui/core/ui_keypad.c \
@@ -213,24 +214,24 @@ CSRC = $(STARTUPSRC) \
        src/ui/menus/menu_stimulus.c \
        src/ui/menus/menu_system.c \
        src/ui/menus/menu_storage.c \
-       src/platform/peripherals/lcd.c \
-       src/ui/display/display_presenter.c \
-       src/platform/boards/board_events.c \
-       src/infra/storage/config_service.c \
-       src/infra/event/event_bus.c \
-       src/infra/task/scheduler.c \
-       src/rf/pipeline/measurement_pipeline.c \
-       src/platform/platform_hal.c \
-       src/platform/boards/board_registry.c \
-       src/platform/boards/nanovna_board.c \
-       src/platform/boards/stm32_peripherals.c \
-       src/ui/input/hardware_input.c \
-       src/infra/state/state_manager.c \
-       src/middleware/chprintf.c \
-       src/rf/engine/measurement_engine.c \
-       src/interfaces/ports/processing_port.c \
-       src/interfaces/ports/ui_port.c \
-       src/interfaces/ports/usb_command_server_port.c
+       src/driver/lcd.c \
+       src/ui/draw/display_presenter.c \
+       src/driver/board_events.c \
+       src/sys/config_service.c \
+       src/sys/event_bus.c \
+       src/sys/scheduler.c \
+       src/rf/pipeline.c \
+       src/driver/platform_hal.c \
+       src/driver/board_registry.c \
+       src/driver/nanovna_board.c \
+       src/driver/stm32_peripherals.c \
+       src/ui/core/hardware_input.c \
+       src/sys/state_manager.c \
+       src/sys/chprintf.c \
+       src/rf/measurement.c \
+       src/sys/processing_port.c \
+       src/sys/ui_port.c \
+       src/sys/usb_command_server_port.c
 
 # C++ sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.
@@ -261,7 +262,8 @@ ASMSRC = $(STARTUPASM) $(PORTASM) $(OSALASM)
 
 INCDIR = $(STARTUPINC) $(KERNINC) $(PORTINC) $(OSALINC) \
          $(HALINC) $(PLATFORMINC) $(BOARDINC)  \
-         $(STREAMSINC) $(PROJ)/third_party/FatFs
+         $(STREAMSINC) $(PROJ)/third_party/FatFs \
+         include/driver include/sys include/rf include/ui/core include/ui/draw
 
 #
 # Project, sources and paths
@@ -375,31 +377,31 @@ $(TEST_BUILD_DIR)/test_vna_math: tests/unit/test_vna_math.c src/processing/vna_m
 	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_measurement_pipeline: tests/unit/test_measurement_pipeline.c \
-		src/rf/pipeline/measurement_pipeline.c | $(TEST_BUILD_DIR)
+		src/rf/pipeline.c | $(TEST_BUILD_DIR)
 	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_dsp_backend: tests/unit/test_dsp_backend.c src/processing/dsp_backend.c | $(TEST_BUILD_DIR)
 	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
-$(TEST_BUILD_DIR)/test_legacy_measure: tests/unit/test_legacy_measure.c src/processing/vna_math.c src/rf/analysis/measurement_analysis.c | $(TEST_BUILD_DIR)
+$(TEST_BUILD_DIR)/test_legacy_measure: tests/unit/test_legacy_measure.c src/processing/vna_math.c src/rf/legacy.c src/rf/analysis.c | $(TEST_BUILD_DIR)
 	$(HOST_CC) $(HOST_CFLAGS) -Wno-unused-function -Wno-unused-variable -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
-$(TEST_BUILD_DIR)/test_event_bus: tests/unit/test_event_bus.c src/infra/event/event_bus.c | $(TEST_BUILD_DIR)
+$(TEST_BUILD_DIR)/test_event_bus: tests/unit/test_event_bus.c src/sys/event_bus.c | $(TEST_BUILD_DIR)
 	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
-$(TEST_BUILD_DIR)/test_scheduler: tests/unit/test_scheduler.c src/infra/task/scheduler.c | $(TEST_BUILD_DIR)
+$(TEST_BUILD_DIR)/test_scheduler: tests/unit/test_scheduler.c src/sys/scheduler.c | $(TEST_BUILD_DIR)
 	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_measurement_engine: tests/unit/test_measurement_engine.c \
-		src/rf/engine/measurement_engine.c src/rf/pipeline/measurement_pipeline.c | $(TEST_BUILD_DIR)
+		src/rf/measurement.c src/rf/pipeline.c | $(TEST_BUILD_DIR)
 	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
-$(TEST_BUILD_DIR)/test_shell_service: tests/unit/test_shell_service.c src/interfaces/cli/shell_service.c \
+$(TEST_BUILD_DIR)/test_shell_service: tests/unit/test_shell_service.c src/sys/shell_service.c \
 		src/core/common.c | $(TEST_BUILD_DIR)
 	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_display_presenter: tests/unit/test_display_presenter.c \
-		src/ui/display/display_presenter.c | $(TEST_BUILD_DIR)
+		src/ui/draw/display_presenter.c | $(TEST_BUILD_DIR)
 	$(HOST_CC) $(HOST_CFLAGS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_accuracy_analysis: tests/unit/test_accuracy_analysis.c src/processing/vna_math.c | $(TEST_BUILD_DIR)

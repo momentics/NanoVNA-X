@@ -22,28 +22,28 @@
 
 #include "runtime/runtime_features.h"
 #include "runtime/runtime_entry.h"
-#include "rf/sweep/sweep_orchestrator.h"
+#include "rf/sweep.h"
 
 #include "ch.h"
 #include "hal.h"
-#include "platform/peripherals/si5351.h"
+#include "driver/si5351.h"
 #include "nanovna.h"
-#include "interfaces/cli/shell_service.h"
-#include "interfaces/cli/shell_commands.h"
-#include "platform/peripherals/usbcfg.h"
-#include "platform/hal.h"
-#include "infra/storage/config_service.h"
-#include "infra/event/event_bus.h"
+#include "sys/shell_service.h"
+#include "sys/shell_commands.h"
+#include "driver/usbcfg.h"
+#include "driver/platform_hal.h"
+#include "sys/config_service.h"
+#include "sys/event_bus.h"
 #include "version_info.h"
-#include "rf/engine/measurement_engine.h"
-#include "interfaces/ports/processing_port.h"
-#include "interfaces/ports/ui_port.h"
-#include "interfaces/ports/usb_command_server_port.h"
-#include "platform/boards/stm32_peripherals.h"
-#include "infra/state/state_manager.h"
-#include "ui/display/display_presenter.h"
-#include "ui/controller/ui_controller.h"
-#include "platform/boards/board_events.h"
+#include "rf/measurement.h"
+#include "sys/processing_port.h"
+#include "sys/ui_port.h"
+#include "sys/usb_command_server_port.h"
+#include "driver/stm32_peripherals.h"
+#include "sys/state_manager.h"
+#include "ui/draw/display_presenter.h"
+#include "ui/core/ui_controller.h"
+#include "driver/board_events.h"
 
 #ifdef __LCD_BRIGHTNESS__
 void lcd_set_brightness(uint16_t brightness);
@@ -289,7 +289,7 @@ static THD_FUNCTION(Thread1, arg) {
   }
 }
 
-#include "rf/sweep/sweep_orchestrator.h"
+#include "rf/sweep.h"
 
 void pause_sweep(void) {
   sweep_mode &= ~SWEEP_ENABLE;

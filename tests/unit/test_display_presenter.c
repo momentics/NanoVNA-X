@@ -19,7 +19,7 @@
  */
 
 /*
- * Host-side coverage for src/ui/display/display_presenter.c.
+ * Host-side coverage for src/ui/draw/display_presenter.c.
  *
  * The presenter API is intentionally thin, forwarding every call to whichever
  * implementation is currently bound.  These tests bind a mock presenter and
@@ -35,7 +35,7 @@
 #include <string.h>
 
 #include "nanovna.h"
-#include "ui/display/display_presenter.h"
+#include "ui/draw/display_presenter.h"
 
 config_t config = {0};
 

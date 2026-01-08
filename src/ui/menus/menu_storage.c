@@ -21,8 +21,8 @@
 #include "ch.h"
 #include "hal.h"
 #include "nanovna.h"
-#include "interfaces/cli/shell_service.h"
-#include "platform/boards/board_events.h"
+#include "sys/shell_service.h"
+#include "driver/board_events.h"
 #include "ui/menus/menu_storage.h"
 #include "ui/menus/menu_system.h" // For menu_vna_mode_acb
 #include "ui/menus/menu_main.h"   // For menu_stored_trace_acb if applicable
@@ -31,9 +31,9 @@
 #include "ui/core/ui_keypad.h"
 #include "chprintf.h"
 #include <string.h>
-#include "infra/storage/config_service.h"
-#include "infra/state/state_manager.h" // For state_manager_force_save if needed
-#include "platform/boards/board_events.h" // For boardDFUEnter if referenced? No, local DFU is System.
+#include "sys/config_service.h"
+#include "sys/state_manager.h" // For state_manager_force_save if needed
+#include "driver/board_events.h" // For boardDFUEnter if referenced? No, local DFU is System.
 
 #ifdef __USE_SD_CARD__
 

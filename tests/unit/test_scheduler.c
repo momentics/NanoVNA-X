@@ -19,7 +19,7 @@
  */
 
 /*
- * Host-side regression tests for src/infra/task/scheduler.c.
+ * Host-side regression tests for src/sys/scheduler.c.
  *
  * The cooperative task scheduler coordinates a small pool of worker slots on
  * the STM32.  By stubbing the ChibiOS primitives (thread creation/termination,
@@ -36,7 +36,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "infra/task/scheduler.h"
+#include "sys/scheduler.h"
 
 /* ------------------------------------------------------------------------- */
 /* Minimal ChibiOS primitives tailored for the scheduler tests.              */

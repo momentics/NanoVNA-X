@@ -19,7 +19,7 @@
  * Boston, MA 02110-1301, USA.
  */
 #include "nanovna.h"
-#include "ui/input/hardware_input.h"
+#include "ui/core/hardware_input.h"
 #include "ui/core/ui_menu_engine.h"
 #include "ui/menus/menu_main.h"
 

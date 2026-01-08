@@ -21,7 +21,7 @@
 #include "processing/calibration.h"
 #include <string.h>
 #include "nanovna.h"
-#include "rf/sweep/sweep_orchestrator.h"
+#include "rf/sweep.h"
 
 // Forward declarations of static functions
 static void eterm_set(int term, float re, float im);

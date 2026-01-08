@@ -21,15 +21,15 @@
 #include "ch.h"
 #include "hal.h"
 #include "nanovna.h"
-#include "infra/state/state_manager.h"
-#include "platform/peripherals/si5351.h"
+#include "sys/state_manager.h"
+#include "driver/si5351.h"
 #include "ui/ui_menu.h"
 #include "ui/core/ui_core.h"
 #include "ui/core/ui_menu_engine.h"
 #include "ui/core/ui_keypad.h"
 #include "ui/menus/menu_system.h"
-#include "infra/storage/config_service.h"
-#include "infra/event/event_bus.h"
+#include "sys/config_service.h"
+#include "sys/event_bus.h"
 #include <string.h>
 
 // Enums for config callback

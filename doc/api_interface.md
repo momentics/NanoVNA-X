@@ -30,7 +30,7 @@ When a command modifies sweep settings it typically pauses generation, performs 
 
 ### 3.1 State persistence and autosave
 
-The `infra/state/state_manager` layer owns sweep/GUI persistence:
+The `sys/state_manager` layer owns sweep/GUI persistence:
 
 * When `REMEMBER STATE` (System -> Device) is on, edits to sweep points, start/stop limits, brightness, lever mode, and the active calibration slot are staged in RAM and automatically written back to flash a short time after the last change.
 * Issuing `saveconfig` or selecting **SAVE CONFIG** in the UI forces both the configuration block and any pending autosave data to be committed immediately. Hosts that modify sweep settings via USB should either wait for the prompt plus ~1 second or explicitly call `saveconfig` to guarantee persistence.

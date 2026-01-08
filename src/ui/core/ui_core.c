@@ -27,15 +27,15 @@
 #include "ui/core/ui_menu_engine.h" // For ui_draw_button
 #include "ui/core/ui_keypad.h" // For ui_keypad_lever
 #include "ui/ui_menu.h"
-#include "ui/input/hardware_input.h"
+#include "ui/core/hardware_input.h"
 #include "../resources/icons/icons_menu.h"
-#include "platform/boards/board_events.h"
+#include "driver/board_events.h"
 #include "ui/menus/menu_system.h" // For lcd_set_brightness
 
-#include "platform/boards/board_events.h"
+#include "driver/board_events.h"
 
-#include "infra/storage/config_service.h"
-#include "rf/sweep/sweep_orchestrator.h"
+#include "sys/config_service.h"
+#include "rf/sweep.h"
 
 
 #define TOUCH_INTERRUPT_ENABLED 1

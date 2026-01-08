@@ -59,7 +59,7 @@ The core of the firmware was reworked from blocking calls to a fully asynchronou
 - **Non-Blocking USB.** The USB CDC (serial) stack is now fully asynchronous. The firmware no longer hangs if a host PC connects, disconnects, or stalls during a data transfer. This resolves the most common source of device freezes.
 - **Timeout-Driven Recovery.** Critical subsystems, including the measurement engine and I²C bus, are guarded by timeouts. A stalled operation will no longer lock up the device; instead, the subsystem attempts to recover cleanly.
 - **RTOS-based Concurrency.** Busy-wait loops and polling have been replaced with efficient RTOS-based signaling, reducing CPU load and improving battery life. The measurement thread, UI, and USB stack now cooperate without race conditions or deadlocks.
-- **Persistent State.** A dedicated `infra/state/state_manager` module snapshots sweep limits, UI flags, and calibration slots to flash. Changes are auto-saved after you stop editing (or immediately via *Save Config*), so editing the sweep on the device or over USB survives a cold boot without hammering flash.
+- **Persistent State.** A dedicated `sys/state_manager` module snapshots sweep limits, UI flags, and calibration slots to flash. Changes are auto-saved after you stop editing (or immediately via *Save Config*), so editing the sweep on the device or over USB survives a cold boot without hammering flash.
 - **UI/Sweep Sync.** The UI and sweep engine are now decoupled. The UI remains responsive even during complex calculations, and on-screen data is always synchronized with the underlying measurement state.
 
 ### Performance and Resource Management
@@ -127,7 +127,7 @@ STM32F303 families.
   brings up the measurement pipeline, and spins a dedicated sweep thread that coordinates
   measurements, UI updates and shell commands.
 - **Platform abstraction.** `src/platform/platform_hal.c` invokes the registered board driver
-  table from `src/platform/boards/` so each supported target can publish a `PlatformDrivers`
+  table from `src/driver/` so each supported target can publish a `PlatformDrivers`
   structure with its initialisation hooks and peripheral descriptors. This keeps the core
   application agnostic of whether it is running on the NanoVNA-H (STM32F072) or NanoVNA-H4
   (STM32F303) hardware variants.
@@ -141,7 +141,7 @@ STM32F303 families.
   sweep execution to the application layer and reports the current channel mask. Numerical
   helpers and calibration maths reside in `src/processing/`, keeping compute-heavy code isolated from
   hardware access.
-- **Drivers and middleware.** Low-level device interactions are implemented in `src/platform/peripherals/`
+- **Drivers and middleware.** Low-level device interactions are implemented in `src/driver/`
   for the LCD, Si5351 synthesiser, TLV320 codec and USB front-end, while `src/middleware/`
   houses small integration shims such as the `chprintf` binding for ChibiOS streams. ChibiOS
   itself is vendored under `third_party/` and configured through the headers in `config/`
@@ -156,7 +156,7 @@ across both memory profiles with only targeted platform overrides.
 
 ## Event bus and scheduler
 
-The event bus (`infra/event/event_bus.[ch]`) is a small publish/subscribe helper that avoids
+The event bus (`sys/event_bus.[ch]`) is a small publish/subscribe helper that avoids
 dynamic allocation. Call `event_bus_init()` with a static subscription array, optional
 mailbox storage (`msg_t` buffer plus queue length), and optional queue nodes that back the
 mailbox entries. When the mailbox buffers are provided, `event_bus_publish()` posts messages
@@ -168,7 +168,7 @@ lock-aware fashion. The predefined topics (`EVENT_SWEEP_STARTED`, `EVENT_SWEEP_C
 `EVENT_USB_COMMAND_PENDING`) cover the current coordination needs; adding new topics
 requires extending the `event_bus_topic_t` enum.
 
-The scheduler helper (`infra/task/scheduler.[ch]`) keeps a fixed pool of four slots that wrap
+The scheduler helper (`sys/scheduler.[ch]`) keeps a fixed pool of four slots that wrap
 `chThdCreateStatic()`/`chThdTerminate()`. `scheduler_start()` returns a handle containing the
 assigned slot so callers can later stop the worker through `scheduler_stop()`. It does not
 implement time slicing or cooperative yielding; task priorities and timing remain under the
@@ -200,7 +200,7 @@ The source tree has been reorganised so it is no longer a line-for-line fork of 
 | `include/ui`, `src/ui` | Rendering, controllers, input adapters, and UI resources (fonts/icons). |
 | `src/platform`, `boards/STM32F072/STM32F303` | Low-level board support code shared with ChibiOS. |
 
-This separation lets you trace dependencies easily (e.g. `ui/` depends on `infra/state/state_manager.h` but not vice versa) and removes duplicated helper tables from multiple files. When porting patches from older firmware trees, map the functionality onto the closest module instead of copying entire source files.
+This separation lets you trace dependencies easily (e.g. `ui/` depends on `sys/state_manager.h` but not vice versa) and removes duplicated helper tables from multiple files. When porting patches from older firmware trees, map the functionality onto the closest module instead of copying entire source files.
 
 ## Building the firmware
 

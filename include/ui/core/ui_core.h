@@ -22,9 +22,9 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "ui/controller/ui_controller.h"
+#include "ui/core/ui_controller.h"
 #include "ui/ui_menu.h" // For button_t? keypads uses button_t?
-#include "ui/input/hardware_input.h"
+#include "ui/core/hardware_input.h"
 
 // Enums for UI mode
 enum {

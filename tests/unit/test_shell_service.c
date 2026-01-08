@@ -19,7 +19,7 @@
  */
 
 /*
- * Host-side coverage for src/interfaces/cli/shell_service.c.
+ * Host-side coverage for src/sys/shell_service.c.
  *
 + * The CLI normally talks to the ChibiOS USB stack; for the host build we
  * replace the USB driver with an in-memory stream so that I/O, deferred command
@@ -36,8 +36,8 @@
 #include <string.h>
 
 #include "nanovna.h"
-#include "platform/peripherals/usbcfg.h"
-#include "interfaces/cli/shell_service.h"
+#include "driver/usbcfg.h"
+#include "sys/shell_service.h"
 #include "chprintf.h"
 #include "memstreams.h"
 

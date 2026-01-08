@@ -23,8 +23,8 @@
 #include "nanovna.h"
 #include "ui/core/ui_core.h"
 #include "ui/core/ui_keypad.h"
-#include "ui/display/display_presenter.h"
-#include "ui/input/hardware_input.h"
+#include "ui/draw/display_presenter.h"
+#include "ui/core/hardware_input.h"
 #include <string.h>
 
 // Macros for drawing

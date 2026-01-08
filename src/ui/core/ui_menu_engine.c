@@ -24,8 +24,8 @@
 #include "ui/core/ui_core.h"
 #include "ui/core/ui_menu_engine.h"
 #include "ui/core/ui_keypad.h"
-#include "ui/display/display_presenter.h"
-#include "ui/input/hardware_input.h"
+#include "ui/draw/display_presenter.h"
+#include "ui/core/hardware_input.h"
 
 // Bring in macros for drawing (or include a common ui_draw.h if I created one)
 // For now, reuse the macros as localized here.
@@ -180,7 +180,7 @@ void menu_push_submenu(const menuitem_t* submenu) {
 // Icons
 #include "../resources/icons/icons_menu.h"
 // This path might be wrong relative to ui/core/
-// Original: #include "../resources/icons/icons_menu.h" in ui_controller.c (src/ui/controller/ui_controller.c)
+// Original: #include "../resources/icons/icons_menu.h" in ui_controller.c (src/ui/core/ui_controller.c)
 // src/ui/core/ui_menu_engine.c -> ../../resources/icons/icons_menu.h?
 // resources/icons is likely in src/ui/resources/icons or src/resources/icons?
 // I need to check where resources dir is.

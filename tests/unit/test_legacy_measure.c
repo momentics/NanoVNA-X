@@ -126,7 +126,7 @@ void cell_printf(int x, int y, const char* fmt, ...) {
 }
 void markmap_all_markers(void) {}
 
-#include "rf/analysis/measurement_analysis.h"
+#include "rf/analysis.h"
 
 static void test_match_quadratic_equation(void) {
   /*

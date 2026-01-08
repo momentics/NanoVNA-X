@@ -23,7 +23,7 @@
 #include "ui/core/ui_menu_engine.h"
 #include "ui/core/ui_core.h"
 #include "ui/core/ui_keypad.h" // For KM_* definitions
-#include "infra/storage/config_service.h"
+#include "sys/config_service.h"
 
 // ===================================
 // Callbacks

@@ -19,7 +19,7 @@
  */
 
 /*
- * Host-side regression tests for src/infra/event/event_bus.c.
+ * Host-side regression tests for src/sys/event_bus.c.
  *
  * The firmware event bus uses mailbox-backed queues on the STM32 but can fall
  * back to synchronous dispatching when no queue is configured.  These tests
@@ -35,7 +35,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "infra/event/event_bus.h"
+#include "sys/event_bus.h"
 
 /* ------------------------------------------------------------------------- */
 /* Minimal ChibiOS mailbox/syslock emulation used by the event bus during tests. */

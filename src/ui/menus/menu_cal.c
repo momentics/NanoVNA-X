@@ -23,8 +23,8 @@
 #include "ui/core/ui_menu_engine.h"
 #include "ui/core/ui_core.h"
 #include "ui/core/ui_keypad.h"
-#include "infra/storage/config_service.h"
-#include "platform/peripherals/si5351.h"
+#include "sys/config_service.h"
+#include "driver/si5351.h"
 #include "core/config_macros.h"
 
 // ===================================

@@ -21,7 +21,7 @@
  */
 #pragma once
 #include "ch.h"
-#include "infra/event/event_bus.h"
+#include "sys/event_bus.h"
 #include <stdalign.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -33,8 +33,8 @@
 /*
  * CPU Hardware depend functions declaration
  */
-#include "platform/boards/stm32_peripherals.h"
-#include "platform/hal.h"
+#include "driver/stm32_peripherals.h"
+#include "driver/platform_hal.h"
 
 #include "processing/dsp_config.h"
 

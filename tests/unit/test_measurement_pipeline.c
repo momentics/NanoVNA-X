@@ -30,7 +30,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "rf/pipeline/measurement_pipeline.h"
+#include "rf/pipeline.h"
 
 static uint16_t g_mask_value = 0u;
 static bool g_last_break = false;
