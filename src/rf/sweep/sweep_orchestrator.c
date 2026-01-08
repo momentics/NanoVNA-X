@@ -108,6 +108,38 @@ static float geometry_mean(float v0, float v1, float v2) {
 #define SWEEP_UI_IDLE_SLICE_POINTS ((uint16_t)SWEEP_POINTS_MAX)
 #define SWEEP_UI_TIMESLICE_TICKS MS2ST(8U)
 
+typedef enum {
+  RF_STATE_IDLE,
+  RF_STATE_SETUP_FREQ,
+  RF_STATE_SETUP_MEASURE,
+  RF_STATE_WAIT_CAPTURE,
+  RF_STATE_PROCESS,
+  RF_STATE_NEXT_STEP,
+  RF_STATE_FAULT
+} rf_state_t;
+
+typedef struct {
+  rf_state_t state;
+  bool break_on_operation;
+  uint16_t mask;
+  uint16_t batch_budget;
+  uint16_t processed;
+  systime_t slice_start;
+  
+  // Per-point state
+  freq_t frequency;
+  int delay;
+  int st_delay;
+  int interpolation_idx;
+  uint8_t total_cycles;
+  uint8_t current_cycle;
+  uint8_t channel_index;
+  
+  // Processing state
+  float offset;
+  float sweep_data[4]; // S11 real, S11 imag, S21 real, S21 imag
+} rf_fsm_context_t;
+
 static inline void sweep_reset_progress(void) {
   p_sweep = 0;
 }
@@ -556,167 +588,198 @@ static void cal_interpolate(int idx, freq_t f, float data[CAL_TYPE_COUNT][2]) {
 }
 
 // Static buffers to reduce stack usage in app_measurement_sweep
-static float sweep_data[4];
 static float sweep_cal_data[CAL_TYPE_COUNT][2];
+// FSM State Handlers
+
+static void fsm_setup_freq(rf_fsm_context_t* ctx) {
+  ctx->frequency = get_frequency(p_sweep);
+  uint8_t extra_cycles = 0U;
+  if (ctx->mask & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE)) {
+    ctx->delay = app_measurement_set_frequency(ctx->frequency);
+    ctx->interpolation_idx = (ctx->mask & SWEEP_USE_INTERPOLATION) ? -1 : (int)p_sweep;
+    extra_cycles = si5351_take_settling_cycles();
+  }
+  ctx->total_cycles = extra_cycles + 1U;
+  ctx->current_cycle = 0;
+  ctx->st_delay = DELAY_SWEEP_START; 
+  ctx->state = RF_STATE_SETUP_MEASURE;
+}
+
+static void fsm_setup_measure(rf_fsm_context_t* ctx) {
+  if (ctx->current_cycle >= ctx->total_cycles) {
+#ifdef __VNA_Z_RENORMALIZATION__
+    if (ctx->mask & SWEEP_USE_RENORMALIZATION) {
+       apply_renormalization(ctx->sweep_data, ctx->mask);
+    }
+#endif
+    ctx->state = RF_STATE_NEXT_STEP;
+    return;
+  }
+  
+  if ((ctx->mask & SWEEP_CH0_MEASURE) && ctx->channel_index == 0) {
+      // Ready for Ch0
+  } else if ((ctx->mask & SWEEP_CH1_MEASURE) && ctx->channel_index <= 1) {
+      ctx->channel_index = 1; 
+  } else {
+     ctx->current_cycle++;
+     ctx->channel_index = 0;
+     return;
+  }
+  
+  tlv320aic3204_select(ctx->channel_index);
+  
+  int cycle_delay = ctx->delay;
+  int cycle_st_delay = (ctx->current_cycle == 0U) ? ctx->st_delay : 0;
+  
+  if (ctx->channel_index == 1 && (ctx->mask & SWEEP_CH0_MEASURE)) {
+     cycle_delay = DELAY_CHANNEL_CHANGE;
+  }
+  
+  sweep_service_start_capture(cycle_delay + cycle_st_delay);
+  
+  bool final_cycle = (ctx->current_cycle == ctx->total_cycles - 1U);
+  if (final_cycle && (ctx->mask & SWEEP_APPLY_CALIBRATION)) {
+     cal_interpolate(ctx->interpolation_idx, ctx->frequency, sweep_cal_data); 
+  }
+
+  ctx->state = RF_STATE_WAIT_CAPTURE;
+}
+
+static void fsm_process(rf_fsm_context_t* ctx) {
+    bool final_cycle = (ctx->current_cycle == ctx->total_cycles - 1U);
+    int data_idx = ctx->channel_index * 2;
+    
+    void (*sample_cb)(float*) = sample_func;
+    sample_cb(&ctx->sweep_data[data_idx]);
+    
+    if (final_cycle) {
+        if (ctx->mask & SWEEP_APPLY_CALIBRATION) {
+            if (ctx->channel_index == 0)
+                apply_ch0_error_term(ctx->sweep_data, sweep_cal_data);
+            else {
+                apply_ch1_error_term(ctx->sweep_data, sweep_cal_data);
+            }
+        }
+        
+        if (ctx->channel_index == 0) {
+            if (ctx->mask & SWEEP_APPLY_EDELAY_S11)
+                apply_edelay(electrical_delayS11 * ctx->frequency, &ctx->sweep_data[0]);
+        } else {
+            if (ctx->mask & SWEEP_APPLY_EDELAY_S21)
+                apply_edelay(electrical_delayS21 * ctx->frequency, &ctx->sweep_data[2]);
+            if (ctx->mask & SWEEP_APPLY_S21_OFFSET)
+                apply_offset(&ctx->sweep_data[2], ctx->offset);
+        }
+
+        measured[ctx->channel_index][p_sweep][0] = ctx->sweep_data[data_idx];
+        measured[ctx->channel_index][p_sweep][1] = ctx->sweep_data[data_idx+1];
+    }
+
+    ctx->channel_index++;
+    ctx->state = RF_STATE_SETUP_MEASURE;
+}
 
 bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
+  rf_fsm_context_t ctx;
+  ctx.state = RF_STATE_SETUP_FREQ;
+  ctx.break_on_operation = break_on_operation;
+  ctx.mask = mask;
+  ctx.batch_budget = sweep_points_budget(break_on_operation);
+  ctx.processed = 0;
+  ctx.slice_start = break_on_operation ? chVTGetSystemTimeX() : 0;
+  ctx.offset = 1.0f;
+  ctx.channel_index = 0;
+  
+  if (mask & SWEEP_APPLY_S21_OFFSET) {
+     ctx.offset = vna_expf(s21_offset * (logf(10.0f) / 20.0f));
+  }
+  
   sweep_in_progress = true;
   sweep_service_wait_for_copy_release();
+  
   if (p_sweep >= sweep_points || !break_on_operation) {
     sweep_reset_progress();
     sweep_progress_end();
     sweep_led_end();
   }
+  
   if (break_on_operation && mask == 0U) {
-    sweep_progress_end();
-    sweep_led_end();
-    sweep_in_progress = false;
-    return false;
-  }
-  bool completed = false;
-  int delay = 0;
-  int st_delay = DELAY_SWEEP_START;
-  int interpolation_idx = p_sweep;
-  bool show_progress = config._bandwidth >= BANDWIDTH_100;
-  uint16_t batch_budget = sweep_points_budget(break_on_operation);
-  uint16_t processed = 0;
-  float offset = 1.0f;
-  if (mask & SWEEP_APPLY_S21_OFFSET) {
-    offset = vna_expf(s21_offset * (logf(10.0f) / 20.0f));
+     goto exit_failure;
   }
 
   if (p_sweep == 0U) {
-    sweep_prepare_led_and_progress(show_progress);
+    sweep_prepare_led_and_progress(config._bandwidth >= BANDWIDTH_100);
   }
 
-  const systime_t slice_start = break_on_operation ? chVTGetSystemTimeX() : 0;
-
-  for (; p_sweep < sweep_points; p_sweep++) {
-    if (processed >= batch_budget) {
-      break;
-    }
-    if (break_on_operation && sweep_ui_input_pending()) {
-      break;
-    }
-    if (sweep_timeslice_expired(slice_start)) {
-      break;
-    }
-    freq_t frequency = get_frequency(p_sweep);
-    uint8_t extra_cycles = 0U;
-    if (mask & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE)) {
-      delay = app_measurement_set_frequency(frequency);
-      interpolation_idx = (mask & SWEEP_USE_INTERPOLATION) ? -1 : (int)p_sweep;
-      extra_cycles = si5351_take_settling_cycles();
-    }
-    uint8_t total_cycles = extra_cycles + 1U;
-
-    // Process each cycle - reduced nesting by extracting logic
-    for (uint8_t cycle = 0; cycle < total_cycles; cycle++) {
-      bool final_cycle = (cycle == total_cycles - 1U);
-      int cycle_delay = delay;
-      int cycle_st_delay = (cycle == 0U) ? st_delay : 0;
-
-      // Process channel 0 if needed
-      if (mask & SWEEP_CH0_MEASURE) {
-        tlv320aic3204_select(0);
-        sweep_service_start_capture(cycle_delay + cycle_st_delay);
-        cycle_delay = DELAY_CHANNEL_CHANGE;
-        
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-          cal_interpolate(interpolation_idx, frequency, sweep_cal_data);
-        }
-
-        if (!sweep_service_wait_for_capture()) {
-          goto capture_failure;
-        }
-
-        void (*sample_cb)(float*) = sample_func;
-        sample_cb(&sweep_data[0]);  // Process S11 data[0], data[1]
-
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-          apply_ch0_error_term(sweep_data, sweep_cal_data);
-        }
-
-        if (mask & SWEEP_APPLY_EDELAY_S11) {
-             apply_edelay(electrical_delayS11 * frequency, &sweep_data[0]);
-        }
-        
-        // Store results
-        measured[0][p_sweep][0] = sweep_data[0];
-        measured[0][p_sweep][1] = sweep_data[1];
-      }
-
-      // Process channel 1 if needed
-      if (mask & SWEEP_CH1_MEASURE) {
-        // For channel 1, we may need to interpolate again if channel 0 wasn't processed
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION) && (mask & SWEEP_CH0_MEASURE) == 0U) {
-          cal_interpolate(interpolation_idx, frequency, sweep_cal_data);
-        }
-
-        tlv320aic3204_select(1);
-        sweep_service_start_capture(cycle_delay + cycle_st_delay);
-        cycle_delay = DELAY_CHANNEL_CHANGE;
-        
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-             cal_interpolate(interpolation_idx, frequency, sweep_cal_data);
-        }
-
-        if (!sweep_service_wait_for_capture()) {
-          goto capture_failure;
-        }
-        
-        void (*sample_cb)(float*) = sample_func;
-        sample_cb(&sweep_data[2]);  // Process S21 data[2], data[3]
-        
-        if (final_cycle && (mask & SWEEP_APPLY_CALIBRATION)) {
-            apply_ch1_error_term(sweep_data, sweep_cal_data);
-        }
-        
-        if (mask & SWEEP_APPLY_EDELAY_S21) {
-             apply_edelay(electrical_delayS21 * frequency, &sweep_data[2]);
-        }
-
-        // Apply S21 offset if needed
-        if (mask & SWEEP_APPLY_S21_OFFSET) {
-          apply_offset(&sweep_data[2], offset);
-        }
-
-        // Store results
-        measured[1][p_sweep][0] = sweep_data[2];
-        measured[1][p_sweep][1] = sweep_data[3];
-      }
-    }
-
-#ifdef __VNA_Z_RENORMALIZATION__
-    if (mask & SWEEP_USE_RENORMALIZATION) {
-      // Use the sweep_data buffer for renormalization
-      // Note: This may need to process both channels differently
-      // For now, pass the first two elements for ch0 and next two for ch1
-      apply_renormalization(sweep_data, mask);
-    }
-#endif
-
-    if (show_progress && sweep_points > 1U) {
-      uint16_t current_bar = (uint16_t)(((uint32_t)p_sweep * WIDTH) / (sweep_points - 1U));
-      sweep_progress_update(current_bar);
-    }
-    
-    // Kick watchdog during long sweeps to prevent reset
-    #ifndef NANOVNA_HOST_TEST
-    wdgReset(&WDGD1);
-    #endif
-    
-    processed++;
+  while (ctx.state != RF_STATE_IDLE && ctx.state != RF_STATE_FAULT) {
+     switch (ctx.state) {
+        case RF_STATE_SETUP_FREQ:
+           if (ctx.processed >= ctx.batch_budget || 
+              (break_on_operation && sweep_ui_input_pending()) ||
+              sweep_timeslice_expired(ctx.slice_start)) {
+               ctx.state = RF_STATE_IDLE; 
+               goto exit_loop;
+           }
+           if (p_sweep >= sweep_points) {
+               ctx.state = RF_STATE_IDLE;
+               goto exit_loop;
+           }
+           fsm_setup_freq(&ctx);
+           break;
+           
+        case RF_STATE_SETUP_MEASURE:
+           fsm_setup_measure(&ctx);
+           break;
+           
+        case RF_STATE_WAIT_CAPTURE:
+           if (!sweep_service_wait_for_capture()) {
+               ctx.state = RF_STATE_FAULT;
+           } else {
+               ctx.state = RF_STATE_PROCESS;
+           }
+           break;
+           
+        case RF_STATE_PROCESS:
+           fsm_process(&ctx);
+           break;
+           
+        case RF_STATE_NEXT_STEP:
+            if (config._bandwidth >= BANDWIDTH_100 && sweep_points > 1U) {
+                 uint16_t current_bar = (uint16_t)(((uint32_t)p_sweep * WIDTH) / (sweep_points - 1U));
+                sweep_progress_update(current_bar);
+            }
+            #ifndef NANOVNA_HOST_TEST
+            wdgReset(&WDGD1);
+            #endif
+            
+            p_sweep++;
+            ctx.processed++;
+            ctx.state = RF_STATE_SETUP_FREQ;
+            break;
+            
+        case RF_STATE_FAULT:
+            // handle fault
+            break;
+        default:
+            ctx.state = RF_STATE_FAULT;
+            break;
+     }
   }
-  completed = (p_sweep == sweep_points);
+
+exit_loop:
+  if (ctx.state == RF_STATE_FAULT) {
+      goto exit_failure;
+  }
+  
+  bool completed = (p_sweep >= sweep_points);
   if (completed) {
-    sweep_progress_end();
-    sweep_led_end();
+      sweep_progress_end();
+      sweep_led_end();
   }
   sweep_in_progress = false;
   return completed;
 
-capture_failure:
+exit_failure:
   sweep_reset_progress();
   sweep_progress_end();
   sweep_led_end();
