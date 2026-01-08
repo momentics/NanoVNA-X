@@ -40,8 +40,8 @@ similar.
 
 - **Layered runtime instead of a monolithic `main.c`.** The sweep thread, CLI, and services are wired together in `src/runtime/` via explicit ports, so control flow is inspectable and unit-testable rather than hidden inside `app_main`.
 - **Zero-copy sweep pipeline.** RF orchestration now revolves around `sweep_service_snapshot_t` snapshots and a `measurement_engine` coordinator, letting the UI, USB CLI, and SD-card jobs consume captured buffers without re-triggering hardware sweeps.
-- **Infrastructure services in `infra/`.** The event bus, cooperative scheduler, configuration/calibration persistence, and autosave-aware state manager replace the hard-coded globals used in v0.9.1, making background work predictable and recoverable.
-- **Clean interfaces.** CLI, USB transport, UI hooks, and DSP helpers sit behind `include/interfaces/*` contracts, removing the legacy `#include "*.c"` patterns and making it obvious where transport-agnostic logic lives.
+- **Infrastructure services in `sys/`.** The event bus, cooperative scheduler, configuration/calibration persistence, and autosave-aware state manager replace the hard-coded globals used in v0.9.1, making background work predictable and recoverable.
+- **Clean interfaces.** CLI, USB transport, UI hooks, and DSP helpers sit behind interface contracts in the relevant modules, removing the legacy `#include "*.c"` patterns and making it obvious where transport-agnostic logic lives.
 - **UI/input rework.** presenters, controllers, input adapters, fonts, and icons live under `src/ui/`, enabling SD-card browsing, remote desktop, and better on-device messaging without touching hardware drivers.
 - **Tooling/documentation refresh.** the single `VERSION` file feeds builds and release automation, the Makefile tracks the new folder layout, and both English/Russian docs explain the divergence so downstream forks know what changed relative to DiSlord’s tree.
 - **Predictable, event-driven architecture.** The sweep engine, UI, USB CDC shell, and measurement DSP cooperate through the ChibiOS event bus and watchdog-guarded timeouts. A hung codec, synthesiser, or PC host can no longer freeze the instrument mid-calibration.
@@ -126,23 +126,23 @@ STM32F303 families.
   entry point initialises ChibiOS/RT, configures the USB console and synthesiser drivers,
   brings up the measurement pipeline, and spins a dedicated sweep thread that coordinates
   measurements, UI updates and shell commands.
-- **Platform abstraction.** `src/platform/platform_hal.c` invokes the registered board driver
+- **Platform abstraction.** `src/driver/platform_hal.c` invokes the registered board driver
   table from `src/driver/` so each supported target can publish a `PlatformDrivers`
   structure with its initialisation hooks and peripheral descriptors. This keeps the core
   application agnostic of whether it is running on the NanoVNA-H (STM32F072) or NanoVNA-H4
   (STM32F303) hardware variants.
-- **Services layer.** Shared infrastructure lives in `src/infra/`. The event bus provides
+- **Services layer.** Shared infrastructure lives in `src/sys/`. The event bus provides
   a publish/subscribe mechanism with a fixed topic list and optional mailbox-backed delivery
   so code running in interrupt context can queue work for later dispatch. The scheduler helper
   wraps ChibiOS thread creation and termination, while the configuration service persists user
   settings and calibration slots in MCU flash with checksum protection.
-- **Measurement pipeline and DSP.** `src/rf/pipeline/measurement_pipeline.c` provides a slim façade that
+- **Measurement pipeline and DSP.** `src/rf/pipeline.c` provides a slim façade that
   bridges platform drivers and the measurement routines inside `src/rf/sweep/`. It forwards
   sweep execution to the application layer and reports the current channel mask. Numerical
   helpers and calibration maths reside in `src/processing/`, keeping compute-heavy code isolated from
   hardware access.
 - **Drivers and middleware.** Low-level device interactions are implemented in `src/driver/`
-  for the LCD, Si5351 synthesiser, TLV320 codec and USB front-end, while `src/middleware/`
+  for the LCD, Si5351 synthesiser, TLV320 codec and USB front-end, while `src/sys/`
   houses small integration shims such as the `chprintf` binding for ChibiOS streams. ChibiOS
   itself is vendored under `third_party/` and configured through the headers in `config/`
   and top-level `chconf.h`/`halconf.h`.
@@ -195,10 +195,10 @@ The source tree has been reorganised so it is no longer a line-for-line fork of 
 | `include/runtime`, `src/runtime` | Application entry points, feature flags, CLI plumbing, and sweep orchestration. |
 | `include/rf`, `src/rf` | Sweep orchestration, measurement pipeline, and RF analytics. |
 | `include/processing`, `src/processing` | DSP kernels and math helpers shared by the measurement and UI layers. |
-| `include/infra`, `src/infra` | Cross-cutting services (event bus, scheduler, configuration, persistent state). |
-| `include/interfaces`, `src/interfaces` | Clean ports for the CLI, USB transport, UI hooks, and processing adapters. |
+| `include/sys`, `src/sys` | Cross-cutting services (event bus, scheduler, configuration, persistent state). |
+| `include/driver`, `src/driver` | Driver implementations for hardware components (LCD, Si5351, TLV320, USB). |
 | `include/ui`, `src/ui` | Rendering, controllers, input adapters, and UI resources (fonts/icons). |
-| `src/platform`, `boards/STM32F072/STM32F303` | Low-level board support code shared with ChibiOS. |
+| `src/driver`, `boards/STM32F072/STM32F303` | Low-level board support code shared with ChibiOS. |
 
 This separation lets you trace dependencies easily (e.g. `ui/` depends on `sys/state_manager.h` but not vice versa) and removes duplicated helper tables from multiple files. When porting patches from older firmware trees, map the functionality onto the closest module instead of copying entire source files.
 
