@@ -48,7 +48,7 @@
 // Add RTC backup registers support
 #define __USE_BACKUP__
 // Add SD card support, requires RTC for timestamps
-// #define __USE_SD_CARD__
+#define __USE_SD_CARD__
 // Use unique serial string for USB
 #define __USB_UID__
 // If enabled serial in halconf.h, possible enable serial console control
@@ -125,8 +125,8 @@
 //#define AUDIO_ADC_FREQ_K        48
 
 // Define sample count for one step measure
-#define AUDIO_SAMPLES_COUNT   (48)
-//#define AUDIO_SAMPLES_COUNT   (96)
+// #define AUDIO_SAMPLES_COUNT   (48)
+#define AUDIO_SAMPLES_COUNT   (96)
 //#define AUDIO_SAMPLES_COUNT   (192)
 
 // Frequency offset, depend from AUDIO_ADC_FREQ settings (need aligned table)
