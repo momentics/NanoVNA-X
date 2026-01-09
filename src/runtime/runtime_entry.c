@@ -293,6 +293,9 @@ static THD_FUNCTION(Thread1, arg) {
 
 void pause_sweep(void) {
   sweep_mode &= ~SWEEP_ENABLE;
+  // Cancel any ongoing sweep operation immediately to avoid blocking USB commands
+  // This is critical for performance on devices with high sweep point counts (e.g. F303)
+  sweep_service_cancel_scan();
   sweep_wait_for_idle();
 }
 
