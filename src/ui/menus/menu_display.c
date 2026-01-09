@@ -322,10 +322,7 @@ const menuitem_t menu_scale[] = {
     {MT_ADV_CALLBACK, KM_REFPOS, "REFERENCE\nPOSITION", menu_scale_keyboard_acb},
     {MT_ADV_CALLBACK, KM_EDELAY, "E-DELAY", menu_keyboard_acb},
     {MT_ADV_CALLBACK, KM_S21OFFSET, "S21 OFFSET\n " R_LINK_COLOR "%b.3F" S_dB, menu_keyboard_acb},
-#ifdef __USE_GRID_VALUES__
-    {MT_ADV_CALLBACK, VNA_MODE_SHOW_GRID, "SHOW GRID\nVALUES", menu_vna_mode_acb},
-    {MT_ADV_CALLBACK, VNA_MODE_DOT_GRID, "DOT GRID", menu_vna_mode_acb},
-#endif
+
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 
@@ -336,6 +333,10 @@ static const menuitem_t menu_trace[] = {
     {MT_ADV_CALLBACK, 2, "TRACE 2", menu_trace_acb},
     {MT_ADV_CALLBACK, 3, "TRACE 3", menu_trace_acb},
     {MT_ADV_CALLBACK, 0, "%s TRACE", menu_stored_trace_acb},
+#ifdef __USE_GRID_VALUES__
+    {MT_ADV_CALLBACK, VNA_MODE_SHOW_GRID, "SHOW GRID\nVALUES", menu_vna_mode_acb},
+    {MT_ADV_CALLBACK, VNA_MODE_DOT_GRID, "DOT GRID", menu_vna_mode_acb},
+#endif
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 #elif STORED_TRACES > 1
@@ -349,6 +350,10 @@ const menuitem_t menu_trace[] = {
 #if STORED_TRACES > 2
     {MT_ADV_CALLBACK, 2, "%s TRACE C", menu_stored_trace_acb},
 #endif
+#ifdef __USE_GRID_VALUES__
+    {MT_ADV_CALLBACK, VNA_MODE_SHOW_GRID, "SHOW GRID\nVALUES", menu_vna_mode_acb},
+    {MT_ADV_CALLBACK, VNA_MODE_DOT_GRID, "DOT GRID", menu_vna_mode_acb},
+#endif
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 #else
@@ -357,6 +362,10 @@ const menuitem_t menu_trace[] = {
     {MT_ADV_CALLBACK, 1, "TRACE 1", menu_trace_acb},
     {MT_ADV_CALLBACK, 2, "TRACE 2", menu_trace_acb},
     {MT_ADV_CALLBACK, 3, "TRACE 3", menu_trace_acb},
+#ifdef __USE_GRID_VALUES__
+    {MT_ADV_CALLBACK, VNA_MODE_SHOW_GRID, "SHOW GRID\nVALUES", menu_vna_mode_acb},
+    {MT_ADV_CALLBACK, VNA_MODE_DOT_GRID, "DOT GRID", menu_vna_mode_acb},
+#endif
     {MT_NEXT, 0, NULL, menu_back} // next-> menu_back
 };
 #endif

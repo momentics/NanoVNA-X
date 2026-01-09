@@ -138,7 +138,7 @@ void send_region(remote_region_t *rd, uint8_t * buf, uint16_t size);
 #define DELAY_BAND_3_4           US2ST( 120)   // Delay for bands 3-4
 #define DELAY_BANDCHANGE         US2ST(2000)   // Band changes need set additional delay after reset PLL
 #define DELAY_CHANNEL_CHANGE     US2ST( 100)   // Switch channel delay
-#define DELAY_SWEEP_START        US2ST( 100)   // Delay at sweep start
+#define DELAY_SWEEP_START        US2ST( 10)   // Delay at sweep start
 // Delay after set new PLL values in ms, and send reset
 #define DELAY_RESET_PLL_BEFORE            0    //    0 (0 for disabled)
 #define DELAY_RESET_PLL_AFTER          4000    // 4000 (0 for disabled)
@@ -148,7 +148,7 @@ void send_region(remote_region_t *rd, uint8_t * buf, uint16_t size);
 #define DELAY_BAND_3_4           US2ST( 140)   // 1 Delay for bands 3-4
 #define DELAY_BANDCHANGE         US2ST(5000)   // 2 Band changes need set additional delay after reset PLL
 #define DELAY_CHANNEL_CHANGE     US2ST( 100)   // 3 Switch channel delay
-#define DELAY_SWEEP_START        US2ST( 100)   // 4 Delay at sweep start
+#define DELAY_SWEEP_START        US2ST( 10)   // 4 Delay at sweep start
 // Delay after before/after set new PLL values in ms
 #define DELAY_RESET_PLL_BEFORE            0    // 5    0 (0 for disabled)
 #define DELAY_RESET_PLL_AFTER          4000    // 6 4000 (0 for disabled)

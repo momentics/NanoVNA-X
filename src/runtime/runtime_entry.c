@@ -313,7 +313,7 @@ config_t config = {
     ._IF_freq = FREQUENCY_OFFSET,
     ._touch_cal = DEFAULT_TOUCH_CONFIG,
     ._vna_mode =
-        (1 << VNA_MODE_BACKUP) | (1 << VNA_MODE_USB_UID), // Enable backup + unique USB serial by default
+        (1 << VNA_MODE_BACKUP) | (1 << VNA_MODE_USB_UID) | (1 << VNA_MODE_SHOW_GRID) | (1 << VNA_MODE_DOT_GRID), // Enable backup + unique USB serial + grid options by default
     ._brightness = DEFAULT_BRIGHTNESS,
     ._dac_value = 1922,
     ._vbat_offset = 420,
