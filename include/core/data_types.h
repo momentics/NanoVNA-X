@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __CORE_DATA_TYPES_H__
+#define __CORE_DATA_TYPES_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -292,3 +301,9 @@ typedef struct {
   int16_t w;
   int16_t h;
 } remote_region_t;
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __CORE_DATA_TYPES_H__

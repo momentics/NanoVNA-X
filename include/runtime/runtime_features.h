@@ -4,7 +4,7 @@
  * Each macro defaults to enabled but can be overridden at compile time
  * by defining the symbol before including this header (for example via
  * compiler command line options).
- * 
+ *
  * Copyright (c) 2024, @momentics <momentics@gmail.com>
  * All rights reserved.
  *
@@ -24,11 +24,11 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+#ifndef __RUNTIME_RUNTIME_FEATURES_H__
+#define __RUNTIME_RUNTIME_FEATURES_H__
 
-
-#ifndef ENABLED_DUMP_COMMAND
-#define ENABLED_DUMP_COMMAND 1
+#ifdef __cplusplus
+extern "C" {
 #endif
 
 #ifndef ENABLE_SCANBIN_COMMAND
@@ -119,3 +119,8 @@
 #define DEBUG_CONSOLE_SHOW 0
 #endif
 
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __RUNTIME_RUNTIME_FEATURES_H__

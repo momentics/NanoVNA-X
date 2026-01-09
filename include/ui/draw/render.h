@@ -18,8 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef UI_DISPLAY_RENDER_H
-#define UI_DISPLAY_RENDER_H
+
+
+
+
+#ifndef __UI_DRAW_RENDER_H__
+#define __UI_DRAW_RENDER_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "ui/draw/plot_internal.h"
 #include <stdarg.h>
@@ -39,4 +47,8 @@ int cell_printf_bound(int16_t x, int16_t y, const char* fmt, ...);
 
 void set_active_cell_ctx(RenderCellCtx* ctx);
 
-#endif // UI_DISPLAY_RENDER_H
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __UI_DRAW_RENDER_H__

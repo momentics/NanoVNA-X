@@ -20,7 +20,17 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __DRIVER_STM32_PERIPHERALS_H__
+#define __DRIVER_STM32_PERIPHERALS_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "halconf.h"
 /*
  * adc.c
@@ -383,3 +393,9 @@ inline uint32_t board_get_counter(TIM_TypeDef* timer) {
   return timer->CNT;
 }
 #endif
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __DRIVER_STM32_PERIPHERALS_H__

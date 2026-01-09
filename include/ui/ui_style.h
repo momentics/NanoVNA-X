@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __UI_UI_STYLE_H__
+#define __UI_UI_STYLE_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 #include "core/config_macros.h"
@@ -160,3 +169,9 @@ enum {
 }
 
 #define GET_PALTETTE_COLOR(idx)  config._lcd_palette[idx]
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __UI_UI_STYLE_H__

@@ -18,9 +18,24 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __DRIVER_BOARD_REGISTRY_H__
+#define __DRIVER_BOARD_REGISTRY_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "driver/platform_hal.h"
 
 void platform_board_pre_init(void);
 const PlatformDrivers* platform_board_drivers(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __DRIVER_BOARD_REGISTRY_H__

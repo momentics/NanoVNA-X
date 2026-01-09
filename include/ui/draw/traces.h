@@ -18,8 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef UI_DISPLAY_TRACES_H
-#define UI_DISPLAY_TRACES_H
+
+
+
+
+#ifndef __UI_DRAW_TRACES_H__
+#define __UI_DRAW_TRACES_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "ui/draw/plot_internal.h"
 
@@ -116,4 +124,8 @@ bool need_process_trace(uint16_t idx);
 void trace_into_index(int t);
 void render_traces_in_cell(RenderCellCtx* rcx);
 
-#endif // UI_DISPLAY_TRACES_H
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __UI_DRAW_TRACES_H__

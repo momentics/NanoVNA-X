@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __SYS_PROCESSING_PORT_H__
+#define __SYS_PROCESSING_PORT_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "nanovna.h"
 
@@ -38,3 +47,8 @@ struct processing_port {
 
 extern const processing_port_api_t processing_port_api;
 
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __SYS_PROCESSING_PORT_H__

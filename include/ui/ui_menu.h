@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __UI_UI_MENU_H__
+#define __UI_UI_MENU_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -99,3 +108,9 @@ menuitem_t* ui_menu_list(const menu_descriptor_t* descriptors, size_t count,
 
 void menu_set_next(menuitem_t* entry, const menuitem_t* next);
 void ui_cycle_option(uint16_t* dst, const option_desc_t* list, size_t count, button_t* b);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __UI_UI_MENU_H__

@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __SYS_EVENT_BUS_H__
+#define __SYS_EVENT_BUS_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "ch.h"
 #include "sys/scheduler.h"
@@ -77,3 +86,9 @@ bool event_bus_publish(event_bus_t* bus, event_bus_topic_t topic, const void* pa
 bool event_bus_publish_from_isr(event_bus_t* bus, event_bus_topic_t topic, const void* payload);
 
 bool event_bus_dispatch(event_bus_t* bus, systime_t timeout);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __SYS_EVENT_BUS_H__

@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __DRIVER_BOARD_EVENTS_H__
+#define __DRIVER_BOARD_EVENTS_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "ch.h"
 
@@ -66,3 +75,9 @@ bool board_events_publish_from_isr(board_events_t* events, const board_event_t* 
 
 bool board_events_dispatch(board_events_t* events);
 uint32_t board_events_pending_mask(board_events_t* events);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __DRIVER_BOARD_EVENTS_H__

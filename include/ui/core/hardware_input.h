@@ -20,7 +20,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __UI_CORE_HARDWARE_INPUT_H__
+#define __UI_CORE_HARDWARE_INPUT_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "ch.h"
 #include "hal.h"
@@ -47,3 +56,9 @@ uint16_t ui_input_get_buttons(void);
 uint16_t ui_input_check(void);
 uint16_t ui_input_wait_release(void);
 void ui_input_reset_state(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __UI_CORE_HARDWARE_INPUT_H__

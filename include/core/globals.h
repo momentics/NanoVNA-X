@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __CORE_GLOBALS_H__
+#define __CORE_GLOBALS_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "core/data_types.h"
 #include "ui/ui_style.h"
@@ -41,3 +50,9 @@ extern pixel_t background_color;
 extern alignas(8) pixel_t spi_buffer[SPI_BUFFER_SIZE];
 
 extern uint16_t lastsaveid;
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __CORE_GLOBALS_H__

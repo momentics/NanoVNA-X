@@ -20,7 +20,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __RF_SWEEP_H__
+#define __RF_SWEEP_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -40,9 +49,7 @@
 #define SWEEP_USE_INTERPOLATION (1U << 6)
 #define SWEEP_USE_RENORMALIZATION (1U << 7)
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+
 
 typedef struct {
   const float (*data)[2];
@@ -91,3 +98,5 @@ void i2s_lld_serve_rx_interrupt(uint32_t flags);
 #ifdef __cplusplus
 }
 #endif
+
+#endif // __RF_SWEEP_H__

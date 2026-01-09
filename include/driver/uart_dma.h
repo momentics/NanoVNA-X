@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __DRIVER_UART_DMA_H__
+#define __DRIVER_UART_DMA_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "nanovna.h"
 
@@ -42,3 +51,8 @@ msg_t uart_dma_get_timeout(uint8_t* value, systime_t timeout);
 
 #endif
 
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __DRIVER_UART_DMA_H__

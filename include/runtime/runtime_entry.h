@@ -18,6 +18,21 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __RUNTIME_RUNTIME_ENTRY_H__
+#define __RUNTIME_RUNTIME_ENTRY_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 int runtime_main(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __RUNTIME_RUNTIME_ENTRY_H__

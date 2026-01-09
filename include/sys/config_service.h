@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __SYS_CONFIG_SERVICE_H__
+#define __SYS_CONFIG_SERVICE_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 
@@ -39,3 +48,9 @@ void config_service_attach_event_bus(event_bus_t* bus);
 void config_service_notify_configuration_changed(void);
 void config_service_start_calibration(void);
 void config_service_end_calibration(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __SYS_CONFIG_SERVICE_H__

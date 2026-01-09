@@ -18,8 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef UI_DISPLAY_PLOT_INTERNAL_H
-#define UI_DISPLAY_PLOT_INTERNAL_H
+
+
+
+
+#ifndef __UI_DRAW_PLOT_INTERNAL_H__
+#define __UI_DRAW_PLOT_INTERNAL_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -194,4 +202,8 @@ static inline float get_s21_x(float re, float im, float z) {
 
 static inline float get_w(int i) { return 2 * VNA_PI * get_sweep_frequency(ST_START + i); }
 
-#endif // UI_DISPLAY_PLOT_INTERNAL_H
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __UI_DRAW_PLOT_INTERNAL_H__

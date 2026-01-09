@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __UI_CORE_UI_CORE_H__
+#define __UI_CORE_UI_CORE_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -139,3 +148,8 @@ void menu_vna_mode_acb(uint16_t data, button_t* b);
 bool select_lever_mode(int mode);
 void apply_vna_mode(uint16_t idx, vna_mode_ops operation);
 
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __UI_CORE_UI_CORE_H__

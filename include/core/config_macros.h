@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __CORE_CONFIG_MACROS_H__
+#define __CORE_CONFIG_MACROS_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // Define LCD display driver and size
 #if defined(NANOVNA_F303)
@@ -235,3 +244,9 @@
 #define FREQUENCY_IF_K          6
 //#define FREQUENCY_IF_K          7
 #endif
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __CORE_CONFIG_MACROS_H__

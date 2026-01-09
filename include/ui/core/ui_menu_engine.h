@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __UI_CORE_UI_MENU_ENGINE_H__
+#define __UI_CORE_UI_MENU_ENGINE_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "ui/ui_menu.h"
 
@@ -52,3 +61,9 @@ menuitem_t* menu_dynamic_acquire(void);
 // Exposed globals (from engine)
 extern int8_t selection;
 extern uint8_t menu_current_level;
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __UI_CORE_UI_MENU_ENGINE_H__

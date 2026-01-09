@@ -1,5 +1,10 @@
-#ifndef _DRIVER_PLATFORM_HAL_H_
-#define _DRIVER_PLATFORM_HAL_H_
+
+#ifndef __DRIVER_PLATFORM_HAL_H__
+#define __DRIVER_PLATFORM_HAL_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -42,9 +47,7 @@ typedef struct {
     const storage_driver_t* storage;
 } PlatformDrivers;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+
 
 void platform_init(void);
 const PlatformDrivers* platform_get_drivers(void);
@@ -57,4 +60,4 @@ const PlatformDrivers* platform_board_drivers(void);
 }
 #endif
 
-#endif
+#endif // __DRIVER_PLATFORM_HAL_H__

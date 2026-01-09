@@ -18,11 +18,23 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef __INTERFACES_CLI_SHELL_COMMANDS_H__
-#define __INTERFACES_CLI_SHELL_COMMANDS_H__
+
+
+
+
+#ifndef __SYS_SHELL_COMMANDS_H__
+#define __SYS_SHELL_COMMANDS_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "sys/shell_service.h"
 
 extern const vna_shell_command commands[];
 
-#endif // __INTERFACES_CLI_SHELL_COMMANDS_H__
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __SYS_SHELL_COMMANDS_H__

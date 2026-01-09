@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __UI_CORE_UI_KEYPAD_H__
+#define __UI_CORE_UI_KEYPAD_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "ui/core/ui_core.h"
 
@@ -119,3 +128,9 @@ void ui_keypad_touch(int touch_x, int touch_y);
 void ui_keyboard_cb(uint16_t data, button_t* b);
 
 extern uint8_t keypad_mode;
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __UI_CORE_UI_KEYPAD_H__

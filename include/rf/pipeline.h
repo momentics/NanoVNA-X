@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __RF_PIPELINE_H__
+#define __RF_PIPELINE_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -35,3 +44,9 @@ uint16_t measurement_pipeline_active_mask(measurement_pipeline_t* pipeline);
 
 bool measurement_pipeline_execute(measurement_pipeline_t* pipeline, bool break_on_operation,
                                   uint16_t channel_mask);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __RF_PIPELINE_H__

@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __PROCESSING_DSP_CONFIG_H__
+#define __PROCESSING_DSP_CONFIG_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 #include <stddef.h>
@@ -79,3 +88,9 @@
 #endif
 
 typedef int16_t audio_sample_t;
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __PROCESSING_DSP_CONFIG_H__

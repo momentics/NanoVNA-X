@@ -18,8 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef __MEASUREMENT_ANALYSIS_H__
-#define __MEASUREMENT_ANALYSIS_H__
+
+
+
+
+#ifndef __RF_ANALYSIS_H__
+#define __RF_ANALYSIS_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -158,4 +166,8 @@ extern alignas(8) measurement_cache_t measure_cache;
 
 // Global Helpers (Wrappers for global vars if needed, but we assume direct access for now to match legacy)
 
-#endif // __MEASUREMENT_ANALYSIS_H__
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __RF_ANALYSIS_H__

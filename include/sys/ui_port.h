@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __SYS_UI_PORT_H__
+#define __SYS_UI_PORT_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 
@@ -43,3 +52,8 @@ struct ui_module_port {
 
 extern const ui_module_port_api_t ui_port_api;
 
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __SYS_UI_PORT_H__

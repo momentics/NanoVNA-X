@@ -19,7 +19,17 @@
  * the Free Software Foundation, Inc., 51 Franklin Street,
  * Boston, MA 02110-1301, USA.
  */
-#pragma once
+
+
+
+
+#ifndef __NANOVNA_H__
+#define __NANOVNA_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "ch.h"
 #include "sys/event_bus.h"
 #include <stdalign.h>
@@ -825,3 +835,9 @@ int plot_printf(char *str, int, const char *fmt, ...);
 #define define_to_STR(x)  STR1(x)
 #define SWAP(type, x, y) {type t = x; x=y; y=t;}
 /*EOF*/
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __NANOVNA_H__

@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __CORE_CONTEXT_H__
+#define __CORE_CONTEXT_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "core/data_types.h"
 
@@ -53,3 +62,9 @@ extern config_t config;
 #define props_mode          current_props._mode
 #define domain_window      (props_mode&TD_WINDOW)
 #define domain_func        (props_mode&TD_FUNC)
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __CORE_CONTEXT_H__

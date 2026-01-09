@@ -18,8 +18,23 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __UI_MENUS_MENU_MARKER_H__
+#define __UI_MENUS_MENU_MARKER_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "ui/ui_menu.h"
 
 extern const menuitem_t menu_marker[];
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __UI_MENUS_MENU_MARKER_H__

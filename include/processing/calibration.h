@@ -18,12 +18,24 @@
  * Boston, MA 02110-1301, USA.
  */
 
+
+
+
+
 #ifndef __PROCESSING_CALIBRATION_H__
 #define __PROCESSING_CALIBRATION_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 
 void cal_collect(uint16_t type);
 void cal_done(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // __PROCESSING_CALIBRATION_H__

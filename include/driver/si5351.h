@@ -20,6 +20,17 @@
  * Boston, MA 02110-1301, USA.
  */
 
+
+
+
+
+#ifndef __DRIVER_SI5351_H__
+#define __DRIVER_SI5351_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define SI5351_REG_3_OUTPUT_ENABLE_CONTROL 3
 #define SI5351_CLK0_EN (1 << 0)
 #define SI5351_CLK1_EN (1 << 1)
@@ -93,3 +104,9 @@ void si5351_set_tcxo(uint32_t xtal);
 // Get info functions
 uint32_t si5351_get_frequency(void);
 uint32_t si5351_get_harmonic_lvl(uint32_t f);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __DRIVER_SI5351_H__

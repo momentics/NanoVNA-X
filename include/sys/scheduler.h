@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __SYS_SCHEDULER_H__
+#define __SYS_SCHEDULER_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "ch.h"
 
@@ -35,3 +44,9 @@ scheduler_task_t scheduler_start(const char* name, tprio_t priority, void* worki
                                  void* user_data);
 
 void scheduler_stop(scheduler_task_t* task);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __SYS_SCHEDULER_H__

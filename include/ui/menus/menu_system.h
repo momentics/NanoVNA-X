@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __UI_MENUS_MENU_SYSTEM_H__
+#define __UI_MENUS_MENU_SYSTEM_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "ui/ui_menu.h"
 
@@ -34,3 +43,9 @@ void input_harmonic(uint16_t data, button_t* b);
 void input_vbat(uint16_t data, button_t* b);
 void input_date_time(uint16_t data, button_t* b);
 void input_rtc_cal(uint16_t data, button_t* b);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __UI_MENUS_MENU_SYSTEM_H__

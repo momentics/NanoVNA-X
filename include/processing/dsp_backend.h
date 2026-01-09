@@ -19,6 +19,17 @@
  * Boston, MA 02110-1301, USA.
  */
 
+
+
+
+
+#ifndef __PROCESSING_DSP_BACKEND_H__
+#define __PROCESSING_DSP_BACKEND_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Cortex M4 DSP instructions assembly
 
 // __smlabb inserts a SMLABB instruction. __smlabb returns the equivalent of
@@ -140,3 +151,9 @@ __attribute__((always_inline)) __STATIC_INLINE int64_t __smlaltt(int64_t acc, in
           :);
   return r.i_rep;
 }
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __PROCESSING_DSP_BACKEND_H__

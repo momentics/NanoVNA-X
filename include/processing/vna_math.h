@@ -18,8 +18,17 @@
  * the Free Software Foundation, Inc., 51 Franklin Street,
  * Boston, MA 02110-1301, USA.
  */
-#ifndef __VNA_MATH_H
-#define __VNA_MATH_H
+
+
+
+
+#ifndef __PROCESSING_VNA_MATH_H__
+#define __PROCESSING_VNA_MATH_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Use math.h functions if need
 #include <math.h>
 
@@ -99,4 +108,8 @@ float vna_cbrtf(float x);
 // Return sin/cos value, angle have range 0.0 to 1.0 (0 is 0 degree, 1 is 360 degree)
 void vna_sincosf(float angle, float* pSinVal, float* pCosVal);
 
+#ifdef __cplusplus
+}
 #endif
+
+#endif // __PROCESSING_VNA_MATH_H__

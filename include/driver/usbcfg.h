@@ -14,6 +14,17 @@
     limitations under the License.
 */
 
+
+
+
+
+#ifndef __DRIVER_USBCFG_H__
+#define __DRIVER_USBCFG_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef _USBCFG_H_
 #define _USBCFG_H_
 
@@ -24,3 +35,9 @@ extern SerialUSBDriver SDU1;
 #endif /* _USBCFG_H_ */
 
 /** @} */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __DRIVER_USBCFG_H__

@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __UI_MENUS_MENU_STIMULUS_H__
+#define __UI_MENUS_MENU_STIMULUS_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "ui/ui_menu.h"
 
@@ -27,3 +36,9 @@ void input_var_delay(uint16_t data, button_t* b);
 void input_points(uint16_t data, button_t* b);
 
 extern const menuitem_t menu_stimulus[];
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __UI_MENUS_MENU_STIMULUS_H__

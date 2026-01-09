@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __SYS_USB_COMMAND_SERVER_PORT_H__
+#define __SYS_USB_COMMAND_SERVER_PORT_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "sys/shell_service.h"
 #include "sys/event_bus.h"
@@ -52,3 +61,8 @@ struct usb_command_server_port {
 
 extern const usb_command_server_port_api_t usb_command_server_port_api;
 
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __SYS_USB_COMMAND_SERVER_PORT_H__

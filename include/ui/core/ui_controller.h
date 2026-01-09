@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __UI_CORE_UI_CONTROLLER_H__
+#define __UI_CORE_UI_CONTROLLER_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 
@@ -43,3 +52,9 @@ void ui_controller_configure(const ui_controller_port_t* port);
 uint8_t ui_controller_pending_requests(void);
 void ui_controller_release_requests(uint8_t mask);
 void ui_controller_request_console_break(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __UI_CORE_UI_CONTROLLER_H__

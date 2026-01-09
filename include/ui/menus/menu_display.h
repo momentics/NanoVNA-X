@@ -18,8 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef __UI_MENU_DISPLAY_H__
-#define __UI_MENU_DISPLAY_H__
+
+
+
+
+#ifndef __UI_MENUS_MENU_DISPLAY_H__
+#define __UI_MENUS_MENU_DISPLAY_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "ui/ui_menu.h"
 
@@ -36,4 +44,8 @@ void input_measure_r(uint16_t data, button_t* b);
 void input_portz(uint16_t data, button_t* b);
  // Exposed for menu_main.c
 
-#endif // __UI_MENU_DISPLAY_H__
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __UI_MENUS_MENU_DISPLAY_H__

@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __SYS_SHELL_SERVICE_H__
+#define __SYS_SHELL_SERVICE_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -26,9 +35,7 @@
 
 #include "sys/event_bus.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+
 
 #define VNA_SHELL_NEWLINE_STR "\r\n"
 #define VNA_SHELL_PROMPT_STR "ch> "
@@ -88,3 +95,5 @@ void vna_shell_execute_cmd_line(char* line);
 #ifdef __cplusplus
 }
 #endif
+
+#endif // __SYS_SHELL_SERVICE_H__

@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __UI_DRAW_DISPLAY_PRESENTER_H__
+#define __UI_DRAW_DISPLAY_PRESENTER_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdarg.h>
 #include <stdbool.h>
@@ -70,3 +79,9 @@ void display_presenter_blit_bitmap(uint16_t x, uint16_t y, uint16_t width, uint1
                                    const uint8_t* bitmap);
 
 extern const display_presenter_api_t display_presenter_lcd_api;
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __UI_DRAW_DISPLAY_PRESENTER_H__

@@ -18,8 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef UI_DISPLAY_GRID_H
-#define UI_DISPLAY_GRID_H
+
+
+
+
+#ifndef __UI_DRAW_GRID_H__
+#define __UI_DRAW_GRID_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "ui/draw/plot_internal.h"
 
@@ -34,4 +42,8 @@ int rectangular_grid_y(uint32_t y);
 void render_rectangular_grid_layer(RenderCellCtx* rcx, pixel_t color);
 void render_round_grid_layer(RenderCellCtx* rcx, pixel_t color, uint32_t trace_mask, bool smith_impedance);
 
-#endif // UI_DISPLAY_GRID_H
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __UI_DRAW_GRID_H__

@@ -18,11 +18,23 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef __UI_MENU_MAIN_H__
-#define __UI_MENU_MAIN_H__
+
+
+
+
+#ifndef __UI_MENUS_MENU_MAIN_H__
+#define __UI_MENUS_MENU_MAIN_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "ui/ui_menu.h"
 
 extern const menuitem_t menu_top[];
 
-#endif // __UI_MENU_MAIN_H__
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __UI_MENUS_MENU_MAIN_H__

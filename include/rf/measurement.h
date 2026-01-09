@@ -18,7 +18,16 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+
+
+
+
+#ifndef __RF_MEASUREMENT_H__
+#define __RF_MEASUREMENT_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -26,9 +35,7 @@
 #include "rf/pipeline.h"
 #include "sys/event_bus.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+
 
 typedef struct measurement_engine measurement_engine_t;
 typedef struct measurement_engine_port measurement_engine_port_t;
@@ -64,3 +71,5 @@ void measurement_engine_tick(measurement_engine_t* engine);
 #ifdef __cplusplus
 }
 #endif
+
+#endif // __RF_MEASUREMENT_H__
