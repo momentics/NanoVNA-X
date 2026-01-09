@@ -77,7 +77,7 @@ static inline BaseAsynchronousChannel* shell_current_channel(void) {
 }
 
 #define SHELL_IO_TIMEOUT MS2ST(20)
-#define SHELL_IO_CHUNK_SIZE 64U
+
 /*
  * Deferred (mutex) commands like `scan` may take tens of seconds at low RBW / bandwidth
  * settings (and/or many points). If the wait times out, the shell thread prints a new
@@ -94,14 +94,8 @@ static bool shell_io_write(const uint8_t* data, size_t size) {
   size_t written = 0;
 
   while (written < size) {
-    size_t chunk = size - written;
-    if (chunk > SHELL_IO_CHUNK_SIZE) {
-      chunk = SHELL_IO_CHUNK_SIZE;
-    }
-
     // Use blocking write (100ms timeout) to allow efficient sleeping while waiting for buffer space.
-    // This prevents CPU starvation of the USB ISR on fast cores (F303) compared to spinning with Yield().
-    size_t sent = chnWriteTimeout(channel, data + written, chunk, MS2ST(100));
+    size_t sent = chnWriteTimeout(channel, data + written, size - written, MS2ST(100));
 
     if (sent > 0) {
       written += sent;

@@ -46,6 +46,8 @@ static void mark_line(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2) {
     cell_y1 = MAX_MARKMAP_Y - 1;
   if (cell_y2 >= MAX_MARKMAP_Y)
     cell_y2 = MAX_MARKMAP_Y - 1;
+  if (cell_x1 > cell_x2)
+    SWAP(uint16_t, cell_x1, cell_x2);
   map_t mask = markmap_mask(cell_x1, cell_x2);
   if (cell_y1 > cell_y2)
     SWAP(uint16_t, cell_y1, cell_y2);
