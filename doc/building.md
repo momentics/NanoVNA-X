@@ -3,9 +3,10 @@
 [Русская версия](building_ru.md)
 
 This guide documents a reproducible path to build the NanoVNA-X firmware from
-source. The steps below have been verified on macOS, Ubuntu/Debian and inside
-a GitHub Actions runner. Other Unix-like environments should work as long as
-the same ARM GCC cross-compiler is available.
+source. CI and release builds use the official Linux x86_64 Arm GNU
+14.2.Rel1 package (GCC 14.2.1), including its runtime libraries. Use the same
+package in Linux/WSL when comparing firmware sizes; distribution packages can
+produce different images even when their GCC versions match.
 
 ## 1. Install prerequisites
 
@@ -16,7 +17,7 @@ NanoVNA-X targets ARM Cortex-M microcontrollers and therefore requires the
 
 ```bash
 sudo apt update
-sudo apt install gcc-arm-none-eabi libnewlib-arm-none-eabi dfu-util
+sudo apt install build-essential python3 curl ca-certificates xz-utils dfu-util
 ```
 
 ### macOS (Homebrew)
@@ -31,12 +32,6 @@ Use [WSL2](https://learn.microsoft.com/windows/wsl/install) with an Ubuntu
 distribution and follow the Linux instructions above. Native Windows builds are
 possible with the ARM GNU toolchain archive from Arm, but the project is tested
 on Unix environments.
-
-Verify that the compiler is available:
-
-```bash
-arm-none-eabi-gcc --version
-```
 
 ## 2. Fetch the source code
 
@@ -77,12 +72,30 @@ If you omit `TARGET`, the build defaults to `F072`.
 
 ## 4. Build the firmware
 
-Use the standard GNU Make workflow:
+On Linux x86_64 (including x86_64 WSL), install the pinned compiler after
+cloning, then use GNU Make:
+
+```bash
+bash tools/install-arm-toolchain.sh "$PWD/../arm-gnu-14.2.rel1"
+export PATH="$PWD/../arm-gnu-14.2.rel1/bin:$PATH"
+```
+
+The installer verifies Arm's SHA-256 checksum before extracting the package and
+checks the compiler version. The release, version and checksum are locked in
+`tools/arm-toolchain.env`. Both workflows include that file's hash in all build
+and compiler cache keys, preventing reuse across toolchain packages. When
+changing the pin, validate both F072 and F303 with clean builds and `make test`.
+
+The installer supports Linux x86_64 only. On macOS use the Homebrew compiler
+above instead; its output can differ in size from the pinned Linux builds.
+
+Build either board:
 
 ```bash
 export TARGET=F072   # or F303
-make clean           # optional, but recommended between target switches
+make clean           # required between target/compiler switches
 make -j$(nproc)
+make test
 ```
 
 On macOS use `make -j$(sysctl -n hw.ncpu)` for the parallel build step.

@@ -18,7 +18,7 @@ jobs:
     env:
       TARGET: ${{ matrix.target }}
       OSNAME: ubuntu-24.04
-      APTPACKAGES: gcc-arm-none-eabi libnewlib-arm-none-eabi dfu-util ccache python3
+      APTPACKAGES: build-essential dfu-util ccache python3 curl ca-certificates xz-utils
       CCACHEDIR: .ccache
       CCACHEMAXSIZE: 500M
       APT_USER_CACHE: ${{ github.workspace }}/.apt
@@ -57,7 +57,7 @@ jobs:
             sudo rsync -a --exclude 'lock' --exclude 'partial' "$APT_USER_ARCHIVES/" /var/cache/apt/archives/
           fi
 
-      - name: Install toolchain and utils
+      - name: Install build prerequisites
         shell: bash
         run: |
           set -euo pipefail
@@ -68,7 +68,6 @@ jobs:
                        -o Dir::Cache::archives="$APT_USER_ARCHIVES" \
                        -o Dir::State::lists="$APT_USER_LISTS" \
                        install $APTPACKAGES
-          arm-none-eabi-gcc --version || true
           ccache --version || true
 
       - name: Persist APT user cache back
@@ -96,12 +95,18 @@ jobs:
           mkdir -p "$CCACHEDIR"
           mkdir -p build
 
+      - name: Install pinned Arm GNU toolchain
+        shell: bash
+        run: |
+          bash tools/install-arm-toolchain.sh "$RUNNER_TEMP/arm-gnu"
+          echo "$RUNNER_TEMP/arm-gnu/bin" >> "$GITHUB_PATH"
+
       - name: Detect ARM GCC version
         id: gccver
         shell: bash
         run: |
           set -euo pipefail
-          ver="$(arm-none-eabi-gcc -dumpversion || echo unknown)"
+          ver="$(arm-none-eabi-gcc -dumpfullversion)"
           echo "ver=$ver" >> "$GITHUB_OUTPUT"
           echo "ARM_GCC_VER=$ver" >> "$GITHUB_ENV"
 
@@ -111,9 +116,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.CCACHEDIR }}
-          key: ccache-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}
+          key: ccache-${{ hashFiles('tools/arm-toolchain.env') }}-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}
           restore-keys: |
-            ccache-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-
+            ccache-${{ hashFiles('tools/arm-toolchain.env') }}-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-
 
       - name: Configure ccache
         shell: bash
@@ -148,9 +153,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: build
-          key: build-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}
+          key: build-${{ hashFiles('tools/arm-toolchain.env') }}-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}
           restore-keys: |
-            build-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-
+            build-${{ hashFiles('tools/arm-toolchain.env') }}-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-
 
       - name: Run host unit tests
         shell: bash
@@ -225,7 +230,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: build
-          key: build-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: build-${{ hashFiles('tools/arm-toolchain.env') }}-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       # Сохранение ccache уникальным ключом этого запуска
       - name: Save ccache
@@ -233,4 +238,4 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ env.CCACHEDIR }}
-          key: ccache-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: ccache-${{ hashFiles('tools/arm-toolchain.env') }}-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
