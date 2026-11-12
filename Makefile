@@ -333,8 +333,7 @@ ifeq ($(TARGET),F072)
           -DENABLE_GAIN_COMMAND=0 \
           -DENABLE_PORT_COMMAND=0 \
           -DENABLE_STAT_COMMAND=0 \
-          -DENABLE_THREADS_COMMAND=0 \
-          -DENABLED_DUMP_COMMAND=0
+          -DENABLE_THREADS_COMMAND=0
 endif
 ifneq ($(TARGET),F072)
 #Enable if use RTC and need auto select source LSE or LSI

@@ -345,9 +345,11 @@ const audio_sample_t* sweep_service_rx_buffer(void) {
 #if ENABLED_DUMP_COMMAND
 void sweep_service_prepare_dump(audio_sample_t* buffer, size_t count, int selection) {
   chDbgAssert(((uintptr_t)buffer & 0x3U) == 0U, "audio sample buffer must be 4-byte aligned");
+  osalSysLock();
   dump_buffer = buffer;
   dump_len = (int16_t)count;
   dump_selection = (int16_t)selection;
+  osalSysUnlock();
 }
 
 bool sweep_service_dump_ready(void) {

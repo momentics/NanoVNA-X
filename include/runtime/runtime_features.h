@@ -83,6 +83,10 @@ extern "C" {
 #define ENABLE_TEST_COMMAND 0
 #endif
 
+#ifndef ENABLED_DUMP_COMMAND
+#define ENABLED_DUMP_COMMAND 1
+#endif
+
 #ifndef ENABLE_STAT_COMMAND
 #define ENABLE_STAT_COMMAND 0
 #endif

@@ -147,6 +147,12 @@ immediately; flashing via `make flash` or `dfu-util` works with either the raw
 
 ## 5. Memory budgets
 
+The `dump [selection]` command is enabled by default on both targets. It exports
+raw audio ADC samples using the existing display scratch buffer, without an
+additional sample array. DMA capture waits have a two-second timeout. Disabling
+it explicitly with `ENABLED_DUMP_COMMAND=0` in the compiler definitions remains
+available for custom builds; the standard F072 image relies on default LTO to fit.
+
 The linker enforces the firmware flash budget before the reserved calibration
 area and checks that statically allocated memory fits the target's regions:
 

@@ -783,20 +783,28 @@ VNA_SHELL_FUNCTION(cmd_transform) {}
 VNA_SHELL_FUNCTION(cmd_dump) {
 #if ENABLED_DUMP_COMMAND
   int i, j;
-  // Use global spi_buffer instead of stack allocation to prevent overflow
-  // F303 stack is only 512 bytes, and this buffer needs ~384 bytes
+  /* The deferred handler owns the display scratch buffer until it returns. */
   extern pixel_t spi_buffer[];
   audio_sample_t* dump = (audio_sample_t*)spi_buffer;
   int selection = 0;
   if (argc == 1) selection = (my_atoui(argv[0]) == 1) ? 0 : 1;
   const int dump_count = AUDIO_BUFFER_LEN * 2;
   sweep_service_prepare_dump(dump, dump_count, selection);
-  // tlv320aic3204_select(0);
-  sweep_service_start_capture(DELAY_SWEEP_START);
-  while (!sweep_service_dump_ready()) __WFI();
+  do {
+    /* Wide bandwidth settings may need multiple captures to fill the dump. */
+    sweep_service_start_capture(DELAY_SWEEP_START);
+    if (!sweep_service_wait_for_capture()) {
+      sweep_service_prepare_dump(NULL, 0, 0);
+      shell_printf("capture timeout" VNA_SHELL_NEWLINE_STR);
+      return;
+    }
+  } while (!sweep_service_dump_ready());
   for (i = 0, j = 0; i < dump_count; i++) {
-    shell_printf("%6d ", dump[i]);
-    if (++j == 12) { shell_printf(VNA_SHELL_NEWLINE_STR); j = 0; }
+    if (!shell_printf("%6d ", dump[i])) return;
+    if (++j == 12) {
+      if (!shell_printf(VNA_SHELL_NEWLINE_STR)) return;
+      j = 0;
+    }
   }
 #endif
 }
@@ -1135,22 +1143,22 @@ const vna_shell_command commands[] = {
     {"scan_bin", cmd_scan_bin, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
 #endif
     {"data", cmd_data, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
-    {"frequencies", cmd_frequencies, 0},
+    {"frequencies", cmd_frequencies, CMD_WAIT_MUTEX | CMD_RUN_IN_UI},
     {"freq", cmd_freq, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
     {"sweep", cmd_sweep, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
-    {"power", cmd_power, CMD_RUN_IN_LOAD},
+    {"power", cmd_power, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #ifdef USE_VARIABLE_OFFSET
     {"offset", cmd_offset, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
-    {"bandwidth", cmd_bandwidth, CMD_RUN_IN_LOAD},
+    {"bandwidth", cmd_bandwidth, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #ifdef __USE_RTC__
-    {"time", cmd_time, CMD_RUN_IN_UI},
+    {"time", cmd_time, CMD_WAIT_MUTEX | CMD_RUN_IN_UI},
 #endif
 #ifdef __VNA_ENABLE_DAC__
-    {"dac", cmd_dac, CMD_RUN_IN_LOAD},
+    {"dac", cmd_dac, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
-    {"saveconfig", cmd_saveconfig, CMD_RUN_IN_LOAD},
-    {"clearconfig", cmd_clearconfig, CMD_RUN_IN_LOAD},
+    {"saveconfig", cmd_saveconfig, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
+    {"clearconfig", cmd_clearconfig, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #if ENABLE_SD_CARD_COMMAND
     {"sd_list", cmd_sd_list, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
     {"sd_read", cmd_sd_read, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
@@ -1160,7 +1168,7 @@ const vna_shell_command commands[] = {
     {"dump", cmd_dump, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
 #endif
 #if ENABLE_PORT_COMMAND
-    {"port", cmd_port, CMD_RUN_IN_LOAD},
+    {"port", cmd_port, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
 #if ENABLE_STAT_COMMAND
     {"stat", cmd_stat, CMD_WAIT_MUTEX},
@@ -1169,25 +1177,25 @@ const vna_shell_command commands[] = {
     {"gain", cmd_gain, CMD_WAIT_MUTEX},
 #endif
 #if ENABLE_SAMPLE_COMMAND
-    {"sample", cmd_sample, 0},
+    {"sample", cmd_sample, CMD_WAIT_MUTEX | CMD_RUN_IN_UI},
 #endif
 #if ENABLE_TEST_COMMAND
     {"test", cmd_test, 0},
 #endif
     {"touchcal", cmd_touchcal, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
     {"touchtest", cmd_touchtest, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
-    {"pause", cmd_pause, CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD | CMD_NO_AUTO_RESUME},
+    {"pause", cmd_pause, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD | CMD_NO_AUTO_RESUME},
     {"resume", cmd_resume, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD | CMD_NO_AUTO_RESUME},
 #ifdef __SD_CARD_LOAD__
     {"msg", cmd_msg, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_LOAD},
 #endif
     {"cal", cmd_cal, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
-    {"save", cmd_save, CMD_RUN_IN_LOAD},
+    {"save", cmd_save, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
     {"recall", cmd_recall, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
-    {"trace", cmd_trace, CMD_RUN_IN_LOAD},
-    {"marker", cmd_marker, CMD_RUN_IN_LOAD},
-    {"edelay", cmd_edelay, CMD_RUN_IN_LOAD},
-    {"s21offset", cmd_s21offset, CMD_RUN_IN_LOAD},
+    {"trace", cmd_trace, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
+    {"marker", cmd_marker, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
+    {"edelay", cmd_edelay, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
+    {"s21offset", cmd_s21offset, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
     {"capture", cmd_capture, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
 #ifdef __VNA_MEASURE_MODULE__
     {"measure", cmd_measure, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
@@ -1197,8 +1205,8 @@ const vna_shell_command commands[] = {
     {"touch", cmd_touch, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
     {"release", cmd_release, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI},
 #endif
-    {"vbat", cmd_vbat, CMD_RUN_IN_LOAD},
-    {"tcxo", cmd_tcxo, CMD_RUN_IN_LOAD},
+    {"vbat", cmd_vbat, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
+    {"tcxo", cmd_tcxo, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
     {"reset", cmd_reset, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_LOAD | CMD_NO_AUTO_RESUME},
 #ifdef __USE_SMOOTH__
     {"smooth", cmd_smooth, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
@@ -1214,19 +1222,19 @@ const vna_shell_command commands[] = {
 #endif
 #endif
 #if ENABLE_VBAT_OFFSET_COMMAND
-    {"vbat_offset", cmd_vbat_offset, CMD_RUN_IN_LOAD},
+    {"vbat_offset", cmd_vbat_offset, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
 #if ENABLE_TRANSFORM_COMMAND
-    {"transform", cmd_transform, CMD_RUN_IN_LOAD},
+    {"transform", cmd_transform, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
-    {"threshold", cmd_threshold, CMD_RUN_IN_LOAD},
+    {"threshold", cmd_threshold, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
     {"help", cmd_help, 0},
 #if ENABLE_INFO_COMMAND
     {"info", cmd_info, 0},
 #endif
     {"version", cmd_version, 0},
 #if ENABLE_COLOR_COMMAND
-    {"color", cmd_color, CMD_RUN_IN_LOAD},
+    {"color", cmd_color, CMD_WAIT_MUTEX | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
 #endif
 #if ENABLE_I2C_COMMAND
     {"i2c", cmd_i2c, CMD_WAIT_MUTEX},

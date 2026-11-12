@@ -81,6 +81,17 @@ static int g_queue_enqueues = 0;
 static int g_queue_dequeues = 0;
 static int g_queue_dequeue_all_calls = 0;
 static bool g_deferred_callback_running = false;
+static thread_t g_console_thread;
+static thread_t g_worker_thread;
+static thread_t* g_current_thread = &g_console_thread;
+static int g_pause_calls;
+static int g_resume_calls;
+static bool g_script_before_service;
+static bool g_script_console_output;
+
+thread_t* chThdGetSelfX(void) {
+  return g_current_thread;
+}
 static int g_sys_lock_depth = 0;
 static threads_queue_t* g_waiting_queue = NULL;
 static bool g_service_before_lock = false;
@@ -202,8 +213,8 @@ void chThdSleepMilliseconds(uint32_t ms) {
   (void)ms;
 }
 
-void pause_sweep(void) {}
-void resume_sweep(void) {}
+void pause_sweep(void) { ++g_pause_calls; }
+void resume_sweep(void) { ++g_resume_calls; }
 
 
 void osalSysLock(void) {
@@ -231,12 +242,19 @@ void osalThreadEnqueueTimeoutS(threads_queue_t* queue, systime_t timeout) {
   g_waiting_queue = queue;
   /* Sleeping releases the lock only after the caller is queued. */
   osalSysUnlock();
+  g_current_thread = &g_worker_thread;
+  if (g_script_before_service) {
+    g_script_before_service = false;
+    char script[] = "script local";
+    vna_shell_execute_cmd_line(script);
+  }
   if (g_service_via_event) {
     trigger_pending_event();
   } else {
     shell_service_pending_commands();
   }
   CHECK(g_waiting_queue == NULL, "worker must wake the queued caller before return");
+  g_current_thread = &g_console_thread;
   osalSysLock();
 }
 msg_t osalThreadDequeueNextI(threads_queue_t* queue, msg_t msg) {
@@ -307,6 +325,10 @@ bool event_bus_subscribe(event_bus_t* bus, event_bus_topic_t topic, event_bus_li
 /* ------------------------------------------------------------------------- */
 
 static void reset_shell_state(const char* scripted_rx) {
+  g_current_thread = &g_console_thread;
+  g_pause_calls = g_resume_calls = 0;
+  g_script_before_service = g_script_console_output = false;
+  shell_set_auto_resume(false);
   memset(&g_stream_state, 0, sizeof(g_stream_state));
   g_time = 0;
   g_write_script = NULL;
@@ -494,6 +516,38 @@ static void test_shell_disconnect_waits_for_deferred_completion(void) {
         "completed command must not execute or dequeue again");
 }
 
+static void script_callback(int argc, char* argv[]) {
+  CHECK(argc == 1 && strcmp(argv[0], "local") == 0, "script must use its own arguments");
+  CHECK(shell_printf("hidden") == 0, "script output must be suppressed");
+  g_current_thread = &g_console_thread;
+  CHECK(shell_printf("console") == 7, "script must not disconnect another thread's stream");
+  g_current_thread = &g_worker_thread;
+  g_script_console_output = true;
+}
+
+static void test_script_does_not_corrupt_pending_command(void) {
+  reset_shell_state(NULL);
+  static const vna_shell_command commands[] = {
+      {"deferred", test_command_callback, CMD_WAIT_MUTEX},
+      {"script", script_callback, CMD_RUN_IN_LOAD},
+      {NULL, NULL, 0}};
+  shell_register_commands(commands);
+  char line[] = "deferred borrowed";
+  uint16_t argc;
+  char** argv;
+  const vna_shell_command* command = shell_parse_command(line, &argc, &argv, NULL);
+  g_script_before_service = true;
+  shell_request_deferred_execution(command, argc, argv);
+  CHECK(g_script_console_output, "script must execute before the queued command");
+  CHECK(strcmp(g_last_command_arg0, "borrowed") == 0, "script must preserve pending argv");
+  CHECK(g_pause_calls == 0 && g_resume_calls == 0, "serialization alone must not change sweep mode");
+  CHECK(shell_printf("restored") == 8, "script suppression must end on return");
+
+  shell_set_auto_resume(true);
+  shell_request_deferred_execution(command, argc, argv);
+  CHECK(g_resume_calls == 1 && !shell_get_auto_resume(), "requested auto-resume must complete once");
+}
+
 static void test_shell_read_line_and_echo(void) {
   reset_shell_state("he\x7Flo\r\n");
   char line[32];
@@ -585,6 +639,7 @@ static void test_write_disconnected(void) {
 }
 
 int main(void) {
+  test_script_does_not_corrupt_pending_command();
   test_write_inactivity_timeout();
   test_raw_write_backpressure();
   test_write_partial_progress();

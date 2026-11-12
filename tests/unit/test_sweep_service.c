@@ -71,6 +71,14 @@ void chSysUnlock(void) {
   lock_class = 0;
 }
 
+void osalSysLock(void) {
+  chSysLock();
+}
+
+void osalSysUnlock(void) {
+  chSysUnlock();
+}
+
 void chSysLockFromISR(void) {
   CHECK(in_isr);
   CHECK(lock_class == 0);
@@ -273,6 +281,50 @@ static void test_capture_after_timeout(void) {
   ++test_count;
 }
 
+static void test_dump_capture(void) {
+  static _Alignas(4) audio_sample_t dump[AUDIO_BUFFER_LEN * 2 + 2];
+  audio_sample_t* rx = (audio_sample_t*)sweep_service_rx_buffer();
+  for (unsigned selection = 0; selection < 2; ++selection) {
+    for (unsigned bandwidth = 0; bandwidth < 4; ++bandwidth) {
+      reset_capture(bandwidth);
+      for (unsigned i = 0; i < AUDIO_BUFFER_LEN * 2; ++i)
+        rx[i] = (audio_sample_t)(1000 + i);
+      for (unsigned i = 0; i < ARRAY_COUNT(dump); ++i)
+        dump[i] = -123;
+      sweep_service_prepare_dump(dump, AUDIO_BUFFER_LEN * 2, selection);
+      unsigned captures = 0;
+      do {
+        reset_calls = process_calls = callback_calls = 0;
+        sweep_service_start_capture(0);
+        CHECK(sweep_service_wait_for_capture());
+        CHECK(++captures <= 2);
+      } while (!sweep_service_dump_ready());
+      for (unsigned i = 0; i < AUDIO_BUFFER_LEN * 2; ++i) {
+        unsigned half = AUDIO_BUFFER_LEN / 2;
+        unsigned block = (i / half) % (bandwidth + 2U);
+        unsigned offset = (block & 1U) * AUDIO_BUFFER_LEN + 2U * (i % half);
+        CHECK(dump[i] == rx[offset + selection]);
+      }
+      CHECK(dump[AUDIO_BUFFER_LEN * 2] == -123);
+      CHECK(dump[AUDIO_BUFFER_LEN * 2 + 1] == -123);
+      CHECK(captures == (bandwidth < 2 ? 2U : 1U));
+      ++test_count;
+    }
+  }
+
+  reset_capture(0);
+  sweep_service_prepare_dump(dump, AUDIO_BUFFER_LEN * 2, 0);
+  sweep_service_start_capture(0);
+  timeout_budget = 1;
+  CHECK(!sweep_service_wait_for_capture());
+  sweep_service_prepare_dump(NULL, 0, 0);
+  CHECK(sweep_service_dump_ready());
+  sweep_service_start_capture(0);
+  CHECK(sweep_service_wait_for_capture());
+  CHECK(sweep_service_dump_ready());
+  ++test_count;
+}
+
 static void reference_smooth(float data[2][SWEEP_POINTS_MAX][2], uint16_t points,
                              unsigned factor, unsigned mask, bool arithmetic) {
   float previous[2][SWEEP_POINTS_MAX][2];
@@ -353,6 +405,7 @@ static void test_smoothing(void) {
 }
 
 int main(void) {
+  test_dump_capture();
   test_smoothing();
   test_capture_idle();
   test_capture_before_wait();

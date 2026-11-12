@@ -21,6 +21,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -40,6 +41,7 @@ typedef intptr_t msg_t;
 #define TIME_INFINITE (-1)
 
 #define MS2ST(ms) ((systime_t)(ms))
+#define chDbgAssert(condition, message) assert(condition)
 
 typedef struct BaseSequentialStream {
   void* vmt;
@@ -66,6 +68,7 @@ typedef struct thread {
 } thread_t;
 
 typedef thread_t* thread_reference_t;
+thread_t* chThdGetSelfX(void);
 
 typedef int tprio_t;
 

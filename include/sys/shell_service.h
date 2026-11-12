@@ -53,9 +53,9 @@ typedef struct {
 typedef void (*shell_session_callback_t)(void);
 
 enum {
-  CMD_WAIT_MUTEX = 1,
+  CMD_WAIT_MUTEX = 1, /* Serialize with sweep/UI work; no system lock spans the handler. */
   CMD_BREAK_SWEEP = 2,
-  CMD_RUN_IN_UI = 4,
+  CMD_RUN_IN_UI = 4, /* May run directly only when already in the sweep thread. */
   CMD_RUN_IN_LOAD = 8,
   CMD_NO_AUTO_RESUME = 16,
 };

@@ -271,7 +271,9 @@ static void app_measurement_service_loop(measurement_engine_port_t* port) {
 }
 
 static THD_WORKING_AREA(waThread1, 768);
+static thread_t* sweep_thread;
 static THD_FUNCTION(Thread1, arg) {
+  sweep_thread = chThdGetSelfX();
   (void)arg;
   chRegSetThreadName("sweep");
 #ifdef __FLIP_DISPLAY__
@@ -292,10 +294,12 @@ static THD_FUNCTION(Thread1, arg) {
 #include "rf/sweep.h"
 
 void pause_sweep(void) {
+  chSysLock();
   sweep_mode &= ~SWEEP_ENABLE;
   // Cancel any ongoing sweep operation immediately to avoid blocking USB commands
   // This is critical for performance on devices with high sweep point counts (e.g. F303)
   sweep_service_cancel_scan();
+  chSysUnlock();
   sweep_wait_for_idle();
 }
 
@@ -622,7 +626,7 @@ static void vna_shell_execute_line(char* line) {
   if (cmd) {
     uint16_t cmd_flag = cmd->flags;
     bool auto_resume = false;
-    if ((cmd_flag & CMD_RUN_IN_UI) && (sweep_mode & SWEEP_UI_MODE)) {
+    if ((cmd_flag & CMD_RUN_IN_UI) && chThdGetSelfX() == sweep_thread) {
       cmd_flag &= (uint16_t)~CMD_WAIT_MUTEX;
     }
     if (cmd_flag & CMD_BREAK_SWEEP) {

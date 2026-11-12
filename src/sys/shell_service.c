@@ -61,6 +61,7 @@ static shell_session_callback_t shell_session_start_cb = NULL;
 static shell_session_callback_t shell_session_stop_cb = NULL;
 static bool shell_session_active = false;
 static bool shell_auto_resume = false;
+static thread_t* script_thread = NULL;
 
 static void shell_on_event(const event_bus_message_t* message, void* user_data);
 
@@ -77,6 +78,8 @@ static void shell_assign_stream(BaseSequentialStream* stream) {
 }
 
 static inline BaseAsynchronousChannel* shell_current_channel(void) {
+  if (script_thread != NULL && chThdGetSelfX() == script_thread)
+    return NULL;
   return (BaseAsynchronousChannel*)shell_stream;
 }
 
@@ -145,7 +148,7 @@ static size_t shell_read(void* buf, size_t size) {
 static char shell_print_buffer[96];
 
 int shell_printf(const char* fmt, ...) {
-  if (shell_stream == NULL) {
+  if (shell_current_channel() == NULL) {
     return 0;
   }
   
@@ -381,9 +384,7 @@ void shell_service_pending_commands(void) {
     pending_command = NULL;
     osalSysUnlock();
 
-    if ((command->flags & CMD_BREAK_SWEEP) || (command->flags & CMD_WAIT_MUTEX)) {
-      pause_sweep();
-    }
+    /* Dispatch runs between captures; CMD_WAIT_MUTEX alone must not stop sweeping. */
     command->sc_function(argc, argv);
     
     // Auto-resume sweep if it was running and command allows it
@@ -469,16 +470,18 @@ int vna_shell_read_line(char* line, int max_size) {
 }
 
 void vna_shell_execute_cmd_line(char* line) {
-  BaseSequentialStream* previous = shell_stream;
-  shell_assign_stream(NULL);
-  uint16_t argc = 0;
-  char** argv = NULL;
-  const vna_shell_command* cmd = shell_parse_command(line, &argc, &argv, NULL);
-  if (cmd != NULL && (cmd->flags & CMD_RUN_IN_LOAD)) {
-    cmd->sc_function(argc, argv);
+  /* Scripts must not overwrite a queued console command's argv or its stream. */
+  char* argv[VNA_SHELL_MAX_ARGUMENTS + 1];
+  uint16_t argc = parse_line(line, argv, ARRAY_COUNT(argv));
+  if (argc == 0 || argc > ARRAY_COUNT(argv) || command_table == NULL)
+    return;
+  thread_t* previous = script_thread;
+  script_thread = chThdGetSelfX();
+  for (const vna_shell_command* cmd = command_table; cmd->sc_name != NULL; ++cmd) {
+    if ((cmd->flags & CMD_RUN_IN_LOAD) && strcmp(argv[0], cmd->sc_name) == 0) {
+      cmd->sc_function((int)argc - 1, argv + 1);
+      break;
+    }
   }
-  shell_assign_stream(previous);
-  if (shell_stream == NULL) {
-    shell_restore_stream();
-  }
+  script_thread = previous;
 }
