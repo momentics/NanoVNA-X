@@ -60,8 +60,8 @@ When adding new code or porting patches, drop each feature into the matching lay
 
 ## 3. Choose a target board
 
-The firmware can be built for two board profiles. Select the target by setting
-the `TARGET` environment variable before invoking `make`:
+The firmware can be built for two board profiles. Select the target with
+`make TARGET=...` or by setting the `TARGET` environment variable:
 
 | Target | Board                | MCU profile |
 |--------|----------------------|-------------|
@@ -83,18 +83,39 @@ export PATH="$PWD/../arm-gnu-14.2.rel1/bin:$PATH"
 The installer verifies Arm's SHA-256 checksum before extracting the package and
 checks the compiler version. The release, version and checksum are locked in
 `tools/arm-toolchain.env`. Both workflows include that file's hash in all build
-and compiler cache keys, preventing reuse across toolchain packages. When
-changing the pin, validate both F072 and F303 with clean builds and `make test`.
+and compiler cache keys, preventing reuse across toolchain packages. Build cache
+keys and fallback prefixes also hash `Makefile` to prevent restoring objects
+after build settings change. When changing the pin, validate both F072 and F303
+with clean builds and `make test`.
 
 The installer supports Linux x86_64 only. On macOS use the Homebrew compiler
 above instead; its output can differ in size from the pinned Linux builds.
 
-Build either board:
+Link-time optimization (LTO) defaults to `USE_LTO=yes` for both F072 and F303.
+Override it explicitly with `USE_LTO=yes` or `USE_LTO=no` on the Make command
+line. Both targets and LTO modes share the same `build/` directory; Make does
+not automatically track target or LTO changes. A clean rebuild is required
+whenever you switch target, LTO mode, or compiler.
+
+Build either board with LTO enabled (the default):
 
 ```bash
-export TARGET=F072   # or F303
-make clean           # required between target/compiler switches
-make -j$(nproc)
+make clean
+make TARGET=F072 USE_LTO=yes -j$(nproc)
+
+make clean
+make TARGET=F303 USE_LTO=yes -j$(nproc)
+make test
+```
+
+For a non-LTO build, clean first and explicitly disable LTO:
+
+```bash
+make clean
+make TARGET=F072 USE_LTO=no -j$(nproc)
+
+make clean
+make TARGET=F303 USE_LTO=no -j$(nproc)
 make test
 ```
 
@@ -124,6 +145,21 @@ so that tools such as the Windows `DfuSe` utility recognise the file
 immediately; flashing via `make flash` or `dfu-util` works with either the raw
 `.bin` or the `.dfu` artefact.
 
+## 5. Memory budgets
+
+The linker enforces the firmware flash budget before the reserved calibration
+area and checks that statically allocated memory fits the target's regions:
+
+| Target | Firmware flash budget | Calibration area starts at | Main SRAM | Separate CCM RAM |
+| --- | --- | --- | --- | --- |
+| F072 | 98 KiB | `0x08018800` | 16 KiB | None |
+| F303 | 114 KiB | `0x0801C800` | 40 KiB | 8 KiB |
+
+These are region limits, not measured firmware sizes or free-memory figures.
+The F303's 8 KiB CCM region is separate from its 40 KiB main SRAM and must not
+be counted as additional main SRAM. A successful link does not establish
+runtime stack headroom; that requires separate runtime measurement and analysis.
+
 ## 6. Flash the device (optional)
 
 With the hardware in DFU mode, flash the generated binary using `dfu-util`:
@@ -141,8 +177,8 @@ host; see the main README for more detail on entering DFU mode.
 
 - **Missing compiler** – confirm that `arm-none-eabi-gcc` is on `PATH` and the
   packages listed above are installed.
-- **Old build artefacts** – run `make clean` when switching between targets or
-  after updating the toolchain to avoid mixing incompatible object files.
+- **Old build artefacts** – run `make clean` when switching targets, changing
+  `USE_LTO`, or updating the toolchain to avoid mixing incompatible object files.
 - **Permission errors when flashing** – on Linux, add udev rules for DFU devices
   or run `dfu-util` with `sudo`.
 - **Host utility cannot detect the device** – after flashing, open the USB console

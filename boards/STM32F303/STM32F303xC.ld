@@ -19,7 +19,8 @@
  */
 MEMORY
 {
-    flash0  : org = 0x08000000, len = 142k
+    /* Firmware must stop before the existing calibration storage. */
+    flash0  : org = 0x08000000, len = 114k
     flash1  : org = 0x00000000, len = 0
     flash2  : org = 0x00000000, len = 0
     flash3  : org = 0x00000000, len = 0
@@ -36,6 +37,9 @@ MEMORY
     ram6    : org = 0x00000000, len = 0
     ram7    : org = 0x00000000, len = 0
 }
+
+ASSERT(ORIGIN(flash0) + LENGTH(flash0) <= ORIGIN(flash7),
+       "Firmware flash overlaps calibration storage")
 
 /* For each data/text section two region are defined, a virtual region
    and a load region (_LMA suffix).*/

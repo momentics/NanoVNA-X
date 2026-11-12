@@ -50,10 +50,13 @@ ifeq ($(USE_LDOPT),)
   USE_LDOPT =
 endif
 
-# Enable this if you want link time optimizations (LTO)
+# Enable LTO on both targets; override with USE_LTO=no after a clean rebuild.
 ifeq ($(USE_LTO),)
-  USE_LTO = no
+  USE_LTO = yes
 endif
+
+# Report each linker memory region, including initialized-data loads and stacks.
+USE_LDOPT += --print-memory-usage
 
 # If enabled, this option allows to compile the application in THUMB mode.
 ifeq ($(USE_THUMB),)

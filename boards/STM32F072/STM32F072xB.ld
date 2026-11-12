@@ -37,6 +37,9 @@ MEMORY
     ram7    : org = 0x00000000, len = 0
 }
 
+ASSERT(ORIGIN(flash0) + LENGTH(flash0) <= ORIGIN(flash7),
+       "Firmware flash overlaps calibration storage")
+
 /* For each data/text section two region are defined, a virtual region
    and a load region (_LMA suffix).*/
 

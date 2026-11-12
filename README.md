@@ -62,7 +62,7 @@ The firmware uses ChibiOS signaling, system locks, and bounded hardware waits to
 - **RTOS-based concurrency.** ADC completion uses an atomic suspend/resume handoff instead of `__WFI()` polling. The F072 and F303 capture DMA handlers use ChibiOS IRQ entry/exit hooks so waking the waiting thread triggers correct scheduling.
 - **Persistent State.** A dedicated `sys/state_manager` module snapshots sweep limits, UI flags, and calibration slots to flash. Changes are auto-saved after you stop editing (or immediately via *Save Config*), so editing the sweep on the device or over USB survives a cold boot without hammering flash.
 - **UI/sweep coordination.** Measurement, UI servicing, and deferred commands share the sweep thread. Serializing `data` there prevents concurrent modification of the exported buffer; UI servicing waits for the command to return.
-- **Sweep smoothing.** When enabled, smoothing runs in place once per completed pipeline sweep, before any time-domain transform; partial sweeps are not filtered. The CDC and smoothing fixes address [issue #14](https://github.com/momentics/NanoVNA-X/issues/14) and its linked report, with thanks to @d51r3verse and @jebcampbellhm.
+- **Sweep smoothing.** When enabled, smoothing runs in place once per completed pipeline sweep, before any time-domain transform; partial sweeps are not filtered. The CDC and smoothing fixes address [issue #14](https://github.com/momentics/NanoVNA-X/issues/14) and its linked report, with thanks to [@d51r3verse](https://github.com/d51r3verse) and [@jebcampbellhm](https://github.com/jebcampbellhm).
 
 ### Performance and Resource Management
 
@@ -116,6 +116,7 @@ While the speed per point is limited by the physics of the measurement loop, the
 
 - **Automated Versioning** The firmware version is now automatically embedded during the build process from a single `VERSION` file.
 
+- **LTO and memory budgets** LTO defaults to `USE_LTO=yes` for both F072 and F303; firmware flash and static RAM budgets are enforced at link time. See the [build guide](doc/building.md) for overrides, clean rebuild requirements, and exact limits.
 - **Improved CI/CD** The GitHub Actions workflows have been optimized for faster, more reliable builds with better caching.
 - **DFU File Generation** A Python-based script for creating DfuSe-compatible firmware files has been integrated into the release process.
 
