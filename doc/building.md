@@ -93,12 +93,23 @@ Build either board:
 
 ```bash
 export TARGET=F072   # or F303
-make clean           # required between target/compiler switches
+make clean           # required between target/compiler/LTO switches
 make -j$(nproc)
 make test
 ```
 
 On macOS use `make -j$(sysctl -n hw.ncpu)` for the parallel build step.
+
+F072 builds enable link-time optimization (LTO) by default, including CI and
+release builds, to preserve space within the 98 KiB firmware region without
+removing features or changing saved calibration storage. F303 retains its
+non-LTO default. Both workflows use the defaults in `Makefile`.
+
+For comparison or debugging, explicitly override the setting with
+`make TARGET=F072 USE_LTO=no` or `make TARGET=F303 USE_LTO=yes`. Run `make clean`
+before changing this setting; Make does not track command-line flag changes.
+An F072 build without LTO may exceed the firmware region as fixes are added;
+do not enlarge that region into calibration storage to make it fit.
 
 The build artefacts are written to `build/`:
 

@@ -50,9 +50,14 @@ ifeq ($(USE_LDOPT),)
   USE_LDOPT =
 endif
 
-# Enable this if you want link time optimizations (LTO)
+# F072 needs LTO to leave room for fixes within its 98 KiB firmware region.
+# Explicit USE_LTO=yes/no overrides remain available for either target.
 ifeq ($(USE_LTO),)
-  USE_LTO = no
+  ifeq ($(TARGET),F072)
+    USE_LTO = yes
+  else
+    USE_LTO = no
+  endif
 endif
 
 # If enabled, this option allows to compile the application in THUMB mode.
