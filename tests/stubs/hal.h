@@ -33,3 +33,14 @@ static inline uint16_t __REVSH(uint16_t value) {
   /* Byte-swap implementation for host builds. */
   return (uint16_t)((value << 8) | (value >> 8));
 }
+
+#ifdef SWEEP_SERVICE_HOST_TEST
+#define STM32_DMA_ISR_TCIF (1U << 1)
+#define GPIOC 0
+#define GPIOC_LED 0
+void palClearPad(int port, int pad);
+void palSetPad(int port, int pad);
+/* Keep an accidental return to WFI observable rather than a host no-op. */
+void sweep_test_wfi(void);
+#define __WFI() sweep_test_wfi()
+#endif

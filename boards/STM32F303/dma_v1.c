@@ -51,10 +51,12 @@ OSAL_IRQ_HANDLER(STM32_DMA1_CH3_HANDLER) {
 
 #if defined(DMA1_CH4_HANDLER_FUNC) || defined(DMA1_USE_ALL_HANDLERS)
 OSAL_IRQ_HANDLER(STM32_DMA1_CH4_HANDLER) {
+  OSAL_IRQ_PROLOGUE();
   uint32_t flags = DMA1->ISR; DMA1->IFCR = flags;  // reset interrupt vector
 #ifdef DMA1_CH4_HANDLER_FUNC
   if (flags & (STM32_DMA_ISR_MASK<<12)) DMA1_CH4_HANDLER_FUNC((flags>>12)&STM32_DMA_ISR_MASK); // DMA Channel 4 handler
 #endif
+  OSAL_IRQ_EPILOGUE();
 }
 #endif
 

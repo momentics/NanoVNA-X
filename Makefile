@@ -461,3 +461,19 @@ else
 	@etags *.[ch] boards/STM32F072/*.[ch] $(shell find third_party/ChibiOS -name \*.\[ch\] -print)
 endif
 	@ls -l TAGS
+
+TEST_SUITES += $(TEST_BUILD_DIR)/test_sweep_service
+
+ifeq ($(OS),Windows_NT)
+# MinGW PE references otherwise retain hardware-only functions despite section GC.
+SWEEP_TEST_LDFLAGS := -flto -Wl,--exclude-all-symbols
+endif
+
+$(TEST_BUILD_DIR)/test_sweep_service: tests/unit/test_sweep_service.c src/rf/sweep.c src/processing/vna_math.c | $(TEST_BUILD_DIR)
+	$(HOST_CC) $(HOST_CFLAGS) -fno-fast-math -ffunction-sections -fdata-sections -fno-asynchronous-unwind-tables -fno-unwind-tables -DNO_OLDNAMES -DNANOVNA_HOST_TEST -DSWEEP_SERVICE_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ -Wl,--gc-sections $(SWEEP_TEST_LDFLAGS) $(HOST_LDFLAGS)
+
+tests: $(TEST_BUILD_DIR)/test_sweep_service
+
+.PHONY: test-sweep-service
+test-sweep-service: $(TEST_BUILD_DIR)/test_sweep_service
+	./$(TEST_BUILD_DIR)/test_sweep_service

@@ -480,25 +480,8 @@ VNA_SHELL_FUNCTION(cmd_data) {
   }
 
   if (sel < 2) {
-      // Use runtime_entry.c logic
-    sweep_service_snapshot_t snapshot;
-    if (sweep_mode & SWEEP_ENABLE)
-        sweep_service_wait_for_generation();
-    while (true) {
-      if (!sweep_service_snapshot_acquire((uint8_t)sel, &snapshot)) {
-        chThdSleepMilliseconds(1);
-        continue;
-      }
-      for (uint16_t i = 0; i < snapshot.points; i++) {
-        if (!shell_printf("%f %f" VNA_SHELL_NEWLINE_STR, snapshot.data[i][0], snapshot.data[i][1])) break;
-        if ((i & 12) == 12) {
-          wdgReset(&WDGD1);
-          chThdYield();
-        }
-      }
-      if (sweep_service_snapshot_release(&snapshot)) return;
-      chThdYield();
-    }
+    /* The deferred handler owns the sweep buffer for the entire transfer. */
+    array = measured[sel];
   } else {
     array = cal_data[sel - 2];
     osalSysLock();
@@ -1151,7 +1134,7 @@ const vna_shell_command commands[] = {
 #if ENABLE_SCANBIN_COMMAND
     {"scan_bin", cmd_scan_bin, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
 #endif
-    {"data", cmd_data, 0},
+    {"data", cmd_data, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP},
     {"frequencies", cmd_frequencies, 0},
     {"freq", cmd_freq, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},
     {"sweep", cmd_sweep, CMD_WAIT_MUTEX | CMD_BREAK_SWEEP | CMD_RUN_IN_UI | CMD_RUN_IN_LOAD},

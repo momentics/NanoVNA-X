@@ -39,12 +39,12 @@ similar.
 ## What Makes NanoVNA-X Different
 
 - **Layered runtime instead of a monolithic `main.c`.** The sweep thread, CLI, and services are wired together in `src/runtime/` via explicit ports, so control flow is inspectable and unit-testable rather than hidden inside `app_main`.
-- **Zero-copy sweep pipeline.** RF orchestration now revolves around `sweep_service_snapshot_t` snapshots and a `measurement_engine` coordinator, letting the UI, USB CLI, and SD-card jobs consume captured buffers without re-triggering hardware sweeps.
+- **Zero-copy sweep pipeline.** `measurement_engine` coordinates sweeps over shared measurement buffers. The `data` command runs in the sweep thread with acquisition paused, reads those buffers directly, and resumes acquisition afterward if it was previously enabled. No snapshot copy or additional measurement array is required.
 - **Infrastructure services in `sys/`.** The event bus, cooperative scheduler, configuration/calibration persistence, and autosave-aware state manager replace the hard-coded globals used in v0.9.1, making background work predictable and recoverable.
 - **Clean interfaces.** CLI, USB transport, UI hooks, and DSP helpers sit behind interface contracts in the relevant modules, removing the legacy `#include "*.c"` patterns and making it obvious where transport-agnostic logic lives.
 - **UI/input rework.** presenters, controllers, input adapters, fonts, and icons live under `src/ui/`, enabling SD-card browsing, remote desktop, and better on-device messaging without touching hardware drivers.
 - **Tooling/documentation refresh.** the single `VERSION` file feeds builds and release automation, the Makefile tracks the new folder layout, and both English/Russian docs explain the divergence so downstream forks know what changed relative to DiSlord’s tree.
-- **Predictable, event-driven architecture.** The sweep engine, UI, USB CDC shell, and measurement DSP cooperate through the ChibiOS event bus and watchdog-guarded timeouts. A hung codec, synthesiser, or PC host can no longer freeze the instrument mid-calibration.
+- **RTOS-aware coordination.** ADC capture waits suspend the sweep thread until DMA completion or a two-second timeout, allowing the lower-priority shell to run. Deferred commands are published and queued atomically; their callers wait for handler completion so arguments remain valid even across USB disconnects.
 - **Measurement-focused DMA budget.** SPI LCD transfers and TLV320 I²S captures use DMA, while the UART console was intentionally moved to an IRQ driver so that DMA channels are always available for RF data paths.
 - **Unique USB identity by default.** Every unit now enumerates with a serial number derived from its MCU unique ID (System -> Device -> MORE -> *USB DEVICE UID* still allows opting out for legacy workflows).
 - **Integrated SD workflow.** The internal micro-SD slot supports calibration slots, S1P/S2P exports, BMP or compact RLE-TIFF screenshots, firmware dumps, scripted command playback, and a deterministic `FORMAT SD` routine that uses FatFs mkfs parameters aligned with Keysight/R&S service practices.
@@ -55,13 +55,14 @@ The firmware was rewritten around a layered ChibiOS stack that emphasises respon
 
 ### Firmware Stability and Responsiveness
 
-The core of the firmware was reworked from blocking calls to a fully asynchronous, event-driven architecture using ChibiOS primitives (Mailboxes, Events, and Semaphores).
+The firmware uses ChibiOS signaling, system locks, and bounded hardware waits to coordinate measurement and console work. Some operations remain synchronous, including deferred command completion and raw USB transfers.
 
-- **Non-Blocking USB.** The USB CDC (serial) stack is now fully asynchronous. The firmware no longer hangs if a host PC connects, disconnects, or stalls during a data transfer. This resolves the most common source of device freezes.
+- **USB transfer behavior.** Formatted output such as `data` stops after one second without write progress; progressing transfers have no overall time limit. Raw transfers, including binary scans and screen capture, retain blocking backpressure until transmission completes or USB disconnects, rather than silently dropping timed-out chunks. A connected host that stops reading can therefore still delay the sweep/UI thread during a raw transfer.
 - **Timeout-Driven Recovery.** Critical subsystems, including the measurement engine and I²C bus, are guarded by timeouts. A stalled operation will no longer lock up the device; instead, the subsystem attempts to recover cleanly.
-- **RTOS-based Concurrency.** Busy-wait loops and polling have been replaced with efficient RTOS-based signaling, reducing CPU load and improving battery life. The measurement thread, UI, and USB stack now cooperate without race conditions or deadlocks.
+- **RTOS-based concurrency.** ADC completion uses an atomic suspend/resume handoff instead of `__WFI()` polling. The F072 and F303 capture DMA handlers use ChibiOS IRQ entry/exit hooks so waking the waiting thread triggers correct scheduling.
 - **Persistent State.** A dedicated `sys/state_manager` module snapshots sweep limits, UI flags, and calibration slots to flash. Changes are auto-saved after you stop editing (or immediately via *Save Config*), so editing the sweep on the device or over USB survives a cold boot without hammering flash.
-- **UI/Sweep Sync.** The UI and sweep engine are now decoupled. The UI remains responsive even during complex calculations, and on-screen data is always synchronized with the underlying measurement state.
+- **UI/sweep coordination.** Measurement, UI servicing, and deferred commands share the sweep thread. Serializing `data` there prevents concurrent modification of the exported buffer; UI servicing waits for the command to return.
+- **Sweep smoothing.** When enabled, smoothing runs in place once per completed pipeline sweep, before any time-domain transform; partial sweeps are not filtered. The CDC and smoothing fixes address [issue #14](https://github.com/momentics/NanoVNA-X/issues/14) and its linked report, with thanks to @d51r3verse and @jebcampbellhm.
 
 ### Performance and Resource Management
 
@@ -92,7 +93,7 @@ The STM32F303 platform is technically faster than the STM32F072:
 
 However, the "useful work" (calculation and rendering) takes less than 5% of the total sweep time, so the real-world speed difference is small (~9%):
 
-- The main measurement loop (`sweep_orchestrator.c`) calls `sweep_service_wait_for_capture()`, which waits for the audio ADC buffer to fill.
+- The measurement loop in `src/rf/sweep.c` calls `sweep_service_wait_for_capture()`, suspending the thread until the audio ADC capture completes or times out.
 - **Configuration:** 192 kHz sampling rate, 48-sample buffer (`nanovna.h`).
 - This generates an interrupt every 0.25 ms.
 - To achieve base accuracy (1 kHz bandwidth), the device waits for approximately 4 buffers, resulting in **1.0 ms of pure waiting time per point**.
@@ -141,8 +142,8 @@ STM32F303 families.
   wraps ChibiOS thread creation and termination, while the configuration service persists user
   settings and calibration slots in MCU flash with checksum protection.
 - **Measurement pipeline and DSP.** `src/rf/pipeline.c` provides a slim façade that
-  bridges platform drivers and the measurement routines inside `src/rf/sweep/`. It forwards
-  sweep execution to the application layer and reports the current channel mask. Numerical
+  bridges platform drivers and the measurement routines in `src/rf/sweep.c`. It forwards
+  sweep execution, reports the current channel mask, and smooths completed sweeps when enabled. Numerical
   helpers and calibration maths reside in `src/processing/`, keeping compute-heavy code isolated from
   hardware access.
 - **Drivers and middleware.** Low-level device interactions are implemented in `src/driver/`

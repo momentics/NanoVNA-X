@@ -42,6 +42,10 @@ extern void resume_sweep(void);
 #include "memstreams.h"
 #include <string.h>
 
+#ifdef NANOVNA_HOST_TEST
+extern systime_t chVTGetSystemTimeX(void);
+#endif
+
 static const vna_shell_command* command_table = NULL;
 
 static BaseSequentialStream* shell_stream = NULL;
@@ -78,20 +82,13 @@ static inline BaseAsynchronousChannel* shell_current_channel(void) {
 
 #define SHELL_IO_TIMEOUT MS2ST(20)
 
-/*
- * Deferred (mutex) commands like `scan` may take tens of seconds at low RBW / bandwidth
- * settings (and/or many points). If the wait times out, the shell thread prints a new
- * prompt while the sweep is still running, which desynchronizes host tools and makes
- * them interpret old/partial buffers as new segments.
- */
-#define SHELL_DEFERRED_EXECUTION_TIMEOUT MS2ST(300000) // 5 minutes
-
-static bool shell_io_write(const uint8_t* data, size_t size) {
+static bool shell_io_write(const uint8_t* data, size_t size, bool abort_on_stall) {
   BaseAsynchronousChannel* channel = shell_current_channel();
   if (channel == NULL || data == NULL) {
     return false;
   }
   size_t written = 0;
+  systime_t last_progress = chVTGetSystemTimeX();
 
   while (written < size) {
     // Use blocking write (100ms timeout) to allow efficient sleeping while waiting for buffer space.
@@ -99,6 +96,7 @@ static bool shell_io_write(const uint8_t* data, size_t size) {
 
     if (sent > 0) {
       written += sent;
+      last_progress = chVTGetSystemTimeX();
     } else {
       // Timeout incurred (sent=0). Check connection.
       if (!shell_check_connect()) {
@@ -107,6 +105,10 @@ static bool shell_io_write(const uint8_t* data, size_t size) {
       #ifndef NANOVNA_HOST_TEST
       wdgReset(&WDGD1);
       #endif
+      /* Bound inactivity, not total transfer time, even while USB stays connected. */
+      if (abort_on_stall && (systime_t)(chVTGetSystemTimeX() - last_progress) >= MS2ST(1000)) {
+        return false;
+      }
     }
   }
   return true;
@@ -133,7 +135,8 @@ static size_t shell_io_read(uint8_t* data, size_t size) {
 }
 
 static void shell_write(const void* buf, size_t size) {
-  (void)shell_io_write((const uint8_t*)buf, size);
+  /* The raw void API cannot report truncated chunks; block until sent or disconnected. */
+  (void)shell_io_write((const uint8_t*)buf, size, false);
 }
 
 static size_t shell_read(void* buf, size_t size) {
@@ -175,7 +178,7 @@ int shell_printf(const char* fmt, ...) {
    * Use shell_io_write which implements timeouts to prevent hanging 
    * if the host is not reading data (e.g. stalled CDC connection).
    */
-  if (!shell_io_write((uint8_t*)shell_print_buffer, ms.eos)) {
+  if (!shell_io_write((uint8_t*)shell_print_buffer, ms.eos, true)) {
     return 0;
   }
 
@@ -196,15 +199,10 @@ void shell_stream_write(const void* buffer, size_t size) {
   shell_write(buffer, size);
 }
 
-// Function to wake up all shell threads, must be called from ISR or locked context
 void shell_wake_all_waiting_threadsI(void) {
-#ifdef NANOVNA_HOST_TEST
-  // In test environment, we don't have full OSAL implementation
-  // This is a placeholder for the real implementation
-#else
-  // Wake up all waiting threads with MSG_RESET (-2) to unblock them
-  osalThreadDequeueAllI(&shell_thread, (msg_t)-2);
-#endif
+  /* Retain the USB callback API, but only command completion may release this
+   * queue: handlers borrow caller arguments and print buffers until they return.
+   * USB I/O has its own driver queues to wake on disconnect. */
 }
 
 static void shell_handle_session_transition(bool active) {
@@ -361,15 +359,13 @@ const vna_shell_command* shell_parse_command(char* line, uint16_t* argc, char***
 }
 
 void shell_request_deferred_execution(const vna_shell_command* command, uint16_t argc, char** argv) {
-  pending_command = command;
+  osalSysLock();
   pending_argc = argc;
   pending_argv = argv;
-  osalSysLock();
-  osalThreadEnqueueTimeoutS(&shell_thread, SHELL_DEFERRED_EXECUTION_TIMEOUT);
+  pending_command = command;
+  /* Publish and enqueue atomically; arguments remain borrowed until completion. */
+  osalThreadEnqueueTimeoutS(&shell_thread, TIME_INFINITE);
   osalSysUnlock();
-  if (shell_event_bus != NULL) {
-    event_bus_publish(shell_event_bus, EVENT_USB_COMMAND_PENDING, NULL);
-  }
 }
 
 void shell_service_pending_commands(void) {
@@ -400,9 +396,7 @@ void shell_service_pending_commands(void) {
 
 
     osalSysLock();
-    // In the real system, we would check if threads are waiting before dequeuing
-    // For safety, we assume a thread is waiting and proceed with dequeue
-    // In test environment, this is simplified
+    /* The caller remains queued until the handler releases its borrowed buffers. */
     osalThreadDequeueNextI(&shell_thread, MSG_OK);
     osalSysUnlock();
   }

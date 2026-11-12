@@ -20,6 +20,10 @@
 
 #pragma once
 
+#ifdef SWEEP_SERVICE_HOST_TEST
+/* Quoted rf/sweep.h includes still resolve here; forward to the real API. */
+#include "../../../include/rf/sweep.h"
+#else
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -28,7 +32,8 @@
 uint16_t app_measurement_get_sweep_mask(void);
 bool app_measurement_sweep(bool break_on_operation, uint16_t mask);
 void sweep_service_init(event_bus_t* bus);
-void sweep_service_wait_for_copy_release(void);
 void sweep_service_begin_measurement(void);
 void sweep_service_end_measurement(void);
 uint32_t sweep_service_increment_generation(void);
+void measurement_data_smooth(uint16_t channel_mask);
+#endif

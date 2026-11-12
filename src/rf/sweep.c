@@ -18,7 +18,8 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#pragma GCC optimize("O2")
+/* Keep RF processing optimized without spending scarce F072 flash on function padding. */
+#pragma GCC optimize("O2", "align-functions=1")
 
 #include "rf/sweep.h"
 
@@ -36,6 +37,7 @@
  */
 static systime_t ready_time = 0;
 static volatile uint16_t wait_count = 0;
+static thread_reference_t capture_thread = NULL;
 static alignas(8) audio_sample_t rx_buffer[AUDIO_BUFFER_LEN * 2];
 
 #if ENABLED_DUMP_COMMAND
@@ -48,7 +50,6 @@ static int16_t dump_selection = 0;
  * Sweep execution state shared across the firmware.
  */
 static volatile bool sweep_in_progress = false;
-static volatile bool sweep_copy_in_progress = false;
 static volatile uint32_t sweep_generation = 0;
 static uint16_t p_sweep = 0;
 static uint8_t sweep_state_flags = 0;
@@ -84,12 +85,12 @@ static freq_t _f_error __attribute__((used));
 static uint16_t _f_points __attribute__((used));
 #endif
 
-static float arifmetic_mean(float v0, float v1, float v2) __attribute__((unused));
+static float arifmetic_mean(float v0, float v1, float v2) __attribute__((optimize("Os")));
 static float arifmetic_mean(float v0, float v1, float v2) {
   return (v0 + 2.0f * v1 + v2) * 0.25f;
 }
 
-static float geometry_mean(float v0, float v1, float v2) __attribute__((unused));
+static float geometry_mean(float v0, float v1, float v2) __attribute__((optimize("Os")));
 static float geometry_mean(float v0, float v1, float v2) {
   float v = vna_cbrtf(vna_fabsf(v0 * v1 * v2));
   if ((v0 + v1 + v2) < 0.0f) {
@@ -263,12 +264,15 @@ void i2s_lld_serve_rx_interrupt(uint32_t flags) {
 #if ENABLED_DUMP_COMMAND
   duplicate_buffer_to_dump(p, AUDIO_BUFFER_LEN);
 #endif
-  --wait_count;
+  if (--wait_count == 0U) {
+    chSysLockFromISR();
+    chThdResumeI(&capture_thread, MSG_OK);
+    chSysUnlockFromISR();
+  }
 }
 
 void sweep_service_init(event_bus_t* bus) {
   sweep_in_progress = false;
-  sweep_copy_in_progress = false;
   sweep_generation = 0;
   sweep_reset_progress();
   sweep_state_flags = 0;
@@ -285,18 +289,6 @@ void sweep_service_init(event_bus_t* bus) {
 
 void sweep_service_reset_progress(void) {
   sweep_reset_progress();
-}
-
-void sweep_service_wait_for_copy_release(void) {
-  while (true) {
-    osalSysLock();
-    bool busy = sweep_copy_in_progress;
-    osalSysUnlock();
-    if (!busy) {
-      break;
-    }
-    chThdYield();
-  }
 }
 
 void sweep_service_begin_measurement(void) {
@@ -326,79 +318,24 @@ uint32_t sweep_service_current_generation(void) {
   return generation;
 }
 
-void sweep_service_wait_for_generation(void) {
-  systime_t start_time = chVTGetSystemTimeX();
-  systime_t timeout = MS2ST(1000); // 1 second timeout to prevent infinite wait
-  
-  while (sweep_service_current_generation() == 0U) {
-    if (chVTGetSystemTimeX() - start_time >= timeout) {
-      // Timeout occurred, break to prevent hanging
-      break;
-    }
-    chThdSleepMilliseconds(1);
-  }
-}
-
-bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* snapshot) {
-  if (snapshot == NULL || channel >= 2U) {
-    return false;
-  }
-  systime_t start_time = chVTGetSystemTimeX();
-  systime_t timeout = MS2ST(2000); // 2 second timeout to prevent infinite wait
-  
-  while (true) {
-    osalSysLock();
-    bool busy = sweep_in_progress || sweep_copy_in_progress;
-    if (!busy) {
-      sweep_copy_in_progress = true;
-      snapshot->generation = sweep_generation;
-      snapshot->points = sweep_points;
-      snapshot->data = measured[channel];
-      osalSysUnlock();
-      return true;
-    }
-    osalSysUnlock();
-    
-    // Check for timeout
-    if (chVTGetSystemTimeX() - start_time >= timeout) {
-      return false; // Timeout occurred, unable to acquire snapshot
-    }
-    
-    chThdSleepMilliseconds(1);
-  }
-}
-
-bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot) {
-  bool stable = false;
-  osalSysLock();
-  if (snapshot != NULL) {
-    stable = (snapshot->generation == sweep_generation);
-  }
-  sweep_copy_in_progress = false;
-  osalSysUnlock();
-  return stable;
-}
-
 void sweep_service_start_capture(systime_t delay_ticks) {
   ready_time = chVTGetSystemTimeX() + delay_ticks;
   wait_count = config._bandwidth + 2U;
 }
 
 bool sweep_service_wait_for_capture(void) {
-  systime_t start_time = chVTGetSystemTimeX();
-  systime_t timeout = MS2ST(2000); // 2000ms timeout - increased for stability
-  while (wait_count != 0U) {
-    systime_t current_time = chVTGetSystemTimeX();
-    if (current_time - start_time >= timeout) {
-      // Timeout occurred - break to prevent hanging
-      // This can happen if I2S interrupts don't fire properly (e.g. USB not connected)
-      // Avoid resetting DSP accumulator here to preserve partially accumulated data
+  bool completed = true;
+  chSysLock();
+  if (wait_count != 0U) {
+    /* Atomically sleep until DMA completes, leaving the lower-priority CLI runnable.
+     * Reports: @d51r3verse and @jebcampbellhm, GitHub issue #14.
+     */
+    completed = chThdSuspendTimeoutS(&capture_thread, MS2ST(2000)) == MSG_OK;
+    if (!completed)
       wait_count = 0;
-      return false;
-    }
-    __WFI();
   }
-  return true;
+  chSysUnlock();
+  return completed;
 }
 
 const audio_sample_t* sweep_service_rx_buffer(void) {
@@ -671,7 +608,7 @@ static void fsm_process(rf_fsm_context_t* ctx) {
     ctx->state = RF_STATE_SETUP_MEASURE;
 }
 
-bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
+bool __attribute__((optimize("Os"))) app_measurement_sweep(bool break_on_operation, uint16_t mask) {
   rf_fsm_context_t ctx;
   ctx.state = RF_STATE_SETUP_FREQ;
   ctx.break_on_operation = break_on_operation;
@@ -687,7 +624,6 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t mask) {
   }
   
   sweep_in_progress = true;
-  sweep_service_wait_for_copy_release();
   
   if (p_sweep >= sweep_points || !break_on_operation) {
     sweep_reset_progress();
@@ -789,38 +725,30 @@ void app_measurement_reset(void) {
   sweep_reset_progress();
 }
 
-void measurement_data_smooth(uint16_t ch_mask) {
-  if (smooth_factor == 0U) {
-    return;
-  }
-  if (sweep_points <= 2U) {
+void __attribute__((optimize("Os"))) measurement_data_smooth(uint16_t ch_mask) {
+  if (smooth_factor == 0U || sweep_points <= 2U) {
     return;
   }
   float (*smooth_func)(float, float, float) =
       VNA_MODE(VNA_MODE_SMOOTH) ? arifmetic_mean : geometry_mean;
-  for (int ch = 0; ch < 2; ch++, ch_mask >>= 1) {
-    if ((ch_mask & 1U) == 0U) {
-      continue;
-    }
-    uint32_t max_passes = (sweep_points > 2U) ? (sweep_points - 2U) : 0U;
-    uint32_t count = 1U << (smooth_factor - 1U);
-    if (count == 0U)
-      count = 1U;
-    if (count > max_passes)
-      count = max_passes;
-    if (count == 0U)
+  uint32_t max_passes = sweep_points - 2U;
+  uint32_t count = 1U << (smooth_factor - 1U);
+  if (count > max_passes)
+    count = max_passes;
+  for (unsigned ch = 0; ch < 2U; ch++, ch_mask >>= 1) {
+    if ((ch_mask & 1U) == 0U)
       continue;
     float* data = measured[ch][0];
-    for (uint32_t n = 0; n < count; n++) {
+    float* end = data + 2U * (sweep_points - 1U);
+    for (uint32_t n = count; n != 0U; n--) {
       float prev_re = data[0];
       float prev_im = data[1];
-      for (uint32_t j = 1; j < sweep_points - 1U; j++) {
-        float old_re = data[2 * j];
-        float old_im = data[2 * j + 1];
-        data[2 * j] = smooth_func(prev_re, data[2 * j], data[2 * j + 2]);
-        data[2 * j + 1] = smooth_func(prev_im, data[2 * j + 1], data[2 * j + 3]);
-        prev_re = old_re;
-        prev_im = old_im;
+      // Alternate components, retaining each original left neighbor before overwrite.
+      for (float* p = data + 2; p != end; p++) {
+        float old = p[0];
+        p[0] = smooth_func(prev_re, old, p[2]);
+        prev_re = prev_im;
+        prev_im = old;
       }
     }
   }
@@ -931,7 +859,7 @@ static float kaiser_window_ext(uint32_t k, uint32_t n, uint16_t beta) {
   return bessel_i0_ext((float)k / n);
 }
 
-void app_measurement_transform_domain(uint16_t ch_mask) {
+void __attribute__((optimize("Os"))) app_measurement_transform_domain(uint16_t ch_mask) {
   uint16_t offset = 0;
   uint8_t is_lowpass = FALSE;
   switch (domain_func) {

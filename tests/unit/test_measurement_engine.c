@@ -24,8 +24,8 @@
  * The production path orchestrates the measurement pipeline, sweep service,
  * and the UI-facing event bus.  By substituting each dependency with lightweight
  * host stubs we can exercise the state machine deterministically: sweeps are
- * triggered via a fake port, the measurement pipeline is reduced to a boolean
- * flag, and the sweep service simply records call counts.  These tests ensure
+ * triggered via a fake port, the real pipeline calls a boolean sweep stub,
+ * and the sweep service records call counts and ordering.  These tests ensure
  * EVENT_SWEEP_{STARTED,COMPLETED} fire in the right order, that break flags
  * propagate down to the pipeline, and that results always reach the port even
  * when a sweep aborts.
@@ -38,22 +38,27 @@
 #include <string.h>
 
 #include "rf/measurement.h"
+#include "nanovna.h"
+#include "rf/sweep.h"
 
 /* ------------------------------------------------------------------------- */
 /*                         Stubbed sweep service hooks                        */
 
 static int g_sweep_init_calls;
-static int g_sweep_wait_calls;
+static event_bus_t* g_sweep_init_bus;
 static int g_sweep_begin_calls;
 static int g_sweep_end_calls;
 static int g_sweep_generation_calls;
+static unsigned g_sequence;
+static unsigned g_sweep_sequence;
+static unsigned g_smooth_sequence;
+static unsigned g_end_sequence;
+static unsigned g_generation_sequence;
+static unsigned g_result_sequence;
 
-void sweep_service_init(void) {
+void sweep_service_init(event_bus_t* bus) {
   ++g_sweep_init_calls;
-}
-
-void sweep_service_wait_for_copy_release(void) {
-  ++g_sweep_wait_calls;
+  g_sweep_init_bus = bus;
 }
 
 void sweep_service_begin_measurement(void) {
@@ -62,10 +67,12 @@ void sweep_service_begin_measurement(void) {
 
 void sweep_service_end_measurement(void) {
   ++g_sweep_end_calls;
+  g_end_sequence = ++g_sequence;
 }
 
 uint32_t sweep_service_increment_generation(void) {
   ++g_sweep_generation_calls;
+  g_generation_sequence = ++g_sequence;
   return (uint32_t)g_sweep_generation_calls;
 }
 
@@ -76,6 +83,8 @@ static uint16_t g_active_mask = 0x01u;
 static bool g_pipeline_result = true;
 static bool g_last_break_flag = false;
 static uint16_t g_last_pipeline_mask = 0;
+static int g_smooth_calls;
+static uint16_t g_smooth_mask;
 
 uint16_t app_measurement_get_sweep_mask(void) {
   return g_active_mask;
@@ -84,7 +93,14 @@ uint16_t app_measurement_get_sweep_mask(void) {
 bool app_measurement_sweep(bool break_on_operation, uint16_t channel_mask) {
   g_last_break_flag = break_on_operation;
   g_last_pipeline_mask = channel_mask;
+  g_sweep_sequence = ++g_sequence;
   return g_pipeline_result;
+}
+
+void measurement_data_smooth(uint16_t channel_mask) {
+  ++g_smooth_calls;
+  g_smooth_mask = channel_mask;
+  g_smooth_sequence = ++g_sequence;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -93,6 +109,7 @@ bool app_measurement_sweep(bool break_on_operation, uint16_t channel_mask) {
 typedef struct {
   event_bus_topic_t topic;
   uint16_t mask;
+  unsigned sequence;
 } recorded_event_t;
 
 static recorded_event_t g_recorded_events[4];
@@ -106,6 +123,7 @@ bool event_bus_publish(event_bus_t* bus, event_bus_topic_t topic, const void* pa
   recorded_event_t* rec = &g_recorded_events[g_recorded_event_count++];
   rec->topic = topic;
   rec->mask = payload ? *(const uint16_t*)payload : 0;
+  rec->sequence = ++g_sequence;
   return true;
 }
 
@@ -147,6 +165,7 @@ static void fake_port_handle_result(measurement_engine_port_t* port,
                                     const measurement_engine_result_t* result) {
   fake_port_state_t* state = (fake_port_state_t*)port->context;
   ++state->handle_result_calls;
+  g_result_sequence = ++g_sequence;
   if (result != NULL) {
     state->last_result = *result;
   }
@@ -161,14 +180,22 @@ static measurement_engine_port_t g_fake_port = {
 
 static void reset_stubs(void) {
   g_sweep_init_calls = 0;
-  g_sweep_wait_calls = 0;
+  g_sweep_init_bus = NULL;
   g_sweep_begin_calls = 0;
   g_sweep_end_calls = 0;
   g_sweep_generation_calls = 0;
+  g_sequence = 0;
+  g_sweep_sequence = 0;
+  g_smooth_sequence = 0;
+  g_end_sequence = 0;
+  g_generation_sequence = 0;
+  g_result_sequence = 0;
   g_active_mask = 0x0Fu;
   g_pipeline_result = true;
   g_last_break_flag = false;
   g_last_pipeline_mask = 0;
+  g_smooth_calls = 0;
+  g_smooth_mask = 0;
   g_recorded_event_count = 0;
   memset(g_recorded_events, 0, sizeof(g_recorded_events));
   g_sleep_calls = 0;
@@ -195,6 +222,7 @@ static void test_init_calls_sweep_service(void) {
 
   measurement_engine_init(&engine, &g_fake_port, &bus, &drivers);
   CHECK(g_sweep_init_calls == 1, "sweep_service_init should run exactly once");
+  CHECK(g_sweep_init_bus == &bus, "sweep service should receive the event bus");
   CHECK(engine.port == &g_fake_port, "engine should track the provided port");
   CHECK(engine.event_bus == &bus, "engine should retain the event bus pointer");
   CHECK(engine.pipeline.drivers == &drivers, "pipeline should see driver table");
@@ -204,6 +232,7 @@ static void test_tick_null_engine_sleeps(void) {
   reset_stubs();
   measurement_engine_tick(NULL);
   CHECK(g_sleep_calls == 1, "null engine should sleep once");
+  CHECK(g_smooth_calls == 0, "null engine should not smooth");
 }
 
 static void test_tick_without_trigger_sleeps_and_skips_events(void) {
@@ -222,6 +251,9 @@ static void test_tick_without_trigger_sleeps_and_skips_events(void) {
   CHECK(g_sleep_calls == 1, "engine should sleep when idle");
   CHECK(g_recorded_event_count == 0, "no events must be published when idle");
   CHECK(g_sweep_begin_calls == 0, "sweep helpers must not run when idle");
+  CHECK(g_sweep_init_bus == NULL, "sweep service should accept a null event bus");
+  CHECK(g_smooth_calls == 0, "idle engine should not smooth");
+  CHECK(state.handle_result_calls == 0, "idle engine should not report a result");
 }
 
 static void test_tick_completed_sweep_publishes_events(void) {
@@ -239,7 +271,6 @@ static void test_tick_completed_sweep_publishes_events(void) {
   state.next_break_flag = false;
   measurement_engine_tick(&engine);
 
-  CHECK(g_sweep_wait_calls == 1, "sweep copy wait must run");
   CHECK(g_sweep_begin_calls == 1, "sweep begin must run");
   CHECK(g_sweep_end_calls == 1, "sweep end must run");
   CHECK(g_sweep_generation_calls == 1, "generation counter must increment");
@@ -253,6 +284,37 @@ static void test_tick_completed_sweep_publishes_events(void) {
   CHECK(state.handle_result_calls == 1, "port callback should run");
   CHECK(state.last_result.completed == true, "result must reflect sweep completion");
   CHECK(state.last_result.sweep_mask == g_active_mask, "result should include sweep mask");
+  CHECK(g_recorded_events[0].sequence < g_sweep_sequence, "STARTED must precede the sweep");
+#ifdef __USE_SMOOTH__
+  CHECK(g_smooth_calls == 1, "completed sweep must smooth exactly once");
+  CHECK(g_smooth_mask == g_active_mask, "smoothing must receive the complete sweep mask");
+  CHECK(g_sweep_sequence < g_smooth_sequence, "smoothing must follow the sweep");
+  CHECK(g_smooth_sequence < g_end_sequence, "smoothing must finish before measurement ends");
+  CHECK(g_smooth_sequence < g_generation_sequence, "smoothing must precede generation increment");
+  CHECK(g_smooth_sequence < g_result_sequence, "smoothing must precede the result callback");
+#else
+  CHECK(g_smooth_calls == 0, "disabled smoothing must not run");
+#endif
+  CHECK(g_sweep_sequence < g_end_sequence, "measurement must end after the sweep");
+  CHECK(g_end_sequence < g_generation_sequence, "measurement must end before generation increment");
+  CHECK(g_generation_sequence < g_recorded_events[1].sequence,
+        "generation increment must precede COMPLETED");
+  CHECK(g_recorded_events[1].sequence < g_result_sequence, "COMPLETED must precede the result callback");
+
+  g_active_mask = 0x02u;
+  measurement_engine_tick(&engine);
+#ifdef __USE_SMOOTH__
+  CHECK(g_smooth_calls == 2, "each completed sweep must smooth exactly once");
+  CHECK(g_smooth_mask == g_active_mask, "smoothing must use the new sweep mask");
+  CHECK(g_sweep_sequence < g_smooth_sequence, "next smoothing must follow the next sweep");
+  CHECK(g_smooth_sequence < g_generation_sequence, "next generation must follow smoothing");
+  CHECK(g_smooth_sequence < g_result_sequence, "next result callback must follow smoothing");
+#else
+  CHECK(g_smooth_calls == 0, "disabled smoothing must remain unused on later sweeps");
+#endif
+  CHECK(g_sweep_generation_calls == 2, "each completed sweep must increment generation once");
+  CHECK(state.handle_result_calls == 2, "each completed sweep must report a result once");
+  CHECK(state.last_result.sweep_mask == g_active_mask, "next result must use the new mask");
 }
 
 static void test_tick_incomplete_sweep_skips_completed_event(void) {
@@ -272,6 +334,14 @@ static void test_tick_incomplete_sweep_skips_completed_event(void) {
   CHECK(g_recorded_event_count == 1, "only STARTED event should fire on failure");
   CHECK(g_recorded_events[0].topic == EVENT_SWEEP_STARTED, "first event must be STARTED");
   CHECK(g_sweep_generation_calls == 0, "generation must not bump on failure");
+  CHECK(g_smooth_calls == 0, "partial sweep must never smooth");
+  CHECK(g_sweep_begin_calls == 1, "partial sweep must begin measurement once");
+  CHECK(g_sweep_end_calls == 1, "partial sweep must end measurement once");
+  CHECK(g_sweep_sequence < g_end_sequence, "partial measurement must end after the sweep");
+  CHECK(g_end_sequence < g_result_sequence, "partial result must follow measurement end");
+  CHECK(state.handle_result_calls == 1, "partial sweep must report its result once");
+  CHECK(g_last_break_flag == state.next_break_flag, "partial sweep must retain the break flag");
+  CHECK(g_last_pipeline_mask == g_active_mask, "partial sweep must retain the channel mask");
   CHECK(state.last_result.completed == false, "port must learn about the failure");
   CHECK(state.last_result.sweep_mask == g_active_mask, "result mask should still propagate");
 }

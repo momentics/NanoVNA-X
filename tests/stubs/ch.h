@@ -65,6 +65,8 @@ typedef struct thread {
   bool terminated_flag;
 } thread_t;
 
+typedef thread_t* thread_reference_t;
+
 typedef int tprio_t;
 
 typedef struct {
@@ -83,6 +85,8 @@ msg_t chMBFetch(mailbox_t* mbp, msg_t* msgp, systime_t timeout);
 
 void chSysLock(void);
 void chSysUnlock(void);
+msg_t chThdSuspendTimeoutS(thread_reference_t* reference, systime_t timeout);
+void chThdResumeI(thread_reference_t* reference, msg_t message);
 void chSysLockFromISR(void);
 void chSysUnlockFromISR(void);
 void osalSysLock(void);

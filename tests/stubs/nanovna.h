@@ -52,7 +52,9 @@ extern config_t config;
 
 // 5. Helpers
 #define VNA_MODE(idx) (config._vna_mode & (1U << (idx)))
+#ifndef SWEEP_SERVICE_HOST_TEST
 enum { VNA_MODE_CONNECTION = 0 };
+#endif
 
 #ifndef STR1
 #define STR1(x) #x
@@ -136,3 +138,32 @@ void lcd_set_colors(uint16_t fg, uint16_t bg);
 void lcd_set_flip(bool flip);
 void lcd_set_font(int type);
 void lcd_blit_bitmap(uint16_t x, uint16_t y, uint16_t width, uint16_t height, const uint8_t* bitmap);
+
+#ifdef SWEEP_SERVICE_HOST_TEST
+/* Only the production sweep translation unit needs these firmware declarations. */
+#include "ch.h"
+#undef active_marker
+#include "core/context.h"
+#define DELAY_SWEEP_START 1
+#define DELAY_CHANNEL_CHANGE 1
+#define WIDTH 320
+#define REDRAW_CAL_STATUS 1U
+#define FALSE 0
+#define TRUE 1
+#define START_PROFILE do {} while (0)
+#define STOP_PROFILE do {} while (0)
+extern float measured[2][SWEEP_POINTS_MAX][2];
+extern float spi_buffer[FFT_SIZE * 2];
+extern uint16_t lastsaveid;
+void reset_dsp_accumerator(void);
+void dsp_process(audio_sample_t* samples, size_t count);
+void calculate_gamma(float* gamma);
+void tlv320aic3204_select(uint8_t channel);
+const properties_t* get_properties(uint32_t id);
+freq_t get_frequency(uint16_t index);
+freq_t get_frequency_step(void);
+systime_t chVTGetSystemTimeX(void);
+systime_t chVTTimeElapsedSinceX(systime_t start);
+uint16_t plot_get_measure_channels(void);
+void request_to_redraw(uint16_t flags);
+#endif

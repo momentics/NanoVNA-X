@@ -51,23 +51,13 @@ extern "C" {
 
 
 
-typedef struct {
-  const float (*data)[2];
-  uint16_t points;
-  uint32_t generation;
-} sweep_service_snapshot_t;
-
 void sweep_service_init(event_bus_t* bus);
 void sweep_service_cancel_scan(void);
-void sweep_service_wait_for_copy_release(void);
 void sweep_service_begin_measurement(void);
 void sweep_service_end_measurement(void);
 uint32_t sweep_service_increment_generation(void);
 uint32_t sweep_service_current_generation(void);
-void sweep_service_wait_for_generation(void);
 void sweep_service_reset_progress(void);
-bool sweep_service_snapshot_acquire(uint8_t channel, sweep_service_snapshot_t* snapshot);
-bool sweep_service_snapshot_release(const sweep_service_snapshot_t* snapshot);
 
 void sweep_service_start_capture(systime_t delay_ticks);
 bool sweep_service_wait_for_capture(void);

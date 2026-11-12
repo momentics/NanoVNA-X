@@ -72,4 +72,10 @@ bool measurement_pipeline_execute(measurement_pipeline_t* pipeline, bool break_o
   }
 #endif
 
-  return res;}
+#ifdef __USE_SMOOTH__
+  if (res)
+    measurement_data_smooth(channel_mask);
+#endif
+
+  return res;
+}

@@ -19,9 +19,9 @@
  */
 
 /*
- * Host-side unit tests for src/rf/pipeline/measurement_pipeline.c.  The file
+ * Host-side unit tests for src/rf/pipeline.c.  The file
  * contains only orchestration logic; by providing tiny stubs for the
- * app_measurement_* symbols we can validate its behaviour without STM32
+ * app_measurement_* and smoothing symbols we can validate its behaviour without STM32
  * hardware or the sweep engine.
  */
 
@@ -31,10 +31,19 @@
 #include <stdlib.h>
 
 #include "rf/pipeline.h"
+#include "nanovna.h"
+#include "rf/sweep.h"
 
 static uint16_t g_mask_value = 0u;
 static bool g_last_break = false;
 static uint16_t g_last_channel = 0u;
+static bool g_sweep_completed;
+static unsigned g_sweep_calls;
+static unsigned g_smooth_calls;
+static uint16_t g_smooth_mask;
+static unsigned g_sequence;
+static unsigned g_sweep_sequence;
+static unsigned g_smooth_sequence;
 
 uint16_t app_measurement_get_sweep_mask(void) {
   return g_mask_value;
@@ -43,7 +52,15 @@ uint16_t app_measurement_get_sweep_mask(void) {
 bool app_measurement_sweep(bool break_on_operation, uint16_t channel_mask) {
   g_last_break = break_on_operation;
   g_last_channel = channel_mask;
-  return (channel_mask & 0x1u) != 0u;
+  ++g_sweep_calls;
+  g_sweep_sequence = ++g_sequence;
+  return g_sweep_completed;
+}
+
+void measurement_data_smooth(uint16_t channel_mask) {
+  ++g_smooth_calls;
+  g_smooth_mask = channel_mask;
+  g_smooth_sequence = ++g_sequence;
 }
 
 static int g_failures = 0;
@@ -68,15 +85,36 @@ static void test_init_and_mask(void) {
 
 static void test_execute(void) {
   measurement_pipeline_t pipeline = {.drivers = NULL};
-  bool completed = measurement_pipeline_execute(&pipeline, true, 0x03u);
-  assert_true(completed == true, "stub returns true when LSB set");
-  assert_true(g_last_break == true, "break flag propagated");
-  assert_true(g_last_channel == 0x03u, "channel mask propagated");
+  const uint16_t masks[] = {0x00u, 0x01u, 0x02u, 0x03u, 0x80A5u};
 
-  completed = measurement_pipeline_execute(&pipeline, false, 0x00u);
-  assert_true(!completed, "stub returns false when LSB cleared");
-  assert_true(g_last_break == false, "break flag updated");
-  assert_true(g_last_channel == 0x00u, "channel mask updated");
+  for (size_t i = 0; i < sizeof(masks) / sizeof(masks[0]); ++i) {
+    for (unsigned complete = 0; complete < 2; ++complete) {
+      g_sweep_completed = complete != 0;
+      g_sweep_calls = 0;
+      g_smooth_calls = 0;
+      g_smooth_mask = 0u;
+      g_sequence = 0;
+      g_sweep_sequence = 0;
+      g_smooth_sequence = 0;
+
+      bool completed = measurement_pipeline_execute(&pipeline, !complete, masks[i]);
+      assert_true(completed == g_sweep_completed, "sweep completion should propagate");
+      assert_true(g_sweep_calls == 1, "pipeline should execute exactly one sweep");
+      assert_true(g_last_break == !complete, "break flag should propagate");
+      assert_true(g_last_channel == masks[i], "channel mask should propagate");
+#ifdef __USE_SMOOTH__
+      assert_true(g_smooth_calls == complete,
+                  "only completed sweeps should smooth, exactly once");
+      if (completed) {
+        assert_true(g_smooth_mask == masks[i], "smoothing should receive the full channel mask");
+        assert_true(g_sweep_sequence < g_smooth_sequence,
+                    "smoothing should run after the sweep and before execute returns");
+      }
+#else
+      assert_true(g_smooth_calls == 0, "disabled smoothing should never run");
+#endif
+    }
+  }
 }
 
 int main(void) {
