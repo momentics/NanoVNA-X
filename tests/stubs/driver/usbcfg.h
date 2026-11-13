@@ -35,6 +35,7 @@ typedef struct {
 } USBDriver;
 
 #define USB_ACTIVE 1
+#define SERIAL_USB_TX_BUFFERS_SIZE 64
 
 typedef struct {
   USBDriver* usbp;

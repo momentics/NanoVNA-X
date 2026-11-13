@@ -100,8 +100,16 @@ static bool shell_io_write(const uint8_t* data, size_t size) {
   systime_t last_progress = chVTGetSystemTimeX();
 
   while (written < size) {
-    // Use blocking write (100ms timeout) to allow efficient sleeping while waiting for buffer space.
-    size_t sent = chnWriteTimeout(channel, data + written, size - written, MS2ST(100));
+    /* The driver renews its timeout for each buffer acquisition. Limit each
+     * call to one buffer so a slowly draining host cannot keep us inside the
+     * driver for seconds without servicing the watchdog. */
+    size_t chunk = size - written;
+    if (chunk > SERIAL_USB_TX_BUFFERS_SIZE)
+      chunk = SERIAL_USB_TX_BUFFERS_SIZE;
+    size_t sent = chnWriteTimeout(channel, data + written, chunk, MS2ST(100));
+#ifndef NANOVNA_HOST_TEST
+    wdgReset(&WDGD1);
+#endif
 
     if (sent > 0) {
       written += sent;
@@ -112,9 +120,6 @@ static bool shell_io_write(const uint8_t* data, size_t size) {
         shell_output_failed = true;
         return false;
       }
-      #ifndef NANOVNA_HOST_TEST
-      wdgReset(&WDGD1);
-      #endif
       /* Bound inactivity, not total transfer time, even while USB stays connected. */
       if ((systime_t)(chVTGetSystemTimeX() - last_progress) >= MS2ST(1000)) {
         shell_output_failed = true;

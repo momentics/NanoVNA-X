@@ -44,6 +44,12 @@ DMA flag ownership, flash boundaries, and I2C fault recovery. The timing harness
 is adapted to our suspend/resume capture implementation. Override `HOST_PYTHON`
 or `HOST_CC` when the host tools have different names.
 
+`test_usb_write_progress.py` connects the production shell write function to
+the production ChibiOS buffer-copy loop. Simulated slow consumption checks byte
+integrity and watchdog servicing, including an initially partial buffer. It also
+checks stalled-host timeout and disconnect failure latching. This runs the
+watchdog call path that the regular shell host build excludes.
+
 ## Extending
 
 1. Drop a new `tests/unit/test_*.c` file containing `main()` and register it in
