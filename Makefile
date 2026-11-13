@@ -378,12 +378,16 @@ PY_TEST_SUITES := test_review_fixes test_startup_timing test_irq_wrappers \
                   test_usb_control test_dma_flags test_flash_boundaries test_i2c_recovery
 
 TEST_BUILD_DIR := build/tests
+# Keep the complete list above `tests:`: prerequisites expand while parsing.
 TEST_SUITES := $(TEST_BUILD_DIR)/test_common $(TEST_BUILD_DIR)/test_vna_math \
                $(TEST_BUILD_DIR)/test_measurement_pipeline $(TEST_BUILD_DIR)/test_dsp_backend \
                $(TEST_BUILD_DIR)/test_legacy_measure $(TEST_BUILD_DIR)/test_event_bus \
                $(TEST_BUILD_DIR)/test_scheduler $(TEST_BUILD_DIR)/test_measurement_engine \
                $(TEST_BUILD_DIR)/test_shell_service $(TEST_BUILD_DIR)/test_display_presenter \
-               $(TEST_BUILD_DIR)/test_accuracy_analysis
+               $(TEST_BUILD_DIR)/test_accuracy_analysis \
+               $(TEST_BUILD_DIR)/test_sweep_service \
+               $(TEST_BUILD_DIR)/test_rf_h $(TEST_BUILD_DIR)/test_rf_h_zk \
+               $(TEST_BUILD_DIR)/test_rf_h4 $(TEST_BUILD_DIR)/test_rf_h4_zk
 
 $(TEST_BUILD_DIR):
 	@mkdir -p $@
@@ -482,10 +486,6 @@ else
 endif
 	@ls -l TAGS
 
-TEST_SUITES += $(TEST_BUILD_DIR)/test_sweep_service
-TEST_SUITES += $(TEST_BUILD_DIR)/test_rf_h $(TEST_BUILD_DIR)/test_rf_h_zk \
-               $(TEST_BUILD_DIR)/test_rf_h4 $(TEST_BUILD_DIR)/test_rf_h4_zk
-
 $(TEST_BUILD_DIR)/test_rf_h_zk $(TEST_BUILD_DIR)/test_rf_h4_zk: RF_TEST_DEFS += -D__ZEETK__
 $(TEST_BUILD_DIR)/test_rf_h4 $(TEST_BUILD_DIR)/test_rf_h4_zk: RF_TEST_DEFS += -DNANOVNA_F303
 $(TEST_BUILD_DIR)/test_rf_h $(TEST_BUILD_DIR)/test_rf_h_zk $(TEST_BUILD_DIR)/test_rf_h4 $(TEST_BUILD_DIR)/test_rf_h4_zk: tests/unit/test_rf_profiles.c src/driver/si5351.c | $(TEST_BUILD_DIR)
@@ -498,8 +498,6 @@ endif
 
 $(TEST_BUILD_DIR)/test_sweep_service: tests/unit/test_sweep_service.c src/rf/sweep.c src/processing/vna_math.c | $(TEST_BUILD_DIR)
 	$(HOST_CC) $(HOST_CFLAGS) -fno-fast-math -ffunction-sections -fdata-sections -fno-asynchronous-unwind-tables -fno-unwind-tables -DNO_OLDNAMES -DNANOVNA_HOST_TEST -DSWEEP_SERVICE_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ -Wl,--gc-sections $(SWEEP_TEST_LDFLAGS) $(HOST_LDFLAGS)
-
-tests: $(TEST_BUILD_DIR)/test_sweep_service
 
 .PHONY: test-sweep-service
 test-sweep-service: $(TEST_BUILD_DIR)/test_sweep_service
