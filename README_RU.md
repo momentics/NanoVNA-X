@@ -8,7 +8,8 @@ NanoVNA-X - усовершенствованная прошивка для ка�
 
 [English version](README.md)
 [![Release](https://img.shields.io/github/v/release/momentics/NanoVNA-X)](https://github.com/momentics/NanoVNA-X/releases)
-[![Maintenance](https://img.shields.io/maintenance/yes/2025)]()
+[![Поддерживается](https://img.shields.io/badge/maintained-yes-brightgreen)](https://github.com/momentics/NanoVNA-X/commits/main/)
+[![Сопровождающий](https://img.shields.io/badge/maintainer-%40momentics-blue)](https://github.com/momentics/)
 
 <div align="center">
 <img src="/doc/NanoVNA.jpg" width="280px">
