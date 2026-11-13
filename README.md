@@ -39,7 +39,7 @@ similar.
 ## What Makes NanoVNA-X Different
 
 - **Layered runtime instead of a monolithic `main.c`.** The sweep thread, CLI, and services are wired together in `src/runtime/` via explicit ports, so control flow is inspectable and unit-testable rather than hidden inside `app_main`.
-- **Zero-copy sweep pipeline.** `measurement_engine` coordinates sweeps over shared measurement buffers. The `data` command runs in the sweep thread with acquisition paused, reads those buffers directly, and resumes acquisition afterward if it was previously enabled. No snapshot copy or additional measurement array is required.
+- **Zero-copy sweep pipeline.** `measurement_engine` coordinates sweeps over shared measurement buffers. The `data` command runs in the sweep thread with acquisition paused and exports only a completed, postprocessed result. If the buffer was partially overwritten or invalidated, it captures a complete sweep before exporting; a failed capture reports an error. Acquisition resumes afterward if previously enabled. No snapshot copy or additional measurement array is required.
 - **Infrastructure services in `sys/`.** The event bus, cooperative scheduler, configuration/calibration persistence, and autosave-aware state manager replace the hard-coded globals used in v0.9.1, making background work predictable and recoverable.
 - **Clean interfaces.** CLI, USB transport, UI hooks, and DSP helpers sit behind interface contracts in the relevant modules, removing the legacy `#include "*.c"` patterns and making it obvious where transport-agnostic logic lives.
 - **UI/input rework.** presenters, controllers, input adapters, fonts, and icons live under `src/ui/`, enabling SD-card browsing, remote desktop, and better on-device messaging without touching hardware drivers.
@@ -57,7 +57,7 @@ The firmware was rewritten around a layered ChibiOS stack that emphasises respon
 
 The firmware uses ChibiOS signaling, system locks, and bounded hardware waits to coordinate measurement and console work. Some operations remain synchronous, including deferred command completion and raw USB transfers.
 
-- **USB transfer behavior.** Formatted output such as `data` stops after one second without write progress; progressing transfers have no overall time limit. Raw transfers, including binary scans and screen capture, retain blocking backpressure until transmission completes or USB disconnects, rather than silently dropping timed-out chunks. A connected host that stops reading can therefore still delay the sweep/UI thread during a raw transfer.
+- **USB transfer behavior.** Output, including raw scans and screen capture, stops after one second without write progress; progressing transfers have no overall time limit. A failed transfer suppresses subsequent chunks until the next command or session, so a stalled host cannot hold the sweep/UI thread indefinitely. Hosts must discard incomplete frames.
 - **Timeout-Driven Recovery.** Critical subsystems, including the measurement engine and I²C bus, are guarded by timeouts. A stalled operation will no longer lock up the device; instead, the subsystem attempts to recover cleanly.
 - **RTOS-based concurrency.** ADC completion uses an atomic suspend/resume handoff instead of `__WFI()` polling. The F072 and F303 capture DMA handlers use ChibiOS IRQ entry/exit hooks so waking the waiting thread triggers correct scheduling.
 - **Persistent State.** A dedicated `sys/state_manager` module snapshots sweep limits, UI flags, and calibration slots to flash. Changes are auto-saved after you stop editing (or immediately via *Save Config*), so editing the sweep on the device or over USB survives a cold boot without hammering flash.
@@ -209,6 +209,12 @@ The source tree has been reorganised so it is no longer a line-for-line fork of 
 This separation lets you trace dependencies easily (e.g. `ui/` depends on `sys/state_manager.h` but not vice versa) and removes duplicated helper tables from multiple files. When porting patches from older firmware trees, map the functionality onto the closest module instead of copying entire source files.
 
 ## Building the firmware
+
+CI and Releases provide `F072`, `F072-ZK`, `F303`, and `F303-ZK`. Choose `-ZK`
+for ZeeTK NE602A mixer boards (NanoVNA-H rev3.7 / H4 rev4.4 with SJWCH5351).
+Local ZK builds use `RF_PROFILE=ZK`; standard builds retain runtime clock-profile
+selection. See the [hardware variant guide](doc/building.md#zeetk-hardware-variants)
+before selecting an image; mixer hardware cannot be auto-detected over I2C.
 
 NanoVNA-X uses a standard GNU Make workflow and the Arm GNU GCC toolchain.
 See [`doc/building.md`](doc/building.md) for a fully detailed guide; the

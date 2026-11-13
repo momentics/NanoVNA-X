@@ -110,7 +110,7 @@ This menu consolidates DSP helpers and measurement assistants.
   * `FLIP DISPLAY` *(with `__FLIP_DISPLAY__`)* — mirror the LCD.
   * `DFU` *(with `__DFU_SOFTWARE_MODE__`)* — soft boots into the DFU ROM (path: System -> Device -> DFU).
   * `MORE` -> exposes manufacturing tools:
-    * `MODE` — select the Si5351-compatible synthesiser variant.
+    * `MODE`: standard images cycle through `Si5351`, `MS5351`, and `SJWCH5351` at runtime. ZK images expose only `ZeeTK`, the fixed RF strategy for ZeeTK NE602A mixers with SJWCH5351. This setting does not detect hardware or switch a standard image into a ZK image; select the correct firmware variant first. Saved profile IDs remain 0, 1, and 2 in standard images. Use `SAVE CONFIG` to persist a changed selection and recalibrate after changing RF profiles.
     * `SEPARATOR` *(with `__DIGIT_SEPARATOR__`)* — choose decimal/comma formatting.
     * `USB DEVICE UID` *(with `__USB_UID__`)* — toggle use of the MCU unique ID for USB enumeration.
     * `CLEAR CONFIG` -> contains `CLEAR ALL AND RESET`, which wipes flash-stored configuration.

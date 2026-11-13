@@ -46,13 +46,16 @@ void adc_init(void)
   /* Calibration procedure.*/
   if (VNA_ADC->CR & ADC_CR_ADEN) {
     VNA_ADC->CR |= ADC_CR_ADDIS;        // Disable ADC
-    while (VNA_ADC->CR & ADC_CR_ADDIS); // Wait completion
+    adc_wait_startup(&VNA_ADC->CR, ADC_CR_ADEN | ADC_CR_ADDIS, 0);
   }
 
   VNA_ADC->CR |= ADC_CR_ADCAL;
-  while (VNA_ADC->CR & ADC_CR_ADCAL);
+  adc_wait_startup(&VNA_ADC->CR, ADC_CR_ADCAL, 0);
+  // RM0091: leave at least four ADC clocks between calibration and enable.
+  chThdSleepMilliseconds(1);
+  VNA_ADC->ISR = ADC_ISR_ADRDY; // W1C: discard any stale ready indication.
   VNA_ADC->CR |= ADC_CR_ADEN;                  // Enable ADC
-  while (!(VNA_ADC->ISR & ADC_ISR_ADRDY));
+  adc_wait_startup(&VNA_ADC->ISR, ADC_ISR_ADRDY, ADC_ISR_ADRDY);
   // VBATEN enables resiter devider circuit. It consume vbat power.
   ADC->CCR = ADC_CCR_VREFEN | ADC_CCR_VBATEN;
 }

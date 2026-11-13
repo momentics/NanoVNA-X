@@ -117,7 +117,8 @@ static void test_modff(void) {
 }
 
 static void test_vna_sqrt(void) {
-  const float samples[] = {0.0f, 1.0f, 2.0f, 9.0f, 1234.5f};
+  /* Negative-exponent regression contributed by @jebcampbellhm in PR #11. */
+  const float samples[] = {0.0f, 0x1p-100f, 0.001f, 0.25f, 0.5f, 1.0f, 2.0f, 9.0f, 1234.5f};
   for (size_t i = 0; i < ARRAY_SIZE(samples); ++i) {
     float ref = sqrtf(samples[i]);
     float got = vna_sqrtf(samples[i]);

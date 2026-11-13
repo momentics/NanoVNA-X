@@ -184,12 +184,14 @@ int get_str_index(const char* v, const char* list) {
  * Search first symbols (s2) entry in string (s1)
  */
 static inline char* _strpbrk(char* s1, const char* s2) {
-  do {
+  /* Parser bounds and malformed-quote fixes: @jebcampbellhm, PR #13. */
+  while (*s1) {
     const char* s = s2;
     while (*s)
       if (*s++ == *s1)
         return s1;
-  } while (*++s1);
+    ++s1;
+  }
   return s1;
 }
 
@@ -218,23 +220,15 @@ int parse_line(char* line, char* args[], int max_cnt) {
         args[nargs] = lp; // Store pointer to start of argument
         nargs++;          // Increment count
       } else {
-        // Maximum arguments reached - still need to find end to properly null-terminate
-        char* end_pos = _strpbrk(lp, brk);
-        if (end_pos != NULL && *end_pos != 0) {
-          *end_pos = 0; // Properly terminate the string
-          if (c == '"')
-            end_pos++; // Skip closing quote if it was quoted
-        }
-        break;
+        return max_cnt + 1;
       }
 
       lp = _strpbrk(lp, brk); // Find end of current argument
       if (lp != NULL && *lp != 0) {
         *lp = 0; // Null-terminate the argument
-        if (c == '"')
-          lp++; // If quoted, move past the closing quote
         lp++;   // Move past the null terminator
       } else {
+        if (c == '"') return -1; // Missing closing quote.
         break; // End of string, exit loop
       }
     } else {

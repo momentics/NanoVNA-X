@@ -68,7 +68,7 @@
   - FLIP DISPLAY `[__FLIP_DISPLAY__]`
   - DFU `[__DFU_SOFTWARE_MODE__]`
   - MORE
-    - MODE (Si5351 / MS5351 / SWC5351)
+    - MODE (стандартные образы: Si5351 / MS5351 / SJWCH5351; образы ZK: фиксированный профиль ZeeTK)
     - SEPARATOR `[__DIGIT_SEPARATOR__]`
     - USB DEVICE UID `[__USB_UID__]`
     - CLEAR CONFIG -> CLEAR ALL AND RESET

@@ -52,6 +52,10 @@ static stub_thread_slot_t g_thread_pool[STUB_MAX_THREADS];
 static thread_t* g_current_thread = NULL;
 static bool g_force_create_failure = false;
 static bool g_auto_run_threads = false;
+static bool g_start_during_create;
+static scheduler_task_t g_nested_task;
+static uint8_t g_nested_stack[128];
+static msg_t counting_entry(void* user_data);
 
 static stub_thread_slot_t* stub_find_slot(thread_t* target) {
   if (target == NULL) {
@@ -84,6 +88,10 @@ thread_t* chThdCreateStatic(void* warea, size_t size, tprio_t prio, tfunc_t entr
   (void)warea;
   (void)size;
   (void)prio;
+  if (g_start_during_create) {
+    g_start_during_create=false;
+    g_nested_task=scheduler_start("nested",5,g_nested_stack,sizeof g_nested_stack,counting_entry,NULL);
+  }
   if (g_force_create_failure) {
     g_force_create_failure = false;
     return NULL;
@@ -220,6 +228,15 @@ static void test_creation_failure_does_not_leak_slot(void) {
   scheduler_stop(&second);
 }
 
+static void test_reservation_during_create(void) {
+  reset_stub_state();
+  g_start_during_create=true;
+  uint8_t stack[128];
+  scheduler_task_t task=scheduler_start("outer",5,stack,sizeof stack,counting_entry,NULL);
+  CHECK(task.slot && g_nested_task.slot && task.slot != g_nested_task.slot);
+  scheduler_stop(&task); scheduler_stop(&g_nested_task);
+}
+
 static void test_stop_handles_completed_thread(void) {
   reset_stub_state();
   g_auto_run_threads = true; /* Threads exit before scheduler_stop observes them. */
@@ -227,11 +244,12 @@ static void test_stop_handles_completed_thread(void) {
   scheduler_task_t task =
       scheduler_start("oneshot", 5, stack, sizeof(stack), counting_entry, NULL);
   CHECK(task.slot != NULL);
-  scheduler_stop(&task); /* Should be a no-op because slot->thread is already NULL. */
+  scheduler_stop(&task); /* Completed thread retains its slot until joined. */
   CHECK(task.slot == NULL);
 }
 
 int main(void) {
+  test_reservation_during_create();
   test_start_and_stop_runs_entry();
   test_exhausts_slots_then_recovers();
   test_creation_failure_does_not_leak_slot();

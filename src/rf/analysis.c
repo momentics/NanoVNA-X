@@ -82,19 +82,26 @@ float bilinear_interpolation(float y1, float y2, float y3, float x) {
 
 float measure_search_value(uint16_t* idx, float y, get_value_t get, int16_t mode,
                                   int16_t marker_idx) {
-  uint16_t x = *idx;
+  /* Endpoint, search-direction and CW guards: @jebcampbellhm, PR #13. */
+  int x = *idx;
+  if (x >= sweep_points || (mode != -1 && mode != 1))
+    return 0;
   float y1, y2, y3;
   y1 = y2 = y3 = get(x);
   bool result = (y3 > y); // current position depend from start point
-  for (; x < sweep_points; x += mode) {
-    if (mode < 0 && x == 0) break;
+  for (; x >= 0 && x < sweep_points; x += mode) {
     y3 = get(x);
+    if (y3 == y) {
+      *idx = x;
+      if (marker_idx != MARKER_INVALID) set_marker_index(marker_idx, x);
+      return get_frequency(x);
+    }
     if (result != (y3 > y))
       break;
     y1 = y2;
     y2 = y3;
   }
-  if (x >= sweep_points)
+  if (x < 0 || x >= sweep_points)
     return 0;
   x -= mode;
   *idx = x;
@@ -127,9 +134,9 @@ float search_peak_value(uint16_t* xp, get_value_t get, bool mode) {
       x = i;
     }
   }
+  *xp = x;
   if (x < 1 || x >= sweep_points - 1)
     return y2;
-  *xp = x;
   float y1 = get(x - 1);
   float y3 = get(x + 1);
   if (y1 == y3)
@@ -143,7 +150,7 @@ float search_peak_value(uint16_t* xp, get_value_t get, bool mode) {
 }
 
 bool measure_get_value(uint16_t ch, freq_t f, float* data) {
-  if (f < frequency0 || f > frequency1)
+  if (ch > 1 || sweep_points < 2 || frequency0 == frequency1 || f < frequency0 || f > frequency1)
     return false;
   // Search k1
   uint16_t _points = sweep_points - 1;

@@ -32,6 +32,7 @@ extern "C" {
 #include <stdint.h>
 
 void state_manager_init(void);
+void load_default_properties(void);
 void state_manager_mark_dirty(void);
 void state_manager_force_save(void);
 void state_manager_service(void);

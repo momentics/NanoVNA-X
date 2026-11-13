@@ -62,6 +62,7 @@ static shell_session_callback_t shell_session_stop_cb = NULL;
 static bool shell_session_active = false;
 static bool shell_auto_resume = false;
 static thread_t* script_thread = NULL;
+static bool shell_output_failed;
 
 static void shell_on_event(const event_bus_message_t* message, void* user_data);
 
@@ -85,9 +86,14 @@ static inline BaseAsynchronousChannel* shell_current_channel(void) {
 
 #define SHELL_IO_TIMEOUT MS2ST(20)
 
-static bool shell_io_write(const uint8_t* data, size_t size, bool abort_on_stall) {
+/* @jebcampbellhm identified stalled-host and buffer-lifetime risks in
+ * https://github.com/momentics/NanoVNA-X/pull/13. This implementation bounds
+ * all output inactivity and latches failure until the next command/session.
+ * This prevents a raw caller from silently continuing after a missing chunk.
+ */
+static bool shell_io_write(const uint8_t* data, size_t size) {
   BaseAsynchronousChannel* channel = shell_current_channel();
-  if (channel == NULL || data == NULL) {
+  if (shell_output_failed || channel == NULL || data == NULL) {
     return false;
   }
   size_t written = 0;
@@ -103,13 +109,15 @@ static bool shell_io_write(const uint8_t* data, size_t size, bool abort_on_stall
     } else {
       // Timeout incurred (sent=0). Check connection.
       if (!shell_check_connect()) {
+        shell_output_failed = true;
         return false;
       }
       #ifndef NANOVNA_HOST_TEST
       wdgReset(&WDGD1);
       #endif
       /* Bound inactivity, not total transfer time, even while USB stays connected. */
-      if (abort_on_stall && (systime_t)(chVTGetSystemTimeX() - last_progress) >= MS2ST(1000)) {
+      if ((systime_t)(chVTGetSystemTimeX() - last_progress) >= MS2ST(1000)) {
+        shell_output_failed = true;
         return false;
       }
     }
@@ -139,7 +147,7 @@ static size_t shell_io_read(uint8_t* data, size_t size) {
 
 static void shell_write(const void* buf, size_t size) {
   /* The raw void API cannot report truncated chunks; block until sent or disconnected. */
-  (void)shell_io_write((const uint8_t*)buf, size, false);
+  (void)shell_io_write((const uint8_t*)buf, size);
 }
 
 static size_t shell_read(void* buf, size_t size) {
@@ -181,7 +189,7 @@ int shell_printf(const char* fmt, ...) {
    * Use shell_io_write which implements timeouts to prevent hanging 
    * if the host is not reading data (e.g. stalled CDC connection).
    */
-  if (!shell_io_write((uint8_t*)shell_print_buffer, ms.eos, true)) {
+  if (!shell_io_write((uint8_t*)shell_print_buffer, ms.eos)) {
     return 0;
   }
 
@@ -210,6 +218,7 @@ void shell_wake_all_waiting_threadsI(void) {
 
 static void shell_handle_session_transition(bool active) {
   if (active && !shell_session_active) {
+    shell_output_failed = false;
     shell_session_active = true;
     if (shell_session_start_cb != NULL) {
       shell_session_start_cb();
@@ -323,8 +332,12 @@ void shell_register_commands(const vna_shell_command* table) {
 
 const vna_shell_command* shell_parse_command(char* line, uint16_t* argc, char*** argv,
                                            const char** name_out) {
+  shell_output_failed = false;
   shell_nargs = parse_line(line, shell_args, ARRAY_COUNT(shell_args));
   if (shell_nargs > ARRAY_COUNT(shell_args)) {
+    if (argc) *argc = 0;
+    if (argv) *argv = NULL;
+    if (name_out) *name_out = NULL;
     shell_printf("too many arguments, max " define_to_STR(VNA_SHELL_MAX_ARGUMENTS)
                      VNA_SHELL_NEWLINE_STR);
     return NULL;
@@ -361,6 +374,13 @@ const vna_shell_command* shell_parse_command(char* line, uint16_t* argc, char***
   return NULL;
 }
 
+/* PR #13 by @jebcampbellhm proposed atomic publication and completion-bound
+ * argument lifetime for deferred commands:
+ * https://github.com/momentics/NanoVNA-X/pull/13
+ * The implementation here follows the same synchronization principle: keep
+ * the caller queued and its borrowed arguments valid until the handler returns.
+ * The surrounding transport and script handling are NanoVNA-X adaptations.
+ */
 void shell_request_deferred_execution(const vna_shell_command* command, uint16_t argc, char** argv) {
   osalSysLock();
   pending_argc = argc;

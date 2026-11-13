@@ -27,6 +27,16 @@ make test
 The `test` target builds every suite into `build/tests/*.out` and executes them.
 Failures are reported with descriptive messages.
 
+Production-function Python harnesses contributed by @jebcampbellhm in
+[PR #11](https://github.com/momentics/NanoVNA-X/pull/11) and
+[PR #13](https://github.com/momentics/NanoVNA-X/pull/13) also run under `make test`.
+They compile extracted production functions rather than duplicate their logic:
+startup rollover/ADC readiness, nested IRQ scheduling, CDC line-state changes,
+exact SD I/O, transactional CAL import, Touchstone parsing, calibration/math,
+DMA flag ownership, flash boundaries, and I2C fault recovery. The timing harness
+is adapted to our suspend/resume capture implementation. Override `HOST_PYTHON`
+or `HOST_CC` when the host tools have different names.
+
 ## Extending
 
 1. Drop a new `tests/unit/test_*.c` file containing `main()` and register it in

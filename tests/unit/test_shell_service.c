@@ -357,6 +357,8 @@ static void reset_shell_state(const char* scripted_rx) {
   g_published_event_count = 0;
   g_registered_listener = NULL;
   shell_restore_stream();
+  char empty_line[] = "";
+  shell_parse_command(empty_line, NULL, NULL, NULL);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -412,11 +414,7 @@ static void test_shell_parse_and_overflow(void) {
   char** overflow_argv = NULL;
   const vna_shell_command* overflow_cmd =
       shell_parse_command(overflow_line, &overflow_argc, &overflow_argv, NULL);
-  CHECK(overflow_cmd == &g_test_commands[0], "known commands should still parse when clamped");
-  CHECK(overflow_argc == VNA_SHELL_MAX_ARGUMENTS,
-        "argc must be clamped to the configured maximum");
-  CHECK(strcmp(overflow_argv[VNA_SHELL_MAX_ARGUMENTS - 1], "4") == 0,
-        "excess arguments should be dropped");
+  CHECK(overflow_cmd == NULL, "excess arguments must reject the command");
 }
 
 static void test_shell_deferred_queue_and_event_bus(void) {
@@ -571,6 +569,8 @@ static void test_write_inactivity_timeout(void) {
   CHECK(shell_check_connect(), "inactivity should not disconnect the shell session");
 
   g_write_script_length = 0;
+  char next_command[] = "version";
+  shell_parse_command(next_command, NULL, NULL, NULL);
   CHECK(shell_printf("recovered") == 9, "later output should succeed when the host resumes reading");
   CHECK(tx_contains("recovered"), "recovered output should reach the host");
 
@@ -591,13 +591,13 @@ static void test_raw_write_backpressure(void) {
   g_write_script = partial_writes;
   g_write_script_length = ARRAY_COUNT(partial_writes);
   shell_stream_write("progress", 8);
-  CHECK(g_stream_state.tx_len == 8 && memcmp(g_stream_state.tx, "progress", 8) == 0,
-        "raw output must preserve every byte despite more than one second without progress");
-   CHECK(g_time == MS2ST(1200) && g_write_calls == ARRAY_COUNT(partial_writes) + 1,
-        "raw output must keep retrying until the host resumes reading");
+  CHECK(g_stream_state.tx_len == 2 && memcmp(g_stream_state.tx, "pr", 2) == 0,
+         "raw output must abort after one second without progress");
+  CHECK(g_time == MS2ST(1000) && g_write_calls == 11,
+         "raw output must not block the owner thread forever");
   shell_stream_write("next", 4);
-  CHECK(g_stream_state.tx_len == 12 && memcmp(g_stream_state.tx, "progressnext", 12) == 0,
-        "subsequent raw chunks must follow the complete stalled chunk without missing bytes");
+  CHECK(g_stream_state.tx_len == 2,
+         "failed frames must suppress subsequent chunks until a new command");
 }
 
 static void test_write_partial_progress(void) {

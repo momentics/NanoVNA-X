@@ -329,12 +329,19 @@ static UI_FUNCTION_ADV_CALLBACK(menu_brightness_acb) {
 }
 #endif
 
-// Band Mode Logic
-// Band Mode Logic
+/* @jebcampbellhm's hardware/profile proposal in PR #12 informed this UI:
+ * https://github.com/momentics/NanoVNA-X/pull/12
+ * Our variant keeps runtime clock selection in standard images and displays
+ * the enforced ZeeTK strategy in ZK images; it does not copy the PR's menu.
+ */
 static const option_desc_t band_mode_options[] = {
-    {0, "Direct", BUTTON_ICON_NONE},
-    {1, "Div", BUTTON_ICON_NONE},
-    {2, "Multi", BUTTON_ICON_NONE},
+#ifdef __ZEETK__
+    {SI5351_BAND_SJWCH5351, "ZeeTK", BUTTON_ICON_NONE},
+#else
+    {SI5351_BAND_SI5351, "Si5351", BUTTON_ICON_NONE},
+    {SI5351_BAND_MS5351, "MS5351", BUTTON_ICON_NONE},
+    {SI5351_BAND_SJWCH5351, "SJWCH5351", BUTTON_ICON_NONE},
+#endif
 };
 
 

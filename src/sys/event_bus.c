@@ -112,7 +112,10 @@ static bool event_bus_enqueue(event_bus_t* bus, event_bus_queue_node_t* node, bo
   msg_t msg = (msg_t)node;
   msg_t result;
   if (from_isr) {
+    /* @jebcampbellhm, PR #13: I-class mailbox calls require the ISR lock. */
+    chSysLockFromISR();
     result = chMBPostI(&bus->mailbox, msg);
+    chSysUnlockFromISR();
   } else {
     result = chMBPost(&bus->mailbox, msg, TIME_IMMEDIATE);
   }

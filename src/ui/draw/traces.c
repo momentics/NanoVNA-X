@@ -360,29 +360,8 @@ void trace_into_index(int t) {
     const float rscale = P_RADIUS / scale;
     int16_t y, x;
     for (i = start; i <= stop; i++) {
-      if (trace[t].type == TRC_SMITH) {
-        float real = array[i][0];
-        float imag = array[i][1];
-        float mag2 = real*real + imag*imag;
-        float denominator = 1.0f + mag2;
-        if (denominator > 0.001f) { 
-          x = P_CENTER_X + float2int((2.0f * real / denominator) * rscale);
-          y = P_CENTER_Y - float2int((2.0f * imag / denominator) * rscale);
-        } else {
-          x = P_CENTER_X;
-          y = P_CENTER_Y;
-        }
-        if (x < CELLOFFSETX)
-          x = CELLOFFSETX;
-        else if (x > CELLOFFSETX + WIDTH)
-          x = CELLOFFSETX + WIDTH;
-        if (y < 0)
-          y = 0;
-        else if (y > HEIGHT)
-          y = HEIGHT;
-      } else {
-        cartesian_scale(array[i], &x, &y, rscale);
-      }
+      // @jebcampbellhm, PR #13: Smith charts plot Gamma, not transformed Z.
+      cartesian_scale(array[i], &x, &y, rscale);
       mark_set_index(index, i, (uint16_t)x, (uint16_t)y, &line_state);
     }
     return;

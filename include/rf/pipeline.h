@@ -42,6 +42,7 @@ void measurement_pipeline_init(measurement_pipeline_t* pipeline, const PlatformD
 
 uint16_t measurement_pipeline_active_mask(measurement_pipeline_t* pipeline);
 
+void measurement_pipeline_renormalize(uint16_t channel_mask);
 bool measurement_pipeline_execute(measurement_pipeline_t* pipeline, bool break_on_operation,
                                   uint16_t channel_mask);
 

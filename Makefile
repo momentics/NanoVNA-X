@@ -18,6 +18,13 @@ ifeq ($(TARGET),)
 endif
 #TARGET=F303
 
+# Mixer hardware cannot be identified over I2C. Keep it separate from the MCU.
+RF_PROFILE ?= STANDARD
+ifeq ($(filter $(RF_PROFILE),STANDARD ZK),)
+$(error RF_PROFILE must be STANDARD or ZK)
+endif
+RF_SUFFIX := $(if $(filter ZK,$(RF_PROFILE)),-ZK,)
+
 # Compiler options here.
 ifeq ($(USE_OPT),)
  ifeq ($(TARGET),F303)
@@ -126,9 +133,9 @@ endif
 
 # Define project name here
 ifeq ($(TARGET),F303)
-  PROJECT = H4
+PROJECT = H4$(RF_SUFFIX)
 else
-  PROJECT = H
+PROJECT = H$(RF_SUFFIX)
 endif
 
 # Imported source files and paths
@@ -341,7 +348,10 @@ UDEFS+= -DVNA_AUTO_SELECT_RTC_SOURCE
 endif
 #Enable if install external 32.768kHz clock quartz on PC14 and PC15 pins on STM32 CPU and no VNA_AUTO_SELECT_RTC_SOURCE
 #UDEFS+= -DVNA_USE_LSE
-UDEFS+= -D__VNA_Z_RENORMALIZATION__ 
+UDEFS+= -D__VNA_Z_RENORMALIZATION__
+ifeq ($(RF_PROFILE),ZK)
+UDEFS += -D__ZEETK__
+endif
 # Define ASM defines here
 UADEFS =
 
@@ -362,6 +372,10 @@ ULIBS = -lm
 HOST_CC ?= gcc
 HOST_CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -O2 -fno-inline-small-functions -ggdb -fomit-frame-pointer -falign-functions=16 -ffast-math -fsingle-precision-constant -fmerge-constants
 HOST_LDFLAGS ?= -lm
+HOST_PYTHON ?= python3
+PY_TEST_SUITES := test_review_fixes test_startup_timing test_irq_wrappers \
+                  test_storage_io test_storage_parser test_snp_import \
+                  test_usb_control test_dma_flags test_flash_boundaries test_i2c_recovery
 
 TEST_BUILD_DIR := build/tests
 TEST_SUITES := $(TEST_BUILD_DIR)/test_common $(TEST_BUILD_DIR)/test_vna_math \
@@ -420,6 +434,10 @@ test: tests
 		echo "[RUN] $$suite"; \
 		"$$suite"; \
 	done
+	@set -e; for suite in $(PY_TEST_SUITES); do \
+		echo "[RUN] $$suite"; \
+		HOST_CC="$(HOST_CC)" $(HOST_PYTHON) tests/unit/$$suite.py; \
+	done
 
 # Define ChibiOS sources and objects (handle potential ./ prefix)
 CHIBIOS_SOURCES := $(filter third_party/ChibiOS/% ./third_party/ChibiOS/%, $(CSRC))
@@ -441,7 +459,7 @@ PRE_MAKE_ALL_RULE_HOOK: $(VERSION_HEADER)
 
 $(VERSION_HEADER): VERSION | $(BUILDDIR)
 	@mkdir -p $(dir $@)
-	@printf '#pragma once\n#define NANOVNA_VERSION_STRING "%s"\n' "$(VERSION)" > $@
+	@printf '#pragma once\n#define NANOVNA_VERSION_STRING "%s"\n' "$(VERSION)$(RF_SUFFIX)" > $@
 
 flash: build/$(PROJECT).bin
 	dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D build/$(PROJECT).bin
@@ -465,6 +483,13 @@ endif
 	@ls -l TAGS
 
 TEST_SUITES += $(TEST_BUILD_DIR)/test_sweep_service
+TEST_SUITES += $(TEST_BUILD_DIR)/test_rf_h $(TEST_BUILD_DIR)/test_rf_h_zk \
+               $(TEST_BUILD_DIR)/test_rf_h4 $(TEST_BUILD_DIR)/test_rf_h4_zk
+
+$(TEST_BUILD_DIR)/test_rf_h_zk $(TEST_BUILD_DIR)/test_rf_h4_zk: RF_TEST_DEFS += -D__ZEETK__
+$(TEST_BUILD_DIR)/test_rf_h4 $(TEST_BUILD_DIR)/test_rf_h4_zk: RF_TEST_DEFS += -DNANOVNA_F303
+$(TEST_BUILD_DIR)/test_rf_h $(TEST_BUILD_DIR)/test_rf_h_zk $(TEST_BUILD_DIR)/test_rf_h4 $(TEST_BUILD_DIR)/test_rf_h4_zk: tests/unit/test_rf_profiles.c src/driver/si5351.c | $(TEST_BUILD_DIR)
+	$(HOST_CC) $(HOST_CFLAGS) $(RF_TEST_DEFS) -Itests/stubs -Iinclude -Isrc -o $@ $< $(HOST_LDFLAGS)
 
 ifeq ($(OS),Windows_NT)
 # MinGW PE references otherwise retain hardware-only functions despite section GC.

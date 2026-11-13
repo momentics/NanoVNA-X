@@ -27,7 +27,8 @@ MEMORY
     flash4  : org = 0x00000000, len = 0
     flash5  : org = 0x00000000, len = 0
     flash6  : org = 0x00000000, len = 0
-    flash7  : org = 0x0801C800, len = 114k
+    /* @jebcampbellhm, PR #13: saved records plus CAL staging reach flash end. */
+    flash7  : org = 0x0801C800, len = 142k
     ram0    : org = 0x20000000, len = 40k
     ram1    : org = 0x00000000, len = 0
     ram2    : org = 0x00000000, len = 0

@@ -405,6 +405,17 @@ static void test_smoothing(void) {
 }
 
 int main(void) {
+  sweep_service_init(NULL);
+  CHECK(!sweep_service_data_valid());
+  sweep_service_increment_generation();
+  CHECK(sweep_service_data_valid());
+  sweep_service_begin_measurement();
+  CHECK(!sweep_service_data_valid());
+  sweep_service_end_measurement();
+  CHECK(!sweep_service_data_valid());
+  sweep_service_increment_generation();
+  app_measurement_reset();
+  CHECK(!sweep_service_data_valid());
   test_dump_capture();
   test_smoothing();
   test_capture_idle();

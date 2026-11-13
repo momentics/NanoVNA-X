@@ -106,10 +106,15 @@
 static void initADCDriver(ADC_TypeDef *adc) {
   adc->CR = 0;                            // Master ADC calibration.
   adc->CR = ADC_CR_ADVREGEN_0;
+  // RM0316: allow the internal regulator to settle before calibration.
+  chThdSleepMilliseconds(1);
   adc->CR|= ADC_CR_ADCAL;
-  while (adc->CR & ADC_CR_ADCAL);
+  adc_wait_startup(&adc->CR, ADC_CR_ADCAL, 0);
+  // Also cover the post-calibration ADC-clock delay before enabling.
+  chThdSleepMilliseconds(1);
+  adc->ISR = ADC_ISR_ADRD; // W1C: wait for a fresh ready indication.
   adc->CR|= ADC_CR_ADEN;                  // Master ADC enabled here in order to reduce conversions latencies.
-  while ((adc->ISR & ADC_ISR_ADRD) == 0); // wait ready
+  adc_wait_startup(&adc->ISR, ADC_ISR_ADRD, ADC_ISR_ADRD);
   // Set measure timings for all channels
   adc->SMPR1 = ADC_SMPR1_SMP_AN3(ADC_TOUCH_SMP_TIME) | ADC_SMPR1_SMP_AN4(ADC_TOUCH_SMP_TIME);
   adc->SMPR2 = ADC_SMPR2_SMP_AN17(ADC_VBAT_SMP_TIME) | ADC_SMPR2_SMP_AN18(ADC_VBAT_SMP_TIME) | ADC_SMPR2_SMP_AN16(ADC_VBAT_SMP_TIME);

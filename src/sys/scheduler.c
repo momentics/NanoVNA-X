@@ -37,11 +37,9 @@ static THD_FUNCTION(scheduler_entry_adapter, arg) {
     exit_code = slot->entry(slot->user_data);
   }
 
-  chSysLock();
-  slot->thread = NULL;
-  slot->entry = NULL;
-  slot->user_data = NULL;
-  chSysUnlock();
+  /* @jebcampbellhm, PR #13: retain ownership until scheduler_stop joins us,
+   * even when this thread exits before chThdCreateStatic returns.
+   */
 
   chThdExit(exit_code);
 }
@@ -57,7 +55,7 @@ scheduler_task_t scheduler_start(const char* name, tprio_t priority, void* worki
   scheduler_slot_t* slot = NULL;
   chSysLock();
   for (size_t i = 0; i < SCHEDULER_MAX_TASKS; ++i) {
-    if (scheduler_slots[i].thread == NULL) {
+    if (scheduler_slots[i].entry == NULL) {
       slot = &scheduler_slots[i];
       slot->entry = entry;
       slot->user_data = user_data;

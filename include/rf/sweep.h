@@ -56,6 +56,7 @@ void sweep_service_cancel_scan(void);
 void sweep_service_begin_measurement(void);
 void sweep_service_end_measurement(void);
 uint32_t sweep_service_increment_generation(void);
+bool sweep_service_data_valid(void);
 uint32_t sweep_service_current_generation(void);
 void sweep_service_reset_progress(void);
 

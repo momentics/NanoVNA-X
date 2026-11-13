@@ -35,7 +35,9 @@
 /*
  * DMA/I2S capture state
  */
-static systime_t ready_time = 0;
+/* Rollover-safe settling, based on @jebcampbellhm's PR #11. */
+static systime_t capture_start = 0;
+static systime_t capture_delay = 0;
 static volatile uint16_t wait_count = 0;
 static thread_reference_t capture_thread = NULL;
 static alignas(8) audio_sample_t rx_buffer[AUDIO_BUFFER_LEN * 2];
@@ -51,6 +53,7 @@ static int16_t dump_selection = 0;
  */
 static volatile bool sweep_in_progress = false;
 static volatile uint32_t sweep_generation = 0;
+static bool sweep_data_valid;
 static uint16_t p_sweep = 0;
 static uint8_t sweep_state_flags = 0;
 static volatile bool sweep_cancel_request = false;
@@ -246,7 +249,7 @@ static void duplicate_buffer_to_dump(audio_sample_t* p, size_t n) {
 
 void i2s_lld_serve_rx_interrupt(uint32_t flags) {
   uint16_t wait = wait_count;
-  if (wait == 0U || chVTGetSystemTimeX() < ready_time) {
+  if (wait == 0U || (systime_t)(chVTGetSystemTimeX() - capture_start) < capture_delay) {
     return;
   }
   audio_sample_t* p = (flags & STM32_DMA_ISR_TCIF) ? rx_buffer + AUDIO_BUFFER_LEN : rx_buffer;
@@ -274,6 +277,7 @@ void i2s_lld_serve_rx_interrupt(uint32_t flags) {
 void sweep_service_init(event_bus_t* bus) {
   sweep_in_progress = false;
   sweep_generation = 0;
+  sweep_data_valid = false;
   sweep_reset_progress();
   sweep_state_flags = 0;
   sweep_cancel_request = false;
@@ -294,6 +298,7 @@ void sweep_service_reset_progress(void) {
 void sweep_service_begin_measurement(void) {
   osalSysLock();
   sweep_in_progress = true;
+  sweep_data_valid = false;
   sweep_cancel_request = false;
   osalSysUnlock();
 }
@@ -307,6 +312,7 @@ void sweep_service_end_measurement(void) {
 uint32_t sweep_service_increment_generation(void) {
   osalSysLock();
   uint32_t generation = ++sweep_generation;
+  sweep_data_valid = true;
   osalSysUnlock();
   return generation;
 }
@@ -319,8 +325,11 @@ uint32_t sweep_service_current_generation(void) {
 }
 
 void sweep_service_start_capture(systime_t delay_ticks) {
-  ready_time = chVTGetSystemTimeX() + delay_ticks;
+  chSysLock();
+  capture_start = chVTGetSystemTimeX();
+  capture_delay = delay_ticks;
   wait_count = config._bandwidth + 2U;
+  chSysUnlock();
 }
 
 bool sweep_service_wait_for_capture(void) {
@@ -328,7 +337,10 @@ bool sweep_service_wait_for_capture(void) {
   chSysLock();
   if (wait_count != 0U) {
     /* Atomically sleep until DMA completes, leaving the lower-priority CLI runnable.
-     * Reports: @d51r3verse and @jebcampbellhm, GitHub issue #14.
+     * @jebcampbellhm analyzed capture-task starvation and DMA IRQ scheduling in
+     * https://github.com/momentics/NanoVNA-X/pull/11, alongside the reports by
+     * @d51r3verse and @jebcampbellhm in issue #14. Our suspend/resume handoff
+     * addresses that problem differently from the PR's tick-sleep approach.
      */
     completed = chThdSuspendTimeoutS(&capture_thread, MS2ST(2000)) == MSG_OK;
     if (!completed)
@@ -350,6 +362,10 @@ void sweep_service_prepare_dump(audio_sample_t* buffer, size_t count, int select
   dump_len = (int16_t)count;
   dump_selection = (int16_t)selection;
   osalSysUnlock();
+}
+
+bool sweep_service_data_valid(void) {
+  return sweep_data_valid;
 }
 
 bool sweep_service_dump_ready(void) {
@@ -537,7 +553,7 @@ static void fsm_setup_freq(rf_fsm_context_t* ctx) {
   }
   ctx->total_cycles = extra_cycles + 1U;
   ctx->current_cycle = 0;
-  ctx->st_delay = DELAY_SWEEP_START; 
+   ctx->st_delay = p_sweep == 0U ? DELAY_SWEEP_START : 0;
   ctx->state = RF_STATE_SETUP_MEASURE;
 }
 
@@ -611,6 +627,7 @@ static void fsm_process(rf_fsm_context_t* ctx) {
 }
 
 bool __attribute__((optimize("Os"))) app_measurement_sweep(bool break_on_operation, uint16_t mask) {
+  sweep_data_valid = false;
   rf_fsm_context_t ctx;
   ctx.state = RF_STATE_SETUP_FREQ;
   ctx.break_on_operation = break_on_operation;
@@ -724,6 +741,7 @@ void sweep_wait_for_idle(void) {
 }
 
 void app_measurement_reset(void) {
+  sweep_data_valid = false;
   sweep_reset_progress();
 }
 
@@ -785,8 +803,10 @@ int app_measurement_set_frequency(freq_t freq) {
 
 #ifdef __USE_FREQ_TABLE__
 void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points) {
-  freq_t step = points - 1U;
+  sweep_data_valid = false;
+  freq_t step = points > 1U ? points - 1U : 1U;
   freq_t span = stop - start;
+  if (points < 2U) span = 0;
   freq_t delta = span / step;
   freq_t error = span % step;
   freq_t f = start;
@@ -816,9 +836,11 @@ freq_t get_frequency_step(void) {
 }
 #else
 void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points) {
+  sweep_data_valid = false;
   freq_t span = stop - start;
   _f_start = start;
-  _f_points = points - 1U;
+  _f_points = points > 1U ? points - 1U : 1U;
+  if (points < 2U) span = 0;
   _f_delta = span / _f_points;
   _f_error = span % _f_points;
 }

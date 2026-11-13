@@ -132,7 +132,7 @@ static void test_parse_line(void) {
   char small_buf[] = "a b c d";
   char* small_argv[2];
   int small_argc = parse_line(small_buf, small_argv, 2);
-  CHECK(small_argc == 2);
+  CHECK(small_argc == 3); /* Overflow is reported, not silently truncated. */
   CHECK(strcmp(small_argv[0], "a") == 0);
   CHECK(strcmp(small_argv[1], "b") == 0);
 }

@@ -75,7 +75,11 @@ static UI_FUNCTION_ADV_CALLBACK(menu_calop_acb) {
   }
   // Reset the physical button debounce state when advancing through CAL steps
   ui_input_reset_state();
-  cal_collect(data);
+  /* @jebcampbellhm, PR #13: a failed capture must not advance the CAL wizard. */
+  if (!cal_collect(data)) {
+    ui_message_box("CAL", "Capture failed", 1000);
+    return;
+  }
   selection = c_list[data].next;
 }
 

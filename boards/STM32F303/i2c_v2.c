@@ -33,47 +33,44 @@ void i2c_start(void) {
   i2c_set_timings(STM32_I2C_INIT_T);
 }
 
-// I2C TX only (compact version)
-bool i2c_transfer(uint8_t addr, const uint8_t *w, size_t wn)
-{
-  //if (wn == 0) return false;
-  while(VNA_I2C->ISR & I2C_ISR_BUSY); // wait last transaction
-  VNA_I2C->CR1|= I2C_CR1_PE;
-  VNA_I2C->CR2 = (addr << I2C_CR2_SADD_7BIT_SHIFT) | (wn << I2C_CR2_NBYTES_SHIFT) | I2C_CR2_AUTOEND | I2C_CR2_START;
-  do {
-    while ((VNA_I2C->ISR & (I2C_ISR_TXE|I2C_ISR_NACKF)) == 0);
-    if (VNA_I2C->ISR & I2C_ISR_NACKF) {VNA_I2C->CR1 = 0; return false;}  // NO ASK error
-    VNA_I2C->TXDR = *w++;
-  } while (--wn);
-  return true;
+// Bounded I2C recovery contributed by @jebcampbellhm in PR #13.
+// Bound every peripheral wait, including BUSY and a missing ACK/clock.
+// The iteration cap also terminates during early startup with the tick stopped.
+static bool i2c_wait(uint32_t mask, uint32_t value) {
+  for (unsigned timeout=100000;timeout;--timeout) {
+    uint32_t status=VNA_I2C->ISR;
+    if (status & (I2C_ISR_NACKF|I2C_ISR_BERR|I2C_ISR_ARLO)) break;
+    if ((status & mask)==value) return true;
+  }
+  VNA_I2C->CR1 &= ~I2C_CR1_PE;
+  VNA_I2C->ICR = I2C_ICR_NACKCF|I2C_ICR_STOPCF|I2C_ICR_BERRCF|I2C_ICR_ARLOCF;
+  return false;
 }
 
-// I2C TX and RX variant
-bool i2c_receive(uint8_t addr, const uint8_t *w, size_t wn, uint8_t *r, size_t rn)
-{
-  while(VNA_I2C->ISR & I2C_ISR_BUSY); // wait last transaction
-  VNA_I2C->CR1|= I2C_CR1_PE;
+bool i2c_receive(uint8_t addr, const uint8_t *w, size_t wn, uint8_t *r, size_t rn) {
+  if (wn>255 || rn>255 || (!wn && !rn) || (wn && !w) || (rn && !r)) return false;
+  if (!i2c_wait(I2C_ISR_BUSY,0)) return false;
+  VNA_I2C->CR1 |= I2C_CR1_PE;
   if (wn) {
-    VNA_I2C->CR2 = (addr << I2C_CR2_SADD_7BIT_SHIFT) | (wn << I2C_CR2_NBYTES_SHIFT);
-    if (rn == 0) VNA_I2C->CR2|= I2C_CR2_AUTOEND;
-    VNA_I2C->CR2|= I2C_CR2_START;
+    VNA_I2C->CR2=(addr<<1)|(wn<<16)|I2C_CR2_START|(rn ? 0 : I2C_CR2_AUTOEND);
     do {
-      while ((VNA_I2C->ISR & (I2C_ISR_TXE|I2C_ISR_NACKF)) == 0);
-      if (VNA_I2C->ISR & I2C_ISR_NACKF) {VNA_I2C->CR1 = 0; return false;}  // NO ASK error
-      VNA_I2C->TXDR = *w++;
+      if (!i2c_wait(I2C_ISR_TXIS,I2C_ISR_TXIS)) return false;
+      VNA_I2C->TXDR=*w++;
     } while (--wn);
+    if (rn && !i2c_wait(I2C_ISR_TC,I2C_ISR_TC)) return false;
   }
-
   if (rn) {
-    while ((VNA_I2C->ISR & I2C_ISR_TC) == 0); // wait transfer completion if need
-    VNA_I2C->CR2 = (addr << I2C_CR2_SADD_7BIT_SHIFT) | (rn << I2C_CR2_NBYTES_SHIFT) | I2C_CR2_RD_WRN | I2C_CR2_START | I2C_CR2_AUTOEND;   // start transfer
-    //VNA_I2C->CR2|= I2C_CR2_AUTOEND; // important to do it afterwards to do a proper repeated start!
+    VNA_I2C->CR2=(addr<<1)|(rn<<16)|I2C_CR2_RD_WRN|I2C_CR2_START|I2C_CR2_AUTOEND;
     do {
-      while((VNA_I2C->ISR & (I2C_ISR_RXNE|I2C_ISR_NACKF)) == 0);
-      if (VNA_I2C->ISR & I2C_ISR_NACKF) {VNA_I2C->CR1 = 0; return false;}  // NO ASK error
-      *r++ = VNA_I2C->RXDR;
+      if (!i2c_wait(I2C_ISR_RXNE,I2C_ISR_RXNE)) return false;
+      *r++=VNA_I2C->RXDR;
     } while (--rn);
   }
+  if (!i2c_wait(I2C_ISR_STOPF,I2C_ISR_STOPF)) return false;
+  VNA_I2C->ICR=I2C_ICR_STOPCF;
   return true;
 }
 
+bool i2c_transfer(uint8_t addr, const uint8_t *w, size_t wn) {
+  return i2c_receive(addr,w,wn,NULL,0);
+}

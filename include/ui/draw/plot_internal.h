@@ -193,14 +193,15 @@ static inline float get_s11_x(float re, float im, float z) {
 
 static inline float get_s21_r(float re, float im, float z) {
   float l = get_l(re, im);
-  return z * (1.0f - l) / l;
+  /* @jebcampbellhm, PR #13: series impedance is 2*Z0*(1-S21)/S21. */
+  return z * (re - l) / l;
 }
 
 static inline float get_s21_x(float re, float im, float z) {
-  return -2.0f * z * im / get_l(re, im);
+  return -z * im / get_l(re, im);
 }
 
-static inline float get_w(int i) { return 2 * VNA_PI * get_sweep_frequency(ST_START + i); }
+static inline float get_w(int i) { return 2 * VNA_PI * get_frequency(i); }
 
 #ifdef __cplusplus
 }

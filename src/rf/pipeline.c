@@ -38,39 +38,33 @@ uint16_t measurement_pipeline_active_mask(measurement_pipeline_t* pipeline) {
   return app_measurement_get_sweep_mask();
 }
 
+/* @jebcampbellhm, PR #13: use the calibration reference, not a fixed 50 ohms. */
+void measurement_pipeline_renormalize(uint16_t channel_mask) {
+#ifdef __VNA_Z_RENORMALIZATION__
+  if ((channel_mask & SWEEP_CH0_MEASURE) && current_props._portz > 1.0f &&
+      cal_load_r > 1.0f && current_props._portz != cal_load_r) {
+    float k = (current_props._portz - cal_load_r) / (current_props._portz + cal_load_r);
+    for (unsigned i = 0; i < sweep_points; ++i) {
+      float re = measured[0][i][0], im = measured[0][i][1];
+      float a = re - k, c = 1.0f - re * k, d = -im * k;
+      float den = c * c + d * d;
+      if (den > 1e-9f) {
+        measured[0][i][0] = (a * c + im * d) / den;
+        measured[0][i][1] = (im * c - a * d) / den;
+      }
+    }
+  }
+#else
+  (void)channel_mask;
+#endif
+}
+
 bool measurement_pipeline_execute(measurement_pipeline_t* pipeline, bool break_on_operation,
                                   uint16_t channel_mask) {
   (void)pipeline;
   bool res = app_measurement_sweep(break_on_operation, channel_mask);
 
-#ifdef __VNA_Z_RENORMALIZATION__
-  if (res && current_props._portz != 50.0f && current_props._portz > 1.0f) {
-     float k = (current_props._portz - 50.0f) / (current_props._portz + 50.0f);
-     uint16_t count = sweep_points;
-     // Only renormalize CH0 (S11)
-     if (channel_mask & 1) {
-       for (uint16_t i = 0; i < count; i++) {
-         float re = measured[0][i][0];
-         float im = measured[0][i][1];
-         
-         // Gamma_new = (Gamma - k) / (1 - Gamma*k)
-         // A + jB = (re - k) + j(im)
-         // C + jD = (1 - re*k) + j(-im*k)
-         
-         float A = re - k;
-         float B = im;
-         float C = 1.0f - re * k;
-         float D = -im * k;
-         
-         float den = C * C + D * D;
-         if (den > 1e-9f) {
-           measured[0][i][0] = (A * C + B * D) / den;
-           measured[0][i][1] = (B * C - A * D) / den;
-         }
-       }
-     }
-  }
-#endif
+  if (res) measurement_pipeline_renormalize(channel_mask);
 
 #ifdef __USE_SMOOTH__
   if (res)

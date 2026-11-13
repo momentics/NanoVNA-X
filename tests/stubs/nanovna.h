@@ -56,6 +56,32 @@ extern config_t config;
 enum { VNA_MODE_CONNECTION = 0 };
 #endif
 
+#ifdef RF_DRIVER_HOST_TEST
+#include "ch.h"
+#define AUDIO_CLOCK_REF 8000000U
+static inline uint32_t clamp_harmonic_threshold(uint32_t value) {
+  return value < FREQUENCY_MIN ? FREQUENCY_MIN :
+      value > FREQUENCY_MAX ? FREQUENCY_MAX : value;
+}
+systime_t chVTGetSystemTimeX(void);
+#define XTALFREQ 26000000U
+#define IF_OFFSET 12000
+#define DELAY_BAND_1_2 1
+#define DELAY_BAND_3_4 1
+#define DELAY_BANDCHANGE 1
+#define DELAY_CHANNEL_CHANGE 1
+#define DELAY_SWEEP_START 1
+#define DELAY_RESET_PLL_BEFORE 1
+#define DELAY_RESET_PLL_AFTER 0
+#define START_PROFILE do {} while (0)
+#define STOP_PROFILE do {} while (0)
+void i2c_transfer(uint8_t address, const uint8_t* data, size_t size);
+bool i2c_receive(uint8_t address, const uint8_t* tx, size_t tx_size, uint8_t* rx, size_t rx_size);
+void tlv320aic3204_set_gain(uint8_t left, uint8_t right);
+void chThdSleepMicroseconds(uint32_t delay);
+void chThdSleepMilliseconds(uint32_t delay);
+#endif
+
 #ifndef STR1
 #define STR1(x) #x
 #endif

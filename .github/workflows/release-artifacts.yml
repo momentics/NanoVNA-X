@@ -6,16 +6,21 @@ on:
 
 jobs:
   build-and-upload:
-    name: Release ${{ matrix.target }}
+    name: Release ${{ matrix.variant }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     strategy:
       matrix:
-        target: [F072, F303]
+        include:
+          - { target: F072, rf_profile: STANDARD, variant: F072 }
+          - { target: F072, rf_profile: ZK, variant: F072-ZK }
+          - { target: F303, rf_profile: STANDARD, variant: F303 }
+          - { target: F303, rf_profile: ZK, variant: F303-ZK }
       fail-fast: false
     env:
       TARGET: ${{ matrix.target }}
+      RF_PROFILE: ${{ matrix.rf_profile }}
       OSNAME: ubuntu-24.04
       # APT user-cache
       APTUSERCACHE: ${{ github.workspace }}/.apt
@@ -145,9 +150,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: build
-          key: build-${{ hashFiles('tools/arm-toolchain.env','Makefile') }}-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}
+          key: build-${{ hashFiles('tools/arm-toolchain.env','Makefile') }}-${{ env.OSNAME }}-${{ matrix.variant }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}
           restore-keys: |
-            build-${{ hashFiles('tools/arm-toolchain.env','Makefile') }}-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-
+            build-${{ hashFiles('tools/arm-toolchain.env','Makefile') }}-${{ env.OSNAME }}-${{ matrix.variant }}-${{ steps.gccver.outputs.ver }}-
 
       - name: Determine firmware version
         id: version
@@ -189,9 +194,12 @@ jobs:
             dfuse_preset=stm32f072xb
           fi
           fw_version='${{ steps.version.outputs.fw_version }}'
+          if [ "$RF_PROFILE" = ZK ]; then
+            project="${project}-ZK"
+          fi
           dist_dir=dist
           mkdir -p "$dist_dir"
-          base_name="NanoVNA-X_${{ matrix.target }}_v${fw_version}"
+          base_name="NanoVNA-X_${{ matrix.variant }}_v${fw_version}"
           for ext in bin hex; do
             cp "build/${project}.${ext}" "$dist_dir/${base_name}.${ext}"
           done
@@ -214,12 +222,12 @@ jobs:
         with:
           tag_name: ${{ github.event.release.tag_name }}
           files: |
-            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.bin
-            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.hex
-            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.dfu
-            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.bin.sha256
-            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.hex.sha256
-            dist/NanoVNA-X_${{ matrix.target }}_v${{ steps.version.outputs.fw_version }}.dfu.sha256
+            dist/NanoVNA-X_${{ matrix.variant }}_v${{ steps.version.outputs.fw_version }}.bin
+            dist/NanoVNA-X_${{ matrix.variant }}_v${{ steps.version.outputs.fw_version }}.hex
+            dist/NanoVNA-X_${{ matrix.variant }}_v${{ steps.version.outputs.fw_version }}.dfu
+            dist/NanoVNA-X_${{ matrix.variant }}_v${{ steps.version.outputs.fw_version }}.bin.sha256
+            dist/NanoVNA-X_${{ matrix.variant }}_v${{ steps.version.outputs.fw_version }}.hex.sha256
+            dist/NanoVNA-X_${{ matrix.variant }}_v${{ steps.version.outputs.fw_version }}.dfu.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -234,7 +242,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: build
-          key: build-${{ hashFiles('tools/arm-toolchain.env','Makefile') }}-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: build-${{ hashFiles('tools/arm-toolchain.env','Makefile') }}-${{ env.OSNAME }}-${{ matrix.variant }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Save ccache
         if: always()

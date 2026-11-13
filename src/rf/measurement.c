@@ -27,7 +27,9 @@
 static inline void measurement_engine_publish(measurement_engine_t* engine, event_bus_topic_t event,
                                               const uint16_t* mask) {
   if (engine->event_bus != NULL) {
-    event_bus_publish(engine->event_bus, event, mask);
+    /* @jebcampbellhm, PR #13: queued payloads must not reference this stack. */
+    (void)mask;
+    event_bus_publish(engine->event_bus, event, NULL);
   }
 }
 
@@ -73,13 +75,13 @@ void measurement_engine_tick(measurement_engine_t* engine) {
   const bool completed =
       measurement_pipeline_execute(&engine->pipeline, request.break_on_operation, mask);
   sweep_service_end_measurement();
-  if (completed) {
-    sweep_service_increment_generation();
-    measurement_engine_publish(engine, EVENT_SWEEP_COMPLETED, &mask);
-  }
-
   if (engine->port != NULL && engine->port->handle_result != NULL) {
     measurement_engine_result_t result = {.sweep_mask = mask, .completed = completed};
     engine->port->handle_result(engine->port, &result);
+  }
+  /* @jebcampbellhm, PR #11: publish only after time-domain postprocessing. */
+  if (completed) {
+    sweep_service_increment_generation();
+    measurement_engine_publish(engine, EVENT_SWEEP_COMPLETED, &mask);
   }
 }

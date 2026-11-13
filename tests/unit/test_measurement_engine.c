@@ -277,8 +277,8 @@ static void test_tick_completed_sweep_publishes_events(void) {
   CHECK(g_recorded_event_count == 2, "two events expected for a completed sweep");
   CHECK(g_recorded_events[0].topic == EVENT_SWEEP_STARTED, "first event must be STARTED");
   CHECK(g_recorded_events[1].topic == EVENT_SWEEP_COMPLETED, "second event must be COMPLETED");
-  CHECK(g_recorded_events[0].mask == g_active_mask, "mask should propagate to events");
-  CHECK(g_recorded_events[1].mask == g_active_mask, "mask should propagate to events");
+  CHECK(g_recorded_events[0].mask == 0, "queued event must not borrow stack payload");
+  CHECK(g_recorded_events[1].mask == 0, "queued event must not borrow stack payload");
   CHECK(g_last_break_flag == state.next_break_flag, "break flag must reach pipeline");
   CHECK(g_last_pipeline_mask == g_active_mask, "pipeline must see current sweep mask");
   CHECK(state.handle_result_calls == 1, "port callback should run");
@@ -299,7 +299,7 @@ static void test_tick_completed_sweep_publishes_events(void) {
   CHECK(g_end_sequence < g_generation_sequence, "measurement must end before generation increment");
   CHECK(g_generation_sequence < g_recorded_events[1].sequence,
         "generation increment must precede COMPLETED");
-  CHECK(g_recorded_events[1].sequence < g_result_sequence, "COMPLETED must precede the result callback");
+  CHECK(g_result_sequence < g_recorded_events[1].sequence, "postprocessing must precede COMPLETED");
 
   g_active_mask = 0x02u;
   measurement_engine_tick(&engine);

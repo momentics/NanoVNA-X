@@ -51,6 +51,7 @@ static void active_marker_check(void) {
 // Callbacks
 
 static UI_FUNCTION_CALLBACK(menu_marker_op_cb) {
+  /* Disabled-marker guards contributed by @jebcampbellhm in PR #13. */
   freq_t freq = get_marker_frequency(active_marker);
   if (freq == 0)
     return; // no active marker
@@ -91,6 +92,8 @@ static UI_FUNCTION_CALLBACK(menu_marker_op_cb) {
 }
 
 static UI_FUNCTION_CALLBACK(menu_marker_search_dir_cb) {
+  if (!get_marker_frequency(active_marker))
+    return;
   marker_search_dir(markers[active_marker].index,
                     data == MK_SEARCH_RIGHT ? MK_SEARCH_RIGHT : MK_SEARCH_LEFT);
   props_mode &= ~TD_MARKER_TRACK;

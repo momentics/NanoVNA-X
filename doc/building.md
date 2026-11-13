@@ -145,6 +145,45 @@ so that tools such as the Windows `DfuSe` utility recognise the file
 immediately; flashing via `make flash` or `dfu-util` works with either the raw
 `.bin` or the `.dfu` artefact.
 
+### ZeeTK hardware variants
+
+CI and release workflows build `F072`, `F072-ZK`, `F303`, and `F303-ZK`.
+The MCU remains `TARGET=F072` or `TARGET=F303`; select ZeeTK NE602A mixers
+with `RF_PROFILE=ZK`:
+
+```bash
+make clean
+make -j$(nproc) TARGET=F072 RF_PROFILE=ZK
+make clean
+make -j$(nproc) TARGET=F303 RF_PROFILE=ZK
+```
+
+The default is `RF_PROFILE=STANDARD`. Always clean when changing the MCU, RF
+profile, or LTO setting. Standard image names remain `H` and `H4`; ZK images are
+`H-ZK` and `H4-ZK`, and their displayed firmware version has a `-ZK` suffix.
+Releases publish BIN, HEX, DFU and SHA-256 checksums for each variant.
+
+Use ZK for NanoVNA-H rev3.7 / NanoVNA-H4 rev4.4 with ZeeTK NE602A mixers and
+SJWCH5351 generators. RF gains, harmonic bands, and drive currents follow
+hugen79/NanoVNA-H 1.2.50 and @jebcampbellhm's proposal in
+[PR #12](https://github.com/momentics/NanoVNA-X/pull/12), addressing
+[issue #10](https://github.com/momentics/NanoVNA-X/issues/10). PR #11 concerns
+runtime/USB fixes, and PR #13 contains numerical, storage, and error-handling
+fixes. Those fixes also apply to standard images, with local adaptations where
+NanoVNA-X already provides equivalent synchronization. Attribution is retained
+in the affected source and regression tests; selecting ZK changes RF hardware
+parameters, not whether these correctness fixes are enabled.
+
+Mixer hardware has no software-readable identity. Register-compatible clock
+clones have no verified distinguishing device ID in the referenced proposals,
+so firmware must not guess the mixer or generator from an I2C ACK. Standard
+images retain runtime selection of Si5351, MS5351, and SJWCH5351 under
+**System > Device > More > Mode**; saved IDs 0, 1, and 2 remain unchanged.
+ZK images enforce ZeeTK gains even if a legacy configuration was saved.
+A generator suffix alone does not identify the mixer revision. Saved RF
+preferences are loaded before generator initialization. Recalibrate after
+changing variants; physical RF accuracy and settling still need board testing.
+
 ## 5. Memory budgets
 
 The `dump [selection]` command is enabled by default on both targets. It exports

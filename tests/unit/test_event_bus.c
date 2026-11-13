@@ -34,12 +34,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #include "sys/event_bus.h"
 
 /* ------------------------------------------------------------------------- */
 /* Minimal ChibiOS mailbox/syslock emulation used by the event bus during tests. */
 
+static bool isr_locked;
 static msg_t mailbox_push(mailbox_t* mbp, msg_t msg) {
   if (mbp == NULL || mbp->buffer == NULL || mbp->length == 0) {
     return MSG_TIMEOUT;
@@ -70,6 +72,7 @@ msg_t chMBPost(mailbox_t* mbp, msg_t msg, systime_t timeout) {
 }
 
 msg_t chMBPostI(mailbox_t* mbp, msg_t msg) {
+  assert(isr_locked);
   return mailbox_push(mbp, msg);
 }
 
@@ -88,8 +91,8 @@ msg_t chMBFetch(mailbox_t* mbp, msg_t* msgp, systime_t timeout) {
 
 void chSysLock(void) {}
 void chSysUnlock(void) {}
-void chSysLockFromISR(void) {}
-void chSysUnlockFromISR(void) {}
+void chSysLockFromISR(void) { assert(!isr_locked); isr_locked=true; }
+void chSysUnlockFromISR(void) { assert(isr_locked); isr_locked=false; }
 
 /* ------------------------------------------------------------------------- */
 

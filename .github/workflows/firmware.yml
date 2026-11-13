@@ -7,16 +7,21 @@ on:
 
 jobs:
   build:
-    name: Build ${{ matrix.target }}
+    name: Build ${{ matrix.variant }}
     runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
       matrix:
-        target: [ F072, F303 ]
+        include:
+          - { target: F072, rf_profile: STANDARD, variant: F072 }
+          - { target: F072, rf_profile: ZK, variant: F072-ZK }
+          - { target: F303, rf_profile: STANDARD, variant: F303 }
+          - { target: F303, rf_profile: ZK, variant: F303-ZK }
 
     env:
       TARGET: ${{ matrix.target }}
+      RF_PROFILE: ${{ matrix.rf_profile }}
       OSNAME: ubuntu-24.04
       APTPACKAGES: build-essential dfu-util ccache python3 curl ca-certificates xz-utils
       CCACHEDIR: .ccache
@@ -153,9 +158,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: build
-          key: build-${{ hashFiles('tools/arm-toolchain.env','Makefile') }}-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}
+          key: build-${{ hashFiles('tools/arm-toolchain.env','Makefile') }}-${{ env.OSNAME }}-${{ matrix.variant }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}
           restore-keys: |
-            build-${{ hashFiles('tools/arm-toolchain.env','Makefile') }}-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-
+            build-${{ hashFiles('tools/arm-toolchain.env','Makefile') }}-${{ env.OSNAME }}-${{ matrix.variant }}-${{ steps.gccver.outputs.ver }}-
 
       - name: Run host unit tests
         shell: bash
@@ -186,12 +191,16 @@ jobs:
         shell: bash
         run: |
           if [ "${{ matrix.target }}" = "F303" ]; then
-            echo "name=H4" >> "$GITHUB_OUTPUT"
+            project=H4
             echo "dfusepreset=stm32f303xc" >> "$GITHUB_OUTPUT"
           else
-            echo "name=H" >> "$GITHUB_OUTPUT"
+            project=H
             echo "dfusepreset=stm32f072xb" >> "$GITHUB_OUTPUT"
           fi
+          if [ "$RF_PROFILE" = ZK ]; then
+            project="${project}-ZK"
+          fi
+          echo "name=$project" >> "$GITHUB_OUTPUT"
 
       - name: Generate DFU if script exists
         shell: bash
@@ -210,7 +219,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: NanoVNA-X-${{ matrix.target }}
+          name: NanoVNA-X-${{ matrix.variant }}
           if-no-files-found: error
           path: |
             build/${{ steps.project.outputs.name }}.bin
@@ -230,7 +239,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: build
-          key: build-${{ hashFiles('tools/arm-toolchain.env','Makefile') }}-${{ env.OSNAME }}-${{ matrix.target }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: build-${{ hashFiles('tools/arm-toolchain.env','Makefile') }}-${{ env.OSNAME }}-${{ matrix.variant }}-${{ steps.gccver.outputs.ver }}-${{ hashFiles('Makefile','config/**','boards/**','include/**','src/**','tools/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       # Сохранение ccache уникальным ключом этого запуска
       - name: Save ccache

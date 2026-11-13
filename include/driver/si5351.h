@@ -92,6 +92,13 @@ void si5351_set_frequency_offset(int32_t offset);
 int si5351_set_frequency(uint32_t freq, uint8_t drive_strength);
 uint8_t si5351_take_settling_cycles(void);
 void si5351_set_power(uint8_t drive_strength);
+/* Persisted IDs must remain stable across firmware variants. */
+enum {
+  SI5351_BAND_SI5351 = 0,
+  SI5351_BAND_MS5351,
+  SI5351_BAND_SJWCH5351,
+  SI5351_BAND_COUNT
+};
 void si5351_set_band_mode(uint16_t t);
 
 // Defug use functions

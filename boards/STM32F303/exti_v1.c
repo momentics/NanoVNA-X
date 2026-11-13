@@ -18,7 +18,8 @@
  * the Free Software Foundation, Inc., 51 Franklin Street,
  * Boston, MA 02110-1301, USA.
  */
-// F072 Ext interrupts handler function
+// RTOS IRQ entry/exit contributed by @jebcampbellhm in PR #11.
+// F303 Ext interrupts handler function
 #if HAL_USE_EXT == FALSE
 extern void handle_button_interrupt(uint16_t channel);
 
@@ -49,57 +50,68 @@ extern void handle_button_interrupt(uint16_t channel);
 
 #if defined(EXT_CH0_HANDLER_FUNC)
 OSAL_IRQ_HANDLER(Vector58) {  // EXTI[0] interrupt handler.
+  OSAL_IRQ_PROLOGUE();
   uint32_t pr = EXTI->PR & (1U << 0);
   EXTI->PR = pr;
 #ifdef EXT_CH0_HANDLER_FUNC
   if (pr & (1U << 0)) EXT_CH0_HANDLER_FUNC(0);
 #endif
+  OSAL_IRQ_EPILOGUE();
 }
 #endif
 
 #if defined(EXT_CH1_HANDLER_FUNC)
 OSAL_IRQ_HANDLER(Vector5C) {  // EXTI[1] interrupt handler.
+  OSAL_IRQ_PROLOGUE();
   uint32_t pr = EXTI->PR & (1U << 1);
   EXTI->PR = pr;
 #ifdef EXT_CH1_HANDLER_FUNC
   if (pr & (1U << 1)) EXT_CH1_HANDLER_FUNC(1);
 #endif
+  OSAL_IRQ_EPILOGUE();
 }
 #endif
 
 #if defined(EXT_CH2_HANDLER_FUNC)
 OSAL_IRQ_HANDLER(Vector60) {  // EXTI[2] interrupt handler.
+  OSAL_IRQ_PROLOGUE();
   uint32_t pr = EXTI->PR & (1U << 2);
   EXTI->PR = pr;
 #ifdef EXT_CH2_HANDLER_FUNC
   if (pr & (1U << 2)) EXT_CH2_HANDLER_FUNC(2);
 #endif
+  OSAL_IRQ_EPILOGUE();
 }
 #endif
 
 #if defined(EXT_CH3_HANDLER_FUNC)
 OSAL_IRQ_HANDLER(Vector64) {  // EXTI[3] interrupt handler.
+  OSAL_IRQ_PROLOGUE();
   uint32_t pr = EXTI->PR & (1U << 3);
   EXTI->PR = pr;
 #ifdef EXT_CH3_HANDLER_FUNC
   if (pr & (1U << 3)) EXT_CH3_HANDLER_FUNC(3);
 #endif
+  OSAL_IRQ_EPILOGUE();
 }
 #endif
 
 #if defined(EXT_CH4_HANDLER_FUNC)
 OSAL_IRQ_HANDLER(Vector68) {  // EXTI[4] interrupt handler.
+  OSAL_IRQ_PROLOGUE();
   uint32_t pr = EXTI->PR & (1U << 4);
   EXTI->PR = pr;
 #ifdef EXT_CH4_HANDLER_FUNC
   if (pr & (1U << 4)) EXT_CH4_HANDLER_FUNC(4);
 #endif
+  OSAL_IRQ_EPILOGUE();
 }
 #endif
 
 #if defined(EXT_CH5_HANDLER_FUNC) || defined(EXT_CH6_HANDLER_FUNC) || defined(EXT_CH7_HANDLER_FUNC) || \
     defined(EXT_CH8_HANDLER_FUNC) || defined(EXT_CH9_HANDLER_FUNC)
 OSAL_IRQ_HANDLER(Vector9C) {  // EXTI[5]...EXTI[9] interrupt handler
+  OSAL_IRQ_PROLOGUE();
   uint32_t pr = EXTI->PR & ((1U << 5) | (1U << 6) | (1U << 7) | (1U << 8) | (1U << 9));
   EXTI->PR = pr;
 #ifdef EXT_CH5_HANDLER_FUNC
@@ -117,12 +129,14 @@ OSAL_IRQ_HANDLER(Vector9C) {  // EXTI[5]...EXTI[9] interrupt handler
 #ifdef EXT_CH9_HANDLER_FUNC
   if (pr & (1U << 9)) EXT_CH9_HANDLER_FUNC(9);
 #endif
+  OSAL_IRQ_EPILOGUE();
 }
 #endif
 
 #if defined(EXT_CH10_HANDLER_FUNC) || defined(EXT_CH11_HANDLER_FUNC) || defined(EXT_CH12_HANDLER_FUNC) || \
     defined(EXT_CH13_HANDLER_FUNC) || defined(EXT_CH14_HANDLER_FUNC) || defined(EXTI_CH15_HANDLER_FUNC)
 OSAL_IRQ_HANDLER(VectorE0) {  // EXTI[4]...EXTI[15] interrupt handler
+  OSAL_IRQ_PROLOGUE();
   uint32_t pr = EXTI->PR & ((1U << 10) | (1U << 11) | (1U << 12) |
                             (1U << 13) | (1U << 14) | (1U << 15));
   EXTI->PR = pr;
@@ -144,6 +158,7 @@ OSAL_IRQ_HANDLER(VectorE0) {  // EXTI[4]...EXTI[15] interrupt handler
 #ifdef EXT_CH15_HANDLER_FUNC
   if (pr & (1U << 15)) EXT_CH15_HANDLER_FUNC(15);
 #endif
+  OSAL_IRQ_EPILOGUE();
 }
 #endif
 

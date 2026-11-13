@@ -30,8 +30,9 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stdbool.h>
 
-void cal_collect(uint16_t type);
+bool cal_collect(uint16_t type);
 void cal_done(void);
 
 #ifdef __cplusplus

@@ -35,5 +35,7 @@ void sweep_service_init(event_bus_t* bus);
 void sweep_service_begin_measurement(void);
 void sweep_service_end_measurement(void);
 uint32_t sweep_service_increment_generation(void);
+bool sweep_service_data_valid(void);
+void app_measurement_reset(void);
 void measurement_data_smooth(uint16_t channel_mask);
 #endif

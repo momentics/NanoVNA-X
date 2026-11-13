@@ -166,9 +166,9 @@ static void test_measure_search_value_right(void) {
   float freq = measure_search_value(&idx, 4.0f, curve_value, MEASURE_SEARCH_RIGHT, 5);
   const float expected = (float)frequency0 + measure_frequency_step * 3.0f;
   expect_float_close(expected, freq, 0.5f, "search right frequency");
-  CHECK(idx == 2); /* marker sticks to the last >y sample */
+  CHECK(idx == 3); /* An exact crossing belongs to that sample. */
   CHECK(g_last_marker_slot == 5);
-  CHECK(g_last_marker_index == 2);
+  CHECK(g_last_marker_index == 3);
 }
 
 static void test_measure_search_value_left(void) {
@@ -185,9 +185,9 @@ static void test_measure_search_value_left(void) {
   float freq = measure_search_value(&idx, 4.0f, curve_value, MEASURE_SEARCH_LEFT, 6);
   const float expected = (float)frequency0 + measure_frequency_step * 7.0f;
   expect_float_close(expected, freq, 0.5f, "search left frequency");
-  CHECK(idx == 8);
+  CHECK(idx == 7);
   CHECK(g_last_marker_slot == 6);
-  CHECK(g_last_marker_index == 8);
+  CHECK(g_last_marker_index == 7);
 }
 
 static void test_search_peak_value_max(void) {

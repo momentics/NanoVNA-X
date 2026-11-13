@@ -22,6 +22,7 @@
 #include "hal.h"
 #include "nanovna.h"
 #include "driver/si5351.h"
+#include <string.h>
 
 // audio codec frequency clock
 #define CLK2_FREQUENCY AUDIO_CLOCK_REF
@@ -36,15 +37,22 @@
 #define SI5351_I2C_ADDR 0x60
 
 static uint8_t current_band = 0;
+static uint8_t band_count;
 static uint8_t current_power = 0;
 static uint32_t current_freq = 0;
 static uint8_t pending_settling_cycles = 0;
 // Use cache for this reg, not update if not change
 static uint8_t clk_cache[3] = {0, 0, 0};
 
+/* RF cache corrections and profile-switch requirements were proposed by
+ * @jebcampbellhm in https://github.com/momentics/NanoVNA-X/pull/12.
+ * This implementation adapts them to separate standard and ZeeTK builds.
+ */
 static void si5351_reset_cache(void) {
   current_band = 0;
   current_freq = 0;
+  pending_settling_cycles = 0;
+  memset(clk_cache, 0xff, sizeof(clk_cache));
 }
 
 #if ENABLE_SI5351_TIMINGS
@@ -117,7 +125,8 @@ bool si5351_bulk_read(uint8_t reg, uint8_t* buf, int len) {
 static void si5351_wait_pll_lock(void)
 {
   uint8_t status = 0xFF;  // Initialize to worst case to force at least one read
-  systime_t timeout = chVTGetSystemTimeX() + MS2ST(100); // Set timeout to 100ms
+  /* Rollover-safe PLL deadline, contributed by @jebcampbellhm in PR #11. */
+  systime_t start = chVTGetSystemTimeX();
   
   // Wait for both PLLA and PLLB to lock (bits 5 and 6 of register 0 should be 0)
   do {
@@ -128,7 +137,7 @@ static void si5351_wait_pll_lock(void)
     }
     // Small delay to avoid excessive bus traffic
     chThdSleepMilliseconds(1);
-  } while (chVTGetSystemTimeX() < timeout);
+  } while ((systime_t)(chVTGetSystemTimeX() - start) < MS2ST(100));
   
   // Add minimal stabilization time even if lock was detected earlier
   // This ensures the PLL outputs are fully settled before proceeding
@@ -889,7 +898,37 @@ CONST_BAND band_strategy_t band_strategy_36H_MS5351[] = {
      11 * 12 * 4} // 10};
 };
 
-// Mode for board H v3.6+ or H4 v4.3+ and SWC5351 installed
+/* ZeeTK RF parameters originate in hugen79/NanoVNA-H 1.2.50 (816495e).
+ * @jebcampbellhm contributed the hardware-support proposal, integration work,
+ * and reported H4 validation in https://github.com/momentics/NanoVNA-X/pull/12.
+ * NanoVNA-X adapts that contribution to a compile-time mixer variant rather
+ * than importing the PR's additional runtime ZeeTK profile verbatim.
+ * Mixer hardware cannot be identified over I2C.
+ */
+#ifdef __ZEETK__
+CONST_BAND band_strategy_t band_strategy_SWC5351[] = {
+    {0U, 0, {0}, 0, 0, -1, -1, -1, -1, 1},
+    {32000U, SI5351_FIXED_PLL, {6}, 1, 1,
+     SI5351_CLK_DRIVE_STRENGTH_6MA, SI5351_CLK_DRIVE_STRENGTH_4MA, 0, 0, 1},
+    {130000000U, SI5351_FIXED_PLL, {40}, 1, 1,
+     SI5351_CLK_DRIVE_STRENGTH_6MA, SI5351_CLK_DRIVE_STRENGTH_4MA, 0, 0, 1},
+    {1, SI5351_FIXED_MULT, {4}, 1, 1,
+     SI5351_CLK_DRIVE_STRENGTH_6MA, SI5351_CLK_DRIVE_STRENGTH_4MA, 0, 0, 1},
+    {588000000U, SI5351_FIXED_MULT, {6}, 3, 5,
+     SI5351_CLK_DRIVE_STRENGTH_6MA, SI5351_CLK_DRIVE_STRENGTH_6MA, 5, 5, 3 * 5 * 4},
+    {3, SI5351_FIXED_MULT, {4}, 3, 5,
+     SI5351_CLK_DRIVE_STRENGTH_6MA, SI5351_CLK_DRIVE_STRENGTH_6MA, 5, 5, 3 * 5 * 4},
+    {5, SI5351_FIXED_MULT, {4}, 5, 7,
+     SI5351_CLK_DRIVE_STRENGTH_6MA, SI5351_CLK_DRIVE_STRENGTH_6MA, 5, 5, 5 * 7 * 4},
+    {7, SI5351_FIXED_MULT, {4}, 7, 9,
+     SI5351_CLK_DRIVE_STRENGTH_8MA, SI5351_CLK_DRIVE_STRENGTH_8MA, 40, 40, 7 * 9 * 4},
+    {9, SI5351_FIXED_MULT, {4}, 9, 11,
+     SI5351_CLK_DRIVE_STRENGTH_8MA, SI5351_CLK_DRIVE_STRENGTH_8MA, 50, 50, 9 * 11 * 4},
+    {11, SI5351_FIXED_MULT, {4}, 11, 13,
+     SI5351_CLK_DRIVE_STRENGTH_8MA, SI5351_CLK_DRIVE_STRENGTH_8MA, 55, 55, 11 * 12 * 4}
+};
+#else
+// Mode for board H v3.6+ or H4 v4.3+ with SJWCH5351 and legacy mixers.
 CONST_BAND band_strategy_t band_strategy_SWC5351[] = {
     {0U, 0, {0}, 0, 0, -1, -1, -1, -1, 1}, // 0
     {32000U,
@@ -984,7 +1023,16 @@ CONST_BAND band_strategy_t band_strategy_SWC5351[] = {
      11 * 12 * 4} // 9
 };
 
+#endif
+
 void si5351_set_band_mode(uint16_t t) {
+#ifdef __ZEETK__
+  /* The ZK image always uses ZeeTK gains, regardless of legacy saved profile IDs. */
+  (void)t;
+  config._band_mode = SI5351_BAND_SJWCH5351;
+  band_s = band_strategy_SWC5351;
+  band_count = ARRAY_COUNT(band_strategy_SWC5351);
+#else
   static const band_strategy_t* bs[] = {
 #if defined(NANOVNA_F303)
       band_strategy_H4_SI5351, band_strategy_36H_MS5351, band_strategy_SWC5351
@@ -992,13 +1040,26 @@ void si5351_set_band_mode(uint16_t t) {
       band_strategy_33H_SI5351, band_strategy_36H_MS5351, band_strategy_SWC5351
 #endif
   };
+  static const uint8_t counts[] = {
+#if defined(NANOVNA_F303)
+      ARRAY_COUNT(band_strategy_H4_SI5351),
+#else
+      ARRAY_COUNT(band_strategy_33H_SI5351),
+#endif
+      ARRAY_COUNT(band_strategy_36H_MS5351), ARRAY_COUNT(band_strategy_SWC5351)};
+  if (t >= ARRAY_COUNT(bs))
+    t = SI5351_BAND_SI5351;
+  config._band_mode = (uint8_t)t;
   band_s = bs[t];
+  band_count = counts[t];
+#endif
+  si5351_reset_cache();
 }
 
 uint32_t si5351_get_harmonic_lvl(uint32_t freq) {
   uint16_t i;
   const uint32_t threshold = clamp_harmonic_threshold(config._harmonic_freq_threshold);
-  for (i = 0;; i++) {
+  for (i = 1; i + 1U < band_count; i++) {
     uint32_t f = band_s[i].freq;
     if (f < 20) {
       uint64_t scaled = (uint64_t)f * threshold;
@@ -1026,6 +1087,7 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
   int delay = 0;
   if (freq == 0)
     return 0;
+  const uint32_t requested_freq = freq;
   uint32_t rdiv = SI5351_R_DIV_1;
   uint32_t fdiv, pll_n;
   uint32_t ofreq = freq + IF_OFFSET;
@@ -1059,7 +1121,7 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
     current_power = drive_strength;
   }
 
-  if (freq == current_freq)
+  if (requested_freq == current_freq)
     return DELAY_CHANNEL_CHANGE;
 
   if (current_band != band) {
@@ -1143,7 +1205,10 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
     si5351_setup_pll_freq(SI5351_REG_PLL_B, (uint64_t)freq * fdiv,
                           mul); // set PLLB freq = ( freq/ mul)*fdiv
     // Setup CH0 and CH1 constant fdiv divider at change
-    if (band_s[current_band].div != band_s[band].div) {
+    if (current_band != band || clk_cache[OFREQ_CHANNEL] !=
+            (ods | SI5351_CLK_PLL_SELECT_A | SI5351_CLK_INPUT_MULTISYNTH_N | SI5351_CLK_INTEGER_MODE) ||
+        clk_cache[FREQ_CHANNEL] !=
+            (ds | SI5351_CLK_PLL_SELECT_B | SI5351_CLK_INPUT_MULTISYNTH_N | SI5351_CLK_INTEGER_MODE)) {
       si5351_setupMultisynth(OFREQ_CHANNEL, fdiv, 0, 1, SI5351_R_DIV_1,
                              ods | SI5351_CLK_PLL_SELECT_A);
       si5351_setupMultisynth(FREQ_CHANNEL, fdiv, 0, 1, SI5351_R_DIV_1,
@@ -1168,6 +1233,6 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
     current_band = band;
     delay = DELAY_BANDCHANGE;
   }
-  current_freq = freq;
+  current_freq = requested_freq;
   return delay;
 }

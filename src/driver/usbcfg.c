@@ -398,18 +398,19 @@ bool custom_sduRequestsHook(USBDriver *usbp) {
       usbSetupTransfer(usbp, (uint8_t *)&linecoding, sizeof(linecoding), NULL);
       return true;
     case CDC_SET_CONTROL_LINE_STATE:
+      /* @jebcampbellhm, PR #11: DTR/RTS changes must not reset active queues. */
+      chSysLockFromISR();
       /* Check the DTR state - bit 0 of wValue */
       if ((usbp->setup.wValue & 1) != 0) {
         /* DTR is asserted - host has opened the port */
-        sduConfigureHookI(&SDU1);
         shell_update_vcp_connection_state(true);
       } else {
         /* DTR is not asserted - host has closed the port */
-        sduDisconnectI(&SDU1);
         /* Wake up any waiting shell threads to prevent hanging */
         shell_wake_all_waiting_threadsI();
         shell_update_vcp_connection_state(false);
       }
+      chSysUnlockFromISR();
       usbSetupTransfer(usbp, NULL, 0, NULL);
       return true;
     default:

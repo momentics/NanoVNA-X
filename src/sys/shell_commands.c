@@ -28,6 +28,7 @@
 #include "ui/core/ui_core.h"
 #include "processing/calibration.h"
 #include "rf/sweep.h"
+#include "rf/pipeline.h"
 #include "sys/config_service.h"
 #include "sys/state_manager.h"
 #include "sys/ui_port.h"
@@ -118,7 +119,18 @@ VNA_SHELL_FUNCTION(cmd_time) {
   // time[] ={sec, min, hr, 0, day, month, year, 0}
   uint8_t* time = (uint8_t*)dt_buf;
   if (argc == 3 && get_str_index(argv[0], "b") == 0) {
-    rtc_set_time(my_atoui(argv[1]), my_atoui(argv[2]));
+    uint32_t date = my_atoui(argv[1]), clock = my_atoui(argv[2]);
+    const uint32_t fields[] = {clock, clock >> 8, clock >> 16, date, date >> 8, date >> 16};
+    const uint8_t minimum[] = {0, 0, 0, 1, 1, 0};
+    const uint8_t maximum[] = {59, 59, 23, 31, 12, 99};
+    if ((date | clock) & 0xff000000U) goto usage;
+    for (unsigned i = 0; i < ARRAY_COUNT(fields); ++i) {
+      unsigned bcd = fields[i] & 255U;
+      unsigned decimal = (bcd >> 4) * 10U + (bcd & 15U);
+      if ((bcd & 15U) > 9U || (bcd >> 4) > 9U ||
+          decimal < minimum[i] || decimal > maximum[i]) goto usage;
+    }
+    rtc_set_time(date, clock);
     return;
   }
   if (argc != 2)
@@ -129,7 +141,10 @@ VNA_SHELL_FUNCTION(cmd_time) {
     return;
   }
   uint32_t val = my_atoui(argv[1]);
-  if (idx < 0 || val > 99)
+  /* Field bounds from @jebcampbellhm's PR #13; order follows time_cmd. */
+  static const uint8_t minima[] = {0, 1, 1, 0, 0, 0};
+  static const uint8_t maxima[] = {99, 12, 31, 23, 59, 59};
+  if (idx < 0 || val < minima[idx] || val > maxima[idx])
     goto usage;
   time[idx_to_time[idx]] = ((val / 10) << 4) | (val % 10);
   rtc_set_time(dt_buf[1], dt_buf[0]);
@@ -221,12 +236,13 @@ VNA_SHELL_FUNCTION(cmd_scan) {
   if (start != original_start || stop != original_stop)
     restore_config = true;
   if (argc >= 3) {
-    points = my_atoui(argv[2]);
-    if (points == 0 || points > SWEEP_POINTS_MAX) {
+    uint32_t requested = my_atoui(argv[2]);
+    if (requested < 2 || requested > SWEEP_POINTS_MAX) {
       shell_printf("sweep points exceeds range " define_to_STR(SWEEP_POINTS_MAX)
                        VNA_SHELL_NEWLINE_STR);
       return;
     }
+    points = requested;
     sweep_points = points;
     if (points != original_points)
       restore_config = true;
@@ -266,7 +282,17 @@ VNA_SHELL_FUNCTION(cmd_scan) {
 
   if (sweep_ch & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE)) {
     app_measurement_reset();
-    app_measurement_sweep(false, sweep_ch);
+    if (!app_measurement_sweep(false, sweep_ch)) {
+      shell_printf("Capture failed" VNA_SHELL_NEWLINE_STR);
+      sweep_points = original_points;
+      app_measurement_update_frequencies();
+      return;
+    }
+    if (!(mask & SCAN_MASK_NO_CALIBRATION)) measurement_pipeline_renormalize(sweep_ch);
+    sweep_service_increment_generation();
+    /* A one-channel scan is not a complete two-channel data snapshot. */
+    if ((sweep_ch & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE)) !=
+        (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE)) app_measurement_reset();
   }
   pause_sweep();
   
@@ -481,6 +507,24 @@ VNA_SHELL_FUNCTION(cmd_data) {
 
   if (sel < 2) {
     /* The deferred handler owns the sweep buffer for the entire transfer. */
+    /* @jebcampbellhm, PR #11: never export a partially updated buffer. Our
+     * single-owner alternative captures only when no completed result exists.
+     */
+    if (!sweep_service_data_valid()) {
+      app_measurement_reset();
+      uint16_t mask = app_measurement_get_sweep_mask() | SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE;
+      if (!app_measurement_sweep(false, mask)) {
+        shell_printf("Capture failed" VNA_SHELL_NEWLINE_STR);
+        return;
+      }
+      measurement_pipeline_renormalize(mask);
+#ifdef __USE_SMOOTH__
+      measurement_data_smooth(mask);
+#endif
+      if ((props_mode & DOMAIN_MODE) == DOMAIN_TIME)
+        app_measurement_transform_domain(mask);
+      sweep_service_increment_generation();
+    }
     array = measured[sel];
   } else {
     array = cal_data[sel - 2];
@@ -565,12 +609,12 @@ VNA_SHELL_FUNCTION(cmd_cal) {
   }
   request_to_redraw(REDRAW_CAL_STATUS);
   static const char cmd_cal_list[] = "load|open|short|thru|isoln|done|on|off|reset";
-  switch (get_str_index(argv[0], cmd_cal_list)) {
-  case 0: cal_collect(CAL_LOAD); return;
-  case 1: cal_collect(CAL_OPEN); return;
-  case 2: cal_collect(CAL_SHORT); return;
-  case 3: cal_collect(CAL_THRU); return;
-  case 4: cal_collect(CAL_ISOLN); return;
+  int operation = get_str_index(argv[0], cmd_cal_list);
+  if (operation >= 0 && operation < 5) {
+    if (!cal_collect(operation)) shell_printf("Capture failed" VNA_SHELL_NEWLINE_STR);
+    return;
+  }
+  switch (operation) {
   case 5: cal_done(); return;
   case 6: cal_status |= CALSTAT_APPLY; return;
   case 7: cal_status &= ~CALSTAT_APPLY; return;
@@ -607,6 +651,7 @@ VNA_SHELL_FUNCTION(cmd_trace) {
   }
   t = (uint32_t)my_atoi(argv[0]);
   if (t >= TRACES_MAX) return;
+  if (argc < 2) return;
   if (argc >= 2 && get_str_index(argv[1], "off") == 0) {
     set_trace_enable(t, false);
     return;
@@ -682,7 +727,7 @@ VNA_SHELL_FUNCTION(cmd_edelay) {
   if (argc >= 1) {
     int idx = get_str_index(argv[0], cmd_edelay_list);
     if (idx == -1) value = my_atof(argv[0]);
-    else { ch = idx; if (argc == 2) value = my_atof(argv[0]); else return; }
+    else { ch = idx; if (argc == 2) value = my_atof(argv[1]); else return; }
     set_electrical_delay(ch, value * 1e-12);
     return;
   }

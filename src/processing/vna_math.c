@@ -565,7 +565,8 @@ float vna_sqrtf(float x) {
       q += ((1.0f + 1e-30f) > 1.0f) ? 2 : (q & 1);
   }
   ix = (q >> 1) + 0x3f000000;
-  ix += (m << 23);
+  /* @jebcampbellhm, PR #11: left-shifting a negative exponent is undefined. */
+  ix += (uint32_t)m * (1U << 23);
   u.i = ix;
   return u.f;
 }

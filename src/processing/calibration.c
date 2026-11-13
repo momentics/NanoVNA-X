@@ -145,7 +145,10 @@ static void eterm_calc_et(void) {
   cal_status |= CALSTAT_ET;
 }
 
-void cal_collect(uint16_t type) {
+bool cal_collect(uint16_t type) {
+  /* @jebcampbellhm, PR #13: only commit finite, completed captures and restore
+   * the full 16-bit bandwidth on every result.
+   */
   uint16_t dst, src;
 
   static const struct {
@@ -164,7 +167,23 @@ void cal_collect(uint16_t type) {
       [CAL_ISOLN] = {CALSTAT_ISOLN, ~(CALSTAT_APPLY), CAL_ISOLN, 1},
   };
   if (type >= ARRAY_COUNT(calibration_set))
-    return;
+    return false;
+
+  // Capture first: a timeout must not change the previous calibration or grid.
+  src = calibration_set[type].src;
+  uint16_t bw = config._bandwidth;
+  if (bw < BANDWIDTH_100) config._bandwidth = BANDWIDTH_100;
+  bool completed = app_measurement_sweep(false, src == 0 ? SWEEP_CH0_MEASURE : SWEEP_CH1_MEASURE);
+  config._bandwidth = bw;
+  if (!completed) return false;
+  for (unsigned i = 0; i < sweep_points; ++i) {
+    for (unsigned j = 0; j < 2; ++j) {
+      uint32_t bits;
+      memcpy(&bits, &measured[src][i][j], sizeof bits);
+      if ((bits & 0x7f800000u) == 0x7f800000u) return false;
+    }
+  }
+
 
   // reset old calibration if frequency range/points not some
   freq_t cal_start, cal_stop;
@@ -191,44 +210,17 @@ void cal_collect(uint16_t type) {
   dst = calibration_set[type].dst;
   src = calibration_set[type].src;
 
-  // Run sweep for collect data (use minimum BANDWIDTH_30, or bigger if set)
-  uint8_t bw = config._bandwidth; // store current setting
-  if (bw < BANDWIDTH_100)
-    config._bandwidth = BANDWIDTH_100;
-
-  uint16_t mask = (src == 0) ? SWEEP_CH0_MEASURE : SWEEP_CH1_MEASURE;
-  
-  // Measure calibration data
-  app_measurement_sweep(false, mask);
-  
   // Mark that we're about to modify calibration data - temporarily set flag during critical copy
   calibration_in_progress = true;
   
   // Copy calibration data - this is critical section that should not be interrupted
   memcpy(cal_data[dst], measured[src], sizeof measured[0]);
 
-  // Made average if need - also in critical section to maintain data consistency
-  int count = 1, i, j;
-  for (i = 1; i < count; i++) {
-    app_measurement_sweep(false, (src == 0) ? SWEEP_CH0_MEASURE : SWEEP_CH1_MEASURE);
-    for (j = 0; j < sweep_points; j++) {
-      cal_data[dst][j][0] += measured[src][j][0];
-      cal_data[dst][j][1] += measured[src][j][1];
-    }
-  }
-  if (i != 1) {
-    float k = 1.0f / i;
-    for (j = 0; j < sweep_points; j++) {
-      cal_data[dst][j][0] *= k;
-      cal_data[dst][j][1] *= k;
-    }
-  }
-  
   // Clear the flag - calibration data collection complete for this specific measurement
   calibration_in_progress = false;
   
-  config._bandwidth = bw; // restore
   request_to_redraw(REDRAW_CAL_STATUS);
+  return true;
 }
 
 void cal_done(void) {

@@ -45,7 +45,7 @@ static void sanitize_rf_preferences(void) {
   config._harmonic_freq_threshold = clamp_harmonic_threshold(config._harmonic_freq_threshold);
 }
 
-static void load_default_properties(void) {
+void load_default_properties(void) {
   current_props.magic = PROPERTIES_MAGIC;
   current_props._frequency0 = 50000;
   current_props._frequency1 = 900000000U;
@@ -122,7 +122,10 @@ static void load_settings(void) {
     sanitize_rf_preferences();
     backup_0 bk = {.v = get_backup_data32(0)};
     if (bk.v != 0U) {
-      if (bk.id < SAVEAREA_MAX && caldata_recall(bk.id) == 0) {
+      /* @jebcampbellhm, PR #13: validate retained state before indexing it. */
+      if (bk.id < SAVEAREA_MAX && bk.points >= 2 && bk.points <= SWEEP_POINTS_MAX &&
+          get_backup_data32(1) >= FREQUENCY_MIN && get_backup_data32(2) <= FREQUENCY_MAX &&
+          get_backup_data32(1) <= get_backup_data32(2) && caldata_recall(bk.id) == 0) {
         sweep_points = bk.points;
         frequency0 = get_backup_data32(1);
         frequency1 = get_backup_data32(2);
@@ -130,8 +133,8 @@ static void load_settings(void) {
       } else {
         caldata_recall(0);
       }
-      config._brightness = bk.brightness;
-      lever_mode = bk.leveler;
+      config._brightness = bk.brightness <= 100 ? bk.brightness : 100;
+      lever_mode = bk.leveler <= LM_EDELAY ? bk.leveler : LM_MARKER;
       uint32_t backup_mode = get_backup_data32(4);
       if (backup_mode != 0xFFFFFFFFU) {
         config._vna_mode = backup_mode | (1 << VNA_MODE_BACKUP);

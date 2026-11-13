@@ -22,6 +22,7 @@
 #include "ch.h"
 #include "hal.h"
 #include "nanovna.h"
+#include "driver/adc_startup.h"
 
 // Compact STM32 ADC library
 #if HAL_USE_ADC == TRUE

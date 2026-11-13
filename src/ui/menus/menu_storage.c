@@ -32,6 +32,7 @@
 #include "chprintf.h"
 #include <string.h>
 #include "sys/config_service.h"
+#include "rf/sweep.h"
 #include "sys/state_manager.h" // For state_manager_force_save if needed
 #include "driver/board_events.h" // For boardDFUEnter if referenced? No, local DFU is System.
 
@@ -43,6 +44,19 @@
 #pragma GCC optimize("Os")
 
 static uint8_t keyboard_temp; // Used for SD card keyboard workflows
+
+static FRESULT write_exact(FIL *f, const void *data, UINT count, UINT *size) {
+  /* Exact I/O, bounded image parsing, CAL staging and Touchstone grid checks
+   * contributed by @jebcampbellhm in PR #13 (building on PR #11):
+   * https://github.com/momentics/NanoVNA-X/pull/13
+   */
+  FRESULT r=f_write(f,data,count,size);
+  return r == FR_OK && *size != count ? FR_DISK_ERR : r;
+}
+static FRESULT read_exact(FIL *f, void *data, UINT count, UINT *size) {
+  FRESULT r=f_read(f,data,count,size);
+  return r == FR_OK && *size != count ? FR_DISK_ERR : r;
+}
 
 // Save file callback
 typedef FRESULT (*file_save_cb_t)(FIL* f, uint8_t format);
@@ -72,69 +86,78 @@ static FILE_SAVE_CALLBACK(save_snp) {
   UINT size;
   if (format == FMT_S1P_FILE) {
     s_file_format = s1_file_param;
-    res = f_write(f, s1_file_header, sizeof(s1_file_header) - 1, &size);
+    res = write_exact(f, s1_file_header, sizeof(s1_file_header) - 1, &size);
   } else {
     s_file_format = s2_file_param;
-    res = f_write(f, s2_file_header, sizeof(s2_file_header) - 1, &size);
+    res = write_exact(f, s2_file_header, sizeof(s2_file_header) - 1, &size);
   }
   for (int i = 0; i < sweep_points && res == FR_OK; i++) {
     size = plot_printf(buf_8, 128, s_file_format, get_frequency(i), measured[0][i][0],
                        measured[0][i][1], measured[1][i][0], measured[1][i][1]);
-    res = f_write(f, buf_8, size, &size);
+    res = write_exact(f, buf_8, size, &size);
   }
   return res;
 }
 
-static FILE_LOAD_CALLBACK(load_snp) {
+static FILE_LOAD_CALLBACK(load_snp_data) {
+  /* Touchstone validation contributed by @jebcampbellhm in PR #13. */
   (void)fno;
-  UINT size;
-  const int buffer_size = 256;
-  const int line_size = 128;
-  char* buf_8 = (char*)spi_buffer;
-  char* line = buf_8 + buffer_size;
-  uint16_t j = 0, i, count = 0;
-  freq_t start = 0, stop = 0, freq;
-  while (f_read(f, buf_8, buffer_size, &size) == FR_OK && size > 0) {
-    for (i = 0; i < size; i++) {
-      uint8_t c = buf_8[i];
-      if (c == '\r') {
-        line[j] = 0;
-        j = 0;
-        char* args[16];
-        int nargs = parse_line(line, args, 16);
-        if (nargs < 2 || args[0][0] == '#' || args[0][0] == '!')
+  _Static_assert(sizeof(spi_buffer) >= 512 + SWEEP_POINTS_MAX*sizeof(freq_t), "SD frequency staging exceeds SPI buffer");
+  char *buf=(char *)spi_buffer, *line=buf+256;
+  freq_t *freqs=(freq_t *)(buf+512);
+  unsigned count=0, used=0;
+  for (;;) {
+    UINT size;
+    if (f_read(f,buf,256,&size) != FR_OK) return "Read error";
+    // A synthetic final newline also processes an unterminated last record.
+    for (unsigned i=0;i<size+(size==0);++i) {
+      char c=size ? buf[i] : '\n';
+      if (c=='\r' || c=='\n') {
+        line[used]=0; used=0;
+        char *comment=strchr(line,'!');
+        if (comment) *comment=0;
+        char *args[10];
+        int n=parse_line(line,args,10);
+        if (!n) continue;
+        if (n<0 || n>10) return "Format err";
+        if (args[0][0]=='#') {
+          // Preserve the supported Hz / real-imaginary / 50-ohm import contract.
+          if (n!=6 || !strcmpi(args[1],"hz") || !strcmpi(args[2],"s") ||
+              !strcmpi(args[3],"ri") || !strcmpi(args[4],"r") || my_atof(args[5])!=50)
+            return "Format err";
           continue;
-        freq = my_atoui(args[0]);
-        if (count >= SWEEP_POINTS_MAX || freq > FREQUENCY_MAX)
-          return "Format err";
-        if (count == 0)
-          start = freq;
-        stop = freq;
-        measured[0][count][0] = my_atof(args[1]);
-        measured[0][count][1] = my_atof(args[2]);
-        if (format == FMT_S2P_FILE && nargs >= 4) {
-          measured[1][count][0] = my_atof(args[3]);
-          measured[1][count][1] = my_atof(args[4]);
-        } else {
-          measured[1][count][0] = 0.0f;
-          measured[1][count][1] = 0.0f;
         }
-        count++;
-      } else if (c < 0x20)
-        continue;
-      else if (j < line_size)
-        line[j++] = (char)c;
+        if (n < (format==FMT_S2P_FILE ? 5 : 3) || count>=SWEEP_POINTS_MAX)
+          return "Format err";
+        freq_t freq=my_atoui(args[0]);
+        if (freq<FREQUENCY_MIN || freq>FREQUENCY_MAX || (count && freq<freqs[count-1]))
+          return "Format err";
+        freqs[count]=freq;
+        measured[0][count][0]=my_atof(args[1]);
+        measured[0][count][1]=my_atof(args[2]);
+        measured[1][count][0]=format==FMT_S2P_FILE ? my_atof(args[3]) : 0;
+        measured[1][count][1]=format==FMT_S2P_FILE ? my_atof(args[4]) : 0;
+        ++count;
+      } else if (c=='\t' || (unsigned char)c>=0x20) {
+        if (used==127) return "Format err";
+        line[used++]=c;
+      }
     }
+    if (!size) break;
   }
-  if (count != 0) {
-    pause_sweep();
-    current_props._electrical_delay[0] = 0.0f;
-    current_props._electrical_delay[1] = 0.0f;
-    current_props._sweep_points = count;
-    set_sweep_frequency(ST_START, start);
-    set_sweep_frequency(ST_STOP, stop);
-    request_to_redraw(REDRAW_PLOT);
+  if (!count) return "Empty file";
+  if (count<2) return "Format err";
+  freq_t start=freqs[0], stop=freqs[count-1];
+  for (unsigned i=1;i<count;++i) {
+    freq_t expected=start+((uint64_t)(stop-start)*i+(count-1)/2)/(count-1);
+    if (freqs[i]>expected+1 || freqs[i]+1<expected) return "Nonuniform grid";
   }
+  pause_sweep();
+  current_props._electrical_delay[0]=current_props._electrical_delay[1]=0;
+  current_props._sweep_points=count;
+  set_sweep_frequency(ST_START,start);
+  set_sweep_frequency(ST_STOP,stop);
+  request_to_redraw(REDRAW_PLOT);
   return NULL;
 }
 
@@ -158,16 +181,25 @@ static const uint8_t bmp_header_v4[BMP_H1_SIZE + BMP_V4_SIZE] = {
     BMP_UINT32(0), BMP_UINT32(0), BMP_UINT32(0), BMP_UINT32(0), BMP_UINT32(0), BMP_UINT32(0),
     BMP_UINT32(0), BMP_UINT32(0), BMP_UINT32(0), BMP_UINT32(0), BMP_UINT32(0), BMP_UINT32(0)};
 
+static FILE_LOAD_CALLBACK(load_snp) {
+  /* @jebcampbellhm, PR #11: invalidate before writing; publish only success. */
+  sweep_service_begin_measurement();
+  const char* error = load_snp_data(f, fno, format);
+  sweep_service_end_measurement();
+  if (error == NULL) sweep_service_increment_generation();
+  return error;
+}
+
 static FILE_SAVE_CALLBACK(save_bmp) {
   (void)format;
   UINT size;
   uint16_t* buf_16 = (uint16_t*)spi_buffer;
-  FRESULT res = f_write(f, bmp_header_v4, sizeof(bmp_header_v4), &size);
+  FRESULT res = write_exact(f, bmp_header_v4, sizeof(bmp_header_v4), &size);
   lcd_set_background(LCD_SWEEP_LINE_COLOR);
   for (int y = LCD_HEIGHT - 1; y >= 0 && res == FR_OK; y--) {
     lcd_read_memory(0, y, LCD_WIDTH, 1, buf_16);
     swap_bytes(buf_16, LCD_WIDTH);
-    res = f_write(f, buf_16, LCD_WIDTH * sizeof(uint16_t), &size);
+    res = write_exact(f, buf_16, LCD_WIDTH * sizeof(uint16_t), &size);
     lcd_fill(LCD_WIDTH - 1, y, 1, 1);
   }
   return res;
@@ -177,15 +209,16 @@ static FILE_LOAD_CALLBACK(load_bmp) {
   (void)format;
   UINT size;
   uint16_t* buf_16 = (uint16_t*)spi_buffer;
-  FRESULT res = f_read(f, (void*)buf_16, sizeof(bmp_header_v4), &size);
+  FRESULT res = read_exact(f, (void*)buf_16, sizeof(bmp_header_v4), &size);
   if (res != FR_OK || buf_16[9] != LCD_WIDTH || buf_16[11] != LCD_HEIGHT || buf_16[14] != 16)
     return "Format err";
   for (int y = LCD_HEIGHT - 1; y >= 0 && res == FR_OK; y--) {
-    res = f_read(f, (void*)buf_16, LCD_WIDTH * sizeof(uint16_t), &size);
+    res = read_exact(f, (void*)buf_16, LCD_WIDTH * sizeof(uint16_t), &size);
+    if (res != FR_OK) return "Read error";
     swap_bytes(buf_16, LCD_WIDTH);
     lcd_bulk(0, y, LCD_WIDTH, 1);
   }
-  lcd_printf(0, LCD_HEIGHT - 3 * FONT_STR_HEIGHT, fno->fname);
+  lcd_printf(0, LCD_HEIGHT - 3 * FONT_STR_HEIGHT, "%s", fno->fname);
   return NULL;
 }
 
@@ -216,7 +249,7 @@ static FILE_SAVE_CALLBACK(save_tiff) {
   UINT size;
   uint16_t* buf_16 = (uint16_t*)spi_buffer;
   char* buf_8;
-  FRESULT res = f_write(f, tif_header, sizeof(tif_header), &size);
+  FRESULT res = write_exact(f, tif_header, sizeof(tif_header), &size);
   lcd_set_background(LCD_SWEEP_LINE_COLOR);
   for (int y = 0; y < LCD_HEIGHT && res == FR_OK; y++) {
     buf_8 = (char*)buf_16 + 128;
@@ -228,7 +261,7 @@ static FILE_SAVE_CALLBACK(save_tiff) {
       buf_8[3 * x + 2] = (color << 3) & 0xF8;
     }
     size = packbits(buf_8, (char*)buf_16, LCD_WIDTH * 3);
-    res = f_write(f, buf_16, size, &size);
+    res = write_exact(f, buf_16, size, &size);
     lcd_fill(LCD_WIDTH - 1, y, 1, 1);
   }
   return res;
@@ -239,18 +272,24 @@ static FILE_LOAD_CALLBACK(load_tiff) {
   UINT size;
   uint8_t* buf_8 = (uint8_t*)spi_buffer;
   uint16_t* buf_16 = (uint16_t*)spi_buffer;
-  FRESULT res = f_read(f, (void*)buf_16, sizeof(tif_header), &size);
+  FRESULT res = read_exact(f, (void*)buf_16, sizeof(tif_header), &size);
   if (res != FR_OK || buf_16[0] != 0x4949 || buf_16[9] != LCD_WIDTH || buf_16[15] != LCD_HEIGHT ||
       buf_16[27] != TIFF_PACKBITS)
     return "Format err";
   for (int y = 0; y < LCD_HEIGHT && res == FR_OK; y++) {
     for (int x = 0; x < LCD_WIDTH * 3;) {
       int8_t data[2];
-      res = f_read(f, data, 2, &size);
+      res = read_exact(f, data, 1, &size);
+      if (res != FR_OK) return "Read error";
       int count = data[0];
+      if (count == -128) continue; // PackBits no-op has no data byte.
+      unsigned run = count >= 0 ? count+1 : 1-count;
+      if (run > (unsigned)(LCD_WIDTH*3-x)) return "Format err";
+      if (read_exact(f, data+1, 1, &size) != FR_OK) return "Read error";
       buf_8[x++] = data[1];
       if (count > 0) {
-        res = f_read(f, &buf_8[x], count, &size);
+        res = read_exact(f, &buf_8[x], count, &size);
+        if (res != FR_OK) return "Read error";
         x += count;
       } else
         while (count++ < 0)
@@ -260,7 +299,7 @@ static FILE_LOAD_CALLBACK(load_tiff) {
       buf_16[x] = RGB565(buf_8[3 * x + 0], buf_8[3 * x + 1], buf_8[3 * x + 2]);
     lcd_bulk(0, y, LCD_WIDTH, 1);
   }
-  lcd_printf(0, LCD_HEIGHT - 3 * FONT_STR_HEIGHT, fno->fname);
+  lcd_printf(0, LCD_HEIGHT - 3 * FONT_STR_HEIGHT, "%s", fno->fname);
   return NULL;
 }
 #endif
@@ -268,20 +307,44 @@ static FILE_LOAD_CALLBACK(load_tiff) {
 static FILE_SAVE_CALLBACK(save_cal) {
   (void)format;
   UINT size;
+  properties_update_checksum(&current_props);
+  if (!properties_valid(&current_props)) return FR_DISK_ERR;
   const char* src = (char*)&current_props;
   const uint32_t total = sizeof(current_props);
-  return f_write(f, src, total, &size);
+  return write_exact(f, src, total, &size);
 }
 
 static FILE_LOAD_CALLBACK(load_cal) {
   (void)format;
+  if (fno->fsize != sizeof(current_props)) return "Format err";
+#ifdef NANOVNA_F303
+  for (unsigned offset=0;offset<sizeof(current_props);) {
+    UINT size, n=sizeof(current_props)-offset;
+    if (n>2048) n=2048;
+    if (read_exact(f,spi_buffer,n,&size) != FR_OK || properties_stage_write(offset,spi_buffer,n))
+      return "Read error";
+    offset+=n;
+  }
+  const properties_t *p=(const properties_t *)(uintptr_t)CAL_IMPORT_SCRATCH;
+  if (!properties_valid(p)) return "Format err";
+  // Only adopt the complete validated image; errors leave the active CAL intact.
+  memcpy(&current_props,p,sizeof current_props);
+#else
+  // H has no free flash page large enough to stage a complete properties image.
+  // Check its tag before touching active state, and fail closed on partial reads.
   UINT size;
   uint32_t magic;
-  char* src = (char*)&current_props + sizeof(magic);
-  uint32_t total = sizeof(current_props) - sizeof(magic);
-  if (fno->fsize != sizeof(current_props) || f_read(f, &magic, sizeof(magic), &size) != FR_OK ||
-      magic != PROPERTIES_MAGIC || f_read(f, src, total, &size) != FR_OK)
+  if (read_exact(f,&magic,sizeof magic,&size) != FR_OK || magic != PROPERTIES_MAGIC)
     return "Format err";
+  current_props.magic = magic;
+  if (read_exact(f,(char *)&current_props+sizeof magic,sizeof current_props-sizeof magic,&size) != FR_OK ||
+      !properties_valid(&current_props)) {
+    memset(&current_props,0,sizeof current_props);
+    load_default_properties();
+    load_properties(NO_SAVE_SLOT);
+    return "Read error";
+  }
+#endif
   load_properties(NO_SAVE_SLOT);
   return NULL;
 }
@@ -292,7 +355,7 @@ static FILE_SAVE_CALLBACK(save_bin) {
   UINT size;
   const char* src = (const char*)FLASH_START_ADDRESS;
   const uint32_t total = FLASH_TOTAL_SIZE;
-  return f_write(f, src, total, &size);
+  return write_exact(f, src, total, &size);
 }
 #endif
 
@@ -436,7 +499,8 @@ static void ui_save_file(char* name, uint8_t format) {
   if (res == FR_OK) {
     FIL* const file = filesystem_file();
     res = save(file, format);
-    f_close(file);
+    FRESULT closed = f_close(file);
+    if (res == FR_OK) res = closed;
   }
   if (keyboard_temp == 1)
     toggle_sweep();

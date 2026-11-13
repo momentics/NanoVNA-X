@@ -74,12 +74,9 @@ void lcd_set_brightness(uint16_t brightness);
 // enable this need reduce spi_buffer size, by default shell runs in main thread
 // #define VNA_SHELL_THREAD
 
-static event_bus_t app_event_bus;
-static event_bus_subscription_t app_event_slots[6];
-
-#define APP_EVENT_QUEUE_DEPTH 6U
-static msg_t app_event_queue_storage[APP_EVENT_QUEUE_DEPTH];
-static event_bus_queue_node_t app_event_nodes[APP_EVENT_QUEUE_DEPTH];
+/* @jebcampbellhm, PR #13: this owner loop uses direct calls, not an undrained
+ * secondary event queue. The generic event bus remains available to services.
+ */
 
 static board_events_t board_events;
 static const display_presenter_t lcd_display_presenter = {.context = NULL,
@@ -518,6 +515,8 @@ void set_marker_index(int m, int idx) {
 }
 
 freq_t get_marker_frequency(int marker) {
+  /* Marker bounds contributed by @jebcampbellhm in PR #13. */
+  if ((unsigned)marker >= MARKERS_MAX || !markers[marker].enabled) return 0;
   return markers[marker].frequency;
 }
 
@@ -759,9 +758,7 @@ int runtime_main(void) {
 
   const PlatformDrivers* drivers = platform_get_drivers();
   if (drivers != NULL) {
-    if (drivers->init) {
-      drivers->init();
-    }
+    /* @jebcampbellhm, PR #11: platform_init already initialized the board. */
     // Display initialization moved to end of startup sequence to match NanoVNA-D reference
     // if (drivers->display && drivers->display->init) {
     //   drivers->display->init();
@@ -769,19 +766,12 @@ int runtime_main(void) {
     if (drivers->adc && drivers->adc->init) {
       drivers->adc->init();
     }
-    if (drivers->generator && drivers->generator->init) {
-      drivers->generator->init();
-    }
     if (drivers->storage && drivers->storage->init) {
       drivers->storage->init();
     }
   }
 
   config_service_init();
-  event_bus_init(&app_event_bus, app_event_slots, ARRAY_COUNT(app_event_slots),
-                 app_event_queue_storage, ARRAY_COUNT(app_event_queue_storage),
-                 app_event_nodes, ARRAY_COUNT(app_event_nodes));
-  shell_attach_bus(&app_event_bus);
   shell_on_session_start(usb_command_session_started);
   shell_on_session_stop(usb_command_session_stopped);
   board_events_init(&board_events);
@@ -789,7 +779,7 @@ int runtime_main(void) {
   ui_controller_port_t ui_controller_port = {
       .board_events = &board_events,
       .display = &lcd_display_presenter,
-      .config_events = &app_event_bus,
+      .config_events = NULL,
   };
   ui_controller_configure(&ui_controller_port);
 
@@ -797,12 +787,18 @@ int runtime_main(void) {
   measurement_engine_port.can_start_sweep = app_measurement_can_start_sweep;
   measurement_engine_port.handle_result = app_measurement_handle_result;
   measurement_engine_port.service_loop = app_measurement_service_loop;
-  measurement_engine_init(&measurement_engine, &measurement_engine_port, &app_event_bus, drivers);
+  measurement_engine_init(&measurement_engine, &measurement_engine_port, NULL, drivers);
 
   /*
    * restore config and calibration 0 slot from flash memory, also if need use backup data
    */
   state_manager_init();
+  /* Restore RF preferences before generator initialization, as proposed by
+   * @jebcampbellhm in https://github.com/momentics/NanoVNA-X/pull/12.
+   * This preserves the saved crystal calibration and runtime clock profile.
+   */
+  if (drivers != NULL && drivers->generator && drivers->generator->init)
+    drivers->generator->init();
 
 #ifdef USE_VARIABLE_OFFSET
   si5351_set_frequency_offset(IF_OFFSET);
