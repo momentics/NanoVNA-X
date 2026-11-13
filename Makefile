@@ -380,6 +380,7 @@ PY_TEST_SUITES := test_review_fixes test_startup_timing test_irq_wrappers \
 TEST_BUILD_DIR := build/tests
 # Keep the complete list above `tests:`: prerequisites expand while parsing.
 TEST_SUITES := $(TEST_BUILD_DIR)/test_common $(TEST_BUILD_DIR)/test_vna_math \
+               $(TEST_BUILD_DIR)/test_vna_trig_f072 $(TEST_BUILD_DIR)/test_vna_trig_f303 \
                $(TEST_BUILD_DIR)/test_measurement_pipeline $(TEST_BUILD_DIR)/test_dsp_backend \
                $(TEST_BUILD_DIR)/test_legacy_measure $(TEST_BUILD_DIR)/test_event_bus \
                $(TEST_BUILD_DIR)/test_scheduler $(TEST_BUILD_DIR)/test_measurement_engine \
@@ -397,6 +398,10 @@ $(TEST_BUILD_DIR)/test_common: tests/unit/test_common.c src/core/common.c | $(TE
 
 $(TEST_BUILD_DIR)/test_vna_math: tests/unit/test_vna_math.c src/processing/vna_math.c | $(TEST_BUILD_DIR)
 	$(HOST_CC) $(HOST_CFLAGS) -DNANOVNA_HOST_TEST -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
+
+$(TEST_BUILD_DIR)/test_vna_trig_f303: TRIG_TEST_DEFS = -DNANOVNA_F303
+$(TEST_BUILD_DIR)/test_vna_trig_f072 $(TEST_BUILD_DIR)/test_vna_trig_f303: tests/unit/test_vna_trig_tables.c src/processing/vna_math.c | $(TEST_BUILD_DIR)
+	$(HOST_CC) $(HOST_CFLAGS) -fno-fast-math -fno-single-precision-constant $(TRIG_TEST_DEFS) -Itests/stubs -Iinclude -Isrc -o $@ $^ $(HOST_LDFLAGS)
 
 $(TEST_BUILD_DIR)/test_measurement_pipeline: tests/unit/test_measurement_pipeline.c \
 		src/rf/pipeline.c | $(TEST_BUILD_DIR)

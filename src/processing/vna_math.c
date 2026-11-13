@@ -402,17 +402,17 @@ void vna_sincosf(float angle, float* pSinVal, float* pCosVal) {
   float fpart, ipart;
   fpart = vna_modff(angle, &ipart);  
   if (fpart < 0.0f) fpart += 1.0f; 
-  const float table_size_per_quarter = 256.0f;   
+  const uint16_t table_quarter = 256; // Quarter-table steps must fit before division.
   const float table_size_full_circle = 1024.0f;  
   float scaled = fpart * table_size_full_circle;
   uint16_t full_index = (uint16_t)scaled;
   float fract = scaled - full_index;
-  uint8_t quad = full_index / (uint8_t)table_size_per_quarter;  
-  uint16_t in_quad_pos = full_index % (uint16_t)table_size_per_quarter;  
+  uint8_t quad = full_index / table_quarter;
+  uint16_t in_quad_pos = full_index % table_quarter;
   float sin_interp = quadratic_interpolation(in_quad_pos + fract);
-  float comp_angle = table_size_per_quarter - (in_quad_pos + fract);
+  float comp_angle = (float)table_quarter - (in_quad_pos + fract);
   float cos_interp;
-  if (comp_angle >= table_size_per_quarter) {
+  if (comp_angle >= (float)table_quarter) {
       cos_interp = sin_table_qtr_ptr[QTR_WAVE_TABLE_SIZE - 1];
   } else if (comp_angle < 0.0f) {
       cos_interp = sin_table_qtr_ptr[0];
