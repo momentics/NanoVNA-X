@@ -64,6 +64,7 @@ static const size_t* g_write_script;
 static size_t g_write_script_length;
 static size_t g_write_calls;
 static size_t g_disconnect_on_write;
+static bool g_disconnect_on_rx_end;
 
 systime_t chVTGetSystemTimeX(void) {
   return g_time;
@@ -163,6 +164,8 @@ size_t chnReadTimeout(BaseAsynchronousChannel* chp, uint8_t* data, size_t size,
     return 0;
   }
   if (state->rx_pos >= state->rx_len) {
+    if (g_disconnect_on_rx_end)
+      USBD1.state = 0;
     return 0;
   }
   size_t remaining = state->rx_len - state->rx_pos;
@@ -335,6 +338,7 @@ static void reset_shell_state(const char* scripted_rx) {
   g_write_script_length = 0;
   g_write_calls = 0;
   g_disconnect_on_write = 0;
+  g_disconnect_on_rx_end = false;
   if (scripted_rx != NULL) {
     g_stream_state.rx_len = strlen(scripted_rx);
     memcpy(g_stream_state.rx, scripted_rx, g_stream_state.rx_len);
@@ -556,6 +560,71 @@ static void test_shell_read_line_and_echo(void) {
   CHECK(tx_contains(VNA_SHELL_NEWLINE_STR), "entering a line should emit a newline");
 }
 
+static void test_shell_line_length_boundaries(void) {
+  static const char* endings[] = {"\r", "\n", "\r\n"};
+  static const size_t lengths[] = {VNA_SHELL_MAX_LENGTH - 1,
+                                 VNA_SHELL_MAX_LENGTH, VNA_SHELL_MAX_LENGTH * 2};
+  for (size_t e = 0; e < ARRAY_COUNT(endings); ++e) {
+    for (size_t n = 0; n < ARRAY_COUNT(lengths); ++n) {
+      char input[192];
+      /* The truncated prefix would be a valid 'version' command. */
+      memset(input, ' ', lengths[n]);
+      memcpy(input, "version", 7);
+      strcpy(input + lengths[n], endings[e]);
+      strcat(input, "pause\n");
+      reset_shell_state(input);
+      struct { unsigned char before; char line[VNA_SHELL_MAX_LENGTH]; unsigned char after; }
+          guarded = {.before = 0xa5, .after = 0x5a};
+      memset(guarded.line, 'x', sizeof(guarded.line));
+      CHECK(vna_shell_read_line(guarded.line, sizeof(guarded.line)) == 1,
+            "a completed line must return promptly even when rejected");
+      if (lengths[n] < sizeof(guarded.line)) {
+        CHECK(strlen(guarded.line) == lengths[n], "maximum fitting input must be retained");
+        CHECK(memcmp(guarded.line, input, lengths[n]) == 0, "accepted input must be unchanged");
+        CHECK(!tx_contains("error: command too long"), "fitting input must not report overflow");
+      } else {
+        CHECK(guarded.line[0] == 0, "overflow must discard the whole command, not execute its prefix");
+        CHECK(tx_contains("error: command too long"), "overflow must report rejection");
+        uint16_t argc = 99;
+        const char* name = "unchanged";
+        CHECK(shell_parse_command(guarded.line, &argc, NULL, &name) == NULL && name == NULL && argc == 0,
+              "rejected input must not reach command dispatch");
+      }
+      CHECK(guarded.before == 0xa5 && guarded.after == 0x5a, "line buffer guards must stay intact");
+      CHECK(vna_shell_read_line(guarded.line, sizeof(guarded.line)) == 1 &&
+            strcmp(guarded.line, "pause") == 0, "next command must survive CR, LF and CRLF recovery");
+      CHECK(g_stream_state.rx_pos == g_stream_state.rx_len, "recovery must consume exactly two lines");
+    }
+  }
+}
+
+static void test_shell_overflow_editing_and_disconnect(void) {
+  char input[192], line[VNA_SHELL_MAX_LENGTH];
+  memset(input, 'a', VNA_SHELL_MAX_LENGTH - 1);
+  strcpy(input + VNA_SHELL_MAX_LENGTH - 1, "\bZ\n");
+  reset_shell_state(input);
+  CHECK(vna_shell_read_line(line, sizeof(line)) == 1 && strlen(line) == sizeof(line) - 1 &&
+        line[sizeof(line) - 2] == 'Z', "backspace must still work at capacity before overflow");
+
+  memset(input, 'a', VNA_SHELL_MAX_LENGTH);
+  strcpy(input + VNA_SHELL_MAX_LENGTH, "\b\177version\r\npause\n");
+  reset_shell_state(input);
+  CHECK(vna_shell_read_line(line, sizeof(line)) == 1 && line[0] == 0,
+        "backspace and DEL must not turn an overflowed line into an executable prefix");
+  CHECK(vna_shell_read_line(line, sizeof(line)) == 1 && strcmp(line, "pause") == 0,
+        "editing a rejected line must not affect the next command");
+
+  memset(input, 'a', VNA_SHELL_MAX_LENGTH + 10);
+  input[VNA_SHELL_MAX_LENGTH + 10] = 0;
+  reset_shell_state(input);
+  g_disconnect_on_rx_end = true;
+  CHECK(vna_shell_read_line(line, sizeof(line)) == 0,
+        "disconnect while draining overflow must return without dispatch");
+  reset_shell_state("version\n");
+  CHECK(vna_shell_read_line(line, sizeof(line)) == 1 && strcmp(line, "version") == 0,
+        "overflow rejection must not persist into a later session");
+}
+
 static void test_write_inactivity_timeout(void) {
   /* A finite script makes an unbounded-retry regression fail without hanging. */
   static const size_t stalled_writes[11] = {0};
@@ -649,6 +718,8 @@ int main(void) {
   test_shell_deferred_publication_is_atomic();
   test_shell_disconnect_waits_for_deferred_completion();
   test_shell_read_line_and_echo();
+  test_shell_line_length_boundaries();
+  test_shell_overflow_editing_and_disconnect();
 
   if (g_failures == 0) {
     puts("[PASS] tests/unit/test_shell_service");

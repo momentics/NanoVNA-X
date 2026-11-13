@@ -460,6 +460,7 @@ static const char backspace[] = {0x08, 0x20, 0x08, 0x00};
 int vna_shell_read_line(char* line, int max_size) {
   uint8_t c;
   uint16_t j = 0;
+  bool overflow = false;
   while (shell_read(&c, 1)) {
     if (shell_skip_linefeed) {
       shell_skip_linefeed = false;
@@ -468,7 +469,7 @@ int vna_shell_read_line(char* line, int max_size) {
       }
     }
     if (c == 0x08 || c == 0x7f) {
-      if (j > 0) {
+      if (!overflow && j > 0) {
         shell_write(backspace, sizeof backspace);
         j--;
       }
@@ -476,11 +477,19 @@ int vna_shell_read_line(char* line, int max_size) {
     }
     if (c == '\r' || c == '\n') {
       shell_skip_linefeed = (c == '\r');
-      shell_printf(VNA_SHELL_NEWLINE_STR);
-      line[j] = 0;
+      shell_printf(overflow ? VNA_SHELL_NEWLINE_STR "error: command too long" VNA_SHELL_NEWLINE_STR
+                            : VNA_SHELL_NEWLINE_STR);
+      /* Return an empty completed line so the caller prompts without dispatch. */
+      line[overflow ? 0 : j] = 0;
       return 1;
     }
-    if (c < ' ' || j >= max_size - 1) {
+    if (c < ' ' || overflow) {
+      continue;
+    }
+    if (j >= max_size - 1) {
+      /* A truncated prefix may be a valid command. Drain the entire line,
+       * including edits, rather than executing a command the host did not send. */
+      overflow = true;
       continue;
     }
     shell_write(&c, 1);
