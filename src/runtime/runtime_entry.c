@@ -123,7 +123,8 @@ static FATFS fs_volume_instance;
 static FIL fs_file_instance;
 
 static void usb_command_session_started(void) {
-  shell_printf(VNA_SHELL_NEWLINE_STR "NanoVNA-X Shell" VNA_SHELL_NEWLINE_STR);
+  /* Stay silent until a complete input line. Hosts can send their first
+   * command before this connection callback runs. */
 }
 
 static void usb_command_session_stopped(void) {}
@@ -709,10 +710,10 @@ THD_FUNCTION(myshellThread, p) {
   (void)p;
   chRegSetThreadName("shell");
   while (true) {
-    shell_printf(VNA_SHELL_PROMPT_STR);
-    if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH))
+    if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH)) {
       vna_shell_execute_line(shell_line);
-    else // Putting a delay in order to avoid an endless loop trying to read an unavailable stream.
+      shell_printf(VNA_SHELL_PROMPT_STR);
+    } else // Putting a delay in order to avoid an endless loop trying to read an unavailable stream.
       chThdSleepMilliseconds(100);
   }
 }
@@ -895,10 +896,12 @@ int runtime_main(void) {
       chThdWait(shelltp);
 #else
     do {
-      shell_printf(VNA_SHELL_PROMPT_STR);
-      if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH))
+      /* A startup prompt can race the host's first command and be mistaken
+       * for its terminator. Blank lines still produce an interactive prompt. */
+      if (vna_shell_read_line(shell_line, VNA_SHELL_MAX_LENGTH)) {
         vna_shell_execute_line(shell_line);
-      else
+        shell_printf(VNA_SHELL_PROMPT_STR);
+      } else
         chThdSleepMilliseconds(200);
     } while (shell_check_connect());
 #endif

@@ -375,7 +375,7 @@ HOST_LDFLAGS ?= -lm
 HOST_PYTHON ?= python3
 PY_TEST_SUITES := test_review_fixes test_startup_timing test_irq_wrappers \
                   test_storage_io test_storage_parser test_snp_import \
-                  test_usb_control test_dma_flags test_flash_boundaries test_i2c_recovery test_lcd_detection test_usb_write_progress
+                  test_usb_control test_dma_flags test_flash_boundaries test_i2c_recovery test_lcd_detection test_usb_write_progress test_console_startup
 
 TEST_BUILD_DIR := build/tests
 # Keep the complete list above `tests:`: prerequisites expand while parsing.

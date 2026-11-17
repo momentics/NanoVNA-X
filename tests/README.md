@@ -52,6 +52,11 @@ watchdog call path that the regular shell host build excludes.
 
 ## Extending
 
+`test_console_startup.py` compiles both production console loops with and without
+SD support. It checks response ordering when the first command is already queued
+at session start, blank-line synchronization, disconnect/reopen, and board names
+used by NanoVNA-Saver model selection. Hardware testing still verifies USB timing.
+
 1. Drop a new `tests/unit/test_*.c` file containing `main()` and register it in
    the `TEST_SUITES` variable inside the top-level `Makefile`.
 2. Reuse existing stubs or add new ones (e.g. mock `ch.h`) under `tests/stubs/`.
