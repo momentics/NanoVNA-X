@@ -34,7 +34,7 @@ static void check(uint32_t raw, lcd_type_t expected) {
     assert(sequence == (expected == st7789v ? ST7789V_init_seq : ili9341_init_seq));
 }
 int main(void) {
-    check(0x40c0d9ff, st7789v); // ST7789P3, observed on NanoVNA-H ZK.
+    check(0x40c0d9ff, st7789v); // ST7789P3, observed on NanoVNA-H hw 3.7_ZK.
     check(0x42c2a97f, st7789v); // Existing ST7789V.
     check(0, ili9341_type);    // Existing fallback.
     check(0xffffffff, ili9341_type);
