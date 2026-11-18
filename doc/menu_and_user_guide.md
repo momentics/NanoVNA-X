@@ -131,7 +131,10 @@ The final button reflects the sweep status: `PAUSE SWEEP` while sweeping, `RESUM
 
 ## USB console prompt behaviour
 
-Automation clients rely on the USB shell prompt. Each session starts with `\r\nch> \r\nNanoVNA Shell\r\nch>` so host software can synchronise on the prompt before parsing the banner.
+Opening the USB COM port shows no banner or prompt. **Press Enter (send CR)**
+to obtain the initial `ch> ` prompt. Host software can send a blank CR to
+synchronise or send a complete first command and wait for the prompt at the
+end of its reply.
 
 ---
 
