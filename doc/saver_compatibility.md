@@ -18,12 +18,11 @@ and reconnect. Log the outgoing `scan ... 0b001` and `scan ... 0b110` commands.
 Also exercise immediate `version` after opening, delayed startup, blank-line
 synchronization, and repeated close/reopen. Test F072 and F303 builds separately.
 
-This branch contains only the startup/model fix. Hardware testing on
-NanoVNA-H hw 3.7_ZK used a separate combined image with PRs #17-#20. Standalone
-PR artifacts do not include those fixes; this display requires PR #17.
-Rollback uses a known-working image for the same chip and RF profile, such as
-the previously tested combined F072-ZK image. Configuration and calibration
-formats are unchanged.
+This branch contains the startup/model fix against upstream 0.9.105, which
+already includes #17, #18 and #20. The branch does not include #19. Earlier
+hardware testing used a combined 0.9.104-ZK image with all four PRs.
+Roll back with a known-working image for the same chip and RF profile. The
+configuration and calibration formats are unchanged.
 
 ## Local results, 2026-11-17
 
@@ -57,9 +56,32 @@ STM32CubeProgrammer checked the F072 identity and verified the programmed bytes.
 The combined F072-ZK image uses 98,100 of 100,352 firmware bytes and 15,024 bytes
 static RAM. This is compatibility testing, not calibrated RF accuracy,
 high-frequency performance, long-duration soak or USB suspend/resume validation.
-These local tests preceded publication. See the PR for GitHub Actions results
-and per-variant firmware downloads; those artifacts contain this fix alone.
+See the PR for GitHub Actions results and current per-variant firmware
+downloads.
 
 Saver's H model configures a 1.5 GHz upper sweep limit, instead of the generic
 model's 300 MHz limit. The model selection was verified; the sweeps recorded
 above cover only 50 kHz-50 MHz, not operation or accuracy near 1.5 GHz.
+
+## Standalone retest on upstream 0.9.105 (2026-11-18)
+
+The rebased source `5bd17ef` against `3f22b00` passed all 30 host suites,
+including the console startup and upstream LCD regressions, normally and
+with sanitizers. All four firmware variants built. The F072-ZK image uses
+98,100 firmware bytes and 15,024 bytes of static RAM.
+
+On the same NanoVNA-H hw 3.7_ZK, this standalone image passed ten
+version-first serial opens with delays from 0 to 1,200 ms. Each returned the
+exact echo, version and single prompt in order, then a valid blank-line
+prompt and the H model in `info`. Three further opens sent a blank line
+first and received the expected prompt followed by a valid version exchange.
+
+NanoVNA-Saver 0.7.3 connected, completed a 101-point scan, released the port
+on application close, and reconnected after relaunch. Both launches logged
+`NanoVNA-H v0.9.105-ZK`, used masks `0b001` and `0b110`, and completed
+50 kHz-50 MHz sweeps without logged errors. This retest used an application
+restart for the Saver reconnect. The recorded runs above used the older
+combined firmware.
+
+Verified F072-ZK firmware SHA-256:
+`7d025f65167f91aab854cebb74ccac64e328e58b3ca702d9cf88288f0fd998ab`.
