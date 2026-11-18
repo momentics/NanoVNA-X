@@ -7,6 +7,11 @@ functions without requiring any STM32 hardware.
   and validate behaviour with a regular POSIX toolchain.  Current suites cover:
   - `test_common.c`: CLI parsing helpers (`my_atof`, `parse_line`, `packbits`, …)
   - `test_vna_math.c`: LUT-driven trig/FFT helpers used by the DSP pipeline
+  - `test_vna_trig_tables.c`: production F072 and F303 sine/cosine tables, compiled
+    separately without `NANOVNA_HOST_TEST`. Checks dense samples, table and quadrant
+    boundaries, negative/wrapped angles and phase-rotation magnitude against a
+    double-precision reference. Tolerances account for each chip's existing endpoint
+    interpolation; this test does not substitute the host math library for firmware.
   - `test_measurement_pipeline.c`: integration glue that proxies sweep requests
   - `test_dsp_backend.c`: scalar DSP accumulation path that runs when SIMD is disabled
   - `test_legacy_measure.c`: RF legacy analytics (quadratic solver, cursor search, regression)
