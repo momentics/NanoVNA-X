@@ -1,15 +1,17 @@
 # NanoVNA-Saver startup compatibility
 
-Proposed release note: keep the console silent when a session opens and send
-the prompt after a completed input line. This prevents a delayed startup banner
-or prompt from being mistaken for the reply to the first command. Interactive
-terminal users can press Enter for a prompt. Command echo and response framing
-remain unchanged. No host-specific delays or USB queue resets are added.
+## Proposed release note
+
+**The USB COM-port console opens without a banner or prompt. Press Enter
+(send a carriage return, CR) to obtain the initial `ch> ` prompt.**
+The prompt follows a completed command or blank line, so startup output
+cannot be mistaken for part of the first command's reply.
 
 Report the F072 board as `NanoVNA-H` so NanoVNA-Saver selects its H model.
 F303 continues to report `NanoVNA-H 4`. The RF profile and firmware version
-suffix are unchanged; this is model identification, not automatic RF-chip
-detection or a claim of high-frequency measurement accuracy.
+suffix are unchanged. The board name identifies the model to host utilities.
+
+## Bench checklist
 
 NanoVNA-Saver 0.7.3 selects scan-mask acquisition for versions >= 0.7.1.
 Validate that connection reports the actual version and `Scan mask command`,
@@ -18,11 +20,36 @@ and reconnect. Log the outgoing `scan ... 0b001` and `scan ... 0b110` commands.
 Also exercise immediate `version` after opening, delayed startup, blank-line
 synchronization, and repeated close/reopen. Test F072 and F303 builds separately.
 
-This branch contains the startup/model fix against upstream 0.9.105, which
-already includes #17, #18 and #20. The branch does not include #19. Earlier
-hardware testing used a combined 0.9.104-ZK image with all four PRs.
+This branch contains the startup/model fix against upstream 0.9.105
+(`987dc78`), which includes the merged fixes #17–#20. The validation below
+records the upstream base used for each round of testing.
 Roll back with a known-working image for the same chip and RF profile. The
 configuration and calibration formats are unchanged.
+
+## Retest after #19 merged, 2026-11-18
+
+This PR is rebased on `987dc78`. The Makefile lists the Python host suites
+one per line and preserves their order, including the upstream USB watchdog
+test and this PR's console startup test. All 31 host suites passed normally
+and with sanitizers, and all four firmware variants built after reformatting
+the list (commit `042a26f`).
+
+On NanoVNA-H hw 3.7_ZK, the standalone #21 image from this base
+(`4fbe366`, before the test-list formatting) passed ten version-first serial
+opens and three CR-first opens. The replies contained the expected echo,
+version and prompt in order. The CR-first cases produced the initial prompt
+and accepted the following command. The longest wait confirmed silence for
+1.2 seconds before sending CR. Every case closed the port before reopening.
+
+Saver 0.7.3 identified NanoVNA-H v0.9.105-ZK and completed a 101-point
+50 kHz–50 MHz scan-mask sweep on both launches. Closing and relaunching Saver
+released and reacquired the port without logged errors. This image applied
+#21 to current upstream with #19 already merged. The earlier combined tests
+below used a separate 0.9.104-ZK image.
+
+The verified F072-ZK image uses 98,100 firmware bytes and 15,024 bytes of
+static RAM. SHA-256:
+`7a16ab242e1ada4fea7e9824b4c48a1893f69c735bc7a320872f627e730bf745`.
 
 ## Local results, 2026-11-17
 
@@ -63,7 +90,7 @@ Saver's H model configures a 1.5 GHz upper sweep limit, instead of the generic
 model's 300 MHz limit. The model selection was verified; the sweeps recorded
 above cover only 50 kHz-50 MHz, not operation or accuracy near 1.5 GHz.
 
-## Standalone retest on upstream 0.9.105 (2026-11-18)
+## Standalone retest before #19 merged, 2026-11-18
 
 The rebased source `5bd17ef` against `3f22b00` passed all 30 host suites,
 including the console startup and upstream LCD regressions, normally and
