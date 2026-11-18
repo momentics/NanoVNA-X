@@ -56,8 +56,35 @@ stability or F303 hardware operation.
 
 Combined firmware SHA-256:
 `9e69d02338ae4d579f54f7b2b4593dc968277a1ede42d2382e07881a29fbad39`.
-It uses 98,132 flash bytes and 15,024 static RAM bytes. This PR's standalone
-firmware contains only the USB fix; the hw 3.7_ZK display requires PR #17.
+It uses 98,132 flash bytes and 15,024 static RAM bytes.
 All 27 local host suites passed normally and with sanitizers, and all four
 firmware variants built. This fix leaves F072 flash unchanged, adds 12 flash
 bytes on F303 and leaves RAM unchanged on both chips.
+
+## Retest on upstream 0.9.105 (2026-11-18)
+
+This PR was rebased on upstream `3f22b00`, which already includes the display,
+command rejection and math fixes (#17, #18 and #20). All 30 host suites,
+including the USB write regression and upstream LCD regression, passed normally
+and with sanitizers. F072, F072-ZK, F303 and F303-ZK all built. The baseline and
+candidate F072-ZK images both use 98,132 firmware bytes and 15,024 bytes of
+static RAM.
+
+On a NanoVNA-H hw 3.7_ZK, a Windows host timed normal USB reads in three
+blocks: upstream `3f22b00`, that same base with this PR (`ffd4b1d`), then
+upstream again. Each block used the same device and 4 kHz bandwidth and
+included 20 measured 153,600-byte captures and 20 measured 2,024-byte,
+101-point binary scans. Two warm-up pairs per block were excluded. Each
+binary scan passed header, frequency, finite-value and trailing-prompt checks.
+
+| Median command-to-prompt time | Upstream first | With #19 | Upstream repeat |
+| --- | ---: | ---: | ---: |
+| Screen capture | 473.84 ms | 474.88 ms | 473.83 ms |
+| Binary scan at 50 kHz-50 MHz | 184.02 ms | 184.14 ms | 184.04 ms |
+
+Median capture payload read time was 466.97 / 467.48 / 466.96 ms. Median
+binary payload read time was 3.95 / 4.26 / 3.83 ms. The increase in the
+short binary payload read was 0.31-0.43 ms; total scan time also includes RF
+acquisition. These timings are for one device and host at normal read speed.
+The throttled capture results above are from the earlier 0.9.104-ZK bench
+images.
