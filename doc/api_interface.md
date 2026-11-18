@@ -18,6 +18,14 @@ Commands are case-sensitive. Arguments are separated by spaces or tabs. Double q
 
 Invalid commands cause the firmware to print `<name>?` followed by a newline. Usage hints are printed for malformed arguments.
 
+Console input accepts up to 63 bytes of command text, excluding the line ending.
+If another printable byte exceeds that limit, the entire command is rejected:
+the console discards input through the next CR or LF, reports
+`error: command too long`, and returns to the prompt. It does not execute the
+truncated prefix. Backspace and Delete can edit a line before overflow; once
+overflow occurs, finish the line and enter the command again. CRLF is treated as
+one line ending, and the next command is processed normally.
+
 ## 3. Command lifecycle and concurrency
 Each shell command entry defines flag bits that affect execution:
 

@@ -14,6 +14,8 @@ functions without requiring any STM32 hardware.
   - `test_scheduler.c`: cooperative task scheduler slot allocation, failure paths, and stop logic
   - `test_measurement_engine.c`: RF engine state machine, event publication, and sweep orchestration
   - `test_shell_service.c`: CLI parser/buffer handling plus deferred command queue + event bus glue
+    Includes maximum-length acceptance, whole-line overflow rejection, CR/LF/CRLF
+    recovery, backspace/Delete behavior, buffer guards and disconnect during discard.
   - `test_display_presenter.c`: presenter wrappers that forward drawing calls to the active API
 - `tests/stubs/` provides lightweight stand-ins for headers that normally come
   from ChibiOS/HAL so that host builds can compile firmware files.
