@@ -485,6 +485,8 @@ static const uint8_t ili9341_init_seq[] = {
 // ST7789 LCD_RDDID read return 0x42C2A97F (need shift right by 7 bit, so ID1 = 0x85, ID2 = 0x85,
 // ID3 = 0x52)
 #define ST7789V_ID 0x858552
+// Additional panel ID supported by hugen79/NanoVNA-H and DiSlord/NanoVNA-D.
+#define ST7789P3_ID 0x8181B3
 static const uint8_t ST7789V_init_seq[] = {
     // ST7789V init sequence
     // cmd,           len, data...,
@@ -508,7 +510,7 @@ static const uint8_t ST7789V_init_seq[] = {
 // Read display ID and detect type
 static const uint8_t* get_lcd_init(void) {
   uint32_t id = lcd_send_register(LCD_RDDID, 0, 0) >> 7;
-  if (id == ST7789V_ID)
+  if (id == ST7789V_ID || id == ST7789P3_ID)
     lcd_type = st7789v;
   return lcd_type == ili9341_type ? ili9341_init_seq : ST7789V_init_seq;
 }
