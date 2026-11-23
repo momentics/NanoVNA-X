@@ -60,6 +60,7 @@ bool sweep_service_data_valid(void);
 uint32_t sweep_service_current_generation(void);
 void sweep_service_reset_progress(void);
 
+void sweep_service_init_receiver(void);
 void sweep_service_start_capture(systime_t delay_ticks);
 bool sweep_service_wait_for_capture(void);
 const audio_sample_t* sweep_service_rx_buffer(void);
@@ -72,6 +73,7 @@ bool sweep_service_dump_ready(void);
 uint16_t app_measurement_get_sweep_mask(void);
 bool app_measurement_sweep(bool break_on_operation, uint16_t mask);
 void sweep_wait_for_idle(void);
+// Return the settling delay in ticks, or -1 if tuning failed.
 int app_measurement_set_frequency(freq_t freq);
 void app_measurement_set_frequencies(freq_t start, freq_t stop, uint16_t points);
 void app_measurement_reset(void);

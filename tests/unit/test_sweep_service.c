@@ -6,6 +6,7 @@
 
 #include "rf/sweep.h"
 #include "hal.h"
+#include "driver/si5351.h"
 
 #define CHECK(condition) do { \
   if (!(condition)) { \
@@ -35,6 +36,10 @@ static bool complete_on_lock;
 static bool resumed;
 static thread_t capture_worker;
 static thread_reference_t* suspended_reference;
+static bool tuning_fails;
+static int failing_channel;
+static unsigned tune_calls, select_calls, cache_resets, receiver_starts;
+static uint8_t selected_channel;
 
 static void capture_irq(void) {
   CHECK(lock_class == 0);
@@ -114,6 +119,7 @@ msg_t chThdSuspendTimeoutS(thread_reference_t* reference, systime_t timeout) {
     result = MSG_TIMEOUT;
   } else {
     /* Pending ISR runs at the earliest legal handoff, never in the check gap. */
+    now += 2; /* The simulated DMA block arrives after the sweep settling delays. */
     complete_capture();
     CHECK(resumed);
     CHECK(*reference == NULL);
@@ -174,6 +180,49 @@ void request_to_redraw(uint16_t flags) {
   CHECK(flags == REDRAW_CAL_STATUS);
 }
 
+systime_t chVTTimeElapsedSinceX(systime_t start) { return now - start; }
+
+void palClearPad(int port, int pad) { (void)port; (void)pad; }
+void palSetPad(int port, int pad) { (void)port; (void)pad; }
+
+bool event_bus_publish(event_bus_t* bus, event_bus_topic_t topic, const void* payload) {
+  (void)bus;
+  (void)topic;
+  (void)payload;
+  CHECK(!"this test does not install an event bus");
+  return false;
+}
+
+int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
+  (void)drive_strength;
+  CHECK(freq == 1000000U || freq == 2000000U);
+  ++tune_calls;
+  return tuning_fails ? -1 : 0;
+}
+
+uint32_t si5351_get_harmonic_lvl(uint32_t freq) { (void)freq; return 1; }
+uint8_t si5351_take_settling_cycles(void) { return 0; }
+void si5351_reset_cache(void) { ++cache_resets; }
+
+void init_i2s(void* buffer, uint16_t count) {
+  CHECK(buffer == sweep_service_rx_buffer());
+  CHECK(count == 2U * AUDIO_BUFFER_LEN * sizeof(audio_sample_t) / sizeof(int16_t));
+  ++receiver_starts;
+}
+
+bool tlv320aic3204_select(uint8_t channel) {
+  ++select_calls;
+  selected_channel = channel;
+  reset_calls = process_calls = callback_calls = 0;
+  return channel != failing_channel;
+}
+
+static void sample_sweep_point(float* data) {
+  CHECK(process_calls == 1);
+  data[0] = selected_channel + 1.0f;
+  data[1] = -data[0];
+}
+
 static void reset_capture(uint16_t bandwidth) {
   CHECK(lock_class == 0 && !in_isr && suspended_reference == NULL);
   sweep_service_init(NULL);
@@ -183,6 +232,39 @@ static void reset_capture(uint16_t bandwidth) {
   timeout_budget = 0;
   complete_on_lock = resumed = false;
   config._bandwidth = bandwidth;
+}
+
+static void test_tuning_and_input_errors(void) {
+  reset_capture(0);
+  sweep_points = 2;
+  app_measurement_set_frequencies(1000000U, 2000000U, sweep_points);
+  sweep_service_set_sample_function(sample_sweep_point);
+  memset(measured, 0, sizeof measured);
+  const uint16_t mask = SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE;
+  tune_calls = select_calls = cache_resets = 0;
+  failing_channel = -1;
+  tuning_fails = true;
+  CHECK(!app_measurement_sweep(false, mask));
+  CHECK(tune_calls == 1 && select_calls == 0 && suspend_calls == 0);
+  CHECK(receiver_starts == 0);
+  CHECK(!sweep_service_data_valid());
+
+  tuning_fails = false;
+  failing_channel = 1;
+  CHECK(!app_measurement_sweep(false, mask));
+  CHECK(tune_calls == 2 && select_calls == 2 && suspend_calls == 1);
+  CHECK(cache_resets == 1 && !sweep_service_data_valid());
+  CHECK(measured[0][0][0] == 0.0f && measured[1][0][0] == 0.0f);
+
+  failing_channel = -1;
+  CHECK(app_measurement_sweep(false, mask));
+  CHECK(tune_calls == 4 && select_calls == 6 && suspend_calls == 5);
+  CHECK(receiver_starts == 1);
+  for (unsigned point = 0; point < sweep_points; ++point) {
+    CHECK(measured[0][point][0] == 1.0f && measured[0][point][1] == -1.0f);
+    CHECK(measured[1][point][0] == 2.0f && measured[1][point][1] == -2.0f);
+  }
+  ++test_count;
 }
 
 static void test_capture_idle(void) {
@@ -424,6 +506,7 @@ int main(void) {
   test_capture_suspend_handoff();
   test_capture_timeout_retry();
   test_capture_after_timeout();
+  test_tuning_and_input_errors();
   printf("sweep service: %u regression cases passed\n", test_count);
   return EXIT_SUCCESS;
 }

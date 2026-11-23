@@ -450,8 +450,8 @@ static const uint8_t conf_data_ch1_select[] = {
     /*0x3A,*/ 0b00001100,                 // IN3 is weakly driven to common mode
 };
 
-static void tlv320aic3204_bulk_write(const uint8_t* buf, int len) {
-  i2c_transfer(AIC3204_ADDR, buf, len);
+static bool tlv320aic3204_bulk_write(const uint8_t* buf, int len) {
+  return i2c_transfer(AIC3204_ADDR, buf, len);
 }
 
 #if 0
@@ -465,52 +465,69 @@ tlv320aic3204_read(uint8_t d0)
 }
 #endif
 
-static void tlv320aic3204_config(const uint8_t* data, int len) {
+static bool codec_configured;
+static bool codec_ready;
+
+static bool tlv320aic3204_config(const uint8_t* data, int len) {
   for (; len--; data += 2)
-    tlv320aic3204_bulk_write(data, 2);
+    if (!tlv320aic3204_bulk_write(data, 2)) return false;
+  return true;
 }
 
 void tlv320aic3204_init(void) {
-  tlv320aic3204_config(conf_data, sizeof(conf_data) / 2);
+  codec_ready = false;
   //  wait_ms(40);
-  tlv320aic3204_config(conf_data_unmute, sizeof(conf_data_unmute) / 2);
+  codec_configured = tlv320aic3204_config(conf_data, sizeof(conf_data) / 2) &&
+                     tlv320aic3204_config(conf_data_unmute, sizeof(conf_data_unmute) / 2);
 }
 
-void tlv320aic3204_write_reg(uint8_t page, uint8_t reg, uint8_t data) {
+bool tlv320aic3204_write_reg(uint8_t page, uint8_t reg, uint8_t data) {
   uint8_t buf[] = {
       0x00, page, // Select Page
       reg,  data, // write reg data
       0x00, 0x01  // Select Page 1 (should be set as default)
   };
-  tlv320aic3204_config(buf, sizeof(buf) / 2);
+  return tlv320aic3204_config(buf, sizeof(buf) / 2);
 }
 
-void tlv320aic3204_select(uint8_t channel) {
+static bool tlv320aic3204_ensure_ready(void) {
+  if (!codec_ready) {
+    // Retry incomplete startup before writing page 1 registers.
+    tlv320aic3204_init();
+    tlv320aic3204_start_clocks();
+    if (codec_ready) chThdSleepMilliseconds(200);
+  }
+  return codec_ready;
+}
+bool tlv320aic3204_select(uint8_t channel) {
 #if 0
   // Cache current selected channel
   static uint8_t current_channel = -1;
   if (current_channel == channel)
-    return;
+    return true;
   current_channel = channel;
 #endif
-  tlv320aic3204_bulk_write(channel ? conf_data_ch1_select : conf_data_ch3_select,
-                           sizeof(conf_data_ch1_select));
   //  tlv320aic3204_config(channel ? conf_data_ch1_select : conf_data_ch3_select,
   //  sizeof(conf_data_ch3_select)/2);
+  return tlv320aic3204_ensure_ready() &&
+         tlv320aic3204_bulk_write(channel ? conf_data_ch1_select : conf_data_ch3_select,
+                                 sizeof(conf_data_ch1_select));
 }
 
-void tlv320aic3204_set_gain(uint8_t lgain, uint8_t rgain) {
+bool tlv320aic3204_set_gain(uint8_t lgain, uint8_t rgain) {
   uint8_t data[] = {
       //  0x00,   0x01,  // Select Page 1 (should be set as default)
       0x3b, lgain,    // Unmute Left MICPGA, set gain
       /*0x3c,*/ rgain // Unmute Right MICPGA, set gain
   };
   //  tlv320aic3204_config(data, sizeof(data)/2);
-  tlv320aic3204_bulk_write(data, sizeof(data));
+  return tlv320aic3204_ensure_ready() && tlv320aic3204_bulk_write(data, sizeof(data));
 }
 
-void tlv320aic3204_start_clocks(void) {
+bool tlv320aic3204_start_clocks(void) {
   // Set the interface mode: 16 bit, DSP mode, BCLK & WCLK as OUTPUT
-  // This is called after I2S is enabled to ensure synchronization
-  tlv320aic3204_write_reg(0, 27, REG_27_DATA_16 | REG_27_INTERFACE_DSP | REG_27_WCLK_OUT | REG_27_BCLK_OUT);
+  // This is called before initial I2S startup and again if codec startup must be retried.
+  codec_ready = codec_configured &&
+                tlv320aic3204_write_reg(0, 27, REG_27_DATA_16 | REG_27_INTERFACE_DSP | REG_27_WCLK_OUT | REG_27_BCLK_OUT);
+  return codec_ready;
 }

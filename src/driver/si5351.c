@@ -41,6 +41,7 @@ static uint8_t band_count;
 static uint8_t current_power = 0;
 static uint32_t current_freq = 0;
 static uint8_t pending_settling_cycles = 0;
+static bool generator_initialized;
 // Use cache for this reg, not update if not change
 static uint8_t clk_cache[3] = {0, 0, 0};
 
@@ -48,7 +49,7 @@ static uint8_t clk_cache[3] = {0, 0, 0};
  * @jebcampbellhm in https://github.com/momentics/NanoVNA-X/pull/12.
  * This implementation adapts them to separate standard and ZeeTK builds.
  */
-static void si5351_reset_cache(void) {
+void si5351_reset_cache(void) {
   current_band = 0;
   current_freq = 0;
   pending_settling_cycles = 0;
@@ -106,13 +107,13 @@ void si5351_set_frequency_offset(int32_t offset) {
 #endif
 
 void si5351_set_power(uint8_t drive_strength) {
-  if (drive_strength == current_power)
+  if (drive_strength == current_power || current_freq == 0)
     return;
   si5351_set_frequency(current_freq, drive_strength);
 }
 
-void si5351_bulk_write(const uint8_t* buf, int len) {
-  i2c_transfer(SI5351_I2C_ADDR, buf, len);
+bool si5351_bulk_write(const uint8_t* buf, int len) {
+  return i2c_transfer(SI5351_I2C_ADDR, buf, len);
 }
 
 bool si5351_bulk_read(uint8_t reg, uint8_t* buf, int len) {
@@ -122,7 +123,7 @@ bool si5351_bulk_read(uint8_t reg, uint8_t* buf, int len) {
 /*
  * Improved PLL lock detection with timeout protection
  */
-static void si5351_wait_pll_lock(void)
+static bool si5351_wait_pll_lock(void)
 {
   uint8_t status = 0xFF;  // Initialize to worst case to force at least one read
   /* Rollover-safe PLL deadline, contributed by @jebcampbellhm in PR #11. */
@@ -130,23 +131,21 @@ static void si5351_wait_pll_lock(void)
   
   // Wait for both PLLA and PLLB to lock (bits 5 and 6 of register 0 should be 0)
   do {
-    si5351_bulk_read(0, &status, 1);
+    if (!si5351_bulk_read(0, &status, 1)) return false;
     // Check if both PLLs are locked (register 0, bits 5 and 6 should be 0)
     if ((status & 0x60) == 0) {  // Both PLLA and PLLB locked
-      break;
+      return true;
     }
     // Small delay to avoid excessive bus traffic
     chThdSleepMilliseconds(1);
   } while ((systime_t)(chVTGetSystemTimeX() - start) < MS2ST(100));
   
-  // Add minimal stabilization time even if lock was detected earlier
-  // This ensures the PLL outputs are fully settled before proceeding
-  chThdSleepMilliseconds(5);
+  return false;
 }
 
-static inline void si5351_write(uint8_t reg, uint8_t dat) {
+static inline bool si5351_write(uint8_t reg, uint8_t dat) {
   uint8_t buf[] = {reg, dat};
-  si5351_bulk_write(buf, 2);
+  return si5351_bulk_write(buf, 2);
 }
 
 // register addr, length, data, ...
@@ -179,16 +178,25 @@ const uint8_t si5351_configs[] = {
     0 // sentinel
 };
 
-void si5351_init(void) {
+static bool si5351_init_registers(void) {
   const uint8_t* p = si5351_configs;
   while (*p) {
     uint8_t len = *p++;
-    si5351_bulk_write(p, len);
+    if (!si5351_bulk_write(p, len)) return false;
     p += len;
   }
+  generator_initialized = true;
+  return true;
+}
+
+static int si5351_program_frequency(uint32_t freq, uint8_t drive_strength, bool set_codec_gain);
+
+void si5351_init(void) {
   si5351_set_band_mode(config._band_mode);
   // Set any (let it be XTALFREQ) frequency for AIC can run
-  si5351_set_frequency(XTALFREQ, 0);
+  si5351_program_frequency(XTALFREQ, 0, false);
+  // Preserve the clock status for startup, but force gain setup on the first sweep.
+  current_band = 0;
 }
 
 static const uint8_t disable_output[] = {
@@ -206,9 +214,9 @@ static const uint8_t msreg_base[] = {
 };
 
 // Reset PLL need then band changes
-static void si5351_reset_pll(uint8_t mask) {
+static bool si5351_reset_pll(uint8_t mask) {
   // Writing a 1<<5 will reset PLLA, 1<<7 reset PLLB, this is a self clearing bits.
-  si5351_write(SI5351_REG_177_PLL_RESET, mask | 0x0C);
+  return si5351_write(SI5351_REG_177_PLL_RESET, mask | 0x0C);
 }
 
 void si5351_disable_output(void) {
@@ -233,7 +241,7 @@ void si5351_set_tcxo(uint32_t xtal) {
 }
 
 // Set PLL freq = XTALFREQ * (mult + num/denom)
-static void si5351_setup_pll(uint8_t pllSource, /* SI5351_REG_PLL_A or SI5351_REG_PLL_B */
+static bool si5351_setup_pll(uint8_t pllSource, /* SI5351_REG_PLL_A or SI5351_REG_PLL_B */
                              uint32_t mult, uint32_t num, uint32_t denom) {
   /* Feedback Multisynth Divider Equation
    * where: a = mult, b = num and c = denom
@@ -266,11 +274,11 @@ static void si5351_setup_pll(uint8_t pllSource, /* SI5351_REG_PLL_A or SI5351_RE
   reg[6] = ((P3 & 0xF0000) >> 12) | ((P2 & 0xF0000) >> 16); // MSN_P3[19:16] | MSN_P2[19:16]
   reg[7] = (P2 & 0x0FF00) >> 8;                             // MSN_P2[15: 8]
   reg[8] = (P2 & 0x000FF);                                  // MSN_P2[ 7: 0]
-  si5351_bulk_write(reg, 9);
+  return si5351_bulk_write(reg, 9);
 }
 
 // Set Multisynth divider = (div + num/denom) * rdiv
-static void si5351_setupMultisynth(uint32_t channel,
+static bool si5351_setupMultisynth(uint32_t channel,
                                    uint32_t div, // 4,6,8, 8+ ~ 900
                                    uint32_t num, uint32_t denom,
                                    uint32_t rdiv,  // SI5351_R_DIV_1~128
@@ -313,16 +321,17 @@ static void si5351_setupMultisynth(uint32_t channel,
   reg[6] = ((P3 & 0xF0000) >> 12) | ((P2 & 0xF0000) >> 16); // MSx_P3[19:16] | MSx_P2[19:16]
   reg[7] = (P2 & 0x0FF00) >> 8;                             // MSx_P2[15: 8]
   reg[8] = (P2 & 0x000FF);                                  // MSx_P2[ 7: 0]
-  si5351_bulk_write(reg, 9);
+  if (!si5351_bulk_write(reg, 9)) return false;
 
   /* Configure the clk control and enable the output */
   chctrl |= SI5351_CLK_INPUT_MULTISYNTH_N;
   if (num == 0)
     chctrl |= SI5351_CLK_INTEGER_MODE;
   if (clk_cache[channel] != chctrl) {
-    si5351_write(SI5351_REG_16_CLK0_CONTROL + channel, chctrl);
+    if (!si5351_write(SI5351_REG_16_CLK0_CONTROL + channel, chctrl)) return false;
     clk_cache[channel] = chctrl;
   }
+  return true;
 }
 
 // Find better approximate values for n/d
@@ -360,23 +369,23 @@ static void approximate_fraction(uint32_t* n, uint32_t* d) {
 }
 
 // Setup Multisynth divider for get correct output freq if fixed PLL = pllfreq
-static void si5351_set_frequency_fixedpll(uint32_t channel, uint64_t pllfreq, uint32_t freq,
+static bool si5351_set_frequency_fixedpll(uint32_t channel, uint64_t pllfreq, uint32_t freq,
                                           uint32_t rdiv, uint8_t chctrl) {
   uint32_t div = pllfreq / freq; // range: 8 ~ 1800
   uint32_t num = pllfreq % freq;
   uint32_t denom = freq;
   approximate_fraction(&num, &denom);
-  si5351_setupMultisynth(channel, div, num, denom, rdiv, chctrl);
+  return si5351_setupMultisynth(channel, div, num, denom, rdiv, chctrl);
 }
 
 // Setup PLL freq if Multisynth divider fixed = div (need get output =  freq/mul)
-static void si5351_setup_pll_freq(uint32_t pllSource, uint64_t pllfreq, uint32_t div) {
+static bool si5351_setup_pll_freq(uint32_t pllSource, uint64_t pllfreq, uint32_t div) {
   uint32_t xtal = config._xtal_freq * div;
   uint32_t multi = pllfreq / xtal;
   uint32_t num = pllfreq % xtal;
   uint32_t denom = xtal;
   approximate_fraction(&num, &denom);
-  si5351_setup_pll(pllSource, multi, num, denom);
+  return si5351_setup_pll(pllSource, multi, num, denom);
 }
 
 #if 0
@@ -1082,11 +1091,13 @@ uint32_t si5351_get_harmonic_lvl(uint32_t freq) {
 #define FREQ_CHANNEL 1
 #define AUDIO_CODEC_CHANNEL 2
 
-int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
+static int si5351_program_frequency(uint32_t freq, uint8_t drive_strength, bool set_codec_gain) {
   uint8_t band;
   int delay = 0;
   if (freq == 0)
-    return 0;
+    return -1;
+  if (!generator_initialized && !si5351_init_registers())
+    goto fail;
   const uint32_t requested_freq = freq;
   uint32_t rdiv = SI5351_R_DIV_1;
   uint32_t fdiv, pll_n;
@@ -1118,24 +1129,21 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
   // Check current power settings
   if (current_power != drive_strength) {
     si5351_reset_cache();
-    current_power = drive_strength;
   }
 
-  if (requested_freq == current_freq)
+  if (current_band && requested_freq == current_freq)
     return DELAY_CHANNEL_CHANGE;
 
-  if (current_band != band) {
+  const bool band_changed = current_band != band;
+  const uint8_t mode = band_s[band].mode;
+  if (band_changed) {
     //   si5351_write(SI5351_REG_3_OUTPUT_ENABLE_CONTROL,
     //   SI5351_CLK0_EN|SI5351_CLK1_EN|SI5351_CLK2_EN);
     if (DELAY_RESET_PLL_BEFORE) {
-      si5351_reset_pll(SI5351_PLL_RESET_A | SI5351_PLL_RESET_B);
+      if (!si5351_reset_pll(SI5351_PLL_RESET_A | SI5351_PLL_RESET_B)) goto fail;
       // Improved PLL lock detection - wait for PLLs to stabilize after reset
-      si5351_wait_pll_lock();
+      if (current_band && !si5351_wait_pll_lock()) goto fail;
     }
-    // Set new gain values
-    if (band_s[current_band].l_gain != band_s[band].l_gain ||
-        band_s[current_band].r_gain != band_s[band].r_gain)
-      tlv320aic3204_set_gain(band_s[band].l_gain, band_s[band].r_gain);
     // Add delay - optimized for band transitions
     if (DELAY_RESET_PLL_BEFORE)
       chThdSleepMicroseconds(DELAY_RESET_PLL_BEFORE);
@@ -1148,31 +1156,28 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
     ds = band_s[band].pow;
     ods = band_s[band].opow;
   }
-  switch (band_s[band].mode) {
+  switch (mode) {
     // 800Hz to 10kHz   PLLN =  8
   case SI5351_FIXED_PLL: // 10kHz to 100MHz  PLLN = 32
     pll_n = band_s[band].pll_n;
     // Improved sequence for PLL programming: configure PLLs first, then multisynths
-    if (current_band != band) {
+    if (band_changed) {
       // Step 1: Configure PLLs - this must be done first to allow proper locking
-      si5351_setup_pll(SI5351_REG_PLL_A, pll_n, 0, 1);
-      si5351_setup_pll(SI5351_REG_PLL_B, PLL_N_2, 0, 1);
-      
-      // Step 2: Wait for PLLs to lock before configuring multisynths - ensures stability
-      si5351_wait_pll_lock();
-      
-      // Step 3: Configure audio codec channel after PLLs are stable
-      si5351_set_frequency_fixedpll(AUDIO_CODEC_CHANNEL, config._xtal_freq * PLL_N_2,
-                                    CLK2_FREQUENCY, SI5351_R_DIV_1,
-                                    SI5351_CLK_DRIVE_STRENGTH_2MA | SI5351_CLK_PLL_SELECT_B);
+      if (!si5351_setup_pll(SI5351_REG_PLL_A, pll_n, 0, 1) ||
+          !si5351_setup_pll(SI5351_REG_PLL_B, PLL_N_2, 0, 1)) goto fail;
+
+      // Step 2: Configure the audio codec channel before the final PLL lock check.
+      if (!si5351_set_frequency_fixedpll(AUDIO_CODEC_CHANNEL, config._xtal_freq * PLL_N_2,
+                                         CLK2_FREQUENCY, SI5351_R_DIV_1,
+                                         SI5351_CLK_DRIVE_STRENGTH_2MA | SI5351_CLK_PLL_SELECT_B)) goto fail;
     }
     delay = DELAY_BAND_1_2;
     // Calculate and set CH0 and CH1 divider
     // Improved sequence ordering: ensure offset frequency is set before main frequency
-    si5351_set_frequency_fixedpll(OFREQ_CHANNEL, (uint64_t)omul * config._xtal_freq * pll_n, ofreq,
-                                  rdiv, ods | SI5351_CLK_PLL_SELECT_A);
-    si5351_set_frequency_fixedpll(FREQ_CHANNEL, (uint64_t)mul * config._xtal_freq * pll_n, freq,
-                                  rdiv, ds | SI5351_CLK_PLL_SELECT_A);
+    if (!si5351_set_frequency_fixedpll(OFREQ_CHANNEL, (uint64_t)omul * config._xtal_freq * pll_n, ofreq,
+                                       rdiv, ods | SI5351_CLK_PLL_SELECT_A) ||
+        !si5351_set_frequency_fixedpll(FREQ_CHANNEL, (uint64_t)mul * config._xtal_freq * pll_n, freq,
+                                       rdiv, ds | SI5351_CLK_PLL_SELECT_A)) goto fail;
     break;
 #if 0
     case SI5351_MIXED:
@@ -1200,39 +1205,60 @@ int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
   case SI5351_FIXED_MULT: // fdiv = 4, f 170-270   PLL 680-1080
     fdiv = band_s[band].div;
     // Calculate and set CH0 and CH1 PLL freq
-    si5351_setup_pll_freq(SI5351_REG_PLL_A, (uint64_t)ofreq * fdiv,
-                          omul); // set PLLA freq = (ofreq/omul)*fdiv
-    si5351_setup_pll_freq(SI5351_REG_PLL_B, (uint64_t)freq * fdiv,
-                          mul); // set PLLB freq = ( freq/ mul)*fdiv
+    // PLLA freq = (ofreq/omul)*fdiv; PLLB freq = (freq/mul)*fdiv.
+    if (!si5351_setup_pll_freq(SI5351_REG_PLL_A, (uint64_t)ofreq * fdiv, omul) ||
+        !si5351_setup_pll_freq(SI5351_REG_PLL_B, (uint64_t)freq * fdiv, mul)) goto fail;
     // Setup CH0 and CH1 constant fdiv divider at change
-    if (current_band != band || clk_cache[OFREQ_CHANNEL] !=
+    if (band_changed || clk_cache[OFREQ_CHANNEL] !=
             (ods | SI5351_CLK_PLL_SELECT_A | SI5351_CLK_INPUT_MULTISYNTH_N | SI5351_CLK_INTEGER_MODE) ||
         clk_cache[FREQ_CHANNEL] !=
             (ds | SI5351_CLK_PLL_SELECT_B | SI5351_CLK_INPUT_MULTISYNTH_N | SI5351_CLK_INTEGER_MODE)) {
-      si5351_setupMultisynth(OFREQ_CHANNEL, fdiv, 0, 1, SI5351_R_DIV_1,
-                             ods | SI5351_CLK_PLL_SELECT_A);
-      si5351_setupMultisynth(FREQ_CHANNEL, fdiv, 0, 1, SI5351_R_DIV_1,
-                             ds | SI5351_CLK_PLL_SELECT_B);
+      if (!si5351_setupMultisynth(OFREQ_CHANNEL, fdiv, 0, 1, SI5351_R_DIV_1,
+                                  ods | SI5351_CLK_PLL_SELECT_A) ||
+          !si5351_setupMultisynth(FREQ_CHANNEL, fdiv, 0, 1, SI5351_R_DIV_1,
+                                  ds | SI5351_CLK_PLL_SELECT_B)) goto fail;
     }
     // Calculate CH2 freq = CLK2_FREQUENCY, depend from calculated before CH1 PLLB = (freq/mul)*fdiv
-    si5351_set_frequency_fixedpll(AUDIO_CODEC_CHANNEL, (uint64_t)freq * fdiv, CLK2_FREQUENCY * mul,
-                                  SI5351_R_DIV_1,
-                                  SI5351_CLK_DRIVE_STRENGTH_2MA | SI5351_CLK_PLL_SELECT_B);
+    if (!si5351_set_frequency_fixedpll(AUDIO_CODEC_CHANNEL, (uint64_t)freq * fdiv, CLK2_FREQUENCY * mul,
+                                       SI5351_R_DIV_1,
+                                       SI5351_CLK_DRIVE_STRENGTH_2MA | SI5351_CLK_PLL_SELECT_B)) goto fail;
     delay = DELAY_BAND_3_4;
     break;
   }
-  if (current_band != band) {
+  if (band_changed) {
     //    si5351_write(SI5351_REG_3_OUTPUT_ENABLE_CONTROL,
     //    ~(SI5351_CLK0_EN|SI5351_CLK1_EN|SI5351_CLK2_EN));
     // Possibly not need add delay now
     if (DELAY_RESET_PLL_AFTER) {
       chThdSleepMicroseconds(DELAY_RESET_PLL_AFTER);
-      si5351_reset_pll(SI5351_PLL_RESET_A | SI5351_PLL_RESET_B);
+      if (!si5351_reset_pll(SI5351_PLL_RESET_A | SI5351_PLL_RESET_B)) goto fail;
     }
+  }
+  // Fixed multiplier bands reprogram the PLLs at every new frequency.
+  if ((band_changed || mode == SI5351_FIXED_MULT) && !si5351_wait_pll_lock()) goto fail;
+
+  if (band_changed) {
+    // Add minimal stabilization time even if lock was detected earlier.
+    // This ensures the PLL outputs are fully settled before proceeding.
+    if (mode == SI5351_FIXED_PLL) chThdSleepMilliseconds(5);
+    // Set new gain values only after the codec clock is stable.
+    if (set_codec_gain &&
+        (band_s[current_band].l_gain != band_s[band].l_gain ||
+         band_s[current_band].r_gain != band_s[band].r_gain) &&
+        !tlv320aic3204_set_gain(band_s[band].l_gain, band_s[band].r_gain)) goto fail;
     pending_settling_cycles = SI5351_SETTLING_CYCLES_ON_BAND_CHANGE;
     current_band = band;
     delay = DELAY_BANDCHANGE;
   }
+  current_power = drive_strength;
   current_freq = requested_freq;
   return delay;
+
+fail:
+  si5351_reset_cache();
+  return -1;
+}
+
+int si5351_set_frequency(uint32_t freq, uint8_t drive_strength) {
+  return si5351_program_frequency(freq, drive_strength, true);
 }

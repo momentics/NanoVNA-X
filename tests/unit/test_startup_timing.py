@@ -31,7 +31,8 @@ runtime = re.sub(r'/\*.*?\*/|//[^\n]*', '', runtime, flags=re.S)
 # Peripheral initialization is performed once; generator/codec clocks precede slave I2S.
 order = [runtime.index(token) for token in (
     'platform_init();', 'drivers->generator->init();',
-    'tlv320aic3204_init();', 'tlv320aic3204_start_clocks();', 'init_i2s(')]
+    'tlv320aic3204_init();', 'if (generator_ready && tlv320aic3204_start_clocks())',
+    'sweep_service_init_receiver();')]
 assert order == sorted(order), 'generator and codec clocks must precede slave I2S'
 assert 'drivers->init();' not in runtime, 'platform_init owns peripheral initialization'
 
@@ -51,6 +52,7 @@ typedef int16_t audio_sample_t;
 #define SWEEP_CH1_MEASURE 2
 #define SWEEP_USE_INTERPOLATION 4
 #define RF_STATE_SETUP_MEASURE 1
+#define RF_STATE_FAULT 2
 static uint32_t now, elapsed, reads, resets, processed;
 static systime_t capture_start, capture_delay;
 static volatile uint16_t wait_count;
@@ -116,7 +118,7 @@ source = prefix + '\n'.join([
     function(sweep, 'void sweep_service_start_capture('),
     function(sweep, 'bool sweep_service_wait_for_capture('),
     function(sweep, 'static void fsm_setup_freq('),
-    function(driver, 'static void si5351_wait_pll_lock('),
+    function(driver, 'static bool si5351_wait_pll_lock('),
 ]) + r'''
 static void check_capture(uint32_t start, uint32_t delay) {
   now = start; resets = processed = 0;
@@ -149,10 +151,10 @@ int main(void) {
   now = UINT32_MAX; sweep_service_start_capture(0);
   i2s_lld_serve_rx_interrupt(0); assert(wait_count == 1);
 
-  now = 1000; elapsed = reads = 0; si5351_wait_pll_lock();
-  assert(reads == 100 && elapsed == MS2ST(105));
-  now = UINT32_MAX - 5000; elapsed = reads = 0; si5351_wait_pll_lock();
-  assert(reads == 100 && elapsed == MS2ST(105));
+  now = 1000; elapsed = reads = 0; assert(!si5351_wait_pll_lock());
+  assert(reads == 100 && elapsed == MS2ST(100));
+  now = UINT32_MAX - 5000; elapsed = reads = 0; assert(!si5351_wait_pll_lock());
+  assert(reads == 100 && elapsed == MS2ST(100));
 
   rf_fsm_context_t ctx = {.mask = SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE};
   p_sweep = 0; fsm_setup_freq(&ctx); assert(ctx.st_delay == DELAY_SWEEP_START);

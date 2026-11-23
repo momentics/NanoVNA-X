@@ -89,7 +89,9 @@ void si5351_disable_output(void);
 void si5351_enable_output(void);
 
 void si5351_set_frequency_offset(int32_t offset);
+// Return the settling delay in ticks, or -1 if tuning failed.
 int si5351_set_frequency(uint32_t freq, uint8_t drive_strength);
+void si5351_reset_cache(void);
 uint8_t si5351_take_settling_cycles(void);
 void si5351_set_power(uint8_t drive_strength);
 /* Persisted IDs must remain stable across firmware variants. */
@@ -102,7 +104,7 @@ enum {
 void si5351_set_band_mode(uint16_t t);
 
 // Defug use functions
-void si5351_bulk_write(const uint8_t* buf, int len);
+bool si5351_bulk_write(const uint8_t* buf, int len);
 bool si5351_bulk_read(uint8_t reg, uint8_t* buf, int len);
 void si5351_set_timing(int i, int v);
 void si5351_update_band_config(int idx, uint32_t pidx, uint32_t v);

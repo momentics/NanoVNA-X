@@ -1,8 +1,8 @@
-"""Run the H4 I2C implementation with register-level timeout/NACK simulations."""
+"""Run both I2C implementations with register-level timeout/NACK simulations."""
 from pathlib import Path
 import os, shlex, subprocess, tempfile
 ROOT=Path(__file__).resolve().parents[2]
-source=r'''
+prefix=r'''
 #include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -29,7 +29,8 @@ static struct {volatile uint32_t CR1,CR2,TIMINGR,ISR,ICR,TXDR,RXDR;} registers;
 #define I2C_ICR_STOPCF 16u
 #define I2C_ICR_BERRCF 64u
 #define I2C_ICR_ARLOCF 128u
-''' + (ROOT/'boards/STM32F303/i2c_v2.c').read_text() + r'''
+'''
+checks=r'''
 int main(void) {
   uint8_t w[]={0x12,0x34},r;
   i2c_start(); assert(registers.TIMINGR==123 && registers.CR1==I2C_CR1_PE);
@@ -39,18 +40,28 @@ int main(void) {
   for(unsigned i=0;i<sizeof faults/sizeof *faults;++i) {
     registers.ISR=faults[i];registers.CR1=I2C_CR1_PE;
     assert(!i2c_receive(0x60,w,2,&r,1)); assert(!(registers.CR1&I2C_CR1_PE));
+    assert(registers.ICR==(I2C_ICR_NACKCF|I2C_ICR_STOPCF|I2C_ICR_BERRCF|I2C_ICR_ARLOCF));
   }
+  registers.ISR=I2C_ISR_TXIS;
+  assert(!i2c_transfer(0x60,w,2)); // A write is not successful until STOP.
+  registers.ISR=I2C_ISR_TXIS|I2C_ISR_STOPF|I2C_ISR_NACKF;
+  assert(!i2c_transfer(0x60,w,2)); // NACK takes precedence over completion.
   registers.ISR=I2C_ISR_TXIS|I2C_ISR_TC|I2C_ISR_RXNE|I2C_ISR_STOPF;
   registers.RXDR=0x5a;
   assert(i2c_receive(0x60,w,2,&r,1) && r==0x5a && registers.TXDR==0x34);
+  assert(registers.CR1&I2C_CR1_PE);
+  assert(registers.ICR==I2C_ICR_STOPCF);
   assert(i2c_transfer(0x60,w,2));
   registers.ISR=I2C_ISR_RXNE|I2C_ISR_STOPF; // Pure receive must not wait for TC.
   assert(i2c_receive(0x60,NULL,0,&r,1));
-  puts("H4 I2C: stuck BUSY/TX/TC, NACK, bus errors, bounded recovery and pure read passed");
+  puts("I2C: stuck BUSY/TX/TC/STOP, NACK, bus errors, bounded recovery and pure read passed");
 }
 '''
-with tempfile.TemporaryDirectory() as d:
-    p=Path(d);(p/'test.c').write_text(source)
-    subprocess.run(shlex.split(os.environ.get('HOST_CC','gcc'))+['-std=c11','-O2','-Wall',
-        '-Wextra','-Werror',str(p/'test.c'),'-o',str(p/'test')],check=True)
-    subprocess.run([str(p/'test')],check=True,timeout=10)
+for target in ('STM32F072', 'STM32F303'):
+    with tempfile.TemporaryDirectory() as d:
+        p=Path(d)
+        source=(ROOT/'boards'/target/'i2c_v2.c').read_text()
+        (p/'test.c').write_text(prefix + source + checks)
+        subprocess.run(shlex.split(os.environ.get('HOST_CC','gcc'))+['-std=c11','-O2','-Wall',
+            '-Wextra','-Werror',str(p/'test.c'),'-o',str(p/'test')],check=True)
+        subprocess.run([str(p/'test')],check=True,timeout=10)

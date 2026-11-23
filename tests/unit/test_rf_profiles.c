@@ -8,32 +8,96 @@ config_t config;
 static uint8_t registers[256];
 static unsigned writes;
 static uint8_t left_gain, right_gain;
+static int fail_register = -1;
+static bool fail_read, fail_gain;
+static uint8_t pll_status;
+static systime_t now;
 
-void i2c_transfer(uint8_t address, const uint8_t* data, size_t size) {
+bool i2c_transfer(uint8_t address, const uint8_t* data, size_t size) {
   assert(address == 0x60 && size > 1);
-  for (size_t i = 1; i < size; ++i)
+  for (size_t i = 1; i < size; ++i) {
     registers[(uint8_t)(data[0] + i - 1)] = data[i];
+    if (data[0] == fail_register) return false;
+  }
   ++writes;
+  return true;
 }
 
 bool i2c_receive(uint8_t address, const uint8_t* tx, size_t tx_size, uint8_t* rx, size_t rx_size) {
   assert(address == 0x60 && tx_size == 1);
-  memset(rx, 0, rx_size); /* PLL status is locked. */
+  if (fail_read) return false;
+  memset(rx, pll_status, rx_size); /* PLL status is locked unless a fault is injected. */
   (void)tx;
   return true;
 }
 
-void tlv320aic3204_set_gain(uint8_t left, uint8_t right) {
+bool tlv320aic3204_set_gain(uint8_t left, uint8_t right) {
+  if (fail_gain) return false;
   left_gain = left;
   right_gain = right;
+  return true;
 }
 void chThdSleepMicroseconds(uint32_t delay) { (void)delay; }
-void chThdSleepMilliseconds(uint32_t delay) { (void)delay; }
-systime_t chVTGetSystemTimeX(void) { return 0; }
+void chThdSleepMilliseconds(uint32_t delay) { now += MS2ST(delay); }
+systime_t chVTGetSystemTimeX(void) { return now; }
+
+static void check_failed_tuning(uint32_t freq) {
+  assert(si5351_set_frequency(freq, SI5351_CLK_DRIVE_STRENGTH_AUTO) < 0);
+  assert(current_freq == 0 && current_band == 0);
+  assert(si5351_take_settling_cycles() == 0);
+  for (unsigned i = 0; i < ARRAY_COUNT(clk_cache); ++i)
+    assert(clk_cache[i] == 0xff);
+}
+
+static void check_retry(uint32_t freq) {
+  const unsigned before = writes;
+  assert(si5351_set_frequency(freq, SI5351_CLK_DRIVE_STRENGTH_AUTO) >= 0);
+  assert(si5351_get_frequency() == freq && writes > before);
+}
+
+static void test_tuning_errors(void) {
+  const uint32_t freq = 400000000U;
+  si5351_set_band_mode(SI5351_BAND_SJWCH5351);
+  fail_register = SI5351_REG_183_CRYSTAL_LOAD;
+  check_failed_tuning(freq);
+  assert(!generator_initialized);
+  fail_register = -1;
+  check_retry(freq);
+
+  const int registers_to_fail[] = {SI5351_REG_PLL_B, SI5351_REG_17_CLK1_CONTROL,
+                                  SI5351_REG_177_PLL_RESET};
+  for (unsigned i = 0; i < ARRAY_COUNT(registers_to_fail); ++i) {
+    si5351_reset_cache();
+    fail_register = registers_to_fail[i];
+    check_failed_tuning(freq);
+    fail_register = -1;
+    check_retry(freq);
+  }
+
+  fail_read = true;
+  check_failed_tuning(freq + 1U);
+  fail_read = false;
+  check_retry(freq + 1U);
+
+  si5351_reset_cache();
+  pll_status = 0x60;
+  const systime_t start = now;
+  check_failed_tuning(freq);
+  assert(now - start == MS2ST(100));
+  pll_status = 0;
+  check_retry(freq);
+
+  si5351_reset_cache();
+  fail_gain = true;
+  check_failed_tuning(freq);
+  fail_gain = false;
+  check_retry(freq);
+}
 
 int main(void) {
   config._xtal_freq = XTALFREQ;
   config._harmonic_freq_threshold = FREQUENCY_THRESHOLD;
+  test_tuning_errors();
   for (unsigned mode = 0; mode < SI5351_BAND_COUNT + 2; ++mode) {
     si5351_set_band_mode(mode);
 #ifdef __ZEETK__

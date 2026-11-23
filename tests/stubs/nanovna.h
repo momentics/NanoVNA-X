@@ -71,13 +71,13 @@ systime_t chVTGetSystemTimeX(void);
 #define DELAY_BANDCHANGE 1
 #define DELAY_CHANNEL_CHANGE 1
 #define DELAY_SWEEP_START 1
-#define DELAY_RESET_PLL_BEFORE 1
-#define DELAY_RESET_PLL_AFTER 0
+#define DELAY_RESET_PLL_BEFORE 0
+#define DELAY_RESET_PLL_AFTER 4000
 #define START_PROFILE do {} while (0)
 #define STOP_PROFILE do {} while (0)
-void i2c_transfer(uint8_t address, const uint8_t* data, size_t size);
+bool i2c_transfer(uint8_t address, const uint8_t* data, size_t size);
 bool i2c_receive(uint8_t address, const uint8_t* tx, size_t tx_size, uint8_t* rx, size_t rx_size);
-void tlv320aic3204_set_gain(uint8_t left, uint8_t right);
+bool tlv320aic3204_set_gain(uint8_t left, uint8_t right);
 void chThdSleepMicroseconds(uint32_t delay);
 void chThdSleepMilliseconds(uint32_t delay);
 #endif
@@ -184,7 +184,8 @@ extern uint16_t lastsaveid;
 void reset_dsp_accumerator(void);
 void dsp_process(audio_sample_t* samples, size_t count);
 void calculate_gamma(float* gamma);
-void tlv320aic3204_select(uint8_t channel);
+bool tlv320aic3204_select(uint8_t channel);
+void init_i2s(void* buffer, uint16_t count);
 const properties_t* get_properties(uint32_t id);
 freq_t get_frequency(uint16_t index);
 freq_t get_frequency_step(void);

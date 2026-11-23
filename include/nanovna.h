@@ -188,10 +188,10 @@ void generate_dsp_table(int offset);
  */
 
 void tlv320aic3204_init(void);
-void tlv320aic3204_start_clocks(void);
-void tlv320aic3204_set_gain(uint8_t lgain, uint8_t rgain);
-void tlv320aic3204_select(uint8_t channel);
-void tlv320aic3204_write_reg(uint8_t page, uint8_t reg, uint8_t data);
+bool tlv320aic3204_start_clocks(void);
+bool tlv320aic3204_set_gain(uint8_t lgain, uint8_t rgain);
+bool tlv320aic3204_select(uint8_t channel);
+bool tlv320aic3204_write_reg(uint8_t page, uint8_t reg, uint8_t data);
 
 
 // Common utilities

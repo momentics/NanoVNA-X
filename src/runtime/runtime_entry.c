@@ -800,6 +800,7 @@ int runtime_main(void) {
    */
   if (drivers != NULL && drivers->generator && drivers->generator->init)
     drivers->generator->init();
+  const bool generator_ready = si5351_get_frequency() != 0U;
 
 #ifdef USE_VARIABLE_OFFSET
   si5351_set_frequency_offset(IF_OFFSET);
@@ -835,15 +836,16 @@ int runtime_main(void) {
    * This ensures I2S inputs are driven (not floating) when I2S peripheral is enabled.
    * Prevents F072 hang due to noise on floating I2S pins.
    */
-  tlv320aic3204_start_clocks();
-  chThdSleepMilliseconds(200); // Short stabilization wait, increased from 10ms
+  if (generator_ready && tlv320aic3204_start_clocks()) {
+    chThdSleepMilliseconds(200); // Short stabilization wait, increased from 10ms
 
-  /*
-   * I2S Initialize
-   * Now safe to enable I2S as Slave, as clocks are present.
-   */
-  init_i2s((void*)sweep_service_rx_buffer(),
-           (AUDIO_BUFFER_LEN * 2) * sizeof(audio_sample_t) / sizeof(int16_t));
+    /*
+     * I2S Initialize
+     * Now safe to enable I2S as Slave, as clocks are present.
+     * On failure, the sweep retries codec startup before enabling the receiver.
+     */
+    sweep_service_init_receiver();
+  }
 
 /*
    * SD Card init (if inserted) allow fix issues

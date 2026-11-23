@@ -41,6 +41,7 @@ static systime_t capture_delay = 0;
 static volatile uint16_t wait_count = 0;
 static thread_reference_t capture_thread = NULL;
 static alignas(8) audio_sample_t rx_buffer[AUDIO_BUFFER_LEN * 2];
+static bool receiver_started;
 
 #if ENABLED_DUMP_COMMAND
 static audio_sample_t* dump_buffer = NULL;
@@ -324,6 +325,13 @@ uint32_t sweep_service_current_generation(void) {
   return generation;
 }
 
+void sweep_service_init_receiver(void) {
+  if (!receiver_started) {
+    init_i2s(rx_buffer, sizeof(rx_buffer) / sizeof(int16_t));
+    receiver_started = true;
+  }
+}
+
 void sweep_service_start_capture(systime_t delay_ticks) {
   chSysLock();
   capture_start = chVTGetSystemTimeX();
@@ -548,6 +556,10 @@ static void fsm_setup_freq(rf_fsm_context_t* ctx) {
   uint8_t extra_cycles = 0U;
   if (ctx->mask & (SWEEP_CH0_MEASURE | SWEEP_CH1_MEASURE)) {
     ctx->delay = app_measurement_set_frequency(ctx->frequency);
+    if (ctx->delay < 0) {
+      ctx->state = RF_STATE_FAULT;
+      return;
+    }
     ctx->interpolation_idx = (ctx->mask & SWEEP_USE_INTERPOLATION) ? -1 : (int)p_sweep;
     extra_cycles = si5351_take_settling_cycles();
   }
@@ -573,7 +585,12 @@ static void fsm_setup_measure(rf_fsm_context_t* ctx) {
      return;
   }
   
-  tlv320aic3204_select(ctx->channel_index);
+  if (!tlv320aic3204_select(ctx->channel_index)) {
+    si5351_reset_cache();
+    ctx->state = RF_STATE_FAULT;
+    return;
+  }
+  sweep_service_init_receiver();
   
   int cycle_delay = ctx->delay;
   int cycle_st_delay = (ctx->current_cycle == 0U) ? ctx->st_delay : 0;
@@ -617,9 +634,6 @@ static void fsm_process(rf_fsm_context_t* ctx) {
             if (ctx->mask & SWEEP_APPLY_S21_OFFSET)
                 apply_offset(&ctx->sweep_data[2], ctx->offset);
         }
-
-        measured[ctx->channel_index][p_sweep][0] = ctx->sweep_data[data_idx];
-        measured[ctx->channel_index][p_sweep][1] = ctx->sweep_data[data_idx+1];
     }
 
     ctx->channel_index++;
@@ -691,6 +705,13 @@ bool __attribute__((optimize("Os"))) app_measurement_sweep(bool break_on_operati
            break;
            
         case RF_STATE_NEXT_STEP:
+            // Do not expose either channel until the whole point has succeeded.
+            for (unsigned ch = 0; ch < 2U; ++ch) {
+                if (ctx.mask & (SWEEP_CH0_MEASURE << ch)) {
+                    measured[ch][p_sweep][0] = ctx.sweep_data[ch * 2U];
+                    measured[ch][p_sweep][1] = ctx.sweep_data[ch * 2U + 1U];
+                }
+            }
             if (config._bandwidth >= BANDWIDTH_100 && sweep_points > 1U) {
                  uint16_t current_bar = (uint16_t)(((uint32_t)p_sweep * WIDTH) / (sweep_points - 1U));
                 sweep_progress_update(current_bar);
