@@ -45,6 +45,11 @@ HEADER = r'''
 #define SAVE_CONFIG_SIZE 2048
 #define SAVE_PROP_CONFIG_ADDR 0x0801c800u
 #define SAVE_CONFIG_ADDR 0x08038800u
+#define SWEEP_STATE_ADDR 0x0803f800u
+#ifdef TEST_REMEMBER_STATE
+#define __USE_BACKUP__
+void set_backup_data32(uint16_t id, uint32_t value);
+#endif
 #define SAVE_FULL_AREA_SIZE (7*16384+2048)
 #define NO_SAVE_SLOT 255
 #define PROPERTIES_MAGIC 0x434f4e54u

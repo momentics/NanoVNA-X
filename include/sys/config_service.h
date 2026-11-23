@@ -47,6 +47,10 @@ void config_service_init(void);
 /* Validated SD/CAL staging, contributed by @jebcampbellhm in PR #13. */
 bool properties_valid(const properties_t* properties);
 void properties_update_checksum(properties_t* properties);
+#ifdef __USE_BACKUP__
+const uint32_t* config_recall_sweep_state(void);
+bool config_save_sweep_state(uint32_t state[6]);
+#endif
 #ifdef NANOVNA_F303
 #define CAL_IMPORT_SCRATCH (SAVE_CONFIG_ADDR + SAVE_CONFIG_SIZE)
 int properties_stage_write(unsigned offset, const void* data, unsigned size);

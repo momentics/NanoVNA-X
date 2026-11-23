@@ -114,8 +114,8 @@ bool properties_valid(const properties_t *p) {
 #ifdef NANOVNA_F303
 // Stage SD imports above the saved records; no active or saved CAL is overwritten.
 _Static_assert(CAL_IMPORT_SCRATCH % FLASH_PAGESIZE == 0, "CAL staging alignment");
-_Static_assert(CAL_IMPORT_SCRATCH + sizeof(properties_t) <= FLASH_START_ADDRESS + FLASH_TOTAL_SIZE,
-               "CAL staging exceeds flash");
+_Static_assert(CAL_IMPORT_SCRATCH + sizeof(properties_t) <= SWEEP_STATE_ADDR,
+               "CAL staging overlaps remembered state");
 int properties_stage_write(unsigned offset, const void *data, unsigned size) {
   if (calibration_in_progress || offset % 2048 ||
       size > 2048 || !size || (size & 1) || offset >= sizeof(properties_t) ||
@@ -128,6 +128,25 @@ int properties_stage_write(unsigned offset, const void *data, unsigned size) {
   return result;
 }
 
+#endif
+
+#ifdef __USE_BACKUP__
+const uint32_t* config_recall_sweep_state(void) {
+  const uint32_t* state = (const uint32_t*)SWEEP_STATE_ADDR;
+  return checksum(state, 5 * sizeof(*state)) == state[5] ? state : NULL;
+}
+
+bool config_save_sweep_state(uint32_t state[6]) {
+  if (chSemWaitTimeout(&flash_operation_semaphore, MS2ST(500)) != MSG_OK) return false;
+  const void* dst = (const void*)SWEEP_STATE_ADDR;
+  const size_t size = 6 * sizeof(*state);
+  state[5] = checksum(state, size - sizeof(*state));
+  if (memcmp(dst, state, size) != 0)
+    flash_program_half_word_buffer((uint16_t*)SWEEP_STATE_ADDR, (uint16_t*)state, size);
+  bool saved = memcmp(dst, state, size) == 0;
+  chSemSignal(&flash_operation_semaphore);
+  return saved;
+}
 #endif
 
 static int config_save_impl(void) {
@@ -260,6 +279,10 @@ static void clear_all_config_prop_data_impl(void) {
   checksum_ok = 0;
   // unlock and erase flash pages
   flash_erase_pages(SAVE_PROP_CONFIG_ADDR, SAVE_FULL_AREA_SIZE);
+#ifdef __USE_BACKUP__
+  flash_erase_pages(SWEEP_STATE_ADDR, FLASH_PAGESIZE);
+  set_backup_data32(0, 0);
+#endif
   
   // Release the semaphore
   chSemSignal(&flash_operation_semaphore);

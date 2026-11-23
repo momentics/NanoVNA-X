@@ -444,6 +444,17 @@ void ui_mode_keypad(int mode) {
   draw_numeric_area_frame();
 }
 
+#ifdef __USE_DISPLAY_DMA__
+void ui_keypad_redraw(void) {
+  draw_keypad();
+  draw_numeric_area_frame();
+  if (keypads->type == NUM_KEYBOARD)
+    draw_numeric_input(kp_buf);
+  else
+    draw_text_input(kp_buf);
+}
+#endif
+
 void ui_keypad_touch(int touch_x, int touch_y) {
   const keypad_pos_t* p = &key_pos[keypads->type];
   if (touch_x < p->x_offs || touch_y < p->y_offs)

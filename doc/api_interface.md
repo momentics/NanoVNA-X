@@ -48,9 +48,9 @@ When a command modifies sweep settings it typically pauses generation, performs 
 
 The `sys/state_manager` layer owns sweep/GUI persistence:
 
-* When `REMEMBER STATE` (System -> Device) is on, edits to sweep points, start/stop limits, brightness, lever mode, and the active calibration slot are staged in RAM and automatically written back to flash a short time after the last change.
-* Issuing `saveconfig` or selecting **SAVE CONFIG** in the UI forces both the configuration block and any pending autosave data to be committed immediately. Hosts that modify sweep settings via USB should either wait for the prompt plus ~1 second or explicitly call `saveconfig` to guarantee persistence.
-* Autosaves target the currently-selected calibration slot (`lastsaveid`, default slot 0). This mirrors the on-device workflow: changing the active slot with `recall` also changes where subsequent autosaves land.
+* `REMEMBER STATE` (System -> Device) retains the sweep range, point count, and UI state in RTC backup registers. Changes to the sweep settings or the selected calibration also schedule a write to a separate flash page, so the sweep can be restored if the RTC state is lost.
+* `saveconfig` and **SAVE CONFIG** write the configuration block and, when `REMEMBER STATE` is enabled, the current sweep state immediately. Neither operation writes calibration slots.
+* To change a saved calibration, use `save <slot>` or the calibration save menu. After `CAL RESET`, the remembered sweep has no active calibration; it can be restored without reloading or overwriting slot 0.
 
 ## 4. Binary data formats
 Most replies are textual. When binary data is transmitted, the firmware writes raw memory structures through the shell stream without additional framing:

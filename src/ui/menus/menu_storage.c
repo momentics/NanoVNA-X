@@ -197,7 +197,7 @@ static FILE_SAVE_CALLBACK(save_bmp) {
   FRESULT res = write_exact(f, bmp_header_v4, sizeof(bmp_header_v4), &size);
   lcd_set_background(LCD_SWEEP_LINE_COLOR);
   for (int y = LCD_HEIGHT - 1; y >= 0 && res == FR_OK; y--) {
-    lcd_read_memory(0, y, LCD_WIDTH, 1, buf_16);
+    if (!lcd_read_memory(0, y, LCD_WIDTH, 1, buf_16)) return FR_DISK_ERR;
     swap_bytes(buf_16, LCD_WIDTH);
     res = write_exact(f, buf_16, LCD_WIDTH * sizeof(uint16_t), &size);
     lcd_fill(LCD_WIDTH - 1, y, 1, 1);
@@ -253,7 +253,7 @@ static FILE_SAVE_CALLBACK(save_tiff) {
   lcd_set_background(LCD_SWEEP_LINE_COLOR);
   for (int y = 0; y < LCD_HEIGHT && res == FR_OK; y++) {
     buf_8 = (char*)buf_16 + 128;
-    lcd_read_memory(0, y, LCD_WIDTH, 1, buf_16);
+    if (!lcd_read_memory(0, y, LCD_WIDTH, 1, buf_16)) return FR_DISK_ERR;
     for (int x = LCD_WIDTH - 1; x >= 0; x--) {
       uint16_t color = (buf_16[x] << 8) | (buf_16[x] >> 8);
       buf_8[3 * x + 0] = (color >> 8) & 0xF8;

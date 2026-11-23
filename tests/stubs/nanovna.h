@@ -157,7 +157,7 @@ void lcd_drawfont(uint8_t ch, int x, int y);
 void lcd_drawstring(int x, int y, const char* str);
 void lcd_drawstring_size(const char* str, int x, int y, uint8_t size);
 int lcd_printf_va(int16_t x, int16_t y, const char* fmt, va_list args);
-void lcd_read_memory(int x, int y, int w, int h, uint16_t* out);
+bool lcd_read_memory(int x, int y, int w, int h, uint16_t* out);
 void lcd_line(int x0, int y0, int x1, int y1);
 void lcd_set_background(uint16_t bg);
 void lcd_set_colors(uint16_t fg, uint16_t bg);

@@ -583,7 +583,7 @@ VNA_SHELL_FUNCTION(cmd_capture) {
 #define READ_ROWS 2
   extern pixel_t spi_buffer[];
   for (int y = 0; y < LCD_HEIGHT; y += READ_ROWS) {
-    lcd_read_memory(0, y, LCD_WIDTH, READ_ROWS, (uint16_t*)spi_buffer);
+    if (!lcd_read_memory(0, y, LCD_WIDTH, READ_ROWS, (uint16_t*)spi_buffer)) return;
     shell_stream_write(spi_buffer, READ_ROWS * LCD_WIDTH * sizeof(uint16_t));
   }
 }
@@ -618,7 +618,11 @@ VNA_SHELL_FUNCTION(cmd_cal) {
   case 5: cal_done(); return;
   case 6: cal_status |= CALSTAT_APPLY; return;
   case 7: cal_status &= ~CALSTAT_APPLY; return;
-  case 8: cal_status = 0; return;
+  case 8:
+    cal_status = 0;
+    lastsaveid = NO_SAVE_SLOT;
+    state_manager_mark_dirty();
+    return;
   }
 }
 
@@ -626,7 +630,7 @@ VNA_SHELL_FUNCTION(cmd_save) {
   if (argc != 1) return;
   uint32_t id = my_atoui(argv[0]);
   if (id >= SAVEAREA_MAX) return;
-  caldata_save(id);
+  if (caldata_save(id) == 0) state_manager_mark_dirty();
   request_to_redraw(REDRAW_CAL_STATUS);
 }
 

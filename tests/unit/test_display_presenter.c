@@ -87,12 +87,13 @@ int lcd_printf_va(int16_t x, int16_t y, const char* fmt, va_list args) {
   int len = vsnprintf(buffer, sizeof(buffer), fmt, args);
   return len;
 }
-void lcd_read_memory(int x, int y, int w, int h, uint16_t* out) {
+bool lcd_read_memory(int x, int y, int w, int h, uint16_t* out) {
   (void)x;
   (void)y;
   (void)w;
   (void)h;
   (void)out;
+  return true;
 }
 void lcd_line(int x0, int y0, int x1, int y1) {
   (void)x0;

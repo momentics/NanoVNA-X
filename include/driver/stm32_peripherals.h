@@ -143,7 +143,7 @@ float rtc_get_cal(void);
  * Backup
  */
 #ifdef __USE_BACKUP__
-inline uint32_t get_backup_data32(uint16_t id) {
+static inline uint32_t get_backup_data32(uint16_t id) {
   switch (id) {
   case 0:
     return RTC->BKP0R;
@@ -158,7 +158,7 @@ inline uint32_t get_backup_data32(uint16_t id) {
   }
   return 0;
 }
-inline void set_backup_data32(uint16_t id, uint32_t data) {
+static inline void set_backup_data32(uint16_t id, uint32_t data) {
   switch (id) {
   case 0:
     RTC->BKP0R = data;
@@ -240,6 +240,17 @@ void init_i2s(void* buffer, uint16_t count);
   (FLASH_CALIBRATION_SECTOR_START + FLASH_CALIBRATION_SECTOR_SIZE - SAVE_CONFIG_SIZE)
 // Properties save area before config
 #define SAVE_PROP_CONFIG_ADDR (SAVE_CONFIG_ADDR - SAVEAREA_MAX * SAVE_PROP_CONFIG_SIZE)
+
+#ifdef NANOVNA_F303
+// Keep the final page separate from the CAL import scratch area.
+#define SWEEP_STATE_ADDR (FLASH_START_ADDRESS + FLASH_TOTAL_SIZE - FLASH_PAGESIZE)
+#else
+// The first reserved page is below the existing calibration slots.
+#define SWEEP_STATE_ADDR FLASH_CALIBRATION_SECTOR_START
+#if SWEEP_STATE_ADDR + FLASH_PAGESIZE > SAVE_PROP_CONFIG_ADDR
+#error "Remembered state overlaps calibration storage"
+#endif
+#endif
 
 #if (SAVE_FULL_AREA_SIZE > FLASH_CALIBRATION_SECTOR_SIZE)
 #error "Calibration storage exceeds reserved flash sector"

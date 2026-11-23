@@ -656,6 +656,9 @@ typedef struct {
 #define _BMP32(d)  (((d)>>24)&0xFF), (((d)>>16)&0xFF), (((d)>>8)&0xFF), ((d)&0xFF)
 
 void lcd_init(void);
+#ifdef __USE_DISPLAY_DMA__
+bool lcd_take_dma_fault(void);
+#endif
 void lcd_bulk(int x, int y, int w, int h);
 void lcd_fill(int x, int y, int w, int h);
 
@@ -688,7 +691,7 @@ int  lcd_printf_va(int16_t x, int16_t y, const char *fmt, va_list ap);
 int  lcd_drawchar_size(uint8_t ch, int x, int y, uint8_t size);
 void lcd_drawstring_size(const char *str, int x, int y, uint8_t size);
 void lcd_drawfont(uint8_t ch, int x, int y);
-void lcd_read_memory(int x, int y, int w, int h, uint16_t* out);
+bool lcd_read_memory(int x, int y, int w, int h, uint16_t* out);
 void lcd_line(int x0, int y0, int x1, int y1);
 void lcd_vector_draw(int x, int y, const vector_data *v);
 

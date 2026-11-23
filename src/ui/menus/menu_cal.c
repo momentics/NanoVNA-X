@@ -24,6 +24,7 @@
 #include "ui/core/ui_core.h"
 #include "ui/core/ui_keypad.h"
 #include "sys/config_service.h"
+#include "sys/state_manager.h"
 #include "driver/si5351.h"
 #include "core/config_macros.h"
 
@@ -116,7 +117,8 @@ static UI_FUNCTION_CALLBACK(menu_cal_reset_cb) {
   cal_status &= CALSTAT_ENHANCED_RESPONSE; // leave ER state
   lastsaveid = NO_SAVE_SLOT;
   // set_power(SI5351_CLK_DRIVE_STRENGTH_AUTO);
-  request_to_redraw(REDRAW_CAL_STATUS);
+  request_to_redraw(REDRAW_BACKUP | REDRAW_CAL_STATUS);
+  state_manager_mark_dirty();
 }
 
 static UI_FUNCTION_ADV_CALLBACK(menu_cal_range_acb) {
@@ -232,6 +234,7 @@ static UI_FUNCTION_ADV_CALLBACK(menu_save_acb) {
   if (result == 0) {
     menu_move_back(true);
     request_to_redraw(REDRAW_BACKUP | REDRAW_CAL_STATUS);
+    state_manager_mark_dirty();
   } else {
     // Show error if save failed
     ui_message_box("SAVE ERROR", "Failed to save calibration", 1000);

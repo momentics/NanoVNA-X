@@ -95,60 +95,59 @@ typedef union {
   uint32_t v;
 } backup_0;
 
-static inline uint16_t active_calibration_slot(void) {
-  uint16_t slot = lastsaveid;
-  if (slot == NO_SAVE_SLOT || slot >= SAVEAREA_MAX) {
-    slot = 0;
-  }
-  return slot;
+static uint32_t sweep_state_header(void) {
+  backup_0 bk = {.points = sweep_points,
+                  .bw = config._bandwidth,
+                  .id = lastsaveid < SAVEAREA_MAX ? lastsaveid : 15U,
+                  .leveler = lever_mode,
+                  .brightness = config._brightness};
+  return bk.v;
 }
 
 void update_backup_data(void) {
-  backup_0 bk = {.points = sweep_points,
-                 .bw = config._bandwidth,
-                 .id = lastsaveid,
-                 .leveler = lever_mode,
-                 .brightness = config._brightness};
-  set_backup_data32(0, bk.v);
+  if (!VNA_MODE(VNA_MODE_BACKUP)) return;
+  // Publish the header last so a reset during an update cannot restore mixed limits.
+  set_backup_data32(0, 0);
   set_backup_data32(1, frequency0);
   set_backup_data32(2, frequency1);
   set_backup_data32(3, var_freq);
   set_backup_data32(4, config._vna_mode);
+  set_backup_data32(0, sweep_state_header());
+}
+
+static bool restore_sweep_state(const uint32_t* state) {
+  if (state == NULL) return false;
+  backup_0 bk = {.v = state[0]};
+  /* @jebcampbellhm, PR #13: validate retained state before indexing it. */
+  if (bk.points < 2 || bk.points > SWEEP_POINTS_MAX ||
+      state[1] < FREQUENCY_MIN || state[1] > FREQUENCY_MAX ||
+      state[2] < FREQUENCY_MIN || state[2] > FREQUENCY_MAX)
+    return false;
+
+  // A missing or invalid CAL slot does not invalidate the remembered sweep.
+  caldata_recall(bk.id < SAVEAREA_MAX ? bk.id : NO_SAVE_SLOT);
+  sweep_points = bk.points;
+  frequency0 = state[1];
+  frequency1 = state[2];
+  var_freq = state[3];
+  config._brightness = bk.brightness <= 100 ? bk.brightness : 100;
+  lever_mode = bk.leveler <= LM_EDELAY ? bk.leveler : LM_MARKER;
+  if (state[4] != UINT32_MAX) config._vna_mode = state[4] | (1 << VNA_MODE_BACKUP);
+  set_bandwidth(bk.bw);
+  return true;
 }
 
 static void load_settings(void) {
   load_default_properties();
-  if (config_recall() == 0 && VNA_MODE(VNA_MODE_BACKUP)) {
-    sanitize_rf_preferences();
-    backup_0 bk = {.v = get_backup_data32(0)};
-    if (bk.v != 0U) {
-      /* @jebcampbellhm, PR #13: validate retained state before indexing it. */
-      if (bk.id < SAVEAREA_MAX && bk.points >= 2 && bk.points <= SWEEP_POINTS_MAX &&
-          get_backup_data32(1) >= FREQUENCY_MIN && get_backup_data32(2) <= FREQUENCY_MAX &&
-          get_backup_data32(1) <= get_backup_data32(2) && caldata_recall(bk.id) == 0) {
-        sweep_points = bk.points;
-        frequency0 = get_backup_data32(1);
-        frequency1 = get_backup_data32(2);
-        var_freq = get_backup_data32(3);
-      } else {
-        caldata_recall(0);
-      }
-      config._brightness = bk.brightness <= 100 ? bk.brightness : 100;
-      lever_mode = bk.leveler <= LM_EDELAY ? bk.leveler : LM_MARKER;
-      uint32_t backup_mode = get_backup_data32(4);
-      if (backup_mode != 0xFFFFFFFFU) {
-        config._vna_mode = backup_mode | (1 << VNA_MODE_BACKUP);
-      } else {
-        config._vna_mode |= (1 << VNA_MODE_BACKUP);
-      }
-      set_bandwidth(bk.bw);
-    } else {
-      caldata_recall(0);
-    }
-  } else {
-    caldata_recall(0);
-    sanitize_rf_preferences();
+  config_recall();
+  sanitize_rf_preferences();
+  bool restored = false;
+  if (VNA_MODE(VNA_MODE_BACKUP)) {
+    uint32_t retained[5];
+    for (unsigned i = 0; i < 5; ++i) retained[i] = get_backup_data32(i);
+    restored = restore_sweep_state(retained) || restore_sweep_state(config_recall_sweep_state());
   }
+  if (!restored) caldata_recall(0);
   app_measurement_update_frequencies();
 #ifdef __VNA_MEASURE_MODULE__
   plot_set_measure_mode(current_props._measure);
@@ -166,10 +165,6 @@ static void load_settings(void) {
   load_properties(0);
 }
 
-static inline uint16_t active_calibration_slot(void) {
-  return 0;
-}
-
 #endif
 
 void state_manager_init(void) {
@@ -178,6 +173,7 @@ void state_manager_init(void) {
 
 void state_manager_mark_dirty(void) {
 #ifdef __USE_BACKUP__
+  update_backup_data();
   sweep_state_dirty = true;
   sweep_state_deadline = chVTGetSystemTimeX() + SWEEP_STATE_AUTOSAVE_DELAY;
 #endif
@@ -186,11 +182,10 @@ void state_manager_mark_dirty(void) {
 void state_manager_force_save(void) {
 #ifdef __USE_BACKUP__
   // Don't save during calibration to avoid conflicts with measurement process
-  if (!calibration_in_progress) {
-    caldata_save(active_calibration_slot());
-  }
-  
-  sweep_state_dirty = false;
+  if (calibration_in_progress || !VNA_MODE(VNA_MODE_BACKUP)) return;
+  update_backup_data();
+  uint32_t state[6] = {sweep_state_header(), frequency0, frequency1, var_freq, config._vna_mode};
+  sweep_state_dirty = !config_save_sweep_state(state);
   sweep_state_last_save = chVTGetSystemTimeX();
 #endif
 }

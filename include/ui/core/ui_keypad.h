@@ -123,6 +123,9 @@ int32_t keyboard_get_int(void);
 // Handlers
 void ui_keypad_lever(uint16_t status);
 void ui_keypad_touch(int touch_x, int touch_y);
+#ifdef __USE_DISPLAY_DMA__
+void ui_keypad_redraw(void);
+#endif
 
 // Callback
 void ui_keyboard_cb(uint16_t data, button_t* b);

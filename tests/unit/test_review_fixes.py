@@ -40,7 +40,7 @@ def run(name, source, extra=(), headers=None):
         flags = ['-O2']
         subprocess.run(CC + ['-std=c11', *flags, '-I'+str(tmp), '-I'+str(ROOT/'include'),
                             str(tmp/'probe.c'), *[str(ROOT/p) for p in extra], '-lm', '-o', str(tmp/'probe')], check=True)
-        result = subprocess.run([str(tmp/'probe')], text=True, capture_output=True)
+        result = subprocess.run([str(tmp/'probe')], text=True, capture_output=True, timeout=10)
         assert result.returncode == 0, (name, result.stdout, result.stderr)
         print(f'PASS {name}: {result.stdout.strip()}')
 
@@ -112,6 +112,155 @@ int main(void) {
   puts("failed/nonfinite captures leave CAL unchanged; retry succeeds; 16-bit bandwidth preserved");
 }
 ''', ('src/processing/calibration.c','src/sys/config_service.c'), headers)
+
+state_manager = 'src/sys/state_manager.c'
+backup_text = (ROOT / state_manager).read_text()
+backup_type = backup_text[backup_text.index('typedef union {'):backup_text.index('} backup_0;')]
+run('remembered sweep without CAL', r'''
+#include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#define VNA_MODE_BACKUP 0
+#define VNA_MODE(mode) (config._vna_mode & (1U << (mode)))
+#define SAVEAREA_MAX 4
+#define NO_SAVE_SLOT UINT16_MAX
+#define SWEEP_POINTS_MAX 101
+#define FREQUENCY_MIN 600U
+#define FREQUENCY_MAX 2700000000U
+#define LM_EDELAY 4
+#define LM_MARKER 0
+typedef uint32_t systime_t;
+static uint16_t sweep_points, lastsaveid;
+static uint32_t frequency0, frequency1, var_freq, lever_mode;
+static struct { unsigned _vna_mode, _bandwidth, _brightness; } config;
+static bool calibration_in_progress, sweep_state_dirty, saved;
+static systime_t sweep_state_deadline, sweep_state_last_save;
+static const uint32_t slot0[] = {14000000, 14350000, 51, 0x12345678};
+static uint32_t rtc[5], flash_state[6];
+static unsigned cal_reads;
+static uint32_t get_backup_data32(unsigned i) { return rtc[i]; }
+static void set_backup_data32(unsigned i, uint32_t value) { rtc[i] = value; }
+static const uint32_t* config_recall_sweep_state(void) { return saved ? flash_state : NULL; }
+static bool config_save_sweep_state(uint32_t state[6]) {
+  memcpy(flash_state, state, sizeof flash_state);
+  saved = true;
+  return true;
+}
+static systime_t chVTGetSystemTimeX(void) { return 100; }
+#define __USE_BACKUP__
+#define SWEEP_STATE_AUTOSAVE_DELAY 750
+static void config_recall(void) { config._vna_mode = 1; }
+static void sanitize_rf_preferences(void) {}
+static void load_default_properties(void) { frequency0 = frequency1 = sweep_points = 0; }
+static int caldata_recall(unsigned slot) {
+  lastsaveid = NO_SAVE_SLOT;
+  if (slot == NO_SAVE_SLOT) return 0;
+  ++cal_reads;
+  if (slot != 0) return -1;
+  lastsaveid = 0;
+  frequency0 = slot0[0]; frequency1 = slot0[1]; sweep_points = slot0[2];
+  return 0;
+}
+static void app_measurement_update_frequencies(void) {}
+static void set_bandwidth(unsigned bw) { config._bandwidth = bw; }
+''' + backup_type + '} backup_0;\n' + '\n'.join(body(state_manager, sig) for sig in (
+    'static uint32_t sweep_state_header(', 'void update_backup_data(',
+    'static bool restore_sweep_state(', 'static void load_settings(',
+    'void state_manager_mark_dirty(', 'void state_manager_force_save(')) + r'''
+int main(void) {
+  load_settings();
+  assert(lastsaveid == 0 && cal_reads == 1);
+  lastsaveid = NO_SAVE_SLOT;
+  frequency0 = 50000000; frequency1 = 100000000; sweep_points = 101;
+  state_manager_mark_dirty();
+  assert(sweep_state_dirty && sweep_state_deadline == 850 && !saved);
+  load_settings();
+  assert(lastsaveid == NO_SAVE_SLOT && cal_reads == 1);
+  assert(frequency0 == 50000000 && frequency1 == 100000000 && sweep_points == 101);
+  state_manager_force_save();
+  assert(saved && !sweep_state_dirty && sweep_state_last_save == 100);
+  load_settings();
+  assert(lastsaveid == NO_SAVE_SLOT && cal_reads == 1);
+  assert(frequency0 == 50000000 && frequency1 == 100000000 && sweep_points == 101);
+  memset(rtc, 0, sizeof rtc);
+  load_settings();
+  assert(lastsaveid == NO_SAVE_SLOT && cal_reads == 1);
+  assert(frequency0 == 50000000 && frequency1 == 100000000 && sweep_points == 101);
+  lastsaveid = 1;
+  update_backup_data();
+  load_settings();
+  assert(lastsaveid == NO_SAVE_SLOT && cal_reads == 2);
+  assert(frequency0 == 50000000 && frequency1 == 100000000 && sweep_points == 101);
+  assert(caldata_recall(0) == 0 && frequency0 == 14000000 && sweep_points == 51);
+  puts("range restores with reset or missing CAL; slot 0 remains unchanged");
+}
+''')
+
+lcd = 'src/driver/lcd.c'
+run('LCD DMA recovery', r'''
+#include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#define __USE_SD_CARD__
+#define GPIOB 0
+#define GPIOB_SD_CS 11
+#define STM32_DMA_CR_EN 1U
+#define DMA_ISR_TEIF2 (1U << 7)
+#define DMA_ISR_TEIF3 (1U << 11)
+#define DMA_IFCR_CGIF2 (1U << 4)
+#define DMA_IFCR_CGIF3 (1U << 8)
+#define MS2ST(ms) (ms)
+typedef uint32_t systime_t;
+static volatile struct { uint32_t CCR, CNDTR; } tx, rx;
+static volatile struct { uint32_t ISR, IFCR; } dma;
+static unsigned lcd_unselects, sd_unselects, resets, inits;
+static systime_t now;
+static bool lcd_dma_fault, busy, complete;
+#define LCD_DMA_TX (&tx)
+#define LCD_DMA_RX (&rx)
+#define DMA1 (&dma)
+#define SPI_IS_BUSY(spi) (busy)
+#define LCD_CS_HIGH (++lcd_unselects)
+static void palSetPad(int port, int pad) { assert(port == GPIOB && pad == GPIOB_SD_CS); ++sd_unselects; }
+static systime_t chVTGetSystemTimeX(void) { return now; }
+static systime_t chVTTimeElapsedSinceX(systime_t start) {
+  ++now;
+  if (complete) { tx.CNDTR = rx.CNDTR = 0; busy = false; }
+  return now - start;
+}
+static void rccResetSPI1(void) { assert(tx.CCR == 0 && rx.CCR == 0); ++resets; busy = false; }
+static void spi_init(void) { ++inits; }
+''' + body(lcd, 'bool lcd_take_dma_fault(') + body(lcd, 'static bool dma_channel_wait_completion_rx_tx(') + r'''
+static void check_recovery(void) {
+  assert(!dma_channel_wait_completion_rx_tx());
+  assert(!tx.CCR && !rx.CCR && !tx.CNDTR && !rx.CNDTR);
+  assert(dma.IFCR == (DMA_IFCR_CGIF2 | DMA_IFCR_CGIF3));
+  assert(lcd_take_dma_fault() && !lcd_take_dma_fault());
+  dma.ISR = 0; // Emulate the hardware's write-to-clear register.
+}
+int main(void) {
+  assert(dma_channel_wait_completion_rx_tx());
+  tx.CNDTR = 8; // A stopped channel with no error flag still needs recovery.
+  check_recovery();
+  rx.CCR = tx.CCR = STM32_DMA_CR_EN;
+  rx.CNDTR = 7; dma.ISR = DMA_ISR_TEIF2;
+  check_recovery();
+  tx.CCR = STM32_DMA_CR_EN; tx.CNDTR = 5; busy = true;
+  now = UINT32_MAX - 20;
+  systime_t start = now;
+  check_recovery();
+  assert(now - start == MS2ST(100));
+  assert(resets == 3 && inits == 3 && lcd_unselects == 3 && sd_unselects == 3);
+  tx.CCR = rx.CCR = STM32_DMA_CR_EN;
+  tx.CNDTR = rx.CNDTR = 8; busy = complete = true;
+  assert(dma_channel_wait_completion_rx_tx());
+  assert(!tx.CCR && !rx.CCR && !lcd_take_dma_fault() && resets == 3);
+  puts("stopped DMA, transfer error, timeout rollover and subsequent transfer checked");
+}
+''')
 
 # Entry points reject one point; the shared generator is defensive as well.
 text = (ROOT/'src/rf/sweep.c').read_text()

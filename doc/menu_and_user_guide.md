@@ -106,7 +106,7 @@ This menu consolidates DSP helpers and measurement assistants.
 * `DEVICE` -> opens advanced hardware controls:
   * `THRESHOLD`, `TCXO`, `VBAT OFFSET` — keypad-entry system constants.
   * `IF OFFSET` *(with `USE_VARIABLE_OFFSET_MENU`)* — choose from compiled IF offsets.
-  * `REMEMBER STATE` *(with `__USE_BACKUP__`)* — enables the autosave daemon that snapshots sweep/UI state shortly after edits.
+   * `REMEMBER STATE` *(with `__USE_BACKUP__`)* — restores the last sweep range and point count independently of calibration. It never overwrites a saved calibration slot.
   * `FLIP DISPLAY` *(with `__FLIP_DISPLAY__`)* — mirror the LCD.
   * `DFU` *(with `__DFU_SOFTWARE_MODE__`)* — soft boots into the DFU ROM (path: System -> Device -> DFU).
   * `MORE` -> exposes manufacturing tools:

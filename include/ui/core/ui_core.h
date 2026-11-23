@@ -107,6 +107,9 @@ void ui_normal_touch(int touch_x, int touch_y);
 
 #ifdef __SD_FILE_BROWSER__
 // The ui_mode_browser declaration was moved above.
+#ifdef __USE_DISPLAY_DMA__
+void ui_browser_redraw(void);
+#endif
 #endif
 
 // Touch functions needed for calibration

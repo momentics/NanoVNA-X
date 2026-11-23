@@ -330,6 +330,12 @@ void ui_mode_browser(int mode) {
   browser_draw_page(current_page);
 }
 
+#ifdef __USE_DISPLAY_DMA__
+void ui_browser_redraw(void) {
+  browser_draw_page(current_page);
+}
+#endif
+
 // Process UI input for browser
 void ui_browser_touch(int touch_x, int touch_y) {
   browser_btn_t btn;

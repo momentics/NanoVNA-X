@@ -131,26 +131,57 @@ static const uint32_t txdmamode = 0 | STM32_DMA_CR_PL(STM32_SPI_SPI1_DMA_PRIORIT
 static const uint32_t rxdmamode = 0 | STM32_DMA_CR_PL(STM32_SPI_SPI1_DMA_PRIORITY) // Set priority
                                   | STM32_DMA_CR_DIR_P2M;                          // SPI to Memory
 
+static void spi_init(void);
+static bool lcd_dma_fault;
+
+bool lcd_take_dma_fault(void) {
+  bool fault = lcd_dma_fault;
+  lcd_dma_fault = false;
+  return fault;
+}
+
+// Wait DMA Rx completion as well as Tx when the transfer uses both channels.
+static bool dma_channel_wait_completion_rx_tx(void) {
+  if (!(LCD_DMA_TX->CCR | LCD_DMA_RX->CCR | LCD_DMA_TX->CNDTR | LCD_DMA_RX->CNDTR) &&
+      !(DMA1->ISR & (DMA_ISR_TEIF2 | DMA_ISR_TEIF3))) return true;
+  const systime_t start = chVTGetSystemTimeX();
+  for (;;) {
+    if (DMA1->ISR & (DMA_ISR_TEIF2 | DMA_ISR_TEIF3)) break;
+    if ((LCD_DMA_TX->CNDTR && !(LCD_DMA_TX->CCR & STM32_DMA_CR_EN)) ||
+        (LCD_DMA_RX->CNDTR && !(LCD_DMA_RX->CCR & STM32_DMA_CR_EN))) break;
+    // Wait for the last SPI frame as well as the DMA counters.
+    if (!(LCD_DMA_TX->CNDTR | LCD_DMA_RX->CNDTR) && !SPI_IS_BUSY(LCD_SPI)) {
+      LCD_DMA_TX->CCR = LCD_DMA_RX->CCR = 0;
+      DMA1->IFCR = DMA_IFCR_CGIF2 | DMA_IFCR_CGIF3;
+      return true;
+    }
+    if (chVTTimeElapsedSinceX(start) >= MS2ST(100)) break;
+  }
+
+  LCD_DMA_TX->CCR = LCD_DMA_RX->CCR = 0;
+  LCD_DMA_TX->CNDTR = LCD_DMA_RX->CNDTR = 0;
+  DMA1->IFCR = DMA_IFCR_CGIF2 | DMA_IFCR_CGIF3;
+  LCD_CS_HIGH;
+#ifdef __USE_SD_CARD__
+  palSetPad(GPIOB, GPIOB_SD_CS);
+#endif
+  rccResetSPI1();
+  spi_init();
+  lcd_dma_fault = true;
+  return false;
+}
+
 // SPI transmit byte buffer use DMA (65535 bytes limit)
-static inline void spi_dma_tx_buffer(const uint8_t* buffer, uint16_t len, bool wait) {
+static inline void spi_dma_tx_buffer(const uint8_t* buffer, uint16_t len) {
   dmaChannelSetMemory(LCD_DMA_TX, buffer);
   dmaChannelSetTransactionSize(LCD_DMA_TX, len);
   dmaChannelSetMode(LCD_DMA_TX,
                     txdmamode | STM32_DMA_CR_BYTE | STM32_DMA_CR_MINC | STM32_DMA_CR_EN);
-  if (wait)
-    dmaChannelWaitCompletion(LCD_DMA_TX);
-}
-
-// Wait DMA Rx completion
-static void dma_channel_wait_completion_rx_tx(void) {
-  dmaChannelWaitCompletion(LCD_DMA_TX);
-  dmaChannelWaitCompletion(LCD_DMA_RX);
-  //  while (SPI_IS_BUSY(LCD_SPI));   // Wait SPI tx/rx
 }
 
 // SPI receive byte buffer use DMA
 static const uint16_t dummy_tx = 0xFFFF;
-static inline void spi_dma_rx_buffer(uint8_t* buffer, uint16_t len, bool wait) {
+static inline bool spi_dma_rx_buffer(uint8_t* buffer, uint16_t len) {
   // Init Rx DMA buffer, size, mode (spi and mem data size is 8 bit), and start
   dmaChannelSetMemory(LCD_DMA_RX, buffer);
   dmaChannelSetTransactionSize(LCD_DMA_RX, len);
@@ -160,16 +191,13 @@ static inline void spi_dma_rx_buffer(uint8_t* buffer, uint16_t len, bool wait) {
   dmaChannelSetMemory(LCD_DMA_TX, &dummy_tx);
   dmaChannelSetTransactionSize(LCD_DMA_TX, len);
   dmaChannelSetMode(LCD_DMA_TX, txdmamode | STM32_DMA_CR_BYTE | STM32_DMA_CR_EN);
-  if (wait)
-    dma_channel_wait_completion_rx_tx();
+  return dma_channel_wait_completion_rx_tx();
 }
 #else
 // Replace DMA function vs no DMA
-#define dma_channel_wait_completion_rx_tx()                                                        \
-  {                                                                                                \
-  }
-#define spi_dma_tx_buffer(buffer, len, flag) spi_tx_buffer(buffer, len)
-#define spi_dma_rx_buffer(buffer, len, flag) spi_rx_buffer(buffer, len)
+#define dma_channel_wait_completion_rx_tx() (true)
+#define spi_dma_tx_buffer(buffer, len) spi_tx_buffer(buffer, len)
+#define spi_dma_rx_buffer(buffer, len) spi_rx_buffer(buffer, len)
 #endif // __USE_DISPLAY_DMA__
 
 static void spi_init(void) {
@@ -590,7 +618,7 @@ void lcd_init(void) {
 
 void lcd_set_window(int x, int y, int w, int h, uint16_t cmd) {
   // Any LCD exchange start from this
-  dma_channel_wait_completion_rx_tx();
+  (void)dma_channel_wait_completion_rx_tx();
   // uint8_t xx[4] = { x >> 8, x, (x+w-1) >> 8, (x+w-1) };
   // uint8_t yy[4] = { y >> 8, y, (y+h-1) >> 8, (y+h-1) };
   uint32_t xx = __REV16(x | ((x + w - 1) << 16));
@@ -608,7 +636,7 @@ void lcd_set_window(int x, int y, int w, int h, uint16_t cmd) {
 //
 #if defined(LCD_DRIVER_ILI9341) || defined(LCD_DRIVER_ST7789)
 // ILI9341 or ST7789 send data in RGB888 format, need parse it
-void lcd_read_memory(int x, int y, int w, int h, uint16_t* out) {
+bool lcd_read_memory(int x, int y, int w, int h, uint16_t* out) {
   uint16_t len = w * h;
   lcd_set_window(x, y, w, h, LCD_RAMRD);
   // Set read speed (if different from write speed)
@@ -619,34 +647,25 @@ void lcd_read_memory(int x, int y, int w, int h, uint16_t* out) {
   spi_drop_rx();                   // Skip data from SPI rx buffer
   spi_rx_byte();                   // require 8bit dummy clock
   uint8_t* rgbbuf = (uint8_t*)out; // receive pixel data to buffer
-#ifndef __USE_DISPLAY_DMA_RX__
+#ifdef __USE_DISPLAY_DMA_RX__
+  // Set the DMA read size in bytes, not pixels. The read waits for both channels to stop.
+  // Previously, conversion polled the remaining DMA data to wait for the next complete RGB pixel.
+  // Convert only after completion now, so a stalled DMA transfer cannot trap the conversion loop.
+  if (!spi_dma_rx_buffer(rgbbuf, len * LCD_RX_PIXEL_SIZE)) return false;
+#else
   spi_rx_buffer(rgbbuf, len * LCD_RX_PIXEL_SIZE);
+#endif
   do {                                                // Parse received data to RGB565 format
     *out++ = RGB565(rgbbuf[0], rgbbuf[1], rgbbuf[2]); // read data is always 18bit
     rgbbuf += LCD_RX_PIXEL_SIZE;
   } while (--len);
-#else
-  len *= LCD_RX_PIXEL_SIZE;              // Set data size for DMA read
-  spi_dma_rx_buffer(rgbbuf, len, false); // Start DMA read, and not wait completion
-  do { // Parse received data to RGB565 format while data receive by DMA
-    uint16_t left =
-        dmaChannelGetTransactionSize(LCD_DMA_RX) + LCD_RX_PIXEL_SIZE; // Get DMA data left
-    if (left > len)
-      continue; // Next pixel RGB data not ready
-    do {        // Process completed by DMA data
-      *out++ = RGB565(rgbbuf[0], rgbbuf[1], rgbbuf[2]);
-      rgbbuf += LCD_RX_PIXEL_SIZE;
-      len -= LCD_RX_PIXEL_SIZE;
-    } while (left < len);
-  } while (len);
-  dma_channel_wait_completion_rx_tx(); // Stop DMA transfer
-#endif
   SPI_BR_SET(LCD_SPI, LCD_SPI_SPEED); // restore SPI speed
   LCD_CS_HIGH;                        // stop read
+  return true;
 }
 #elif defined(LCD_DRIVER_ST7796S)
 // ST7796S send data in RGB565 format, not need parse
-void lcd_read_memory(int x, int y, int w, int h, uint16_t* out) {
+bool lcd_read_memory(int x, int y, int w, int h, uint16_t* out) {
   uint16_t len = w * h;
   lcd_set_window(x, y, w, h, LCD_RAMRD);
   // Set read speed (if need different)
@@ -658,31 +677,36 @@ void lcd_read_memory(int x, int y, int w, int h, uint16_t* out) {
 #ifndef __USE_DISPLAY_DMA_RX__
   spi_rx_buffer((uint8_t*)out, len * 2);
 #else
-  spi_dma_rx_buffer((uint8_t*)out, len * 2, true);
+  if (!spi_dma_rx_buffer((uint8_t*)out, len * 2)) return false;
 #endif
   // restore speed if need
   if (LCD_SPI_RX_SPEED != LCD_SPI_SPEED)
     SPI_BR_SET(LCD_SPI, LCD_SPI_SPEED);
   LCD_CS_HIGH;
+  return true;
 }
 #endif
 
 void lcd_set_flip(bool flip) {
-  dma_channel_wait_completion_rx_tx();
+  (void)dma_channel_wait_completion_rx_tx();
   lcd_set_rotation(flip ? DISPLAY_ROTATION_180 : DISPLAY_ROTATION_0);
 }
 
 // Wait completion before next data send
 #ifndef lcd_bulk_finish
 void lcd_bulk_finish(void) {
-  dmaChannelWaitCompletion(LCD_DMA_TX); // Wait DMA
+  (void)dma_channel_wait_completion_rx_tx(); // Wait DMA
   // while (SPI_IN_TX_RX(LCD_SPI));         // Wait tx
 }
 #endif
 
 static void lcd_bulk_buffer(int x, int y, int w, int h, pixel_t* buffer) {
+#ifdef __USE_DISPLAY_DMA__
+  if (lcd_dma_fault) return;
+#endif
   lcd_set_window(x, y, w, h, LCD_RAMWR);
 #ifdef __USE_DISPLAY_DMA__
+  if (lcd_dma_fault) return;
   dmaChannelSetMemory(LCD_DMA_TX, buffer);
   dmaChannelSetTransactionSize(LCD_DMA_TX, w * h);
   dmaChannelSetMode(LCD_DMA_TX, txdmamode | LCD_DMA_MODE | STM32_DMA_CR_MINC | STM32_DMA_CR_EN);
@@ -717,15 +741,19 @@ void lcd_bulk(int x, int y, int w, int h) {
 //******************************************************************************
 // Fill region by some color
 void lcd_fill(int x, int y, int w, int h) {
+#ifdef __USE_DISPLAY_DMA__
+  if (lcd_dma_fault) return;
+#endif
   lcd_set_window(x, y, w, h, LCD_RAMWR);
   uint32_t len = w * h;
 #ifdef __USE_DISPLAY_DMA__
+  if (lcd_dma_fault) return;
   dmaChannelSetMemory(LCD_DMA_TX, &background_color);
   while (len) {
     uint32_t delta = len > 0xFFFF ? 0xFFFF : len; // DMA can send only 65535 data in one run
     dmaChannelSetTransactionSize(LCD_DMA_TX, delta);
     dmaChannelSetMode(LCD_DMA_TX, txdmamode | LCD_DMA_MODE | STM32_DMA_CR_EN);
-    dmaChannelWaitCompletion(LCD_DMA_TX);
+    if (!dma_channel_wait_completion_rx_tx()) return;
     len -= delta;
   }
 #else
@@ -1184,8 +1212,7 @@ void ili9341_test(int mode) {
 #define SD_SECTOR_SIZE 512
 // SD card spi bus
 #define SD_SPI SPI1
-#define SD_DMA_RX DMA1_Channel2 // DMA1 channel 2 use for SPI1 rx
-#define SD_DMA_TX DMA1_Channel3 // DMA1 channel 3 use for SPI1 tx
+// SD shares SPI1 RX (DMA1 channel 2) and TX (DMA1 channel 3) with the LCD.
 // Define SD SPI speed on work
 #define SD_SPI_SPEED SPI_BR_DIV2
 // div4 give less error and high speed for Rx
@@ -1230,6 +1257,7 @@ void test_log(void) {
 #define SD_CS_HIGH palSetPad(GPIOB, GPIOB_SD_CS)
 
 static void sd_select_spi(uint32_t speed) {
+  (void)dma_channel_wait_completion_rx_tx();
   while (SPI_IS_BUSY(LCD_SPI))
     ;
   LCD_CS_HIGH;               // Unselect LCD
@@ -1344,7 +1372,7 @@ static bool sd_rx_data_block(uint8_t* buff, uint16_t len, uint8_t token) {
     return FALSE;
   }
 #ifdef __USE_SDCARD_DMA_RX__
-  spi_dma_rx_buffer(buff, len, true);
+  if (!spi_dma_rx_buffer(buff, len)) return FALSE;
 #else
   spi_rx_buffer(buff, len);
 #endif
@@ -1372,7 +1400,7 @@ static bool sd_tx_data_block(const uint8_t* buff, uint16_t len, uint8_t token) {
     return FALSE;
   spi_tx_byte(token);
 #ifdef __USE_SDCARD_DMA__
-  spi_dma_tx_buffer(buff, len, false);
+  spi_dma_tx_buffer(buff, len);
 #else
   spi_tx_buffer((uint8_t*)buff, len);
 #endif
@@ -1382,7 +1410,7 @@ static bool sd_tx_data_block(const uint8_t* buff, uint16_t len, uint8_t token) {
   uint16_t bcrc = 0xFFFF;
 #endif
 #ifdef __USE_SDCARD_DMA__
-  dmaChannelWaitCompletion(SD_DMA_TX);
+  if (!dma_channel_wait_completion_rx_tx()) return FALSE;
 #endif
   spi_tx_byte((bcrc >> 0) & 0xFF);
   spi_tx_byte((bcrc >> 8) & 0xFF);

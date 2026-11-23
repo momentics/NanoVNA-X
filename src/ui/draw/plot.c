@@ -39,6 +39,10 @@
 #include "ui/draw/grid.h"
 #include "ui/draw/render.h"
 #include "ui/draw/traces.h"
+#ifdef __USE_DISPLAY_DMA__
+#include "ui/core/ui_keypad.h"
+#include "ui/core/ui_menu_engine.h"
+#endif
 
 /*
  * NanoVNA-X plot module
@@ -954,6 +958,17 @@ void draw_all(void) {
   if (redraw_request & REDRAW_BACKUP)
     update_backup_data();
 #endif
+#ifdef __USE_DISPLAY_DMA__
+  // Consume the fault before repainting so a failed repaint is retried next time.
+  const bool repaint = lcd_take_dma_fault();
+  if (repaint) {
+    if (ui_mode == UI_KEYPAD) ui_keypad_redraw();
+#ifdef __SD_FILE_BROWSER__
+    if (ui_mode == UI_BROWSER) ui_browser_redraw();
+#endif
+    redraw_request |= REDRAW_ALL;
+  }
+#endif
   if (redraw_request & REDRAW_PLOT)
     plot_into_index();
   if (area_width == 0) {
@@ -985,6 +1000,9 @@ void draw_all(void) {
     draw_cal_status();
   if (redraw_request & REDRAW_BATTERY)
     draw_battery_status();
+#ifdef __USE_DISPLAY_DMA__
+  if (repaint && ui_mode == UI_MENU) menu_draw(-1);
+#endif
   redraw_request = 0;
 }
 

@@ -44,6 +44,9 @@ static FRESULT f_write(FIL *f,const void *data,UINT count,UINT *size) {
 }
 static int load_properties(unsigned slot) {assert(slot==NO_SAVE_SLOT);++adopted;return 0;}
 static void load_default_properties(void) { memset(&current_props,0,sizeof current_props); }
+#ifdef TEST_REMEMBER_STATE
+void set_backup_data32(uint16_t id, uint32_t value) { assert(id == 0 && value == 0); }
+#endif
 #ifdef TEST_SMALL_H
 #undef NANOVNA_F303
 #endif
@@ -99,6 +102,22 @@ int main(void) {
   FIL full={.short_at=1};assert(save_cal(&full,0)==FR_DISK_ERR);
   FIL failed={.fail_at=1};assert(save_cal(&failed,0)==FR_DISK_ERR);
   FIL complete={0};assert(save_cal(&complete,0)==FR_OK);
+#ifdef TEST_REMEMBER_STATE
+  current_props = previous;
+  assert(caldata_save(0) == 0);
+  memcpy(saved, (const void*)SAVE_PROP_CONFIG_ADDR, SAVE_PROP_CONFIG_SIZE);
+  uint32_t remembered[6] = {101U | (15U << 18), 50000000U, 100000000U, 0, 1, 0};
+  assert(config_recall_sweep_state() == NULL);
+  assert(config_save_sweep_state(remembered));
+  assert(!memcmp(saved, (const void*)SAVE_PROP_CONFIG_ADDR, SAVE_PROP_CONFIG_SIZE));
+  assert(!memcmp(remembered, config_recall_sweep_state(), sizeof remembered));
+  unsigned prior_writes = writes;
+  assert(config_save_sweep_state(remembered) && writes == prior_writes);
+  bad_write = 1;
+  ++remembered[1];
+  assert(!config_save_sweep_state(remembered) && config_recall_sweep_state() == NULL);
+  assert(!memcmp(saved, (const void*)SAVE_PROP_CONFIG_ADDR, SAVE_PROP_CONFIG_SIZE));
+#endif
   puts("SD CAL: valid atomic import, stale magic, truncated/failed reads, bounds, short/full-card writes passed");
 }
 #else
@@ -133,7 +152,7 @@ with tempfile.TemporaryDirectory(prefix='nanovna-storage-') as d:
         p=tmp/rel;p.parent.mkdir(parents=True,exist_ok=True);p.write_text('#include "nanovna.h"\n')
     (tmp/'test.c').write_text(source)
     subprocess.run(shlex.split(os.environ.get('HOST_CC','gcc'))+[
-        '-std=c11','-O2','-I'+str(tmp),'-I'+str(ROOT/'include'),str(tmp/'test.c'),
+        '-std=c11','-O2','-DTEST_REMEMBER_STATE','-I'+str(tmp),'-I'+str(ROOT/'include'),str(tmp/'test.c'),
         *[str(ROOT/p) for p in ('src/processing/calibration.c','src/sys/config_service.c')],
         '-lm','-o',str(tmp/'test')],check=True)
     subprocess.run([str(tmp/'test')],check=True)

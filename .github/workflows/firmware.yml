@@ -202,6 +202,24 @@ jobs:
           fi
           echo "name=$project" >> "$GITHUB_OUTPUT"
 
+      - name: Check firmware flash budget
+        shell: bash
+        env:
+          PROJECT: ${{ steps.project.outputs.name }}
+        run: |
+          set -euo pipefail
+          case "$TARGET" in
+            F072) limit=$((98 * 1024)) ;;
+            F303) limit=$((114 * 1024)) ;;
+            *) exit 1 ;;
+          esac
+          bytes=$(wc -c < "build/${PROJECT}.bin")
+          echo "${PROJECT}: ${bytes} / ${limit} flash bytes"
+          if (( bytes == 0 || bytes > limit )); then
+            echo "::error::Firmware binary is empty or exceeds the flash budget"
+            exit 1
+          fi
+
       - name: Generate DFU if script exists
         shell: bash
         run: |

@@ -333,6 +333,7 @@ alignas(8) properties_t current_props;
 int load_properties(uint32_t id) {
   int r = caldata_recall(id);
   app_measurement_update_frequencies();
+  state_manager_mark_dirty();
 #ifdef __VNA_MEASURE_MODULE__
   plot_set_measure_mode(current_props._measure);
 #endif
@@ -376,7 +377,6 @@ void set_sweep_points(uint16_t points) {
     return;
   sweep_points = points;
   app_measurement_update_frequencies();
-  update_backup_data();
   state_manager_mark_dirty();
 
   freq_t start = 0;
@@ -423,14 +423,10 @@ void sweep_get_ordered(freq_t* start, freq_t* stop) {
 
 static void update_marker_index(freq_t start, freq_t stop, uint16_t points) {
   uint32_t i;
-  freq_t step;
-  if (points > 1)
-    step = (stop - start) / (points - 1);
-  else
-    step = 1;
+  freq_t step = points > 1 ? (stop - start) / (points - 1) : 0;
   for (i = 0; i < MARKERS_MAX; i++) {
     if (markers[i].enabled) {
-        int32_t index = (int32_t)(markers[i].frequency - start) / step;
+        int32_t index = step ? (int32_t)(markers[i].frequency - start) / step : 0;
         if (index < 0) index = 0;
         if (index >= points) index = points - 1;
         set_marker_index(i, index);
@@ -581,11 +577,10 @@ void set_sweep_frequency_internal(uint16_t type, freq_t freq, bool enforce_order
   case ST_VAR:
     var_freq = freq;
     request_to_redraw(REDRAW_BACKUP);
-    update_backup_data();
+    state_manager_mark_dirty();
     return;
   }
   app_measurement_update_frequencies();
-  update_backup_data();
   state_manager_mark_dirty();
 }
 
@@ -598,7 +593,6 @@ void reset_sweep_frequency(void) {
   frequency1 = cal_frequency1;
   sweep_points = cal_sweep_points;
   app_measurement_update_frequencies();
-  update_backup_data();
   state_manager_mark_dirty();
 
   freq_t start = 0;
